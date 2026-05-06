@@ -1,0 +1,10 @@
+{
+  "project_stage": "protocol_skeleton",
+  "attack_matrix_placeholder": [
+    {
+      "attack_name_placeholder": "identity_attack_placeholder",
+      "attack_params_placeholder": {}
+    }
+  ],
+  "shared_attack_matrix_required": true
+}

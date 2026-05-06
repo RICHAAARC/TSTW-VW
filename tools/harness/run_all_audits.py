@@ -25,6 +25,8 @@ AUDIT_MODULE_NAMES = [
     "tools.harness.audits.audit_naming_conventions",
     "tools.harness.audits.audit_placeholder_random_fields",
     "tools.harness.audits.audit_protocol_skeleton_contract",
+    "tools.harness.audits.audit_protocol_artifact_schema",
+    "tools.harness.audits.audit_protocol_support_configs",
     "tools.harness.audits.audit_threshold_protocol_fields",
     "tools.harness.audits.audit_notebook_formal_output_bypass",
     "tools.harness.audits.audit_skill_file_presence",

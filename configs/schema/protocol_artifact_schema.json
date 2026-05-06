@@ -1,0 +1,118 @@
+{
+  "project_stage": "protocol_skeleton",
+  "construction_phase": "protocol_skeleton",
+  "protocol_name": "fixed_low_fpr_calibrated_detection",
+  "record_schema_name": "event_score_record",
+  "threshold_schema_name": "threshold_record",
+  "manifest_schema_name": "run_manifest_record",
+  "output_layout": {
+    "event_scores_path": "records/event_scores.jsonl",
+    "thresholds_path": "thresholds/thresholds.json",
+    "run_manifest_path": "artifacts/run_manifest.json",
+    "main_metrics_path": "tables/main_metrics.csv",
+    "ablation_table_path": "tables/ablation_table.csv"
+  },
+  "event_score_record": {
+    "required_top_level_fields": [
+      "run_id",
+      "event_id",
+      "sample_id",
+      "split",
+      "sample_role",
+      "method_family",
+      "method_variant",
+      "attack_name",
+      "attack_params",
+      "target_fpr",
+      "threshold_id",
+      "evidence_scores",
+      "disabled_evidence",
+      "decision",
+      "failure_reason",
+      "placeholder_fields",
+      "random_fields"
+    ],
+    "required_evidence_score_fields": [
+      "S_tubelet",
+      "S_sync",
+      "S_traj",
+      "S_final"
+    ],
+    "required_null_encoding_fields": [
+      "threshold_id",
+      "failure_reason",
+      "S_tubelet",
+      "S_sync",
+      "S_traj"
+    ]
+  },
+  "threshold_record": {
+    "required_fields": [
+      "threshold_id",
+      "run_id",
+      "method_family",
+      "method_variant",
+      "score_name",
+      "target_fpr",
+      "calibration_split",
+      "calibration_negative_roles",
+      "threshold_value",
+      "threshold_quantile",
+      "num_calibration_negatives",
+      "threshold_source_record_digest",
+      "fusion_rule",
+      "created_at"
+    ]
+  },
+  "run_manifest_record": {
+    "required_fields": [
+      "run_id",
+      "created_at",
+      "construction_phase",
+      "protocol_name",
+      "method_config_digest",
+      "protocol_config_digest",
+      "attack_matrix_digest",
+      "ablation_config_digest",
+      "records_digest",
+      "thresholds_digest",
+      "tables_digest",
+      "figures_digest_placeholder",
+      "placeholder_fields",
+      "random_fields"
+    ]
+  },
+  "tables": {
+    "main_metrics_columns": [
+      "run_id",
+      "method_family",
+      "method_variant",
+      "target_fpr",
+      "threshold_id",
+      "split",
+      "attack_name",
+      "clean_negative_count",
+      "attacked_negative_count",
+      "watermarked_positive_count",
+      "attacked_positive_count",
+      "clean_negative_FPR",
+      "attacked_negative_FPR",
+      "clean_positive_TPR",
+      "attacked_positive_TPR"
+    ],
+    "ablation_table_columns": [
+      "run_id",
+      "method_family",
+      "method_variant",
+      "enabled_tubelet_evidence",
+      "enabled_sync_evidence",
+      "enabled_trajectory_evidence",
+      "fusion_rule",
+      "threshold_id",
+      "clean_negative_FPR",
+      "attacked_negative_FPR",
+      "clean_positive_TPR",
+      "attacked_positive_TPR"
+    ]
+  }
+}

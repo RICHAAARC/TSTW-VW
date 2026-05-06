@@ -5,5 +5,8 @@
     "tubelet_only_placeholder",
     "tubelet_sync_placeholder"
   ],
-  "shared_protocol_required": true
+  "shared_protocol_required": true,
+  "shared_attack_matrix_required": true,
+  "shared_target_fpr_placeholder": 0.001,
+  "shared_table_builder_placeholder": "protocol_table_builder_placeholder"
 }

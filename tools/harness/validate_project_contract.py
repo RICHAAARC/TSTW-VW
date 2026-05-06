@@ -31,6 +31,117 @@ REQUIRED_EVIDENCE_NAMES = {
     "trajectory_evidence",
     "final_evidence",
 }
+REQUIRED_OUTPUT_LAYOUT = {
+    "event_scores_path": "records/event_scores.jsonl",
+    "thresholds_path": "thresholds/thresholds.json",
+    "run_manifest_path": "artifacts/run_manifest.json",
+    "main_metrics_path": "tables/main_metrics.csv",
+    "ablation_table_path": "tables/ablation_table.csv",
+}
+REQUIRED_EVENT_SCORE_FIELDS = {
+    "run_id",
+    "event_id",
+    "sample_id",
+    "split",
+    "sample_role",
+    "method_family",
+    "method_variant",
+    "attack_name",
+    "attack_params",
+    "target_fpr",
+    "threshold_id",
+    "evidence_scores",
+    "disabled_evidence",
+    "decision",
+    "failure_reason",
+    "placeholder_fields",
+    "random_fields",
+}
+REQUIRED_EVENT_SCORE_EVIDENCE_FIELDS = {
+    "S_tubelet",
+    "S_sync",
+    "S_traj",
+    "S_final",
+}
+REQUIRED_EVENT_SCORE_NULL_ENCODING_FIELDS = {
+    "threshold_id",
+    "failure_reason",
+    "S_tubelet",
+    "S_sync",
+    "S_traj",
+}
+REQUIRED_THRESHOLD_RECORD_FIELDS = {
+    "threshold_id",
+    "run_id",
+    "method_family",
+    "method_variant",
+    "score_name",
+    "target_fpr",
+    "calibration_split",
+    "calibration_negative_roles",
+    "threshold_value",
+    "threshold_quantile",
+    "num_calibration_negatives",
+    "threshold_source_record_digest",
+    "fusion_rule",
+    "created_at",
+}
+REQUIRED_MANIFEST_FIELDS = {
+    "run_id",
+    "created_at",
+    "construction_phase",
+    "protocol_name",
+    "method_config_digest",
+    "protocol_config_digest",
+    "attack_matrix_digest",
+    "ablation_config_digest",
+    "records_digest",
+    "thresholds_digest",
+    "tables_digest",
+    "figures_digest_placeholder",
+    "placeholder_fields",
+    "random_fields",
+}
+REQUIRED_MAIN_METRICS_COLUMNS = {
+    "run_id",
+    "method_family",
+    "method_variant",
+    "target_fpr",
+    "threshold_id",
+    "split",
+    "attack_name",
+    "clean_negative_count",
+    "attacked_negative_count",
+    "watermarked_positive_count",
+    "attacked_positive_count",
+    "clean_negative_FPR",
+    "attacked_negative_FPR",
+    "clean_positive_TPR",
+    "attacked_positive_TPR",
+}
+REQUIRED_ABLATION_TABLE_COLUMNS = {
+    "run_id",
+    "method_family",
+    "method_variant",
+    "enabled_tubelet_evidence",
+    "enabled_sync_evidence",
+    "enabled_trajectory_evidence",
+    "fusion_rule",
+    "threshold_id",
+    "clean_negative_FPR",
+    "attacked_negative_FPR",
+    "clean_positive_TPR",
+    "attacked_positive_TPR",
+}
+REQUIRED_ABLATION_PLACEHOLDER_VARIANTS = {
+    "frame_prc_placeholder",
+    "tubelet_only_placeholder",
+    "tubelet_sync_placeholder",
+}
+REQUIRED_ATTACK_PLACEHOLDER_FIELDS = {
+    "attack_name_placeholder",
+    "attack_params_placeholder",
+}
 
 
 def load_json_config(path: str | Path) -> dict[str, Any]:
@@ -156,6 +267,290 @@ def validate_protocol_config_data(data: dict[str, Any]) -> list[dict[str, str]]:
     return violations
 
 
+def validate_protocol_artifact_schema_data(data: dict[str, Any]) -> list[dict[str, str]]:
+    """Validate the governed stage-0 protocol artifact schema skeleton.
+
+    Args:
+        data: Parsed protocol artifact schema config data.
+
+    Returns:
+        A list of protocol artifact schema validation violations.
+    """
+    violations: list[dict[str, str]] = []
+
+    if data.get("project_stage") != "protocol_skeleton":
+        violations.append(
+            {
+                "field": "project_stage",
+                "reason": "artifact_schema_stage_must_equal_protocol_skeleton",
+            }
+        )
+
+    if data.get("construction_phase") != "protocol_skeleton":
+        violations.append(
+            {
+                "field": "construction_phase",
+                "reason": "construction_phase_must_equal_protocol_skeleton",
+            }
+        )
+
+    if data.get("protocol_name") != "fixed_low_fpr_calibrated_detection":
+        violations.append(
+            {
+                "field": "protocol_name",
+                "reason": "protocol_name_must_equal_fixed_low_fpr_calibrated_detection",
+            }
+        )
+
+    if data.get("record_schema_name") != "event_score_record":
+        violations.append(
+            {
+                "field": "record_schema_name",
+                "reason": "record_schema_name_must_equal_event_score_record",
+            }
+        )
+
+    if data.get("threshold_schema_name") != "threshold_record":
+        violations.append(
+            {
+                "field": "threshold_schema_name",
+                "reason": "threshold_schema_name_must_equal_threshold_record",
+            }
+        )
+
+    if data.get("manifest_schema_name") != "run_manifest_record":
+        violations.append(
+            {
+                "field": "manifest_schema_name",
+                "reason": "manifest_schema_name_must_equal_run_manifest_record",
+            }
+        )
+
+    output_layout = data.get("output_layout", {})
+    for field_name, expected_value in REQUIRED_OUTPUT_LAYOUT.items():
+        if output_layout.get(field_name) != expected_value:
+            violations.append(
+                {
+                    "field": f"output_layout.{field_name}",
+                    "reason": "unexpected_protocol_artifact_output_path",
+                }
+            )
+
+    event_score_record = data.get("event_score_record", {})
+    if not REQUIRED_EVENT_SCORE_FIELDS.issubset(
+        set(event_score_record.get("required_top_level_fields", []))
+    ):
+        violations.append(
+            {
+                "field": "event_score_record.required_top_level_fields",
+                "reason": "missing_required_event_score_fields",
+            }
+        )
+
+    if not REQUIRED_EVENT_SCORE_EVIDENCE_FIELDS.issubset(
+        set(event_score_record.get("required_evidence_score_fields", []))
+    ):
+        violations.append(
+            {
+                "field": "event_score_record.required_evidence_score_fields",
+                "reason": "missing_required_evidence_score_fields",
+            }
+        )
+
+    if not REQUIRED_EVENT_SCORE_NULL_ENCODING_FIELDS.issubset(
+        set(event_score_record.get("required_null_encoding_fields", []))
+    ):
+        violations.append(
+            {
+                "field": "event_score_record.required_null_encoding_fields",
+                "reason": "missing_required_null_encoding_fields",
+            }
+        )
+
+    threshold_record = data.get("threshold_record", {})
+    if not REQUIRED_THRESHOLD_RECORD_FIELDS.issubset(
+        set(threshold_record.get("required_fields", []))
+    ):
+        violations.append(
+            {
+                "field": "threshold_record.required_fields",
+                "reason": "missing_required_threshold_record_fields",
+            }
+        )
+
+    run_manifest_record = data.get("run_manifest_record", {})
+    if not REQUIRED_MANIFEST_FIELDS.issubset(
+        set(run_manifest_record.get("required_fields", []))
+    ):
+        violations.append(
+            {
+                "field": "run_manifest_record.required_fields",
+                "reason": "missing_required_run_manifest_fields",
+            }
+        )
+
+    tables = data.get("tables", {})
+    if not REQUIRED_MAIN_METRICS_COLUMNS.issubset(
+        set(tables.get("main_metrics_columns", []))
+    ):
+        violations.append(
+            {
+                "field": "tables.main_metrics_columns",
+                "reason": "missing_required_main_metrics_columns",
+            }
+        )
+
+    if not REQUIRED_ABLATION_TABLE_COLUMNS.issubset(
+        set(tables.get("ablation_table_columns", []))
+    ):
+        violations.append(
+            {
+                "field": "tables.ablation_table_columns",
+                "reason": "missing_required_ablation_table_columns",
+            }
+        )
+
+    return violations
+
+
+def validate_ablation_placeholder_data(data: dict[str, Any]) -> list[dict[str, str]]:
+    """Validate the governed stage-0 ablation placeholder config.
+
+    Args:
+        data: Parsed ablation placeholder config data.
+
+    Returns:
+        A list of ablation placeholder validation violations.
+    """
+    violations: list[dict[str, str]] = []
+
+    if data.get("project_stage") != "protocol_skeleton":
+        violations.append(
+            {
+                "field": "project_stage",
+                "reason": "ablation_config_stage_must_equal_protocol_skeleton",
+            }
+        )
+
+    if data.get("shared_protocol_required") is not True:
+        violations.append(
+            {
+                "field": "shared_protocol_required",
+                "reason": "shared_protocol_must_be_required",
+            }
+        )
+
+    if data.get("shared_attack_matrix_required") is not True:
+        violations.append(
+            {
+                "field": "shared_attack_matrix_required",
+                "reason": "shared_attack_matrix_must_be_required",
+            }
+        )
+
+    variants = data.get("ablation_variants_placeholder", [])
+    if not REQUIRED_ABLATION_PLACEHOLDER_VARIANTS.issubset(set(variants)):
+        violations.append(
+            {
+                "field": "ablation_variants_placeholder",
+                "reason": "missing_required_ablation_variants",
+            }
+        )
+    elif not all(str(variant).endswith("_placeholder") for variant in variants):
+        violations.append(
+            {
+                "field": "ablation_variants_placeholder",
+                "reason": "ablation_variant_missing_placeholder_suffix",
+            }
+        )
+
+    if data.get("shared_target_fpr_placeholder") != 0.001:
+        violations.append(
+            {
+                "field": "shared_target_fpr_placeholder",
+                "reason": "shared_target_fpr_placeholder_must_equal_point_zero_zero_one",
+            }
+        )
+
+    if (
+        data.get("shared_table_builder_placeholder")
+        != "protocol_table_builder_placeholder"
+    ):
+        violations.append(
+            {
+                "field": "shared_table_builder_placeholder",
+                "reason": "unexpected_shared_table_builder_placeholder",
+            }
+        )
+
+    return violations
+
+
+def validate_attack_placeholder_data(data: dict[str, Any]) -> list[dict[str, str]]:
+    """Validate the governed stage-0 attack placeholder config.
+
+    Args:
+        data: Parsed attack placeholder config data.
+
+    Returns:
+        A list of attack placeholder validation violations.
+    """
+    violations: list[dict[str, str]] = []
+
+    if data.get("project_stage") != "protocol_skeleton":
+        violations.append(
+            {
+                "field": "project_stage",
+                "reason": "attack_config_stage_must_equal_protocol_skeleton",
+            }
+        )
+
+    if data.get("shared_attack_matrix_required") is not True:
+        violations.append(
+            {
+                "field": "shared_attack_matrix_required",
+                "reason": "attack_matrix_must_be_shared",
+            }
+        )
+
+    attack_matrix = data.get("attack_matrix_placeholder", [])
+    if not attack_matrix:
+        violations.append(
+            {
+                "field": "attack_matrix_placeholder",
+                "reason": "missing_attack_matrix_placeholder_entries",
+            }
+        )
+        return violations
+
+    first_entry = attack_matrix[0]
+    if not REQUIRED_ATTACK_PLACEHOLDER_FIELDS.issubset(set(first_entry.keys())):
+        violations.append(
+            {
+                "field": "attack_matrix_placeholder",
+                "reason": "missing_required_attack_placeholder_fields",
+            }
+        )
+
+    if first_entry.get("attack_name_placeholder") != "identity_attack_placeholder":
+        violations.append(
+            {
+                "field": "attack_matrix_placeholder.attack_name_placeholder",
+                "reason": "attack_name_placeholder_must_equal_identity_attack_placeholder",
+            }
+        )
+
+    if not isinstance(first_entry.get("attack_params_placeholder"), dict):
+        violations.append(
+            {
+                "field": "attack_matrix_placeholder.attack_params_placeholder",
+                "reason": "attack_params_placeholder_must_be_object",
+            }
+        )
+
+    return violations
+
+
 def main(argv: list[str] | None = None) -> None:
     """Run the project contract validator as a CLI.
 
@@ -169,6 +564,11 @@ def main(argv: list[str] | None = None) -> None:
     root = Path(arguments[1]) if len(arguments) > 1 else ROOT
     project_contract_path = root / "configs" / "project" / "project_contract.json"
     protocol_path = root / "configs" / "protocol" / "protocol_skeleton.json"
+    protocol_artifact_schema_path = (
+        root / "configs" / "schema" / "protocol_artifact_schema.json"
+    )
+    ablation_path = root / "configs" / "ablation" / "ablation_placeholder.json"
+    attack_path = root / "configs" / "attacks" / "identity_attack_placeholder.json"
 
     payload = {
         "project_contract_violations": validate_project_contract_data(
@@ -176,6 +576,15 @@ def main(argv: list[str] | None = None) -> None:
         ),
         "protocol_threshold_violations": validate_protocol_config_data(
             load_json_config(protocol_path)
+        ),
+        "protocol_artifact_schema_violations": validate_protocol_artifact_schema_data(
+            load_json_config(protocol_artifact_schema_path)
+        ),
+        "ablation_placeholder_violations": validate_ablation_placeholder_data(
+            load_json_config(ablation_path)
+        ),
+        "attack_placeholder_violations": validate_attack_placeholder_data(
+            load_json_config(attack_path)
         ),
     }
     print(json.dumps(payload, indent=2, ensure_ascii=False))
