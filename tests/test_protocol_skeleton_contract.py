@@ -94,3 +94,44 @@ def test_missing_stage0_method_variant_fails() -> None:
         violation["reason"] == "missing_required_supported_method_variants"
         for violation in violations
     )
+
+
+def test_missing_forbidden_runtime_imports_fails() -> None:
+    """Validate that core boundary policy keeps forbidden runtime imports frozen.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(ROOT / "configs" / "project" / "project_contract.json")
+    broken = deepcopy(data)
+    broken["core_boundary_policy"]["forbidden_runtime_imports"] = ["tests"]
+    violations = validate_project_contract_data(broken)
+    assert any(
+        violation["reason"] == "missing_required_forbidden_runtime_imports"
+        for violation in violations
+    )
+
+
+def test_missing_protocol_core_candidate_path_fails() -> None:
+    """Validate that protocol core candidate paths remain frozen.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(ROOT / "configs" / "project" / "project_contract.json")
+    broken = deepcopy(data)
+    broken["core_boundary_policy"]["protocol_core_candidate_paths"] = [
+        "main/core",
+        "main/analysis",
+    ]
+    violations = validate_project_contract_data(broken)
+    assert any(
+        violation["reason"] == "missing_required_protocol_core_candidate_paths"
+        for violation in violations
+    )

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from main.core.digest import compute_object_digest
-from main.core.schema import METHOD_FAMILY_NAME, NEGATIVE_SAMPLE_ROLES, PROTOCOL_NAME, validate_threshold_record
+from main.core.schema import NEGATIVE_SAMPLE_ROLES, PROTOCOL_NAME, validate_threshold_record
 
 
 def _build_threshold_source_payload(
@@ -87,6 +87,14 @@ class ThresholdCalibrator:
             raise TypeError("protocol_config must be a dictionary")
         if not isinstance(calibration_event_records, list) or not calibration_event_records:
             raise ValueError("calibration_event_records must be a non-empty list")
+        if not isinstance(method_config.get("method_family"), str) or not method_config[
+            "method_family"
+        ]:
+            raise ValueError("method_config method_family must be a non-empty string")
+        if not isinstance(method_config.get("method_variant"), str) or not method_config[
+            "method_variant"
+        ]:
+            raise ValueError("method_config method_variant must be a non-empty string")
 
         threshold_protocol = protocol_config["threshold_protocol"]
         target_fpr = float(threshold_protocol["target_fpr_placeholder"])
@@ -125,7 +133,7 @@ class ThresholdCalibrator:
                 f"{PROTOCOL_NAME}:S_final:{method_config['method_variant']}"
             ),
             "run_id": run_id,
-            "method_family": METHOD_FAMILY_NAME,
+            "method_family": method_config["method_family"],
             "method_variant": method_config["method_variant"],
             "score_name": "S_final",
             "target_fpr": target_fpr,

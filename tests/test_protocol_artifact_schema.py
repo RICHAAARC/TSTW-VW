@@ -89,6 +89,33 @@ def test_missing_latent_trace_fields_fails() -> None:
     )
 
 
+def test_missing_input_artifact_trace_fields_fails() -> None:
+    """Validate that input artifact trace fields cannot be omitted from the schema.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(
+        ROOT / "configs" / "schema" / "protocol_artifact_schema.json"
+    )
+    broken = deepcopy(data)
+    broken["event_score_record"]["required_input_artifact_trace_fields"] = [
+        field_name
+        for field_name in broken["event_score_record"][
+            "required_input_artifact_trace_fields"
+        ]
+        if field_name != "artifact_digest"
+    ]
+    violations = validate_protocol_artifact_schema_data(broken)
+    assert any(
+        violation["reason"] == "missing_required_input_artifact_trace_fields"
+        for violation in violations
+    )
+
+
 def test_threshold_source_record_digest_is_required() -> None:
     """Validate that threshold traceability remains part of the schema skeleton.
 

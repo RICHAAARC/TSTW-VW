@@ -1,6 +1,6 @@
 # Protocol Artifact Schema
 
-本文档冻结 `protocol_skeleton` 阶段的 protocol artifact schema skeleton。该冻结只覆盖 schema、字段集合与相对输出布局，不代表当前阶段已经实现真实 `RecordWriter`、`ThresholdCalibrator`、`ProtocolRunner` 或 `TableBuilder`。
+本文档冻结 `protocol_skeleton` 阶段的 protocol artifact schema skeleton。该冻结只覆盖 schema、字段集合与相对输出布局；协议运行时契约可以位于 `main/core/`、`main/protocol/` 与 `main/analysis/`，但外层治理门禁仍必须保留在 `tools/harness/`、`.codex/`、`tests/` 与 docs 中。
 
 ## Governed Config Entry
 
@@ -31,12 +31,27 @@
 | attack_params | yes | 攻击参数容器。 |
 | target_fpr | yes | 当前协议目标 FPR。 |
 | threshold_id | yes | 校准前允许为空值编码。 |
+| input_artifact_trace | yes | 长期输入 artifact trace 容器；后续阶段优先基于该字段扩展。 |
+| latent_backend_name | yes | 阶段 0 random backend 的兼容字段，必须与 `input_artifact_trace.backend_name` 一致。 |
+| latent_backend_status | yes | 阶段 0 random backend 的兼容字段，必须与 `input_artifact_trace.backend_status` 一致。 |
+| latent_tensor_digest_random | yes | 阶段 0 random latent digest 兼容字段，必须与 `input_artifact_trace.artifact_digest` 一致。 |
+| latent_generation_seed_random | yes | 阶段 0 random latent seed 兼容字段，必须与 `input_artifact_trace.generation_seed_random` 一致。 |
 | evidence_scores | yes | 中间证据分数字段容器。 |
 | disabled_evidence | yes | 显式记录禁用 evidence。 |
 | decision | yes | 检测决策布尔值。 |
 | failure_reason | yes | 失败原因，允许空值编码。 |
 | placeholder_fields | yes | 显式列出当前记录中的 placeholder 语义字段。 |
 | random_fields | yes | 显式列出当前记录中的 random trace 字段。 |
+
+### Input Artifact Trace Fields
+
+| field_name | required | notes |
+| --- | --- | --- |
+| artifact_kind | yes | 当前阶段固定写为 `latent_tensor`，但字段语义为长期输入 artifact 类型。 |
+| backend_name | yes | 输入 artifact backend 名称。 |
+| backend_status | yes | 输入 artifact backend 状态。 |
+| artifact_digest | yes | 输入 artifact 的 digest。 |
+| generation_seed_random | yes | 输入 artifact 的随机生成种子；后缀保持 `_random`。 |
 
 ### Evidence Score Fields
 
@@ -128,5 +143,6 @@
 
 - 当前文档冻结 schema 和路径，不声明任何具有方法性能意义的真实实验结果。
 - 当前阶段允许 placeholder / random runtime skeleton 在临时输出路径下写出 records、thresholds、manifest 与 tables，用于验证协议可执行性。
+- `input_artifact_trace` 是后续阶段优先沿用的长期字段；`latent_*_random` 字段仅作为阶段 0 random backend 的兼容 trace 字段保留。
 - 当前阶段不得通过 notebook、终端脚本或临时文件绕过这些 schema 约束写入正式结果。
 - 进入下一阶段前，records、thresholds、manifest 与 tables 的真实实现必须继续遵守本文件和 `configs/schema/protocol_artifact_schema.json` 的冻结口径。

@@ -39,6 +39,32 @@
     "empty_watermark_method_placeholder",
     "random_score_detector_random"
   ],
+  "core_boundary_policy": {
+    "governance_layer_paths": [
+      "tools/harness",
+      ".codex",
+      "tests"
+    ],
+    "protocol_core_candidate_paths": [
+      "main/core",
+      "main/protocol",
+      "main/analysis"
+    ],
+    "method_core_candidate_paths": [
+      "main/methods"
+    ],
+    "forbidden_runtime_imports": [
+      "tools.harness",
+      "tests"
+    ],
+    "minimal_demo_excluded_paths": [
+      "tools/harness",
+      ".codex",
+      "docs/builds",
+      "audit_reports",
+      "tests"
+    ]
+  },
   "target_fpr_placeholder": 0.001,
   "field_governance": {
     "placeholder_suffix": "_placeholder",

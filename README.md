@@ -34,6 +34,7 @@
 ## Test Gate
 
 测试入口和审计入口是两个独立门禁；`run_all_audits.py` 通过不能替代 `pytest` 通过。
+这些门禁属于外层检查入口，不得成为 `main/` 的运行时依赖；`main/core/`、`main/protocol/` 与 `main/analysis/` 内部只允许保留协议运行时契约。
 
 PowerShell 示例：
 
@@ -52,6 +53,8 @@ New-Item -ItemType Directory -Force audit_reports | Out-Null
 python tools/harness/run_all_audits.py
 	| Tee-Object audit_reports/run_all_audits_output.json
 ```
+
+`tools/harness/`、`.codex/` 与 `tests/` 提供 governance / regression gate；它们可以检查 `main/`，但不得被 `main/` 反向导入。
 
 ## Naming Rules
 

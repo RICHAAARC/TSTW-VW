@@ -74,6 +74,14 @@
 6. Tables, figures, and reports must remain rebuildable from governed records and manifests.
 7. Stage-0 runtime outputs must follow the governed `records/`, `thresholds/`, `artifacts/`, and `tables/` layout.
 
+## Core Boundary / Gate Layering
+
+1. Runtime protocol contracts may exist in `main/core/`, `main/protocol/`, and `main/analysis/`; they define split semantics, record schema, threshold calibration, manifests, and rebuildable tables.
+2. Outer governance gates may exist only in `tools/harness/`, `.codex/`, `tests/`, and governed docs; they include naming governance, stage progression guards, notebook bypass audits, and skill-file audits.
+3. `main/` must not import `tools/harness` or `tests`, and future Codex changes must not move audit logic into runtime protocol code.
+4. Governance gates are not part of `method_core`, and future `minimal_release_extraction` must exclude governance harnesses, build-time docs, and audit reports.
+5. `protocol_core` must stay method-family agnostic and must not hard-code a specific method factory or a specific latent backend implementation.
+
 ## Blocking Governance Rules
 
 ### Naming Governance

@@ -27,7 +27,6 @@ EVIDENCE_SCORE_NAMES = set(EVIDENCE_SCORE_ORDER)
 
 CONSTRUCTION_PHASE = "protocol_skeleton"
 PROTOCOL_NAME = "fixed_low_fpr_calibrated_detection"
-METHOD_FAMILY_NAME = "temporal_tubelet_watermark"
 IDENTITY_ATTACK_NAME = "identity_attack_placeholder"
 DEFAULT_LATENT_SHAPE = (16, 4, 32, 32)
 
@@ -43,6 +42,7 @@ REQUIRED_EVENT_SCORE_FIELDS = {
     "attack_params",
     "target_fpr",
     "threshold_id",
+    "input_artifact_trace",
     "latent_backend_name",
     "latent_backend_status",
     "latent_tensor_digest_random",
@@ -53,6 +53,13 @@ REQUIRED_EVENT_SCORE_FIELDS = {
     "failure_reason",
     "placeholder_fields",
     "random_fields",
+}
+REQUIRED_INPUT_ARTIFACT_TRACE_FIELDS = {
+    "artifact_kind",
+    "backend_name",
+    "backend_status",
+    "artifact_digest",
+    "generation_seed_random",
 }
 REQUIRED_THRESHOLD_FIELDS = {
     "threshold_id",
@@ -142,6 +149,89 @@ class DetectionResult:
     failure_reason: str | None
     placeholder_fields: list[str]
     random_fields: list[str]
+
+
+def ensure_non_empty_string(field_value: Any, field_name: str) -> None:
+    """功能：校验字符串字段非空。
+
+    Validate that a governed string field is non-empty.
+
+    Args:
+        field_value: Candidate field value.
+        field_name: Field name used in the error message.
+
+    Returns:
+        None.
+    """
+    if not isinstance(field_value, str) or not field_value:
+        raise ValueError(f"{field_name} must be a non-empty string")
+
+
+def build_input_artifact_trace(latent_sample: LatentSample) -> dict[str, Any]:
+    """功能：根据输入样本构建长期 artifact trace。
+
+    Build the long-lived input artifact trace for a governed event record.
+
+    Args:
+        latent_sample: Input latent sample metadata.
+
+    Returns:
+        A governed input artifact trace dictionary.
+    """
+    if not isinstance(latent_sample, LatentSample):
+        raise TypeError("latent_sample must be a LatentSample instance")
+
+    return {
+        "artifact_kind": "latent_tensor",
+        "backend_name": latent_sample.latent_backend_name,
+        "backend_status": latent_sample.latent_backend_status,
+        "artifact_digest": latent_sample.latent_tensor_digest_random,
+        "generation_seed_random": latent_sample.latent_generation_seed_random,
+    }
+
+
+def validate_input_artifact_trace(input_artifact_trace: dict[str, Any]) -> None:
+    """功能：校验长期 input artifact trace 结构。
+
+    Validate the governed input artifact trace payload.
+
+    Args:
+        input_artifact_trace: Candidate input artifact trace payload.
+
+    Returns:
+        None.
+    """
+    if not isinstance(input_artifact_trace, dict):
+        raise TypeError("input_artifact_trace must be a dictionary")
+
+    missing_fields = REQUIRED_INPUT_ARTIFACT_TRACE_FIELDS.difference(
+        input_artifact_trace.keys()
+    )
+    if missing_fields:
+        raise ValueError(
+            f"missing input_artifact_trace fields: {sorted(missing_fields)}"
+        )
+
+    ensure_non_empty_string(
+        input_artifact_trace["artifact_kind"],
+        "input_artifact_trace.artifact_kind",
+    )
+    ensure_non_empty_string(
+        input_artifact_trace["backend_name"],
+        "input_artifact_trace.backend_name",
+    )
+    ensure_non_empty_string(
+        input_artifact_trace["backend_status"],
+        "input_artifact_trace.backend_status",
+    )
+    ensure_non_empty_string(
+        input_artifact_trace["artifact_digest"],
+        "input_artifact_trace.artifact_digest",
+    )
+    if not isinstance(input_artifact_trace["generation_seed_random"], int):
+        raise ValueError(
+            "input_artifact_trace.generation_seed_random must be an integer"
+        )
 
 
 def ensure_supported_split(split: str) -> None:
@@ -269,22 +359,50 @@ def validate_event_score_record(event_score_record: dict[str, Any]) -> None:
 
     ensure_supported_split(event_score_record["split"])
     ensure_supported_sample_role(event_score_record["sample_role"])
+    ensure_non_empty_string(event_score_record["method_family"], "method_family")
+    ensure_non_empty_string(event_score_record["method_variant"], "method_variant")
     validate_evidence_scores(event_score_record["evidence_scores"])
+    validate_input_artifact_trace(event_score_record["input_artifact_trace"])
 
-    if not isinstance(event_score_record["latent_backend_name"], str) or not event_score_record[
-        "latent_backend_name"
-    ]:
-        raise ValueError("latent_backend_name must be a non-empty string")
-    if not isinstance(event_score_record["latent_backend_status"], str) or not event_score_record[
-        "latent_backend_status"
-    ]:
-        raise ValueError("latent_backend_status must be a non-empty string")
-    if not isinstance(event_score_record["latent_tensor_digest_random"], str) or not event_score_record[
-        "latent_tensor_digest_random"
-    ]:
-        raise ValueError("latent_tensor_digest_random must be a non-empty string")
+    ensure_non_empty_string(event_score_record["latent_backend_name"], "latent_backend_name")
+    ensure_non_empty_string(
+        event_score_record["latent_backend_status"],
+        "latent_backend_status",
+    )
+    ensure_non_empty_string(
+        event_score_record["latent_tensor_digest_random"],
+        "latent_tensor_digest_random",
+    )
     if not isinstance(event_score_record["latent_generation_seed_random"], int):
         raise ValueError("latent_generation_seed_random must be an integer")
+    if (
+        event_score_record["input_artifact_trace"]["backend_name"]
+        != event_score_record["latent_backend_name"]
+    ):
+        raise ValueError(
+            "input_artifact_trace.backend_name must equal latent_backend_name"
+        )
+    if (
+        event_score_record["input_artifact_trace"]["backend_status"]
+        != event_score_record["latent_backend_status"]
+    ):
+        raise ValueError(
+            "input_artifact_trace.backend_status must equal latent_backend_status"
+        )
+    if (
+        event_score_record["input_artifact_trace"]["artifact_digest"]
+        != event_score_record["latent_tensor_digest_random"]
+    ):
+        raise ValueError(
+            "input_artifact_trace.artifact_digest must equal latent_tensor_digest_random"
+        )
+    if (
+        event_score_record["input_artifact_trace"]["generation_seed_random"]
+        != event_score_record["latent_generation_seed_random"]
+    ):
+        raise ValueError(
+            "input_artifact_trace.generation_seed_random must equal latent_generation_seed_random"
+        )
 
     if not isinstance(event_score_record["disabled_evidence"], list):
         raise ValueError("disabled_evidence must be a list")
@@ -318,6 +436,8 @@ def validate_threshold_record(threshold_record: dict[str, Any]) -> None:
     if missing_fields:
         raise ValueError(f"missing threshold_record fields: {sorted(missing_fields)}")
 
+    ensure_non_empty_string(threshold_record["method_family"], "method_family")
+    ensure_non_empty_string(threshold_record["method_variant"], "method_variant")
     ensure_supported_split(threshold_record["calibration_split"])
     calibration_negative_roles = threshold_record["calibration_negative_roles"]
     if not isinstance(calibration_negative_roles, list):

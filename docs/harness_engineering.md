@@ -11,6 +11,12 @@
 - `tools/harness/run_all_audits.py` 统一汇总审计，并将摘要写入 `audit_reports/harness_audit_summary.json`。
 - `tests/` 提供 pytest 最小闭环，验证命名、字段治理、协议契约与汇总审计。
 
+## Layer Boundary
+
+- `tools/harness/` 是外层 governance 层，不属于 `method_core`、`protocol_core` 或未来 `minimal_demo` 的运行时依赖。
+- `main/` 可以被 harness 和 tests 检查，但 `main/` 不得反向 import `tools/harness` 或 `tests`。
+- protocol runtime validation 可以保留在 `main/core/`、`main/protocol/` 与 `main/analysis/`，但 naming governance、stage progression guard、skill audit 只能留在外层治理层。
+
 ## Runtime Guarantees
 
 - Harness 脚本仅依赖 Python 标准库。

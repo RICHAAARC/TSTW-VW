@@ -238,6 +238,10 @@ def build_method_runtime_config(method_config: dict[str, Any]) -> MethodRuntimeC
     enabled_evidence = method_config.get("enabled_evidence")
     if not isinstance(enabled_evidence, dict):
         raise ValueError("enabled_evidence must be a dictionary")
+    for field_name in ("method_family", "method_variant", "method_status", "fusion_rule"):
+        field_value = method_config.get(field_name)
+        if not isinstance(field_value, str) or not field_value:
+            raise ValueError(f"{field_name} must be a non-empty string")
 
     return MethodRuntimeConfig(
         method_family=method_config["method_family"],

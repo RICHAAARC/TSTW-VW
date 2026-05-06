@@ -12,6 +12,7 @@ from main.backends.synthetic_latent_backend_random import SyntheticLatentBackend
 from main.core.records import RecordWriter
 from main.core.schema import (
     EVIDENCE_SCORE_NAMES,
+    build_input_artifact_trace,
     validate_event_score_record,
     validate_run_manifest_record,
     validate_threshold_record,
@@ -50,9 +51,11 @@ def test_stage0_records_schema_is_complete(tmp_path: Path) -> None:
             event_score_record["split"],
             event_score_record["sample_role"],
         )
+        expected_input_artifact_trace = build_input_artifact_trace(expected_latent_sample)
         assert set(event_score_record["evidence_scores"].keys()) == EVIDENCE_SCORE_NAMES
         assert "placeholder_fields" in event_score_record
         assert "random_fields" in event_score_record
+        assert event_score_record["input_artifact_trace"] == expected_input_artifact_trace
         assert event_score_record["latent_backend_name"] == expected_latent_sample.latent_backend_name
         assert event_score_record["latent_backend_status"] == expected_latent_sample.latent_backend_status
         assert (
@@ -62,6 +65,22 @@ def test_stage0_records_schema_is_complete(tmp_path: Path) -> None:
         assert (
             event_score_record["latent_generation_seed_random"]
             == expected_latent_sample.latent_generation_seed_random
+        )
+        assert (
+            event_score_record["input_artifact_trace"]["backend_name"]
+            == event_score_record["latent_backend_name"]
+        )
+        assert (
+            event_score_record["input_artifact_trace"]["backend_status"]
+            == event_score_record["latent_backend_status"]
+        )
+        assert (
+            event_score_record["input_artifact_trace"]["artifact_digest"]
+            == event_score_record["latent_tensor_digest_random"]
+        )
+        assert (
+            event_score_record["input_artifact_trace"]["generation_seed_random"]
+            == event_score_record["latent_generation_seed_random"]
         )
         assert {
             "latent_generation_seed_random",

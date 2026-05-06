@@ -22,3 +22,10 @@
 
 - 只有在 governed records、manifests、tables 和 audits 成熟后，才允许进入 `minimal_release_extraction`。
 - release extraction 必须保持对 governed configs、records 与 manifests 的可追溯性。
+
+## Core Extraction Boundary
+
+- future `method_core` 只抽取方法接口、evidence、fusion 与方法实现本身。
+- future `protocol_core` 只抽取 fixed low-FPR、split、records、thresholds、manifest 与 table rebuild 协议。
+- future `minimal_demo` 只能依赖 `method_core` 与 `protocol_core`。
+- `tools/harness/`、`.codex/`、`docs/builds/`、`audit_reports/` 与完整实验产物不得进入 `minimal_demo`。

@@ -119,6 +119,35 @@ minimal_demo/
 
 最小发布版本不得依赖完整 notebook、历史实验目录、大型模型权重、完整数据集或本地绝对路径。
 
+### （六）门禁分层与核心代码解耦原则
+
+门禁必须分为两类：
+
+1. 协议运行时契约：允许存在于 `main/core/`、`main/protocol/` 与 `main/analysis/`，例如 records schema、threshold calibration、manifest validation、table rebuild。
+2. 外层治理门禁：只能存在于 `tools/harness/`、`.codex/`、`tests/` 或 docs 中，例如 naming governance、placeholder/random audit、stage progression guard、notebook bypass audit、skill file presence audit。
+
+当前与后续阶段必须明确禁止以下耦合：
+
+1. `main/` import `tools/harness`。
+2. `main/` import `tests`。
+3. `main/` 中出现 stage progression guard。
+4. `main/` 中出现 skill file audit。
+5. `main/` 中出现 naming governance 的全仓扫描逻辑。
+6. `method_core` 依赖 project construction governance。
+7. `protocol_core` 硬编码具体 method family、具体 method factory 或具体 latent backend。
+
+未来最小发布抽取必须满足：
+
+1. `method_core` 只抽取方法本身。
+2. `protocol_core` 只抽取 fixed low-FPR、split、records、thresholds、manifest、metrics / tables 等复现协议。
+3. `minimal_demo` 只依赖 `method_core` 与 `protocol_core`。
+4. `tools/harness/`、`.codex/`、`docs/builds/`、`audit_reports/` 与大型实验产物不得进入 `minimal_demo`。
+
+阶段推进要求：
+
+1. 阶段 0 完成后，进入阶段 1 前必须先保证核心解耦边界成立。
+2. 阶段 1 只允许新增 synthetic tubelet / sync 机制，不允许重写阶段 0 协议层。
+
 ---
 
 ## 四、推荐目录结构

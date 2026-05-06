@@ -25,6 +25,7 @@
       "attack_params",
       "target_fpr",
       "threshold_id",
+      "input_artifact_trace",
       "latent_backend_name",
       "latent_backend_status",
       "latent_tensor_digest_random",
@@ -41,6 +42,13 @@
       "S_sync",
       "S_traj",
       "S_final"
+    ],
+    "required_input_artifact_trace_fields": [
+      "artifact_kind",
+      "backend_name",
+      "backend_status",
+      "artifact_digest",
+      "generation_seed_random"
     ],
     "required_null_encoding_fields": [
       "threshold_id",

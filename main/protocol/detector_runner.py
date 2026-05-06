@@ -6,10 +6,16 @@ Module type: General module
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from main.backends.synthetic_latent_backend_random import SyntheticLatentBackendRandom
-from main.core.schema import METHOD_FAMILY_NAME, NEGATIVE_SAMPLE_ROLES, SAMPLE_ROLES, validate_event_score_record
+from main.core.schema import (
+    NEGATIVE_SAMPLE_ROLES,
+    SAMPLE_ROLES,
+    build_input_artifact_trace,
+    validate_event_score_record,
+)
 from main.methods.temporal_tubelet_watermark.method_placeholder import build_method_from_config
 from main.protocol.calibrator import ThresholdCalibrator
 from main.protocol.event_builder import EventPlanEntry
@@ -27,9 +33,50 @@ class ProtocolRunner:
         None.
     """
 
-    def __init__(self) -> None:
-        self._latent_backend = SyntheticLatentBackendRandom()
-        self._threshold_calibrator = ThresholdCalibrator()
+    def __init__(
+        self,
+        latent_backend: Any | None = None,
+        method_factory: Callable[[dict[str, Any]], Any] | None = None,
+        threshold_calibrator: Any | None = None,
+    ) -> None:
+        """功能：构建可注入依赖的阶段 0 protocol runner。
+
+        Build a stage-0 protocol runner with injectable backend, method factory,
+        and threshold calibrator dependencies.
+
+        Args:
+            latent_backend: Optional latent backend implementation.
+            method_factory: Optional method factory callable.
+            threshold_calibrator: Optional threshold calibrator implementation.
+
+        Returns:
+            None.
+        """
+        resolved_latent_backend = (
+            SyntheticLatentBackendRandom() if latent_backend is None else latent_backend
+        )
+        resolved_method_factory = (
+            build_method_from_config if method_factory is None else method_factory
+        )
+        resolved_threshold_calibrator = (
+            ThresholdCalibrator() if threshold_calibrator is None else threshold_calibrator
+        )
+        if not hasattr(resolved_latent_backend, "build_sample") or not callable(
+            resolved_latent_backend.build_sample
+        ):
+            raise TypeError("latent_backend must provide a callable build_sample")
+        if not callable(resolved_method_factory):
+            raise TypeError("method_factory must be callable")
+        if not hasattr(resolved_threshold_calibrator, "calibrate") or not callable(
+            resolved_threshold_calibrator.calibrate
+        ):
+            raise TypeError(
+                "threshold_calibrator must provide a callable calibrate"
+            )
+
+        self._latent_backend = resolved_latent_backend
+        self._method_factory = resolved_method_factory
+        self._threshold_calibrator = resolved_threshold_calibrator
 
     def run_method_variant(
         self,
@@ -60,7 +107,16 @@ class ProtocolRunner:
         if not isinstance(protocol_config, dict):
             raise TypeError("protocol_config must be a dictionary")
 
-        method = build_method_from_config(method_config)
+        if not isinstance(method_config.get("method_family"), str) or not method_config[
+            "method_family"
+        ]:
+            raise ValueError("method_config method_family must be a non-empty string")
+        if not isinstance(method_config.get("method_variant"), str) or not method_config[
+            "method_variant"
+        ]:
+            raise ValueError("method_config method_variant must be a non-empty string")
+
+        method = self._method_factory(method_config)
         target_fpr = float(protocol_config["threshold_protocol"]["target_fpr_placeholder"])
         dev_records = self._run_event_subset(
             run_id,
@@ -140,12 +196,13 @@ class ProtocolRunner:
                 "sample_id": event_plan_entry.sample_id,
                 "split": event_plan_entry.split,
                 "sample_role": event_plan_entry.sample_role,
-                "method_family": METHOD_FAMILY_NAME,
+                "method_family": method_config["method_family"],
                 "method_variant": method_config["method_variant"],
                 "attack_name": event_plan_entry.attack_name,
                 "attack_params": event_plan_entry.attack_params,
                 "target_fpr": target_fpr,
                 "threshold_id": None if threshold_record is None else threshold_record["threshold_id"],
+                "input_artifact_trace": build_input_artifact_trace(attacked_sample),
                 "latent_backend_name": attacked_sample.latent_backend_name,
                 "latent_backend_status": attacked_sample.latent_backend_status,
                 "latent_tensor_digest_random": attacked_sample.latent_tensor_digest_random,

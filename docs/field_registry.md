@@ -4,6 +4,12 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | project_stage | protocol | none | true | false | false | Semantic project stage identifier for governed protocol progression. |
 | legacy_stage_id | compatibility | none | true | false | false | Compatibility-only legacy stage field; it must not drive formal naming. |
+| core_boundary_policy | governance | none | false | false | false | Declared boundary policy that separates outer governance gates from core runtime candidates. |
+| governance_layer_paths | governance | none | false | false | false | Paths reserved for outer governance gates and excluded from runtime core extraction. |
+| protocol_core_candidate_paths | governance | none | false | false | false | Paths eligible for future protocol_core extraction. |
+| method_core_candidate_paths | governance | none | false | false | false | Paths eligible for future method_core extraction. |
+| forbidden_runtime_imports | governance | none | false | false | false | Import roots that runtime code under `main/` must not depend on. |
+| minimal_demo_excluded_paths | governance | none | false | false | false | Paths that must remain outside the future `minimal_demo` extraction boundary. |
 | protocol_runtime_objects | protocol | none | false | false | false | Declared protocol runtime object roster for the protocol skeleton code scaffold. |
 | supported_method_variants | protocol | none | false | false | false | Declared method variants that the protocol skeleton runtime must support. |
 | run_id | protocol | none | true | false | false | Stable run identifier for governed runtime artifacts. |
@@ -29,11 +35,17 @@
 | attack_params | protocol | none | true | false | false | Attack parameter object written into stage-0 event records. |
 | score_name | protocol | none | true | false | false | Governed score identifier used by threshold records. |
 | threshold_id | protocol | none | true | false | false | Stable threshold identifier used by stage-0 threshold and event records. |
-| latent_backend_name | protocol | none | true | false | false | Stable stage-0 latent backend identifier persisted in governed event records. |
-| latent_backend_status | protocol | none | true | false | false | Status field for the stage-0 latent backend scaffold persisted in governed event records. |
+| input_artifact_trace | protocol | none | true | false | false | Long-lived input artifact trace container for governed event records. |
+| artifact_kind | protocol | none | true | false | false | Semantic kind of governed input artifact persisted inside `input_artifact_trace`. |
+| backend_name | protocol | none | true | false | false | Backend identifier persisted inside `input_artifact_trace`. |
+| backend_status | protocol | none | true | false | false | Backend status persisted inside `input_artifact_trace`. |
+| artifact_digest | trace | none | true | false | false | Digest of the governed input artifact persisted inside `input_artifact_trace`. |
+| generation_seed_random | random | _random | true | false | false | Random seed field inside `input_artifact_trace`; the `_random` suffix is retained for reproducibility semantics. |
+| latent_backend_name | protocol | none | true | false | false | Stage-0 compatibility field mirroring `input_artifact_trace.backend_name` in governed event records. |
+| latent_backend_status | protocol | none | true | false | false | Stage-0 compatibility field mirroring `input_artifact_trace.backend_status` in governed event records. |
 | latent_seed_random | random | _random | true | false | false | Random latent seed field; seed semantics are explicit in the field name. |
-| latent_generation_seed_random | random | _random | true | false | false | Seed field for deterministic stage-0 latent sample generation, persisted in governed event records. |
-| latent_tensor_digest_random | random | _digest_random | true | false | false | Digest field for stage-0 synthetic latent sample identity, persisted in governed event records. |
+| latent_generation_seed_random | random | _random | true | false | false | Stage-0 compatibility seed field mirroring `input_artifact_trace.generation_seed_random`. |
+| latent_tensor_digest_random | random | _digest_random | true | false | false | Stage-0 compatibility digest field mirroring `input_artifact_trace.artifact_digest`. |
 | score_generation_seed_random | random | _random | true | false | false | Seed field for deterministic stage-0 random evidence score generation. |
 | prg_direction_seed_random | random | _random | true | false | false | Random PRG direction seed field; seed semantics are explicit in the field name. |
 | sync_code_seed_random | random | _random | true | false | false | Random sync code seed field; seed semantics are explicit in the field name. |

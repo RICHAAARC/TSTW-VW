@@ -46,6 +46,25 @@ REQUIRED_SUPPORTED_METHOD_VARIANTS = {
     "empty_watermark_method_placeholder",
     "random_score_detector_random",
 }
+REQUIRED_GOVERNANCE_LAYER_PATHS = {
+    "tools/harness",
+    ".codex",
+    "tests",
+}
+REQUIRED_PROTOCOL_CORE_CANDIDATE_PATHS = {
+    "main/core",
+    "main/protocol",
+    "main/analysis",
+}
+REQUIRED_METHOD_CORE_CANDIDATE_PATHS = {"main/methods"}
+REQUIRED_FORBIDDEN_RUNTIME_IMPORTS = {"tools.harness", "tests"}
+REQUIRED_MINIMAL_DEMO_EXCLUDED_PATHS = {
+    "tools/harness",
+    ".codex",
+    "docs/builds",
+    "audit_reports",
+    "tests",
+}
 REQUIRED_OUTPUT_LAYOUT = {
     "event_scores_path": "records/event_scores.jsonl",
     "thresholds_path": "thresholds/thresholds.json",
@@ -65,6 +84,7 @@ REQUIRED_EVENT_SCORE_FIELDS = {
     "attack_params",
     "target_fpr",
     "threshold_id",
+    "input_artifact_trace",
     "latent_backend_name",
     "latent_backend_status",
     "latent_tensor_digest_random",
@@ -81,6 +101,13 @@ REQUIRED_EVENT_SCORE_EVIDENCE_FIELDS = {
     "S_sync",
     "S_traj",
     "S_final",
+}
+REQUIRED_INPUT_ARTIFACT_TRACE_FIELDS = {
+    "artifact_kind",
+    "backend_name",
+    "backend_status",
+    "artifact_digest",
+    "generation_seed_random",
 }
 REQUIRED_EVENT_SCORE_NULL_ENCODING_FIELDS = {
     "threshold_id",
@@ -258,6 +285,66 @@ def validate_project_contract_data(data: dict[str, Any]) -> list[dict[str, str]]
             }
         )
 
+    core_boundary_policy = data.get("core_boundary_policy")
+    if not isinstance(core_boundary_policy, dict):
+        violations.append(
+            {
+                "field": "core_boundary_policy",
+                "reason": "missing_core_boundary_policy",
+            }
+        )
+        return violations
+
+    if not REQUIRED_GOVERNANCE_LAYER_PATHS.issubset(
+        set(core_boundary_policy.get("governance_layer_paths", []))
+    ):
+        violations.append(
+            {
+                "field": "core_boundary_policy.governance_layer_paths",
+                "reason": "missing_required_governance_layer_paths",
+            }
+        )
+
+    if not REQUIRED_PROTOCOL_CORE_CANDIDATE_PATHS.issubset(
+        set(core_boundary_policy.get("protocol_core_candidate_paths", []))
+    ):
+        violations.append(
+            {
+                "field": "core_boundary_policy.protocol_core_candidate_paths",
+                "reason": "missing_required_protocol_core_candidate_paths",
+            }
+        )
+
+    if not REQUIRED_METHOD_CORE_CANDIDATE_PATHS.issubset(
+        set(core_boundary_policy.get("method_core_candidate_paths", []))
+    ):
+        violations.append(
+            {
+                "field": "core_boundary_policy.method_core_candidate_paths",
+                "reason": "missing_required_method_core_candidate_paths",
+            }
+        )
+
+    if not REQUIRED_FORBIDDEN_RUNTIME_IMPORTS.issubset(
+        set(core_boundary_policy.get("forbidden_runtime_imports", []))
+    ):
+        violations.append(
+            {
+                "field": "core_boundary_policy.forbidden_runtime_imports",
+                "reason": "missing_required_forbidden_runtime_imports",
+            }
+        )
+
+    if not REQUIRED_MINIMAL_DEMO_EXCLUDED_PATHS.issubset(
+        set(core_boundary_policy.get("minimal_demo_excluded_paths", []))
+    ):
+        violations.append(
+            {
+                "field": "core_boundary_policy.minimal_demo_excluded_paths",
+                "reason": "missing_required_minimal_demo_excluded_paths",
+            }
+        )
+
     return violations
 
 
@@ -432,6 +519,16 @@ def validate_protocol_artifact_schema_data(data: dict[str, Any]) -> list[dict[st
             {
                 "field": "event_score_record.required_evidence_score_fields",
                 "reason": "missing_required_evidence_score_fields",
+            }
+        )
+
+    if not REQUIRED_INPUT_ARTIFACT_TRACE_FIELDS.issubset(
+        set(event_score_record.get("required_input_artifact_trace_fields", []))
+    ):
+        violations.append(
+            {
+                "field": "event_score_record.required_input_artifact_trace_fields",
+                "reason": "missing_required_input_artifact_trace_fields",
             }
         )
 
