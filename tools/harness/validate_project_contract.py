@@ -31,6 +31,21 @@ REQUIRED_EVIDENCE_NAMES = {
     "trajectory_evidence",
     "final_evidence",
 }
+REQUIRED_PROTOCOL_RUNTIME_OBJECTS = {
+    "latent_backend",
+    "watermark_method",
+    "evidence_extractor",
+    "protocol_runner",
+    "threshold_calibrator",
+    "record_writer",
+    "ablation_runner",
+    "table_builder",
+    "manifest_builder",
+}
+REQUIRED_SUPPORTED_METHOD_VARIANTS = {
+    "empty_watermark_method_placeholder",
+    "random_score_detector_random",
+}
 REQUIRED_OUTPUT_LAYOUT = {
     "event_scores_path": "records/event_scores.jsonl",
     "thresholds_path": "thresholds/thresholds.json",
@@ -133,10 +148,9 @@ REQUIRED_ABLATION_TABLE_COLUMNS = {
     "clean_positive_TPR",
     "attacked_positive_TPR",
 }
-REQUIRED_ABLATION_PLACEHOLDER_VARIANTS = {
-    "frame_prc_placeholder",
-    "tubelet_only_placeholder",
-    "tubelet_sync_placeholder",
+REQUIRED_ABLATION_METHOD_VARIANTS = {
+    "empty_watermark_method_placeholder",
+    "random_score_detector_random",
 }
 REQUIRED_ATTACK_PLACEHOLDER_FIELDS = {
     "attack_name_placeholder",
@@ -180,6 +194,14 @@ def validate_project_contract_data(data: dict[str, Any]) -> list[dict[str, str]]
             }
         )
 
+    if data.get("construction_phase") != "protocol_skeleton":
+        violations.append(
+            {
+                "field": "construction_phase",
+                "reason": "construction_phase_must_equal_protocol_skeleton",
+            }
+        )
+
     if not REQUIRED_SAMPLE_ROLES.issubset(set(data.get("sample_roles", []))):
         violations.append(
             {
@@ -212,6 +234,26 @@ def validate_project_contract_data(data: dict[str, Any]) -> list[dict[str, str]]
             }
         )
 
+    if not REQUIRED_PROTOCOL_RUNTIME_OBJECTS.issubset(
+        set(data.get("protocol_runtime_objects", []))
+    ):
+        violations.append(
+            {
+                "field": "protocol_runtime_objects",
+                "reason": "missing_required_protocol_runtime_objects",
+            }
+        )
+
+    if not REQUIRED_SUPPORTED_METHOD_VARIANTS.issubset(
+        set(data.get("supported_method_variants", []))
+    ):
+        violations.append(
+            {
+                "field": "supported_method_variants",
+                "reason": "missing_required_supported_method_variants",
+            }
+        )
+
     return violations
 
 
@@ -232,6 +274,22 @@ def validate_protocol_config_data(data: dict[str, Any]) -> list[dict[str, str]]:
             {
                 "field": "threshold_protocol.calibration_split",
                 "reason": "calibration_split_must_equal_calibration",
+            }
+        )
+
+    if data.get("construction_phase") != "protocol_skeleton":
+        violations.append(
+            {
+                "field": "construction_phase",
+                "reason": "construction_phase_must_equal_protocol_skeleton",
+            }
+        )
+
+    if data.get("protocol_name") != "fixed_low_fpr_calibrated_detection":
+        violations.append(
+            {
+                "field": "protocol_name",
+                "reason": "protocol_name_must_equal_fixed_low_fpr_calibrated_detection",
             }
         )
 
@@ -261,6 +319,22 @@ def validate_protocol_config_data(data: dict[str, Any]) -> list[dict[str, str]]:
             {
                 "field": "threshold_protocol.score_name",
                 "reason": "score_name_must_equal_s_final",
+            }
+        )
+
+    if threshold_protocol.get("threshold_quantile_rule") != "upper_tail":
+        violations.append(
+            {
+                "field": "threshold_protocol.threshold_quantile_rule",
+                "reason": "threshold_quantile_rule_must_equal_upper_tail",
+            }
+        )
+
+    if threshold_protocol.get("allow_attack_specific_threshold") is not False:
+        violations.append(
+            {
+                "field": "threshold_protocol.allow_attack_specific_threshold",
+                "reason": "attack_specific_thresholds_must_be_disabled",
             }
         )
 
@@ -432,6 +506,14 @@ def validate_ablation_placeholder_data(data: dict[str, Any]) -> list[dict[str, s
             }
         )
 
+    if data.get("construction_phase") != "protocol_skeleton":
+        violations.append(
+            {
+                "field": "construction_phase",
+                "reason": "construction_phase_must_equal_protocol_skeleton",
+            }
+        )
+
     if data.get("shared_protocol_required") is not True:
         violations.append(
             {
@@ -448,19 +530,12 @@ def validate_ablation_placeholder_data(data: dict[str, Any]) -> list[dict[str, s
             }
         )
 
-    variants = data.get("ablation_variants_placeholder", [])
-    if not REQUIRED_ABLATION_PLACEHOLDER_VARIANTS.issubset(set(variants)):
+    variants = data.get("supported_method_variants", [])
+    if not REQUIRED_ABLATION_METHOD_VARIANTS.issubset(set(variants)):
         violations.append(
             {
-                "field": "ablation_variants_placeholder",
-                "reason": "missing_required_ablation_variants",
-            }
-        )
-    elif not all(str(variant).endswith("_placeholder") for variant in variants):
-        violations.append(
-            {
-                "field": "ablation_variants_placeholder",
-                "reason": "ablation_variant_missing_placeholder_suffix",
+                "field": "supported_method_variants",
+                "reason": "missing_required_supported_method_variants",
             }
         )
 

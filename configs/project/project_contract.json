@@ -1,5 +1,6 @@
 {
   "project_stage": "protocol_skeleton",
+  "construction_phase": "protocol_skeleton",
   "legacy_stage_id": null,
   "method_objects": [
     "temporal_synchronized_tubelet_code",
@@ -22,6 +23,21 @@
     "dev",
     "calibration",
     "test"
+  ],
+  "protocol_runtime_objects": [
+    "latent_backend",
+    "watermark_method",
+    "evidence_extractor",
+    "protocol_runner",
+    "threshold_calibrator",
+    "record_writer",
+    "ablation_runner",
+    "table_builder",
+    "manifest_builder"
+  ],
+  "supported_method_variants": [
+    "empty_watermark_method_placeholder",
+    "random_score_detector_random"
   ],
   "target_fpr_placeholder": 0.001,
   "field_governance": {

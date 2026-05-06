@@ -43,6 +43,23 @@ def test_placeholder_semantics_without_suffix_fail() -> None:
     assert violations[0]["reason"] == "placeholder_value_on_ungoverned_field"
 
 
+def test_placeholder_identifier_values_on_semantic_fields_pass() -> None:
+    """Validate that semantic identifier fields may reference placeholder names.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    text = (
+        'method_variant: "empty_watermark_method_placeholder"\n'
+        'fusion_rule: "constant_zero_fusion_placeholder"\n'
+        'method_status: "placeholder"\n'
+    )
+    assert find_placeholder_field_violations(text, "memory") == []
+
+
 def test_random_field_with_digest_trace_passes() -> None:
     """Validate that governed random fields pass when digest trace exists.
 

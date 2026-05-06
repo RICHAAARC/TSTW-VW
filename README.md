@@ -2,7 +2,7 @@
 
 本仓库当前处于 `protocol_skeleton` 阶段。
 
-当前仓库只包含 Codex skills、Harness Engineering、最小配置与最小测试闭环；不包含真实视频水印算法、不包含真实 DiT / Flow Matching 接入、不包含真实视频生成流程。
+当前仓库包含阶段 0 所需的 governance 层与 placeholder / random 驱动的 runtime skeleton；不包含真实视频水印算法、不包含真实 DiT / Flow Matching 接入、不包含真实视频生成流程。
 
 ## Current Scope
 
@@ -10,6 +10,7 @@
 - 固定 naming governance 与 placeholder/random field governance。
 - 固定 protocol records、threshold calibration、claim audit 与 artifact rebuild 的骨架约束。
 - 提供可执行的 harness 审计脚本与 pytest 最小闭环。
+- 提供阶段 0 的 placeholder / random runtime skeleton，包括 synthetic latent backend、protocol runner、threshold calibrator、record writer、ablation runner 与 table rebuild scaffold。
 - 冻结阶段 0 的 event score record、threshold record、run manifest 与 table output layout schema skeleton。
 
 ## Formal Config Entries
@@ -17,7 +18,10 @@
 - `configs/project/project_contract.json`
 - `configs/protocol/protocol_skeleton.json`
 - `configs/method/method_placeholder.json`
+- `configs/method/empty_watermark_method_placeholder.json`
+- `configs/method/random_score_detector_random.json`
 - `configs/ablation/ablation_placeholder.json`
+- `configs/ablation/protocol_skeleton_methods.json`
 - `configs/attacks/identity_attack_placeholder.json`
 - `configs/schema/protocol_artifact_schema.json`
 
@@ -57,13 +61,13 @@ python tools/harness/run_all_audits.py
 ## Stage-0 Artifact Freeze
 
 - 当前阶段只冻结 records、thresholds、manifest 与 tables 的 schema 和相对输出布局。
-- 当前阶段不实现真实 `RecordWriter`、`ThresholdCalibrator`、`ProtocolRunner` 或 `TableBuilder`。
-- 当前阶段不在 `outputs/` 下写入正式实验产物。
+- 当前阶段实现的是 placeholder / random 驱动的 `RecordWriter`、`ThresholdCalibrator`、`ProtocolRunner` 与 `TableBuilder` scaffold，而不是真实算法或真实模型流程。
+- 当前阶段不在仓库中 check in 正式实验产物。
 
 ## Stage-0 Support Freeze
 
 - 当前阶段冻结 attack placeholder config、ablation shared-protocol config、claim 边界与 artifact rebuild 约束。
-- 当前阶段不得创建 `main/`、`paper_workflow/`、`outputs/` 或 `minimal_release/` 目录。
+- 当前阶段允许创建 `main/` 下的 stage-0 代码骨架，但仍不得创建 `paper_workflow/` 或 `minimal_release/` 目录。
 - 当前阶段只允许为后续阶段声明边界，不允许提前创建 release artifacts。
 
 ## Next-Stage Gate

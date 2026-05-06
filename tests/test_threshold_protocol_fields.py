@@ -62,3 +62,22 @@ def test_test_threshold_update_allowed_true_fails() -> None:
         violation["reason"] == "test_threshold_updates_must_be_disabled"
         for violation in violations
     )
+
+
+def test_attack_specific_thresholds_are_disabled() -> None:
+    """Validate that stage-0 protocol config blocks attack-specific thresholds.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(ROOT / "configs" / "protocol" / "protocol_skeleton.json")
+    broken = deepcopy(data)
+    broken["threshold_protocol"]["allow_attack_specific_threshold"] = True
+    violations = validate_protocol_config_data(broken)
+    assert any(
+        violation["reason"] == "attack_specific_thresholds_must_be_disabled"
+        for violation in violations
+    )

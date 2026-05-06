@@ -1,0 +1,12 @@
+{
+  "method_family": "temporal_tubelet_watermark",
+  "method_variant": "random_score_detector_random",
+  "method_status": "random",
+  "enabled_evidence": {
+    "tubelet": true,
+    "sync": true,
+    "trajectory": false
+  },
+  "fusion_rule": "random_score_linear_fusion_random",
+  "score_generation_seed_random": 20260506
+}

@@ -1,0 +1,11 @@
+{
+  "method_family": "temporal_tubelet_watermark",
+  "method_variant": "empty_watermark_method_placeholder",
+  "method_status": "placeholder",
+  "enabled_evidence": {
+    "tubelet": false,
+    "sync": false,
+    "trajectory": false
+  },
+  "fusion_rule": "constant_zero_fusion_placeholder"
+}

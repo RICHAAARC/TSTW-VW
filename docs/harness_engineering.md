@@ -15,9 +15,9 @@
 
 - Harness 脚本仅依赖 Python 标准库。
 - `audit_reports/` 仅作为运行时审计输出目录，不属于正式论文 `outputs/`。
-- 当前阶段不实现真实 records writer、threshold calibrator、table builder 或 notebook runner。
-- 当前阶段仅冻结 protocol artifact schema，不落地真实实验产物写入。
-- 当前阶段仅冻结 support config、claim 边界与 release boundary，不创建真实 `minimal_release/` 或 runtime 目录。
+- 当前阶段实现 placeholder / random 驱动的 records writer、threshold calibrator、table builder、protocol runner 与 ablation runner scaffold。
+- 当前阶段仅冻结并执行 stage-0 protocol skeleton，不落地真实算法或真实模型产物。
+- 当前阶段仅冻结 support config、claim 边界与 release boundary，不创建真实 `minimal_release/` 或 notebook-only runtime。
 
 ## Required Entry Commands
 

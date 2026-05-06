@@ -1,5 +1,7 @@
 {
   "project_stage": "protocol_skeleton",
+  "construction_phase": "protocol_skeleton",
+  "protocol_name": "fixed_low_fpr_calibrated_detection",
   "splits": [
     "dev",
     "calibration",
@@ -19,7 +21,9 @@
       "clean_negative",
       "attacked_negative"
     ],
+    "threshold_quantile_rule": "upper_tail",
     "test_split": "test",
-    "test_threshold_update_allowed": false
+    "test_threshold_update_allowed": false,
+    "allow_attack_specific_threshold": false
   }
 }

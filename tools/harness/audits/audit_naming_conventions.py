@@ -166,6 +166,7 @@ def run_audit(root: str | Path) -> dict[str, Any]:
         root_path / ".codex",
         root_path / "configs",
         root_path / "docs",
+        root_path / "main",
         root_path / "tools",
         root_path / "tests",
     ]

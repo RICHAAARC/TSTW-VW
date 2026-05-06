@@ -1,0 +1,341 @@
+"""
+文件用途：定义阶段 0 协议骨架所需的枚举、样本结构与记录校验。
+File purpose: Define the stage-0 protocol schema, sample models, and record validators.
+Module type: General module
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+
+SPLIT_ORDER = ("dev", "calibration", "test")
+SAMPLE_ROLE_ORDER = (
+    "clean_negative",
+    "attacked_negative",
+    "watermarked_positive",
+    "attacked_positive",
+)
+EVIDENCE_SCORE_ORDER = ("S_tubelet", "S_sync", "S_traj", "S_final")
+
+SPLITS = set(SPLIT_ORDER)
+SAMPLE_ROLES = set(SAMPLE_ROLE_ORDER)
+NEGATIVE_SAMPLE_ROLES = {"clean_negative", "attacked_negative"}
+POSITIVE_SAMPLE_ROLES = {"watermarked_positive", "attacked_positive"}
+EVIDENCE_SCORE_NAMES = set(EVIDENCE_SCORE_ORDER)
+
+CONSTRUCTION_PHASE = "protocol_skeleton"
+PROTOCOL_NAME = "fixed_low_fpr_calibrated_detection"
+METHOD_FAMILY_NAME = "temporal_tubelet_watermark"
+IDENTITY_ATTACK_NAME = "identity_attack_placeholder"
+DEFAULT_LATENT_SHAPE = (16, 4, 32, 32)
+
+REQUIRED_EVENT_SCORE_FIELDS = {
+    "run_id",
+    "event_id",
+    "sample_id",
+    "split",
+    "sample_role",
+    "method_family",
+    "method_variant",
+    "attack_name",
+    "attack_params",
+    "target_fpr",
+    "threshold_id",
+    "evidence_scores",
+    "disabled_evidence",
+    "decision",
+    "failure_reason",
+    "placeholder_fields",
+    "random_fields",
+}
+REQUIRED_THRESHOLD_FIELDS = {
+    "threshold_id",
+    "run_id",
+    "method_family",
+    "method_variant",
+    "score_name",
+    "target_fpr",
+    "calibration_split",
+    "calibration_negative_roles",
+    "threshold_value",
+    "threshold_quantile",
+    "num_calibration_negatives",
+    "threshold_source_record_digest",
+    "fusion_rule",
+    "created_at",
+}
+REQUIRED_MANIFEST_FIELDS = {
+    "run_id",
+    "created_at",
+    "construction_phase",
+    "protocol_name",
+    "method_config_digest",
+    "protocol_config_digest",
+    "attack_matrix_digest",
+    "ablation_config_digest",
+    "records_digest",
+    "thresholds_digest",
+    "tables_digest",
+    "figures_digest_placeholder",
+    "placeholder_fields",
+    "random_fields",
+}
+
+
+@dataclass(frozen=True)
+class LatentSample:
+    """功能：定义阶段 0 的随机 latent 样本结构。
+
+    Stage-0 latent sample model.
+
+    Args:
+        sample_id: Stable sample identifier.
+        split: Governed split name.
+        sample_role: Governed sample role name.
+        latent_shape: Declared latent tensor shape.
+        latent_tensor_digest_random: Digest-backed latent identity.
+        latent_generation_seed_random: Deterministic latent seed.
+        latent_backend_name: Stable latent backend identifier.
+        latent_backend_status: Backend scaffold status.
+
+    Returns:
+        None.
+    """
+
+    sample_id: str
+    split: str
+    sample_role: str
+    latent_shape: tuple[int, int, int, int]
+    latent_tensor_digest_random: str
+    latent_generation_seed_random: int
+    latent_backend_name: str
+    latent_backend_status: str
+
+
+@dataclass(frozen=True)
+class DetectionResult:
+    """功能：定义阶段 0 检测输出结构。
+
+    Stage-0 detection result model.
+
+    Args:
+        evidence_scores: Governed evidence score payload.
+        disabled_evidence: Explicitly disabled evidence names.
+        decision: Final binary decision.
+        failure_reason: Optional failure reason.
+        placeholder_fields: Placeholder-governed field names.
+        random_fields: Random-trace field names.
+
+    Returns:
+        None.
+    """
+
+    evidence_scores: dict[str, float | None]
+    disabled_evidence: list[str]
+    decision: bool
+    failure_reason: str | None
+    placeholder_fields: list[str]
+    random_fields: list[str]
+
+
+def ensure_supported_split(split: str) -> None:
+    """功能：校验 split 是否属于受治理枚举。
+
+    Validate that a split name belongs to the governed split set.
+
+    Args:
+        split: Candidate split name.
+
+    Returns:
+        None.
+
+    Raises:
+        TypeError: Raised when the split is not a string.
+        ValueError: Raised when the split is not governed.
+    """
+    if not isinstance(split, str):
+        # 中文注释：split 必须是字符串，否则后续枚举匹配不可靠。
+        raise TypeError("split must be a string")
+    if split not in SPLITS:
+        # 中文注释：只允许三段式协议中的受治理 split。
+        raise ValueError(f"unsupported split: {split}")
+
+
+def ensure_supported_sample_role(sample_role: str) -> None:
+    """功能：校验 sample role 是否属于受治理枚举。
+
+    Validate that a sample role belongs to the governed role set.
+
+    Args:
+        sample_role: Candidate sample role name.
+
+    Returns:
+        None.
+
+    Raises:
+        TypeError: Raised when the role is not a string.
+        ValueError: Raised when the role is not governed.
+    """
+    if not isinstance(sample_role, str):
+        # 中文注释：sample role 必须是字符串，否则配置与 records 语义不稳定。
+        raise TypeError("sample_role must be a string")
+    if sample_role not in SAMPLE_ROLES:
+        # 中文注释：只允许四类受治理样本角色。
+        raise ValueError(f"unsupported sample_role: {sample_role}")
+
+
+def build_empty_evidence_scores(final_score: float = 0.0) -> dict[str, float | None]:
+    """功能：构建完整但可为空的 evidence score 结构。
+
+    Build a fully enumerated evidence score structure.
+
+    Args:
+        final_score: Materialized final score value.
+
+    Returns:
+        A governed evidence score dictionary.
+    """
+    if not isinstance(final_score, (int, float)):
+        # 中文注释：最终分数必须可转换为浮点数，否则无法进入后续阈值逻辑。
+        raise TypeError("final_score must be numeric")
+    return {
+        "S_tubelet": None,
+        "S_sync": None,
+        "S_traj": None,
+        "S_final": round(float(final_score), 6),
+    }
+
+
+def validate_evidence_scores(evidence_scores: dict[str, float | None]) -> None:
+    """功能：校验 evidence score 字段完整且类型有效。
+
+    Validate that evidence scores contain the governed keys and types.
+
+    Args:
+        evidence_scores: Candidate evidence score payload.
+
+    Returns:
+        None.
+
+    Raises:
+        TypeError: Raised when the payload is not a dictionary.
+        ValueError: Raised when required evidence keys are missing.
+    """
+    if not isinstance(evidence_scores, dict):
+        # 中文注释：evidence score 容器必须是字典，便于后续稳定序列化。
+        raise TypeError("evidence_scores must be a dictionary")
+
+    missing_fields = EVIDENCE_SCORE_NAMES.difference(evidence_scores.keys())
+    if missing_fields:
+        # 中文注释：缺失任一 evidence 字段都会破坏 record schema 冻结口径。
+        raise ValueError(f"missing evidence score fields: {sorted(missing_fields)}")
+
+    for score_name in EVIDENCE_SCORE_ORDER:
+        score_value = evidence_scores[score_name]
+        if score_value is not None and not isinstance(score_value, (int, float)):
+            # 中文注释：evidence 值只允许浮点数或显式空值编码。
+            raise ValueError(f"invalid evidence score value for {score_name}")
+
+
+def validate_event_score_record(event_score_record: dict[str, Any]) -> None:
+    """功能：校验 event-level score record 结构。
+
+    Validate the governed event-level score record schema.
+
+    Args:
+        event_score_record: Candidate event score record.
+
+    Returns:
+        None.
+
+    Raises:
+        TypeError: Raised when the record is not a dictionary.
+        ValueError: Raised when required fields are missing or malformed.
+    """
+    if not isinstance(event_score_record, dict):
+        # 中文注释：record 写入前必须保证字典结构完整。
+        raise TypeError("event_score_record must be a dictionary")
+
+    missing_fields = REQUIRED_EVENT_SCORE_FIELDS.difference(event_score_record.keys())
+    if missing_fields:
+        # 中文注释：缺失必填字段会破坏 records schema 可审计性。
+        raise ValueError(f"missing event_score_record fields: {sorted(missing_fields)}")
+
+    ensure_supported_split(event_score_record["split"])
+    ensure_supported_sample_role(event_score_record["sample_role"])
+    validate_evidence_scores(event_score_record["evidence_scores"])
+
+    if not isinstance(event_score_record["disabled_evidence"], list):
+        raise ValueError("disabled_evidence must be a list")
+    if not isinstance(event_score_record["placeholder_fields"], list):
+        raise ValueError("placeholder_fields must be a list")
+    if not isinstance(event_score_record["random_fields"], list):
+        raise ValueError("random_fields must be a list")
+    if not isinstance(event_score_record["decision"], bool):
+        raise ValueError("decision must be a boolean")
+
+
+def validate_threshold_record(threshold_record: dict[str, Any]) -> None:
+    """功能：校验 threshold record 结构。
+
+    Validate the governed threshold record schema.
+
+    Args:
+        threshold_record: Candidate threshold record.
+
+    Returns:
+        None.
+
+    Raises:
+        TypeError: Raised when the record is not a dictionary.
+        ValueError: Raised when required fields are missing or malformed.
+    """
+    if not isinstance(threshold_record, dict):
+        raise TypeError("threshold_record must be a dictionary")
+
+    missing_fields = REQUIRED_THRESHOLD_FIELDS.difference(threshold_record.keys())
+    if missing_fields:
+        raise ValueError(f"missing threshold_record fields: {sorted(missing_fields)}")
+
+    ensure_supported_split(threshold_record["calibration_split"])
+    calibration_negative_roles = threshold_record["calibration_negative_roles"]
+    if not isinstance(calibration_negative_roles, list):
+        raise ValueError("calibration_negative_roles must be a list")
+    if not NEGATIVE_SAMPLE_ROLES.issubset(set(calibration_negative_roles)):
+        raise ValueError("threshold_record is missing required calibration negative roles")
+
+
+def validate_run_manifest_record(run_manifest_record: dict[str, Any]) -> None:
+    """功能：校验 run manifest 结构。
+
+    Validate the governed run manifest schema.
+
+    Args:
+        run_manifest_record: Candidate run manifest payload.
+
+    Returns:
+        None.
+
+    Raises:
+        TypeError: Raised when the payload is not a dictionary.
+        ValueError: Raised when required fields are missing or malformed.
+    """
+    if not isinstance(run_manifest_record, dict):
+        raise TypeError("run_manifest_record must be a dictionary")
+
+    missing_fields = REQUIRED_MANIFEST_FIELDS.difference(run_manifest_record.keys())
+    if missing_fields:
+        raise ValueError(f"missing run_manifest_record fields: {sorted(missing_fields)}")
+
+    if run_manifest_record["construction_phase"] != CONSTRUCTION_PHASE:
+        raise ValueError("run_manifest_record construction_phase must equal protocol_skeleton")
+    if run_manifest_record["protocol_name"] != PROTOCOL_NAME:
+        raise ValueError(
+            "run_manifest_record protocol_name must equal fixed_low_fpr_calibrated_detection"
+        )
+    if not isinstance(run_manifest_record["placeholder_fields"], list):
+        raise ValueError("placeholder_fields must be a list")
+    if not isinstance(run_manifest_record["random_fields"], list):
+        raise ValueError("random_fields must be a list")

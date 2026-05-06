@@ -16,6 +16,12 @@ KEY_VALUE_PATTERN = re.compile(
 )
 
 PLACEHOLDER_META_FIELDS = {"placeholder_suffix"}
+ALLOWED_PLACEHOLDER_VALUE_FIELDS = {
+    "method_status",
+    "method_variant",
+    "fusion_rule",
+    "attack_name",
+}
 RANDOM_META_FIELDS = {
     "random_fields_required",
     "random_suffix",
@@ -68,7 +74,11 @@ def find_placeholder_field_violations(text: str, path: str | Path) -> list[dict[
                 }
             )
             continue
-        if "placeholder" in lowered_value and not lowered_name.endswith("_placeholder"):
+        if (
+            "placeholder" in lowered_value
+            and not lowered_name.endswith("_placeholder")
+            and lowered_name not in ALLOWED_PLACEHOLDER_VALUE_FIELDS
+        ):
             violations.append(
                 {
                     "path": source_path,

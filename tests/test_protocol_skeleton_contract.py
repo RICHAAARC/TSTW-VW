@@ -71,3 +71,26 @@ def test_missing_trajectory_evidence_fails() -> None:
         violation["reason"] == "missing_required_evidence_names"
         for violation in violations
     )
+
+
+def test_missing_stage0_method_variant_fails() -> None:
+    """Validate that stage-0 method variants remain frozen in the contract.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(ROOT / "configs" / "project" / "project_contract.json")
+    broken = deepcopy(data)
+    broken["supported_method_variants"] = [
+        variant
+        for variant in broken["supported_method_variants"]
+        if variant != "random_score_detector_random"
+    ]
+    violations = validate_project_contract_data(broken)
+    assert any(
+        violation["reason"] == "missing_required_supported_method_variants"
+        for violation in violations
+    )

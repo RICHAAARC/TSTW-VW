@@ -47,6 +47,6 @@ def test_governed_repository_reports_protocol_skeleton_status() -> None:
     assert report["directory_status"]["docs"]["exists"] is True
     assert report["directory_status"]["tools"]["exists"] is True
     assert report["directory_status"]["tests"]["exists"] is True
-    assert report["directory_status"]["main"]["exists"] is False
+    assert report["directory_status"]["main"]["exists"] is True
     assert report["directory_status"]["paper_workflow"]["exists"] is False
     assert report["directory_status"]["outputs"]["exists"] is False

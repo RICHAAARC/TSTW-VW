@@ -1,12 +1,12 @@
 {
   "project_stage": "protocol_skeleton",
   "construction_phase": "protocol_skeleton",
-  "supported_method_variants": [
+  "method_variants": [
     "empty_watermark_method_placeholder",
     "random_score_detector_random"
   ],
   "shared_protocol_required": true,
   "shared_attack_matrix_required": true,
-  "shared_target_fpr_placeholder": 0.001,
-  "shared_table_builder_placeholder": "protocol_table_builder_placeholder"
+  "target_fpr": 0.001,
+  "table_builder_name": "table_builder"
 }

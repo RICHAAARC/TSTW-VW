@@ -7,7 +7,8 @@
 ## Current Stage
 
 - `project_stage`: `protocol_skeleton`
-- 当前阶段只允许构建 skills、harness、配置、审计与测试。
+- 当前阶段允许构建阶段 0 所需的 `main/` 代码骨架、配置、文档、审计与测试。
+- 当前阶段允许实现 placeholder / random 驱动的最小 protocol runtime，用于冻结 records、thresholds、manifest 与 table rebuild 口径。
 - 当前阶段不得进入真实算法实现、真实模型接入、真实视频生成流程。
 
 ## Ordered Semantic Stages
@@ -25,6 +26,23 @@
 1. `temporal_synchronized_tubelet_code`
 2. `flow_matching_trajectory_statistic`
 3. `fixed_low_fpr_calibrated_detector`
+
+## Stage-0 Runtime Skeleton
+
+1. `latent_backend`
+2. `watermark_method`
+3. `evidence_extractor`
+4. `protocol_runner`
+5. `threshold_calibrator`
+6. `record_writer`
+7. `ablation_runner`
+8. `table_builder`
+9. `manifest_builder`
+
+## Stage-0 Method Variants
+
+1. `empty_watermark_method_placeholder`
+2. `random_score_detector_random`
 
 ## Evidence Types
 
@@ -54,6 +72,7 @@
 4. Supported claims must map to tables, curves, or audit-approved evidence outputs.
 5. Placeholder fields must never support supported claims.
 6. Tables, figures, and reports must remain rebuildable from governed records and manifests.
+7. Stage-0 runtime outputs must follow the governed `records/`, `thresholds/`, `artifacts/`, and `tables/` layout.
 
 ## Blocking Governance Rules
 
@@ -76,5 +95,5 @@
 1. Do not implement real watermark embedding or detection algorithms.
 2. Do not integrate real DiT backends, Flow Matching backends, or video VAE backends.
 3. Do not create notebook-only protocol logic.
-4. Do not create formal experiment outputs under `outputs/`.
+4. Do not check in formal experiment outputs under `outputs/`; stage-0 tests may use temporary output roots or ephemeral `outputs/runs` paths.
 5. Do not bypass harness audits or pytest gates.

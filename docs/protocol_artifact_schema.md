@@ -126,6 +126,7 @@
 
 ## Stage Boundary
 
-- 当前文档只冻结 schema 和路径，不声明任何真实实验结果。
+- 当前文档冻结 schema 和路径，不声明任何具有方法性能意义的真实实验结果。
+- 当前阶段允许 placeholder / random runtime skeleton 在临时输出路径下写出 records、thresholds、manifest 与 tables，用于验证协议可执行性。
 - 当前阶段不得通过 notebook、终端脚本或临时文件绕过这些 schema 约束写入正式结果。
 - 进入下一阶段前，records、thresholds、manifest 与 tables 的真实实现必须继续遵守本文件和 `configs/schema/protocol_artifact_schema.json` 的冻结口径。
