@@ -1,0 +1,13 @@
+{
+  "project_stage": "protocol_skeleton",
+  "method_variant_placeholder": "tubelet_sync_placeholder",
+  "latent_backend_placeholder": "synthetic_gaussian_latent_placeholder",
+  "watermark_method_placeholder": "projection_margin_method_placeholder",
+  "trajectory_backend_placeholder": "trajectory_backend_placeholder",
+  "quality_metric_placeholder": "identity_quality_metric_placeholder",
+  "random_fields_required": [
+    "latent_seed_random",
+    "prg_direction_seed_random",
+    "sync_code_seed_random"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "project_stage": "protocol_skeleton",
+  "splits": [
+    "dev",
+    "calibration",
+    "test"
+  ],
+  "sample_roles": [
+    "clean_negative",
+    "attacked_negative",
+    "watermarked_positive",
+    "attacked_positive"
+  ],
+  "threshold_protocol": {
+    "score_name": "S_final",
+    "target_fpr_placeholder": 0.001,
+    "calibration_split": "calibration",
+    "calibration_negative_roles": [
+      "clean_negative",
+      "attacked_negative"
+    ],
+    "test_split": "test",
+    "test_threshold_update_allowed": false
+  }
+}

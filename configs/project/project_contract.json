@@ -1,0 +1,49 @@
+{
+  "project_stage": "protocol_skeleton",
+  "legacy_stage_id": null,
+  "method_objects": [
+    "temporal_synchronized_tubelet_code",
+    "flow_matching_trajectory_statistic",
+    "fixed_low_fpr_calibrated_detector"
+  ],
+  "evidence_names": [
+    "tubelet_evidence",
+    "sync_evidence",
+    "trajectory_evidence",
+    "final_evidence"
+  ],
+  "sample_roles": [
+    "clean_negative",
+    "attacked_negative",
+    "watermarked_positive",
+    "attacked_positive"
+  ],
+  "splits": [
+    "dev",
+    "calibration",
+    "test"
+  ],
+  "target_fpr_placeholder": 0.001,
+  "field_governance": {
+    "placeholder_suffix": "_placeholder",
+    "random_suffix": "_random",
+    "random_digest_suffix": "_digest_random"
+  },
+  "naming_governance": {
+    "case_style": "snake_case",
+    "forbidden_suffixes": [
+      "_v1",
+      "_v2",
+      "_p0",
+      "_p1"
+    ],
+    "forbidden_method_variants": [
+      "full",
+      "default",
+      "new",
+      "old",
+      "best",
+      "final_method"
+    ]
+  }
+}

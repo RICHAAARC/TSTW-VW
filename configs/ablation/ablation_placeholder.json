@@ -1,0 +1,9 @@
+{
+  "project_stage": "protocol_skeleton",
+  "ablation_variants_placeholder": [
+    "frame_prc_placeholder",
+    "tubelet_only_placeholder",
+    "tubelet_sync_placeholder"
+  ],
+  "shared_protocol_required": true
+}
