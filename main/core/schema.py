@@ -43,6 +43,10 @@ REQUIRED_EVENT_SCORE_FIELDS = {
     "attack_params",
     "target_fpr",
     "threshold_id",
+    "latent_backend_name",
+    "latent_backend_status",
+    "latent_tensor_digest_random",
+    "latent_generation_seed_random",
     "evidence_scores",
     "disabled_evidence",
     "decision",
@@ -266,6 +270,21 @@ def validate_event_score_record(event_score_record: dict[str, Any]) -> None:
     ensure_supported_split(event_score_record["split"])
     ensure_supported_sample_role(event_score_record["sample_role"])
     validate_evidence_scores(event_score_record["evidence_scores"])
+
+    if not isinstance(event_score_record["latent_backend_name"], str) or not event_score_record[
+        "latent_backend_name"
+    ]:
+        raise ValueError("latent_backend_name must be a non-empty string")
+    if not isinstance(event_score_record["latent_backend_status"], str) or not event_score_record[
+        "latent_backend_status"
+    ]:
+        raise ValueError("latent_backend_status must be a non-empty string")
+    if not isinstance(event_score_record["latent_tensor_digest_random"], str) or not event_score_record[
+        "latent_tensor_digest_random"
+    ]:
+        raise ValueError("latent_tensor_digest_random must be a non-empty string")
+    if not isinstance(event_score_record["latent_generation_seed_random"], int):
+        raise ValueError("latent_generation_seed_random must be an integer")
 
     if not isinstance(event_score_record["disabled_evidence"], list):
         raise ValueError("disabled_evidence must be a list")

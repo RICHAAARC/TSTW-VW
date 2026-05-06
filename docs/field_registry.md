@@ -29,11 +29,11 @@
 | attack_params | protocol | none | true | false | false | Attack parameter object written into stage-0 event records. |
 | score_name | protocol | none | true | false | false | Governed score identifier used by threshold records. |
 | threshold_id | protocol | none | true | false | false | Stable threshold identifier used by stage-0 threshold and event records. |
-| latent_backend_name | protocol | none | true | false | false | Stable stage-0 latent backend identifier. |
-| latent_backend_status | protocol | none | true | false | false | Status field for the stage-0 latent backend scaffold. |
+| latent_backend_name | protocol | none | true | false | false | Stable stage-0 latent backend identifier persisted in governed event records. |
+| latent_backend_status | protocol | none | true | false | false | Status field for the stage-0 latent backend scaffold persisted in governed event records. |
 | latent_seed_random | random | _random | true | false | false | Random latent seed field; seed semantics are explicit in the field name. |
-| latent_generation_seed_random | random | _random | true | false | false | Seed field for deterministic stage-0 latent sample generation. |
-| latent_tensor_digest_random | random | _digest_random | true | false | false | Digest field for stage-0 synthetic latent sample identity. |
+| latent_generation_seed_random | random | _random | true | false | false | Seed field for deterministic stage-0 latent sample generation, persisted in governed event records. |
+| latent_tensor_digest_random | random | _digest_random | true | false | false | Digest field for stage-0 synthetic latent sample identity, persisted in governed event records. |
 | score_generation_seed_random | random | _random | true | false | false | Seed field for deterministic stage-0 random evidence score generation. |
 | prg_direction_seed_random | random | _random | true | false | false | Random PRG direction seed field; seed semantics are explicit in the field name. |
 | sync_code_seed_random | random | _random | true | false | false | Random sync code seed field; seed semantics are explicit in the field name. |
@@ -49,7 +49,7 @@
 | run_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the governed run manifest. |
 | main_metrics_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt main metrics table. |
 | ablation_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt ablation table. |
-| threshold_source_record_digest | trace | none | true | false | false | Digest field that binds threshold materialization to calibration-negative source records. |
+| threshold_source_record_digest | trace | none | true | false | false | Digest field that binds threshold materialization to an ordered calibration-negative source payload including event_id, sample_id, split, sample_role, method_variant, attack_name, and S_final. |
 | calibration_split | protocol | none | true | false | false | Governed calibration split identifier written into threshold records. |
 | calibration_negative_roles | protocol | none | true | false | false | Governed calibration negative role list written into threshold records. |
 | threshold_value | protocol | none | true | false | false | Materialized threshold value for a governed threshold record. |

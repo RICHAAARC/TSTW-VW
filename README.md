@@ -31,16 +31,26 @@
 - `docs/builds/` 不参与 formal governance audit。
 - `docs/builds/` 中的历史命名、示例命名或旧阶段草案不代表当前正式命名规范。
 
-## Run Tests
+## Test Gate
 
-```bash
-pytest -q
+测试入口和审计入口是两个独立门禁；`run_all_audits.py` 通过不能替代 `pytest` 通过。
+
+PowerShell 示例：
+
+```powershell
+New-Item -ItemType Directory -Force audit_reports | Out-Null
+$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+python -m pytest -q -s | Tee-Object audit_reports/pytest_output.txt
 ```
 
-## Run Audits
+## Audit Gate
 
-```bash
+PowerShell 示例：
+
+```powershell
+New-Item -ItemType Directory -Force audit_reports | Out-Null
 python tools/harness/run_all_audits.py
+	| Tee-Object audit_reports/run_all_audits_output.json
 ```
 
 ## Naming Rules
@@ -74,8 +84,9 @@ python tools/harness/run_all_audits.py
 
 进入 `synthetic_tubelet_sync_probe` 之前，必须同时满足：
 
-- `pytest` 全部通过。
-- `python tools/harness/run_all_audits.py` 全部通过。
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q -s` 全部通过，并保留可保存的测试输出。
+- `python tools/harness/run_all_audits.py` 全部通过，并保留可保存的审计输出。
+- 审计通过不能替代 `pytest` 通过。
 - `docs/field_registry.md` 完整登记当前字段。
 - `configs/project/project_contract.json` 与 `configs/protocol/protocol_skeleton.json` 通过审计。
 - `configs/schema/protocol_artifact_schema.json` 通过审计。

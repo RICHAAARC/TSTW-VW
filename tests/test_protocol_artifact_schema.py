@@ -58,6 +58,37 @@ def test_missing_placeholder_and_random_fields_fails() -> None:
     )
 
 
+def test_missing_latent_trace_fields_fails() -> None:
+    """Validate that latent trace fields cannot be omitted from the schema.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(
+        ROOT / "configs" / "schema" / "protocol_artifact_schema.json"
+    )
+    broken = deepcopy(data)
+    broken["event_score_record"]["required_top_level_fields"] = [
+        field_name
+        for field_name in broken["event_score_record"]["required_top_level_fields"]
+        if field_name
+        not in {
+            "latent_backend_name",
+            "latent_backend_status",
+            "latent_tensor_digest_random",
+            "latent_generation_seed_random",
+        }
+    ]
+    violations = validate_protocol_artifact_schema_data(broken)
+    assert any(
+        violation["reason"] == "missing_required_event_score_fields"
+        for violation in violations
+    )
+
+
 def test_threshold_source_record_digest_is_required() -> None:
     """Validate that threshold traceability remains part of the schema skeleton.
 

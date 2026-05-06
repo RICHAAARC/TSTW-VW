@@ -16,6 +16,29 @@ from main.protocol.ablation_runner import AblationRunner
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _build_threshold_source_payload(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Build the expected threshold source payload for test assertions.
+
+    Args:
+        records: Candidate threshold source records.
+
+    Returns:
+        The ordered payload expected by threshold tracing.
+    """
+    return [
+        {
+            "event_id": record["event_id"],
+            "sample_id": record["sample_id"],
+            "split": record["split"],
+            "sample_role": record["sample_role"],
+            "method_variant": record["method_variant"],
+            "attack_name": record["attack_name"],
+            "S_final": record["evidence_scores"]["S_final"],
+        }
+        for record in sorted(records, key=lambda item: item["event_id"])
+    ]
+
+
 def test_threshold_source_digest_uses_only_calibration_negatives(tmp_path: Path) -> None:
     """Validate that threshold traceability uses only calibration-negative records.
 
@@ -46,15 +69,35 @@ def test_threshold_source_digest_uses_only_calibration_negatives(tmp_path: Path)
             if event_score_record["method_variant"] == method_variant
             and event_score_record["split"] == "test"
         ]
-        expected_digest = compute_object_digest(
-            sorted(event_score_record["event_id"] for event_score_record in calibration_negative_records)
+        expected_payload = _build_threshold_source_payload(calibration_negative_records)
+        expected_digest = compute_object_digest(expected_payload)
+        digest_with_test_records = compute_object_digest(
+            _build_threshold_source_payload(calibration_negative_records + test_records)
         )
-        test_digest = compute_object_digest(
-            sorted(event_score_record["event_id"] for event_score_record in test_records)
-        )
+        mutated_payload = [
+            {
+                **payload_item,
+                "S_final": round(float(payload_item["S_final"]) + 1.0, 6),
+            }
+            if payload_index == 0
+            else payload_item
+            for payload_index, payload_item in enumerate(expected_payload)
+        ]
 
+        assert expected_payload
+        assert set(expected_payload[0].keys()) == {
+            "event_id",
+            "sample_id",
+            "split",
+            "sample_role",
+            "method_variant",
+            "attack_name",
+            "S_final",
+        }
+        assert all(payload_item["split"] == "calibration" for payload_item in expected_payload)
         assert threshold_record["threshold_source_record_digest"] == expected_digest
-        assert threshold_record["threshold_source_record_digest"] != test_digest
+        assert threshold_record["threshold_source_record_digest"] != digest_with_test_records
+        assert compute_object_digest(mutated_payload) != expected_digest
         assert all(event_score_record["threshold_id"] is None for event_score_record in calibration_negative_records)
         assert all(
             event_score_record["threshold_id"] == threshold_record["threshold_id"]

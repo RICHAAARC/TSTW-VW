@@ -14,6 +14,39 @@ from main.core.digest import compute_object_digest
 from main.core.schema import METHOD_FAMILY_NAME, NEGATIVE_SAMPLE_ROLES, PROTOCOL_NAME, validate_threshold_record
 
 
+def _build_threshold_source_payload(
+    calibration_negative_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """功能：构建阈值来源的最小稳定 payload。
+
+    Build the minimal stable payload used to trace threshold construction.
+
+    Args:
+        calibration_negative_records: Calibration-negative event records.
+
+    Returns:
+        An ordered source payload for digest construction.
+    """
+    if not isinstance(calibration_negative_records, list) or not calibration_negative_records:
+        raise ValueError("calibration_negative_records must be a non-empty list")
+
+    return [
+        {
+            "event_id": event_record["event_id"],
+            "sample_id": event_record["sample_id"],
+            "split": event_record["split"],
+            "sample_role": event_record["sample_role"],
+            "method_variant": event_record["method_variant"],
+            "attack_name": event_record["attack_name"],
+            "S_final": event_record["evidence_scores"]["S_final"],
+        }
+        for event_record in sorted(
+            calibration_negative_records,
+            key=lambda item: item["event_id"],
+        )
+    ]
+
+
 class ThresholdCalibrator:
     """功能：根据 calibration negative records 生成固定阈值。
 
@@ -84,7 +117,7 @@ class ThresholdCalibrator:
         )
         threshold_value = sorted(calibration_scores)[threshold_index]
         threshold_source_record_digest = compute_object_digest(
-            sorted(event_record["event_id"] for event_record in calibration_negative_records)
+            _build_threshold_source_payload(calibration_negative_records)
         )
 
         threshold_record = {

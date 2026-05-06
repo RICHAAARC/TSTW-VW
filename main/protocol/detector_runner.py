@@ -125,6 +125,15 @@ class ProtocolRunner:
             )
             attacked_sample = event_plan_entry.attack_object.apply(latent_sample)
             detection_result = method.detect(attacked_sample, threshold_record)
+            record_random_fields = list(
+                dict.fromkeys(
+                    [
+                        "latent_generation_seed_random",
+                        "latent_tensor_digest_random",
+                        *detection_result.random_fields,
+                    ]
+                )
+            )
             event_score_record = {
                 "run_id": run_id,
                 "event_id": f"{method_config['method_variant']}:{event_plan_entry.event_id}",
@@ -137,12 +146,16 @@ class ProtocolRunner:
                 "attack_params": event_plan_entry.attack_params,
                 "target_fpr": target_fpr,
                 "threshold_id": None if threshold_record is None else threshold_record["threshold_id"],
+                "latent_backend_name": attacked_sample.latent_backend_name,
+                "latent_backend_status": attacked_sample.latent_backend_status,
+                "latent_tensor_digest_random": attacked_sample.latent_tensor_digest_random,
+                "latent_generation_seed_random": attacked_sample.latent_generation_seed_random,
                 "evidence_scores": detection_result.evidence_scores,
                 "disabled_evidence": detection_result.disabled_evidence,
                 "decision": detection_result.decision,
                 "failure_reason": detection_result.failure_reason,
                 "placeholder_fields": detection_result.placeholder_fields,
-                "random_fields": detection_result.random_fields,
+                "random_fields": record_random_fields,
             }
             validate_event_score_record(event_score_record)
             event_score_records.append(event_score_record)
