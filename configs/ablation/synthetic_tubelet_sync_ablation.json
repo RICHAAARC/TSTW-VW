@@ -11,6 +11,9 @@
   ],
   "tubelet_length_sweep_variant": "tubelet_only",
   "tubelet_length_sweep": [1, 2, 4, 8, 16],
+  "tubelet_length_sweep_tiny": [1, 4],
+  "tubelet_length_sweep_smoke": [1, 4],
+  "tubelet_length_sweep_formal": [1, 2, 4, 8, 16],
   "shared_target_fpr": 0.001,
   "shared_table_builder_name": "table_builder"
 }

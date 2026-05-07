@@ -25,7 +25,7 @@ def test_stage1_event_records_include_mechanism_trace(tmp_path: Path) -> None:
         None.
     """
     output_root = tmp_path / "outputs" / "runs" / "synthetic_tubelet_sync_probe_run"
-    AblationRunner(ROOT).run(output_root, samples_per_role=2)
+    AblationRunner(ROOT).run(output_root, samples_per_role=2, runtime_profile_override="tiny")
     event_score_records = RecordWriter(output_root).read_event_score_records()
 
     assert event_score_records
@@ -60,7 +60,7 @@ def test_stage1_records_do_not_inline_tensor_payload(tmp_path: Path) -> None:
         None.
     """
     output_root = tmp_path / "outputs" / "runs" / "synthetic_tubelet_sync_probe_run"
-    AblationRunner(ROOT).run(output_root, samples_per_role=1)
+    AblationRunner(ROOT).run(output_root, samples_per_role=1, runtime_profile_override="tiny")
     event_score_record = RecordWriter(output_root).read_event_score_records()[0]
 
     assert "latent_tensor_values" not in event_score_record

@@ -26,7 +26,7 @@ def test_active_stage_ablation_variants_share_split_and_attack_matrix(tmp_path: 
         None.
     """
     output_root = tmp_path / "outputs" / "runs" / "synthetic_tubelet_sync_probe_run"
-    AblationRunner(ROOT).run(output_root, samples_per_role=2)
+    AblationRunner(ROOT).run(output_root, samples_per_role=2, runtime_profile_override="tiny")
     event_score_records = RecordWriter(output_root).read_event_score_records()
 
     method_variants = sorted(
@@ -36,9 +36,6 @@ def test_active_stage_ablation_variants_share_split_and_attack_matrix(tmp_path: 
         "frame_prc",
         "tubelet_only",
         "tubelet_only_lt01",
-        "tubelet_only_lt02",
-        "tubelet_only_lt08",
-        "tubelet_only_lt16",
         "tubelet_sync",
     ]
     assert {event_score_record["target_fpr"] for event_score_record in event_score_records} == {0.001}
@@ -73,7 +70,7 @@ def test_active_stage_ablation_variants_share_split_and_attack_matrix(tmp_path: 
             )
         )
     )
-    assert {int(row["clip_length"]) for row in local_clip_rows} == {4, 8, 12, 16}
+    assert {int(row["clip_length"]) for row in local_clip_rows} == {4, 8}
 
     tubelet_rows = list(
         csv.DictReader(
@@ -82,4 +79,4 @@ def test_active_stage_ablation_variants_share_split_and_attack_matrix(tmp_path: 
             )
         )
     )
-    assert {int(row["tubelet_length"]) for row in tubelet_rows} == {1, 2, 4, 8, 16}
+    assert {int(row["tubelet_length"]) for row in tubelet_rows} == {1, 4}

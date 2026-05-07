@@ -314,7 +314,13 @@ class TemporalAttackPlaceholder:
             crop_start = crop_start_candidates[
                 sample.latent_generation_seed_random % len(crop_start_candidates)
             ]
-            crop_length = min(frame_count - int(crop_start), int(self.attack_params["crop_length"]))
+            # 中文注释：tiny / smoke profile 下 frame_count 可能小于 crop_start 候选，
+            # 此处必须 clamp 至 frame_count-1 并保证至少剩余 1 帧，避免 attacked tensor 形状为零。
+            crop_start = max(0, min(int(crop_start), int(frame_count) - 1))
+            crop_length = max(
+                1,
+                min(int(frame_count) - int(crop_start), int(self.attack_params["crop_length"])),
+            )
             return {
                 "crop_start": int(crop_start),
                 "crop_length": int(crop_length),
@@ -362,6 +368,9 @@ class TemporalAttackPlaceholder:
                 ]
             else:
                 clip_length = int(self.attack_params["clip_length"])
+            # 中文注释：tiny / smoke profile 下 frame_count 可能小于受治理 clip_length 集合，
+            # 此处必须 clamp 至 frame_count，避免 attacked tensor 形状与实际 frames 不一致。
+            clip_length = max(1, min(int(clip_length), int(frame_count)))
             max_start = max(0, frame_count - int(clip_length))
             clip_start_candidates = list(range(0, max_start + 1, 4)) or [0]
             clip_start = clip_start_candidates[

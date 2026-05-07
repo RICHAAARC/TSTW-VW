@@ -42,6 +42,12 @@
     "height": 32,
     "width": 32
   },
+  "tiny_latent_shape": {
+    "frames": 8,
+    "channels": 2,
+    "height": 8,
+    "width": 8
+  },
   "latent_generation_seed": 20260507,
   "latent_storage": "npy_artifact",
   "attack_matrix_name": "temporal_attack_matrix",

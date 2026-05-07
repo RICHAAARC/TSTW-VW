@@ -20,6 +20,7 @@ from main.backends.synthetic_video_latent import (
     DEFAULT_LATENT_SHAPE,
     DEFAULT_RUNTIME_PROFILE,
     FORMAL_LATENT_SHAPE,
+    TINY_LATENT_SHAPE,
     LATENT_BACKEND_NAME as SYNTHETIC_VIDEO_LATENT_BACKEND_NAME,
     LATENT_DISTRIBUTION as SYNTHETIC_VIDEO_LATENT_DISTRIBUTION,
     LATENT_STORAGE as SYNTHETIC_VIDEO_LATENT_STORAGE,
@@ -1015,6 +1016,22 @@ def validate_synthetic_tubelet_sync_protocol_support_data(
             {
                 "field": "formal_latent_shape",
                 "reason": "formal_latent_shape_must_match_stage_one_formal_profile",
+            }
+        )
+
+    tiny_latent_shape = data.get("tiny_latent_shape")
+    if not isinstance(tiny_latent_shape, dict):
+        violations.append(
+            {
+                "field": "tiny_latent_shape",
+                "reason": "tiny_latent_shape_must_be_object",
+            }
+        )
+    elif tiny_latent_shape != TINY_LATENT_SHAPE:
+        violations.append(
+            {
+                "field": "tiny_latent_shape",
+                "reason": "tiny_latent_shape_must_match_stage_one_tiny_profile",
             }
         )
 
