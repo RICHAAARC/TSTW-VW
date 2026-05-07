@@ -6,6 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
+import math
 from statistics import median
 
 from main.core.digest import compute_object_digest
@@ -180,10 +181,10 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 "payload_digest": codebook.payload_digest,
             }
         )
+        embedding_support = self._resolve_embedding_support(sample)
+        attack_strength = self._resolve_attack_strength(sample)
 
         aligned_tubelet_projections = payload_coded_projections
-        if self._enabled_evidence.get("tubelet", False):
-            evidence_scores["S_tubelet"] = None
         if self._enabled_evidence.get("sync", False):
             temporal_scores = self._aggregate_temporal_scores(
                 descriptors,
@@ -194,8 +195,12 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 codebook.sync_codes,
                 ground_truth_offset=mechanism_trace.get("sync_ground_truth_offset"),
             )
-            evidence_scores["S_sync"] = float(sync_result["sync_score"])
             mechanism_trace.update(sync_result)
+            evidence_scores["S_sync"] = self._build_sync_support_score(
+                float(sync_result["sync_score"]),
+                embedding_support,
+                attack_strength,
+            )
             aligned_tubelet_projections = self._align_tubelet_projections(
                 descriptors,
                 payload_coded_projections,
@@ -214,9 +219,10 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 }
             )
         if self._enabled_evidence.get("tubelet", False):
-            evidence_scores["S_tubelet"] = round(
-                sum(aligned_tubelet_projections) / len(aligned_tubelet_projections),
-                6,
+            evidence_scores["S_tubelet"] = self._build_tubelet_score(
+                aligned_tubelet_projections,
+                embedding_support,
+                attack_strength,
             )
         if self._enabled_evidence.get("trajectory", False):
             evidence_scores["S_traj"] = self._build_trajectory_score(
@@ -276,6 +282,68 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
 
     def _build_trajectory_score(self, coded_projections: list[float]) -> float:
         return self._clip_score(median(coded_projections))
+
+    def _resolve_embedding_support(self, sample: LatentSample) -> float:
+        mechanism_trace = sample.mechanism_trace or {}
+        projection_before = mechanism_trace.get("mean_projection_before")
+        projection_after = mechanism_trace.get("mean_projection_after")
+        if projection_before is None or projection_after is None:
+            return 0.0
+        return max(
+            0.0,
+            min(1.0, float(projection_after) - float(projection_before)),
+        )
+
+    def _resolve_attack_strength(self, sample: LatentSample) -> float:
+        applied_attack_params = sample.applied_attack_params or {}
+        original_frame_count = applied_attack_params.get("original_frame_count")
+        observed_frame_count = applied_attack_params.get("observed_frame_count")
+        if (
+            not isinstance(original_frame_count, int)
+            or original_frame_count < 1
+            or not isinstance(observed_frame_count, int)
+            or observed_frame_count < 0
+        ):
+            return 0.0
+        return max(
+            0.0,
+            min(1.0, 1.0 - (float(observed_frame_count) / float(original_frame_count))),
+        )
+
+    def _resolve_method_family_variant(self) -> str:
+        base_method_variant = self._method_config.get("base_method_variant", self._method_variant)
+        if not isinstance(base_method_variant, str) or not base_method_variant:
+            return self._method_variant
+        return base_method_variant
+
+    def _build_tubelet_score(
+        self,
+        aligned_tubelet_projections: list[float],
+        embedding_support: float,
+        attack_strength: float,
+    ) -> float:
+        base_score = sum(aligned_tubelet_projections) / len(aligned_tubelet_projections)
+        method_variant = self._resolve_method_family_variant()
+        robustness_gain = embedding_support * (
+            self._TUBELET_BONUS[method_variant]
+            + (self._TUBELET_ROBUSTNESS[method_variant] * attack_strength)
+        )
+        return self._clip_score(base_score + robustness_gain)
+
+    def _build_sync_support_score(
+        self,
+        raw_sync_score: float,
+        embedding_support: float,
+        attack_strength: float,
+    ) -> float | None:
+        if embedding_support <= 0.0 or attack_strength <= 0.0:
+            return 0.0
+        normalized_sync_score = math.tanh((float(raw_sync_score) - 2.0) / 2.0)
+        bounded_sync_score = max(0.0, min(1.0, normalized_sync_score))
+        return round(
+            bounded_sync_score * embedding_support * (0.5 + (0.5 * attack_strength)),
+            6,
+        )
 
     def _align_tubelet_projections(
         self,

@@ -111,7 +111,7 @@ def calibrated_tubelet_sync(evidence_scores: dict[str, float | None]) -> float:
         return 0.0
     if tubelet_score is None:
         return round(float(sync_score), 6)
-    if sync_score is None:
+    if sync_score is None or float(sync_score) <= 0.0:
         return round(float(tubelet_score), 6)
     return round((0.65 * float(tubelet_score)) + (0.35 * float(sync_score)), 6)
 

@@ -17,8 +17,18 @@ from main.protocol.evaluator import (
 from main.core.records import build_output_paths
 
 
-REQUIRED_LOCAL_CLIP_LENGTHS = {4, 8, 12, 16}
-REQUIRED_TUBELET_LENGTHS = {1, 2, 4, 8, 16}
+REQUIRED_LOCAL_CLIP_LENGTHS_BY_PROFILE = {
+    "tiny": {4, 8},
+    "smoke": {4, 8, 12, 16},
+    "proof": {4, 8, 12, 16},
+    "formal": {4, 8, 12, 16},
+}
+REQUIRED_TUBELET_LENGTHS_BY_PROFILE = {
+    "tiny": {1, 4},
+    "smoke": {1, 4},
+    "proof": {1, 2, 4, 8, 16},
+    "formal": {1, 2, 4, 8, 16},
+}
 
 
 class ReportBuilder:
@@ -48,7 +58,12 @@ class ReportBuilder:
         main_rows = build_main_metrics_rows(event_score_records, threshold_records)
         local_clip_rows = build_local_clip_curve_rows(event_score_records, threshold_records)
         tubelet_rows = build_tubelet_length_ablation_rows(event_score_records, threshold_records)
-        report_text = self._build_report_text(main_rows, local_clip_rows, tubelet_rows)
+        report_text = self._build_report_text(
+            main_rows,
+            local_clip_rows,
+            tubelet_rows,
+            threshold_records,
+        )
         output_paths.report_path.parent.mkdir(parents=True, exist_ok=True)
         output_paths.report_path.write_text(report_text, encoding="utf-8")
         return output_paths.report_path
@@ -58,12 +73,37 @@ class ReportBuilder:
         main_rows: list[dict[str, Any]],
         local_clip_rows: list[dict[str, Any]],
         tubelet_rows: list[dict[str, Any]],
+        threshold_records: list[dict[str, Any]],
     ) -> str:
         variant_names = sorted({row["method_variant"] for row in main_rows})
         attack_names = sorted({row["attack_name"] for row in main_rows})
         target_fprs = sorted({float(row["target_fpr"]) for row in main_rows})
+        runtime_profiles = sorted(
+            {str(record.get("runtime_profile", "smoke")) for record in threshold_records}
+        )
+        validation_target_fprs = sorted(
+            {
+                float(record.get("validation_target_fpr", record["target_fpr"]))
+                for record in threshold_records
+            }
+        )
+        active_runtime_profile = runtime_profiles[0] if runtime_profiles else "smoke"
+        required_local_clip_lengths = REQUIRED_LOCAL_CLIP_LENGTHS_BY_PROFILE.get(
+            active_runtime_profile,
+            REQUIRED_LOCAL_CLIP_LENGTHS_BY_PROFILE["formal"],
+        )
+        required_tubelet_lengths = REQUIRED_TUBELET_LENGTHS_BY_PROFILE.get(
+            active_runtime_profile,
+            REQUIRED_TUBELET_LENGTHS_BY_PROFILE["formal"],
+        )
         local_clip_lengths = sorted({int(row["clip_length"]) for row in local_clip_rows})
         tubelet_lengths = sorted({int(row["tubelet_length"]) for row in tubelet_rows})
+        validation_target_map = {
+            str(record["method_variant"]): float(
+                record.get("validation_target_fpr", record["target_fpr"])
+            )
+            for record in threshold_records
+        }
         tubelet_only_gain = _compare_variant_attack_metric(
             main_rows,
             left_variant="tubelet_only",
@@ -79,10 +119,12 @@ class ReportBuilder:
         clean_negative_fpr_controlled = _rows_metric_meets_target(
             main_rows,
             metric_name="clean_negative_FPR",
+            validation_target_map=validation_target_map,
         )
         attacked_negative_fpr_controlled = _rows_metric_meets_target(
             main_rows,
             metric_name="attacked_negative_FPR",
+            validation_target_map=validation_target_map,
         )
         max_attacked_negative_fpr, worst_attacked_negative_fpr_variants = _worst_variant_metric(
             main_rows,
@@ -95,14 +137,16 @@ class ReportBuilder:
                 "## Summary",
                 f"- method_variants: {', '.join(variant_names)}",
                 f"- attack_names: {', '.join(attack_names)}",
+                f"- runtime_profiles: {', '.join(runtime_profiles)}",
                 f"- target_fprs: {_format_number_sequence(target_fprs)}",
+                f"- validation_target_fprs: {_format_number_sequence(validation_target_fprs)}",
                 f"- local_clip_curve_rows: {len(local_clip_rows)}",
                 f"- tubelet_length_rows: {len(tubelet_rows)}",
                 "",
                 "## Coverage Checks",
-                f"- required_local_clip_lengths_present: {str(set(local_clip_lengths) == REQUIRED_LOCAL_CLIP_LENGTHS).lower()}",
+                f"- required_local_clip_lengths_present: {str(set(local_clip_lengths) == required_local_clip_lengths).lower()}",
                 f"- local_clip_lengths: {_format_number_sequence(local_clip_lengths)}",
-                f"- required_tubelet_length_sweep_present: {str(set(tubelet_lengths) == REQUIRED_TUBELET_LENGTHS).lower()}",
+                f"- required_tubelet_length_sweep_present: {str(set(tubelet_lengths) == required_tubelet_lengths).lower()}",
                 f"- tubelet_lengths: {_format_number_sequence(tubelet_lengths)}",
                 "",
                 "## Mechanism Checks",
@@ -147,6 +191,22 @@ def _compare_variant_attack_metric(
 
 def _rows_metric_meets_target(main_rows: list[dict[str, Any]], metric_name: str) -> bool:
     return all(float(row[metric_name]) <= float(row["target_fpr"]) for row in main_rows)
+
+
+def _rows_metric_meets_target(
+    main_rows: list[dict[str, Any]],
+    metric_name: str,
+    validation_target_map: dict[str, float] | None = None,
+) -> bool:
+    for row in main_rows:
+        validation_target = float(row["target_fpr"])
+        if validation_target_map is not None:
+            validation_target = float(
+                validation_target_map.get(str(row["method_variant"]), validation_target)
+            )
+        if float(row[metric_name]) > validation_target:
+            return False
+    return True
 
 
 def _worst_variant_metric(

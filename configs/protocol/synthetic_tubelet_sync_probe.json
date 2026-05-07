@@ -17,6 +17,18 @@
   "threshold_protocol": {
     "score_name": "S_final",
     "target_fpr_placeholder": 0.001,
+    "validation_target_fpr_by_profile": {
+      "tiny": 1.0,
+      "smoke": 0.25,
+      "proof": 0.5,
+      "formal": 0.001
+    },
+    "sync_threshold_guard_band_multiplier_by_profile": {
+      "tiny": 1.5,
+      "smoke": 1.5,
+      "proof": 1.25,
+      "formal": 0.75
+    },
     "calibration_split": "calibration",
     "calibration_negative_roles": [
       "clean_negative",
@@ -41,6 +53,12 @@
     "channels": 4,
     "height": 32,
     "width": 32
+  },
+  "proof_latent_shape": {
+    "frames": 24,
+    "channels": 4,
+    "height": 16,
+    "width": 16
   },
   "tiny_latent_shape": {
     "frames": 8,

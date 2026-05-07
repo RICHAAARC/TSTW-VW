@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timezone
+from statistics import pstdev
 from typing import Any
 
 from main.core.digest import compute_object_digest
@@ -45,6 +46,19 @@ def _build_threshold_source_payload(
             key=lambda item: item["event_id"],
         )
     ]
+
+
+def _resolve_profile_float(
+    profile_values: dict[str, Any],
+    runtime_profile: str,
+    default_value: float,
+) -> float:
+    if not isinstance(profile_values, dict):
+        return float(default_value)
+    resolved_value = profile_values.get(runtime_profile, default_value)
+    if not isinstance(resolved_value, (int, float)):
+        return float(default_value)
+    return float(resolved_value)
 
 
 class ThresholdCalibrator:
@@ -98,6 +112,12 @@ class ThresholdCalibrator:
 
         threshold_protocol = protocol_config["threshold_protocol"]
         target_fpr = float(threshold_protocol["target_fpr_placeholder"])
+        runtime_profile = str(protocol_config.get("runtime_profile", "smoke"))
+        validation_target_fpr = _resolve_profile_float(
+            threshold_protocol.get("validation_target_fpr_by_profile", {}),
+            runtime_profile,
+            target_fpr,
+        )
         calibration_negative_records = [
             event_record
             for event_record in calibration_event_records
@@ -124,6 +144,17 @@ class ThresholdCalibrator:
             ),
         )
         threshold_value = sorted(calibration_scores)[threshold_index]
+        sync_guard_band_multiplier = 0.0
+        if bool(method_config.get("enable_sync", False)) or (
+            method_config.get("fusion_rule") == "calibrated_tubelet_sync"
+        ):
+            sync_guard_band_multiplier = _resolve_profile_float(
+                threshold_protocol.get("sync_threshold_guard_band_multiplier_by_profile", {}),
+                runtime_profile,
+                0.0,
+            )
+        if sync_guard_band_multiplier > 0.0 and len(calibration_scores) > 1:
+            threshold_value += pstdev(calibration_scores) * sync_guard_band_multiplier
         threshold_source_record_digest = compute_object_digest(
             _build_threshold_source_payload(calibration_negative_records)
         )
@@ -137,10 +168,13 @@ class ThresholdCalibrator:
             "method_variant": method_config["method_variant"],
             "score_name": "S_final",
             "target_fpr": target_fpr,
+            "validation_target_fpr": round(validation_target_fpr, 6),
+            "runtime_profile": runtime_profile,
             "calibration_split": threshold_protocol["calibration_split"],
             "calibration_negative_roles": threshold_protocol["calibration_negative_roles"],
             "threshold_value": round(threshold_value, 6),
             "threshold_quantile": threshold_quantile,
+            "sync_threshold_guard_band_multiplier": round(sync_guard_band_multiplier, 6),
             "num_calibration_negatives": len(calibration_negative_records),
             "threshold_source_record_digest": threshold_source_record_digest,
             "fusion_rule": method_config["fusion_rule"],

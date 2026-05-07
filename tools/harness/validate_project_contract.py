@@ -20,6 +20,7 @@ from main.backends.synthetic_video_latent import (
     DEFAULT_LATENT_SHAPE,
     DEFAULT_RUNTIME_PROFILE,
     FORMAL_LATENT_SHAPE,
+    PROOF_LATENT_SHAPE,
     TINY_LATENT_SHAPE,
     LATENT_BACKEND_NAME as SYNTHETIC_VIDEO_LATENT_BACKEND_NAME,
     LATENT_DISTRIBUTION as SYNTHETIC_VIDEO_LATENT_DISTRIBUTION,
@@ -1019,6 +1020,22 @@ def validate_synthetic_tubelet_sync_protocol_support_data(
             }
         )
 
+    proof_latent_shape = data.get("proof_latent_shape")
+    if not isinstance(proof_latent_shape, dict):
+        violations.append(
+            {
+                "field": "proof_latent_shape",
+                "reason": "proof_latent_shape_must_be_object",
+            }
+        )
+    elif proof_latent_shape != PROOF_LATENT_SHAPE:
+        violations.append(
+            {
+                "field": "proof_latent_shape",
+                "reason": "proof_latent_shape_must_match_stage_one_proof_profile",
+            }
+        )
+
     tiny_latent_shape = data.get("tiny_latent_shape")
     if not isinstance(tiny_latent_shape, dict):
         violations.append(
@@ -1042,6 +1059,36 @@ def validate_synthetic_tubelet_sync_protocol_support_data(
                 "reason": "latent_generation_seed_must_match_stage_one_default",
             }
         )
+
+    threshold_protocol = data.get("threshold_protocol")
+    if not isinstance(threshold_protocol, dict):
+        violations.append(
+            {
+                "field": "threshold_protocol",
+                "reason": "threshold_protocol_must_be_object",
+            }
+        )
+    else:
+        validation_target_fpr_by_profile = threshold_protocol.get(
+            "validation_target_fpr_by_profile"
+        )
+        if not isinstance(validation_target_fpr_by_profile, dict):
+            violations.append(
+                {
+                    "field": "threshold_protocol.validation_target_fpr_by_profile",
+                    "reason": "validation_target_fpr_by_profile_must_be_object",
+                }
+            )
+        sync_guard_band_by_profile = threshold_protocol.get(
+            "sync_threshold_guard_band_multiplier_by_profile"
+        )
+        if not isinstance(sync_guard_band_by_profile, dict):
+            violations.append(
+                {
+                    "field": "threshold_protocol.sync_threshold_guard_band_multiplier_by_profile",
+                    "reason": "sync_threshold_guard_band_multiplier_by_profile_must_be_object",
+                }
+            )
 
     if data.get("latent_storage") != SYNTHETIC_VIDEO_LATENT_STORAGE:
         violations.append(

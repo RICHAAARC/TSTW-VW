@@ -89,7 +89,7 @@ class AblationRunner:
             output_root: Run root path.
             samples_per_role: Sample count per split-role pair.
             runtime_profile_override: Optional runtime profile override
-                (one of ``tiny``/``smoke``/``formal``) used to drive the
+                (one of ``tiny``/``smoke``/``proof``/``formal``) used to drive the
                 latent backend shape selection and tubelet sweep tier.
 
         Returns:
@@ -100,6 +100,8 @@ class AblationRunner:
 
         protocol_config = self._resolve_protocol_config(runtime_profile_override)
         runtime_profile = protocol_config.get("runtime_profile")
+        if runtime_profile == "proof" and samples_per_role < 2:
+            raise ValueError("proof runtime_profile requires samples_per_role >= 2")
         protocol_runner = ProtocolRunner(
             latent_backend=self._resolve_latent_backend(protocol_config)
         )
@@ -247,10 +249,11 @@ class AblationRunner:
         ablation_config: dict[str, Any],
         runtime_profile: str | None,
     ) -> list[int]:
-        # 中文注释：smoke 与 tiny 仅跑 {1,4} 加速 CI 闭环；formal 走完整 {1,2,4,8,16}。
+        # 中文注释：tiny / smoke 仅跑 {1,4} 加速 closure；proof / formal 走完整 sweep。
         profile_keyed = {
             "tiny": ablation_config.get("tubelet_length_sweep_tiny"),
             "smoke": ablation_config.get("tubelet_length_sweep_smoke"),
+            "proof": ablation_config.get("tubelet_length_sweep_proof"),
             "formal": ablation_config.get("tubelet_length_sweep_formal"),
         }
         candidate = profile_keyed.get(runtime_profile)

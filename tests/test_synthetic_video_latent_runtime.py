@@ -53,6 +53,12 @@ def test_synthetic_video_latent_backend_builds_reproducible_sample() -> None:
         "height": 32,
         "width": 32,
     }
+    assert support_config["proof_latent_shape"] == {
+        "frames": 24,
+        "channels": 4,
+        "height": 16,
+        "width": 16,
+    }
     assert first_sample.latent_shape == (16, 4, 16, 16)
     assert (
         first_sample.latent_generation_seed_random
@@ -97,3 +103,26 @@ def test_synthetic_video_latent_backend_separates_split_and_role() -> None:
         calibration_sample.latent_tensor_digest_random
         != test_sample.latent_tensor_digest_random
     )
+
+
+def test_synthetic_video_latent_backend_supports_proof_runtime_profile() -> None:
+    """Validate that the proof runtime profile resolves the governed proof shape.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    support_config = load_json_config(
+        ROOT / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+    )
+    support_config["runtime_profile"] = "proof"
+    backend = build_synthetic_video_latent_backend_from_support_config(support_config)
+    proof_sample = backend.build_sample(
+        "sample_test_attacked_positive_000001",
+        "test",
+        "attacked_positive",
+    )
+
+    assert proof_sample.latent_shape == (24, 4, 16, 16)

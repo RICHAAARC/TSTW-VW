@@ -32,9 +32,11 @@ LATENT_STORAGE = "npy_artifact"
 DEFAULT_RUNTIME_PROFILE = "smoke"
 FORMAL_RUNTIME_PROFILE = "formal"
 TINY_RUNTIME_PROFILE = "tiny"
+PROOF_RUNTIME_PROFILE = "proof"
 SUPPORTED_RUNTIME_PROFILES = (
     TINY_RUNTIME_PROFILE,
     DEFAULT_RUNTIME_PROFILE,
+    PROOF_RUNTIME_PROFILE,
     FORMAL_RUNTIME_PROFILE,
 )
 DEFAULT_LATENT_SHAPE = {
@@ -48,6 +50,12 @@ FORMAL_LATENT_SHAPE = {
     "channels": 4,
     "height": 32,
     "width": 32,
+}
+PROOF_LATENT_SHAPE = {
+    "frames": 24,
+    "channels": 4,
+    "height": 16,
+    "width": 16,
 }
 TINY_LATENT_SHAPE = {
     "frames": 8,
@@ -77,6 +85,7 @@ def build_synthetic_video_latent_support_defaults() -> dict[str, object]:
         "latent_distribution": LATENT_DISTRIBUTION,
         "latent_shape": dict(DEFAULT_LATENT_SHAPE),
         "formal_latent_shape": dict(FORMAL_LATENT_SHAPE),
+        "proof_latent_shape": dict(PROOF_LATENT_SHAPE),
         "tiny_latent_shape": dict(TINY_LATENT_SHAPE),
         "latent_generation_seed": DEFAULT_LATENT_GENERATION_SEED,
         "latent_storage": LATENT_STORAGE,
@@ -337,6 +346,8 @@ def _resolve_support_config_latent_shape(
         return support_config.get("tiny_latent_shape", TINY_LATENT_SHAPE)
     if runtime_profile == DEFAULT_RUNTIME_PROFILE:
         return support_config.get("latent_shape", DEFAULT_LATENT_SHAPE)
+    if runtime_profile == PROOF_RUNTIME_PROFILE:
+        return support_config.get("proof_latent_shape", PROOF_LATENT_SHAPE)
     if runtime_profile == FORMAL_RUNTIME_PROFILE:
         return support_config.get("formal_latent_shape", FORMAL_LATENT_SHAPE)
     raise ValueError(f"unsupported runtime_profile: {runtime_profile}")
