@@ -61,6 +61,49 @@ def _resolve_profile_float(
     return float(resolved_value)
 
 
+def _resolve_profile_mapping(
+    profile_values: dict[str, Any],
+    runtime_profile: str,
+) -> dict[str, Any]:
+    if not isinstance(profile_values, dict):
+        return {}
+    resolved_value = profile_values.get(runtime_profile, {})
+    if not isinstance(resolved_value, dict):
+        return {}
+    return resolved_value
+
+
+def _resolve_tubelet_length_guard_band_multiplier(
+    threshold_protocol: dict[str, Any],
+    runtime_profile: str,
+    method_config: dict[str, Any],
+) -> float:
+    profile_mapping = _resolve_profile_mapping(
+        threshold_protocol.get(
+            "tubelet_length_threshold_guard_band_multiplier_by_profile",
+            {},
+        ),
+        runtime_profile,
+    )
+    default_value = profile_mapping.get("default", 0.0)
+    if not isinstance(default_value, (int, float)):
+        default_value = 0.0
+
+    tubelet_length = method_config.get("tubelet_length", 1)
+    if not isinstance(tubelet_length, int) or tubelet_length < 1:
+        tubelet_length = 1
+
+    if tubelet_length >= 16:
+        resolved_value = profile_mapping.get("length_ge_16", default_value)
+        if isinstance(resolved_value, (int, float)):
+            return float(resolved_value)
+    if tubelet_length >= 8:
+        resolved_value = profile_mapping.get("length_ge_08", default_value)
+        if isinstance(resolved_value, (int, float)):
+            return float(resolved_value)
+    return float(default_value)
+
+
 class ThresholdCalibrator:
     """功能：根据 calibration negative records 生成固定阈值。
 
@@ -153,8 +196,19 @@ class ThresholdCalibrator:
                 runtime_profile,
                 0.0,
             )
-        if sync_guard_band_multiplier > 0.0 and len(calibration_scores) > 1:
-            threshold_value += pstdev(calibration_scores) * sync_guard_band_multiplier
+        tubelet_length_guard_band_multiplier = (
+            _resolve_tubelet_length_guard_band_multiplier(
+                threshold_protocol,
+                runtime_profile,
+                method_config,
+            )
+        )
+        applied_guard_band_multiplier = max(
+            sync_guard_band_multiplier,
+            tubelet_length_guard_band_multiplier,
+        )
+        if applied_guard_band_multiplier > 0.0 and len(calibration_scores) > 1:
+            threshold_value += pstdev(calibration_scores) * applied_guard_band_multiplier
         threshold_source_record_digest = compute_object_digest(
             _build_threshold_source_payload(calibration_negative_records)
         )
@@ -175,6 +229,14 @@ class ThresholdCalibrator:
             "threshold_value": round(threshold_value, 6),
             "threshold_quantile": threshold_quantile,
             "sync_threshold_guard_band_multiplier": round(sync_guard_band_multiplier, 6),
+            "tubelet_length_threshold_guard_band_multiplier": round(
+                tubelet_length_guard_band_multiplier,
+                6,
+            ),
+            "applied_threshold_guard_band_multiplier": round(
+                applied_guard_band_multiplier,
+                6,
+            ),
             "num_calibration_negatives": len(calibration_negative_records),
             "threshold_source_record_digest": threshold_source_record_digest,
             "fusion_rule": method_config["fusion_rule"],

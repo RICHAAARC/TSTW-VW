@@ -25,6 +25,7 @@
 | target_fpr_placeholder | placeholder | _placeholder | true | false | true | Placeholder target FPR field used before full threshold materialization. |
 | target_fpr | protocol | none | true | false | false | Materialized target FPR used by stage-0 runtime records and tables. |
 | validation_target_fpr | protocol | none | true | false | false | Profile-scoped validation FPR target used for closure and proof reports when strict `target_fpr` is intentionally deferred. |
+| calibration_negative_min_samples_per_role_by_profile | protocol | none | true | false | false | Profile-scoped lower bound for calibration negative sample counts so proof and formal tiers can widen calibration tails without inflating dev or test coverage. |
 | threshold_quantile_rule | protocol | none | true | false | false | Declared quantile rule for calibration-only threshold construction. |
 | allow_attack_specific_threshold | protocol | none | true | false | false | Boolean field that blocks attack-specific threshold divergence. |
 | method_family | protocol | none | true | false | false | Stable method family identifier for stage-0 records and configs. |
@@ -93,6 +94,9 @@
 | threshold_value | protocol | none | true | false | false | Materialized threshold value for a governed threshold record. |
 | threshold_quantile | protocol | none | true | false | false | Materialized threshold quantile used to build a governed threshold record. |
 | sync_threshold_guard_band_multiplier | protocol | none | true | false | false | Profile-scoped guard-band multiplier applied to sync-enabled threshold calibration to reduce attacked-negative tail leakage under small calibration sample counts. |
+| tubelet_length_threshold_guard_band_multiplier_by_profile | protocol | none | true | false | false | Profile-scoped tubelet-length guard-band map that raises thresholds for long tubelet variants using calibration-negative dispersion only. |
+| tubelet_length_threshold_guard_band_multiplier | protocol | none | true | false | false | Materialized tubelet-length guard-band multiplier recorded in threshold records for auditability of long-tubelet calibration penalties. |
+| applied_threshold_guard_band_multiplier | protocol | none | true | false | false | Materialized guard-band multiplier actually applied to `threshold_value`, defined as the maximum of sync and tubelet-length calibration penalties. |
 | num_calibration_negatives | protocol | none | true | false | false | Count of calibration-negative records used during threshold materialization. |
 | disabled_evidence | protocol | none | true | false | false | Explicit list of evidence branches disabled for a governed event record. |
 | decision | protocol | none | true | false | false | Detection decision field for a governed event record. |

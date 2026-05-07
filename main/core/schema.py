@@ -76,6 +76,8 @@ REQUIRED_THRESHOLD_FIELDS = {
     "threshold_value",
     "threshold_quantile",
     "sync_threshold_guard_band_multiplier",
+    "tubelet_length_threshold_guard_band_multiplier",
+    "applied_threshold_guard_band_multiplier",
     "num_calibration_negatives",
     "threshold_source_record_digest",
     "fusion_rule",
@@ -472,6 +474,16 @@ def validate_threshold_record(threshold_record: dict[str, Any]) -> None:
         raise ValueError("threshold_quantile must be numeric")
     if not isinstance(threshold_record["sync_threshold_guard_band_multiplier"], (int, float)):
         raise ValueError("sync_threshold_guard_band_multiplier must be numeric")
+    if not isinstance(
+        threshold_record["tubelet_length_threshold_guard_band_multiplier"],
+        (int, float),
+    ):
+        raise ValueError("tubelet_length_threshold_guard_band_multiplier must be numeric")
+    if not isinstance(
+        threshold_record["applied_threshold_guard_band_multiplier"],
+        (int, float),
+    ):
+        raise ValueError("applied_threshold_guard_band_multiplier must be numeric")
     calibration_negative_roles = threshold_record["calibration_negative_roles"]
     if not isinstance(calibration_negative_roles, list):
         raise ValueError("calibration_negative_roles must be a list")

@@ -108,7 +108,13 @@ class AblationRunner:
 
         output_root_path = Path(output_root)
         run_id = output_root_path.name
-        split_plan = build_split_plan(samples_per_role=samples_per_role)
+        split_plan = build_split_plan(
+            samples_per_role=samples_per_role,
+            split_role_sample_counts=self._resolve_split_role_sample_counts(
+                samples_per_role,
+                protocol_config,
+            ),
+        )
         attack_registry = build_attack_registry(self._runtime_configs["attack_config"])
         event_plan = build_event_plan(split_plan, attack_registry)
         event_score_records: list[dict[str, Any]] = []
@@ -267,3 +273,34 @@ class AblationRunner:
         if protocol_config.get("latent_backend_name") != SYNTHETIC_VIDEO_LATENT_BACKEND_NAME:
             return None
         return build_synthetic_video_latent_backend_from_support_config(protocol_config)
+
+    def _resolve_split_role_sample_counts(
+        self,
+        samples_per_role: int,
+        protocol_config: dict[str, Any],
+    ) -> dict[str, dict[str, int]] | None:
+        threshold_protocol = protocol_config.get("threshold_protocol", {})
+        if not isinstance(threshold_protocol, dict):
+            return None
+
+        runtime_profile = str(protocol_config.get("runtime_profile", "smoke"))
+        profile_minimums = threshold_protocol.get(
+            "calibration_negative_min_samples_per_role_by_profile",
+            {},
+        )
+        if not isinstance(profile_minimums, dict):
+            return None
+        minimum_count = profile_minimums.get(runtime_profile)
+        if not isinstance(minimum_count, int) or minimum_count < 1:
+            return None
+
+        calibration_negative_count = max(samples_per_role, minimum_count)
+        if calibration_negative_count == samples_per_role:
+            return None
+
+        return {
+            "calibration": {
+                "clean_negative": calibration_negative_count,
+                "attacked_negative": calibration_negative_count,
+            }
+        }

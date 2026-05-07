@@ -1089,6 +1089,26 @@ def validate_synthetic_tubelet_sync_protocol_support_data(
                     "reason": "sync_threshold_guard_band_multiplier_by_profile_must_be_object",
                 }
             )
+        calibration_negative_min_samples = threshold_protocol.get(
+            "calibration_negative_min_samples_per_role_by_profile"
+        )
+        if not isinstance(calibration_negative_min_samples, dict):
+            violations.append(
+                {
+                    "field": "threshold_protocol.calibration_negative_min_samples_per_role_by_profile",
+                    "reason": "calibration_negative_min_samples_per_role_by_profile_must_be_object",
+                }
+            )
+        tubelet_guard_band_by_profile = threshold_protocol.get(
+            "tubelet_length_threshold_guard_band_multiplier_by_profile"
+        )
+        if not isinstance(tubelet_guard_band_by_profile, dict):
+            violations.append(
+                {
+                    "field": "threshold_protocol.tubelet_length_threshold_guard_band_multiplier_by_profile",
+                    "reason": "tubelet_length_threshold_guard_band_multiplier_by_profile_must_be_object",
+                }
+            )
 
     if data.get("latent_storage") != SYNTHETIC_VIDEO_LATENT_STORAGE:
         violations.append(

@@ -97,3 +97,22 @@ def test_stage1_rebuild_restores_required_outputs(tmp_path: Path) -> None:
     assert "- attacked_negative_fpr_meets_validation_target_for_all_variants:" in report_text
     assert "- attacked_negative_fpr_meets_strict_target_for_all_variants:" in report_text
     assert "- worst_attacked_negative_fpr_variants:" in report_text
+
+
+def test_stage1_proof_profile_meets_strict_gate(tmp_path: Path) -> None:
+    """Validate that the proof profile closes with an explicit strict low-FPR pass.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    output_root = tmp_path / "outputs" / "runs" / "synthetic_tubelet_sync_probe_proof_run"
+    AblationRunner(ROOT).run(output_root, samples_per_role=2, runtime_profile_override="proof")
+    report_text = RecordWriter(output_root).output_paths.report_path.read_text(encoding="utf-8")
+
+    assert "- closure_target_pass: true" in report_text
+    assert "- validation_target_fpr_pass: true" in report_text
+    assert "- strict_target_fpr_pass: true" in report_text
+    assert "- attacked_negative_fpr_meets_strict_target_for_all_variants: true" in report_text

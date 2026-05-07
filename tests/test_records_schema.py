@@ -6,6 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 
 from main.core.records import RecordWriter
@@ -16,6 +17,7 @@ from main.core.schema import (
     validate_threshold_record,
 )
 from main.protocol.ablation_runner import AblationRunner
+from main.protocol.split_builder import build_split_plan
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -133,5 +135,40 @@ def test_active_stage_records_schema_is_complete(tmp_path: Path) -> None:
         assert threshold_record["runtime_profile"] == "smoke"
         assert isinstance(threshold_record["validation_target_fpr"], float)
         assert isinstance(threshold_record["sync_threshold_guard_band_multiplier"], float)
+        assert isinstance(
+            threshold_record["tubelet_length_threshold_guard_band_multiplier"],
+            float,
+        )
+        assert isinstance(
+            threshold_record["applied_threshold_guard_band_multiplier"],
+            float,
+        )
 
     validate_run_manifest_record(run_manifest)
+
+
+def test_build_split_plan_supports_calibration_negative_overrides() -> None:
+    """Validate that calibration negative counts can grow without widening test coverage.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    split_plan = build_split_plan(
+        samples_per_role=2,
+        split_role_sample_counts={
+            "calibration": {
+                "clean_negative": 8,
+                "attacked_negative": 8,
+            }
+        },
+    )
+    counts = Counter((entry.split, entry.sample_role) for entry in split_plan)
+
+    assert counts[("dev", "clean_negative")] == 2
+    assert counts[("calibration", "clean_negative")] == 8
+    assert counts[("calibration", "attacked_negative")] == 8
+    assert counts[("calibration", "watermarked_positive")] == 2
+    assert counts[("test", "attacked_negative")] == 2

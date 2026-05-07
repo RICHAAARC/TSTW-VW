@@ -23,11 +23,39 @@
       "proof": 0.5,
       "formal": 0.001
     },
+    "calibration_negative_min_samples_per_role_by_profile": {
+      "tiny": 1,
+      "smoke": 2,
+      "proof": 8,
+      "formal": 16
+    },
     "sync_threshold_guard_band_multiplier_by_profile": {
       "tiny": 1.5,
       "smoke": 1.5,
-      "proof": 1.25,
-      "formal": 0.75
+      "proof": 1.5,
+      "formal": 1.25
+    },
+    "tubelet_length_threshold_guard_band_multiplier_by_profile": {
+      "tiny": {
+        "default": 0.0,
+        "length_ge_08": 0.0,
+        "length_ge_16": 0.0
+      },
+      "smoke": {
+        "default": 0.0,
+        "length_ge_08": 0.0,
+        "length_ge_16": 0.0
+      },
+      "proof": {
+        "default": 0.0,
+        "length_ge_08": 0.25,
+        "length_ge_16": 0.75
+      },
+      "formal": {
+        "default": 0.0,
+        "length_ge_08": 0.25,
+        "length_ge_16": 0.75
+      }
     },
     "calibration_split": "calibration",
     "calibration_negative_roles": [
