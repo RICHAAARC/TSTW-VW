@@ -29,7 +29,15 @@ LATENT_BACKEND_NAME = "synthetic_video_latent"
 LATENT_BACKEND_STATUS = "tensor_artifact_runtime"
 LATENT_DISTRIBUTION = "standard_normal"
 LATENT_STORAGE = "npy_artifact"
+DEFAULT_RUNTIME_PROFILE = "smoke"
+FORMAL_RUNTIME_PROFILE = "formal"
 DEFAULT_LATENT_SHAPE = {
+    "frames": 16,
+    "channels": 4,
+    "height": 16,
+    "width": 16,
+}
+FORMAL_LATENT_SHAPE = {
     "frames": 32,
     "channels": 4,
     "height": 32,
@@ -53,8 +61,10 @@ def build_synthetic_video_latent_support_defaults() -> dict[str, object]:
         "project_stage": PROJECT_STAGE,
         "target_construction_phase": TARGET_CONSTRUCTION_PHASE,
         "latent_backend_name": LATENT_BACKEND_NAME,
+        "runtime_profile": DEFAULT_RUNTIME_PROFILE,
         "latent_distribution": LATENT_DISTRIBUTION,
         "latent_shape": dict(DEFAULT_LATENT_SHAPE),
+        "formal_latent_shape": dict(FORMAL_LATENT_SHAPE),
         "latent_generation_seed": DEFAULT_LATENT_GENERATION_SEED,
         "latent_storage": LATENT_STORAGE,
     }
@@ -211,7 +221,6 @@ class SyntheticVideoLatentPlaceholder(LatentBackend):
         artifact_path: Path,
         latent_artifact_digest: str,
     ) -> LatentSample:
-        latent_artifact_digest = compute_file_digest(artifact_path)
         return LatentSample(
             sample_id=sample_id,
             split=split,
@@ -294,7 +303,7 @@ def build_synthetic_video_latent_backend_from_support_config(
     if not isinstance(support_config, dict):
         raise TypeError("support_config must be a dictionary")
     return SyntheticVideoLatentPlaceholder(
-        latent_shape=support_config.get("latent_shape", DEFAULT_LATENT_SHAPE),
+        latent_shape=_resolve_support_config_latent_shape(support_config),
         latent_generation_seed=support_config.get(
             "latent_generation_seed",
             DEFAULT_LATENT_GENERATION_SEED,
@@ -305,3 +314,14 @@ def build_synthetic_video_latent_backend_from_support_config(
         ),
         latent_storage=support_config.get("latent_storage", LATENT_STORAGE),
     )
+
+
+def _resolve_support_config_latent_shape(
+    support_config: dict[str, Any],
+) -> dict[str, int] | tuple[int, int, int, int]:
+    runtime_profile = support_config.get("runtime_profile", DEFAULT_RUNTIME_PROFILE)
+    if runtime_profile == DEFAULT_RUNTIME_PROFILE:
+        return support_config.get("latent_shape", DEFAULT_LATENT_SHAPE)
+    if runtime_profile == FORMAL_RUNTIME_PROFILE:
+        return support_config.get("formal_latent_shape", FORMAL_LATENT_SHAPE)
+    raise ValueError(f"unsupported runtime_profile: {runtime_profile}")

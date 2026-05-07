@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 from array import array
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 import struct
 import sys
@@ -119,7 +120,27 @@ def read_float_tensor_npy(file_path: str | Path) -> FloatTensorArtifact:
         A `FloatTensorArtifact` instance.
     """
     input_path = Path(file_path)
-    payload = input_path.read_bytes()
+    input_path_stat = input_path.stat()
+    cached_artifact = _read_float_tensor_npy_cached(
+        str(input_path.resolve()),
+        input_path_stat.st_mtime_ns,
+        input_path_stat.st_size,
+    )
+    return FloatTensorArtifact(
+        shape=cached_artifact.shape,
+        values=array("f", cached_artifact.values),
+    )
+
+
+@lru_cache(maxsize=256)
+def _read_float_tensor_npy_cached(
+    resolved_path: str,
+    mtime_ns: int,
+    file_size: int,
+) -> FloatTensorArtifact:
+    del mtime_ns
+    del file_size
+    payload = Path(resolved_path).read_bytes()
     if len(payload) < 10 or payload[:6] != NPY_MAGIC_PREFIX:
         raise ValueError("unsupported npy artifact header")
 

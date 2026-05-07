@@ -28,8 +28,15 @@
     "allow_attack_specific_threshold": false
   },
   "latent_backend_name": "synthetic_video_latent",
+  "runtime_profile": "smoke",
   "latent_distribution": "standard_normal",
   "latent_shape": {
+    "frames": 16,
+    "channels": 4,
+    "height": 16,
+    "width": 16
+  },
+  "formal_latent_shape": {
     "frames": 32,
     "channels": 4,
     "height": 32,

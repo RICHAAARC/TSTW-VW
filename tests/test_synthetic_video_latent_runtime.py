@@ -46,7 +46,14 @@ def test_synthetic_video_latent_backend_builds_reproducible_sample() -> None:
 
     assert first_sample.latent_backend_name == LATENT_BACKEND_NAME
     assert first_sample.latent_backend_status == "tensor_artifact_runtime"
-    assert first_sample.latent_shape == (32, 4, 32, 32)
+    assert support_config["runtime_profile"] == "smoke"
+    assert support_config["formal_latent_shape"] == {
+        "frames": 32,
+        "channels": 4,
+        "height": 32,
+        "width": 32,
+    }
+    assert first_sample.latent_shape == (16, 4, 16, 16)
     assert (
         first_sample.latent_generation_seed_random
         == second_sample.latent_generation_seed_random

@@ -45,7 +45,7 @@ def test_synthetic_video_latent_backend_writes_reproducible_tensor_artifact(
     assert first_sample.latent_artifact_relpath == second_sample.latent_artifact_relpath
     assert first_sample.latent_artifact_digest == second_sample.latent_artifact_digest
     assert first_sample.latent_tensor_digest_random == second_sample.latent_tensor_digest_random
-    assert first_sample.latent_shape == (32, 4, 32, 32)
+    assert first_sample.latent_shape == (16, 4, 16, 16)
     assert artifact_path.stat().st_mtime_ns == sentinel_mtime_ns
 
 

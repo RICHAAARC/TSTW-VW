@@ -62,14 +62,29 @@ def test_temporal_attacks_transform_placeholder_sample_metadata() -> None:
     attacked_samples = {attack.attack_name: attack.apply(sample) for attack in attack_registry}
 
     assert attacked_samples["no_attack"] == sample
-    assert attacked_samples["temporal_crop"].latent_shape == (20, 4, 32, 32)
-    assert attacked_samples["frame_dropping"].latent_shape == (24, 4, 32, 32)
-    assert attacked_samples["speed_change"].latent_shape == (26, 4, 32, 32)
+    assert attacked_samples["temporal_crop"].latent_shape == (
+        attacked_samples["temporal_crop"].applied_attack_params["observed_frame_count"],
+        4,
+        16,
+        16,
+    )
+    assert attacked_samples["frame_dropping"].latent_shape == (
+        attacked_samples["frame_dropping"].applied_attack_params["observed_frame_count"],
+        4,
+        16,
+        16,
+    )
+    assert attacked_samples["speed_change"].latent_shape == (
+        attacked_samples["speed_change"].applied_attack_params["observed_frame_count"],
+        4,
+        16,
+        16,
+    )
     assert attacked_samples["local_clip"].latent_shape == (
         attacked_samples["local_clip"].applied_attack_params["clip_length"],
         4,
-        32,
-        32,
+        16,
+        16,
     )
     assert attacked_samples["latent_gaussian_noise"].latent_shape == sample.latent_shape
     assert (

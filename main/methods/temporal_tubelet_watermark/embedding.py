@@ -144,12 +144,12 @@ def apply_projection_margin_embedding(
                 delta_scale * code_sign,
             )
             delta_norm_values.append(delta_scale)
-            direction_norm_squared = sum(
-                float(direction_value) * float(direction_value)
-                for direction_value in direction
-            )
             projection_after_values.append(
-                coded_projection_before + (delta_scale * direction_norm_squared)
+                coded_projection_before
+                + (
+                    delta_scale
+                    * codebook.direction_norm_squares[descriptor.tubelet_index]
+                )
             )
         else:
             delta_norm_values.append(0.0)

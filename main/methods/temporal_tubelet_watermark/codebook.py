@@ -52,6 +52,7 @@ class TubeletCodebook:
         payload_codes: Payload signs indexed by tubelet index.
         sync_codes: Sync signs indexed by temporal index.
         combined_codes: Final per-tubelet signs after optional sync coupling.
+        direction_norm_squares: Squared L2 norm for each direction vector.
         codebook_digest: Digest for the full direction construction.
         sync_code_digest: Digest for the synchronization code family.
         payload_digest: Digest for the payload sign map.
@@ -60,15 +61,17 @@ class TubeletCodebook:
         None.
     """
 
-    directions: dict[int, list[float]]
+    directions: dict[int, tuple[float, ...]]
     payload_codes: dict[int, int]
     sync_codes: dict[int, int]
     combined_codes: dict[int, int]
+    direction_norm_squares: dict[int, float]
     codebook_digest: str
     sync_code_digest: str
     payload_digest: str
 
 
+@lru_cache(maxsize=1)
 def build_codebook_config() -> CodebookConfig:
     """功能：返回 stage-one codebook 默认配置。
 
@@ -167,7 +170,8 @@ def _build_cached_tubelet_codebook(
     }
     payload_codes: dict[int, int] = {}
     combined_codes: dict[int, int] = {}
-    directions: dict[int, list[float]] = {}
+    directions: dict[int, tuple[float, ...]] = {}
+    direction_norm_squares: dict[int, float] = {}
     direction_seed_payload: list[dict[str, int]] = []
 
     for temporal_index, tubelet_index, descriptor_vector_length in descriptor_signature:
@@ -185,10 +189,15 @@ def _build_cached_tubelet_codebook(
         combined_codes[tubelet_index] = payload_code * (
             sync_codes[temporal_index] if enable_sync else 1
         )
-        directions[tubelet_index] = _build_normalized_direction(
+        direction = _build_normalized_direction(
             direction_seed,
             descriptor_vector_length,
             codebook_config.direction_normalization,
+        )
+        directions[tubelet_index] = direction
+        direction_norm_squares[tubelet_index] = round(
+            sum(direction_value * direction_value for direction_value in direction),
+            8,
         )
         direction_seed_payload.append(
             {
@@ -204,6 +213,7 @@ def _build_cached_tubelet_codebook(
         payload_codes=payload_codes,
         sync_codes=sync_codes,
         combined_codes=combined_codes,
+        direction_norm_squares=direction_norm_squares,
         codebook_digest=compute_object_digest(direction_seed_payload),
         sync_code_digest=compute_object_digest(sync_codes),
         payload_digest=compute_object_digest(payload_codes),
@@ -230,7 +240,7 @@ def _build_normalized_direction(
     seed_value: int,
     vector_length: int,
     normalization_rule: str,
-) -> list[float]:
+) -> tuple[float, ...]:
     if normalization_rule != "l2":
         raise ValueError(f"unsupported direction_normalization: {normalization_rule}")
     generator = random.Random(seed_value)
@@ -238,4 +248,4 @@ def _build_normalized_direction(
     l2_norm = math.sqrt(sum(value * value for value in values))
     if l2_norm == 0.0:
         raise ValueError("direction generation produced a zero vector")
-    return [round(value / l2_norm, 8) for value in values]
+    return tuple(round(value / l2_norm, 8) for value in values)

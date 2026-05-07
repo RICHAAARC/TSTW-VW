@@ -18,6 +18,8 @@ from main.attacks.temporal import (
 from main.backends.synthetic_video_latent import (
     DEFAULT_LATENT_GENERATION_SEED,
     DEFAULT_LATENT_SHAPE,
+    DEFAULT_RUNTIME_PROFILE,
+    FORMAL_LATENT_SHAPE,
     LATENT_BACKEND_NAME as SYNTHETIC_VIDEO_LATENT_BACKEND_NAME,
     LATENT_DISTRIBUTION as SYNTHETIC_VIDEO_LATENT_DISTRIBUTION,
     LATENT_STORAGE as SYNTHETIC_VIDEO_LATENT_STORAGE,
@@ -989,6 +991,30 @@ def validate_synthetic_tubelet_sync_protocol_support_data(
             {
                 "field": "latent_shape",
                 "reason": "latent_shape_must_match_stage_one_default",
+            }
+        )
+
+    if data.get("runtime_profile") != DEFAULT_RUNTIME_PROFILE:
+        violations.append(
+            {
+                "field": "runtime_profile",
+                "reason": "runtime_profile_must_equal_smoke",
+            }
+        )
+
+    formal_latent_shape = data.get("formal_latent_shape")
+    if not isinstance(formal_latent_shape, dict):
+        violations.append(
+            {
+                "field": "formal_latent_shape",
+                "reason": "formal_latent_shape_must_be_object",
+            }
+        )
+    elif formal_latent_shape != FORMAL_LATENT_SHAPE:
+        violations.append(
+            {
+                "field": "formal_latent_shape",
+                "reason": "formal_latent_shape_must_match_stage_one_formal_profile",
             }
         )
 
