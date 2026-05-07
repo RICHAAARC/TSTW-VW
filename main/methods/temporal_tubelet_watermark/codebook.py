@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
+from functools import lru_cache
 
 from main.core.digest import compute_object_digest
 from main.methods.temporal_tubelet_watermark.tubelet_partition import TubeletDescriptor
@@ -115,10 +116,46 @@ def build_tubelet_codebook(
     if not isinstance(codebook_config, CodebookConfig):
         raise TypeError("codebook_config must be a CodebookConfig instance")
 
-    temporal_indices = (
-        sorted(reference_temporal_indices)
+    normalized_reference_temporal_indices = (
+        tuple(sorted({int(temporal_index) for temporal_index in reference_temporal_indices}))
         if reference_temporal_indices is not None
-        else sorted({descriptor.temporal_index for descriptor in tubelet_descriptors})
+        else None
+    )
+    descriptor_signature = _build_descriptor_signature(tubelet_descriptors)
+    return _build_cached_tubelet_codebook(
+        sample_id,
+        descriptor_signature,
+        codebook_config,
+        bool(enable_sync),
+        normalized_reference_temporal_indices,
+    )
+
+
+def _build_descriptor_signature(
+    tubelet_descriptors: list[TubeletDescriptor],
+) -> tuple[tuple[int, int, int], ...]:
+    return tuple(
+        (
+            descriptor.temporal_index,
+            descriptor.tubelet_index,
+            len(descriptor.flat_indices),
+        )
+        for descriptor in tubelet_descriptors
+    )
+
+
+@lru_cache(maxsize=128)
+def _build_cached_tubelet_codebook(
+    sample_id: str,
+    descriptor_signature: tuple[tuple[int, int, int], ...],
+    codebook_config: CodebookConfig,
+    enable_sync: bool,
+    reference_temporal_indices: tuple[int, ...] | None,
+) -> TubeletCodebook:
+    temporal_indices = (
+        list(reference_temporal_indices)
+        if reference_temporal_indices is not None
+        else sorted({temporal_index for temporal_index, _, _ in descriptor_signature})
     )
     sync_codes = {
         temporal_index: _build_binary_code(
@@ -133,31 +170,30 @@ def build_tubelet_codebook(
     directions: dict[int, list[float]] = {}
     direction_seed_payload: list[dict[str, int]] = []
 
-    for descriptor in tubelet_descriptors:
-        descriptor_vector_length = len(descriptor.flat_indices)
+    for temporal_index, tubelet_index, descriptor_vector_length in descriptor_signature:
         payload_code = _build_binary_code(
             codebook_config.payload_key,
             sample_id,
-            descriptor.tubelet_index,
+            tubelet_index,
         )
         direction_seed = _build_integer_seed(
             codebook_config.direction_key,
             sample_id,
-            descriptor.tubelet_index,
+            tubelet_index,
         )
-        payload_codes[descriptor.tubelet_index] = payload_code
-        combined_codes[descriptor.tubelet_index] = payload_code * (
-            sync_codes[descriptor.temporal_index] if enable_sync else 1
+        payload_codes[tubelet_index] = payload_code
+        combined_codes[tubelet_index] = payload_code * (
+            sync_codes[temporal_index] if enable_sync else 1
         )
-        directions[descriptor.tubelet_index] = _build_normalized_direction(
+        directions[tubelet_index] = _build_normalized_direction(
             direction_seed,
             descriptor_vector_length,
             codebook_config.direction_normalization,
         )
         direction_seed_payload.append(
             {
-                "tubelet_index": descriptor.tubelet_index,
-                "temporal_index": descriptor.temporal_index,
+                "tubelet_index": tubelet_index,
+                "temporal_index": temporal_index,
                 "direction_seed": direction_seed,
                 "vector_length": descriptor_vector_length,
             }

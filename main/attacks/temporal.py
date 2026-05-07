@@ -100,6 +100,7 @@ class TemporalAttackPlaceholder:
             raise TypeError("attack_params must be a dictionary")
         self.attack_name = attack_name
         self.attack_params = self._normalize_attack_params(attack_name, attack_params)
+        self._artifact_cache: dict[tuple[str, str], LatentSample] = {}
 
     def apply(self, sample: LatentSample) -> LatentSample:
         """功能：对 latent sample 应用真实 tensor-based temporal attack。
@@ -120,27 +121,79 @@ class TemporalAttackPlaceholder:
         if self.attack_name == "no_attack":
             return sample
 
-        tensor_artifact = read_float_tensor_npy(sample.latent_artifact_path)
         materialized_attack_params = self._materialize_attack_params(sample)
         attacked_shape = self._derive_attacked_shape(sample, materialized_attack_params)
         attacked_seed = self._derive_attacked_seed(sample, attacked_shape)
+        attack_params_digest = compute_object_digest(materialized_attack_params)[:12]
+        source_artifact_digest = compute_object_digest(
+            {
+                "sample_id": sample.sample_id,
+                "source_digest": sample.latent_tensor_digest_random,
+                "attack_name": self.attack_name,
+            }
+        )[:16]
+        artifact_relpath = (
+            Path("artifacts")
+            / "latents"
+            / "attacked"
+            / self.attack_name
+            / f"{source_artifact_digest}_{attack_params_digest}.npy"
+        )
+        artifact_path = Path(sample.run_root_path) / artifact_relpath
+        cache_key = (sample.latent_tensor_digest_random, attack_params_digest)
+        cached_sample = self._artifact_cache.get(cache_key)
+        if (
+            cached_sample is not None
+            and cached_sample.latent_artifact_path is not None
+            and Path(cached_sample.latent_artifact_path).exists()
+        ):
+            return cached_sample
+
+        if artifact_path.exists():
+            attacked_digest = compute_file_digest(artifact_path)
+            attacked_sample = self._build_attacked_sample(
+                sample,
+                artifact_relpath,
+                artifact_path,
+                attacked_shape,
+                attacked_seed,
+                materialized_attack_params,
+                attacked_digest,
+            )
+            self._artifact_cache[cache_key] = attacked_sample
+            return attacked_sample
+
+        tensor_artifact = read_float_tensor_npy(sample.latent_artifact_path)
         attacked_values = self._apply_attack_to_tensor(
             tensor_artifact.values,
             sample.latent_shape,
             materialized_attack_params,
             attacked_seed,
         )
-        attack_params_digest = compute_object_digest(materialized_attack_params)[:12]
-        artifact_relpath = (
-            Path("artifacts")
-            / "latents"
-            / "attacked"
-            / self.attack_name
-            / f"{sample.sample_id}_{sample.latent_tensor_digest_random[:12]}_{attack_params_digest}.npy"
-        )
-        artifact_path = Path(sample.run_root_path) / artifact_relpath
         write_float_tensor_npy(artifact_path, attacked_shape, attacked_values)
         attacked_digest = compute_file_digest(artifact_path)
+        attacked_sample = self._build_attacked_sample(
+            sample,
+            artifact_relpath,
+            artifact_path,
+            attacked_shape,
+            attacked_seed,
+            materialized_attack_params,
+            attacked_digest,
+        )
+        self._artifact_cache[cache_key] = attacked_sample
+        return attacked_sample
+
+    def _build_attacked_sample(
+        self,
+        sample: LatentSample,
+        artifact_relpath: Path,
+        artifact_path: Path,
+        attacked_shape: tuple[int, int, int, int],
+        attacked_seed: int,
+        materialized_attack_params: dict[str, Any],
+        attacked_digest: str,
+    ) -> LatentSample:
         mechanism_trace = dict(sample.mechanism_trace or {})
         mechanism_trace.setdefault("reference_latent_shape", list(sample.latent_shape))
         mechanism_trace.update(

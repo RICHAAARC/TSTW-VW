@@ -129,6 +129,7 @@ class SyntheticVideoLatentPlaceholder(LatentBackend):
         self._latent_distribution = latent_distribution
         self._latent_storage = latent_storage
         self._output_root = Path(tempfile.gettempdir()) / "tstw_vw_synthetic_probe_cache"
+        self._sample_cache: dict[tuple[str, str, str], LatentSample] = {}
 
     def set_output_root(self, output_root: str | Path) -> None:
         """功能：设置当前 run 的 artifact 输出根目录。
@@ -141,7 +142,10 @@ class SyntheticVideoLatentPlaceholder(LatentBackend):
         Returns:
             None.
         """
-        self._output_root = Path(output_root)
+        resolved_output_root = Path(output_root)
+        if resolved_output_root != self._output_root:
+            self._sample_cache.clear()
+        self._output_root = resolved_output_root
 
     def build_sample(self, sample_id: str, split: str, sample_role: str) -> LatentSample:
         """功能：构建 deterministic synthetic video latent tensor artifact。
@@ -161,11 +165,52 @@ class SyntheticVideoLatentPlaceholder(LatentBackend):
         ensure_supported_split(split)
         ensure_supported_sample_role(sample_role)
 
+        cache_key = (sample_id, split, sample_role)
+        cached_sample = self._sample_cache.get(cache_key)
+        if (
+            cached_sample is not None
+            and cached_sample.latent_artifact_path is not None
+            and Path(cached_sample.latent_artifact_path).exists()
+        ):
+            return cached_sample
         derived_seed = self._derive_seed(sample_id, split, sample_role)
-        latent_values = self._build_tensor_values(derived_seed)
-        artifact_relpath = Path("artifacts") / "latents" / f"{sample_id}.npy"
+        artifact_relpath = (
+            Path("artifacts")
+            / "latents"
+            / split
+            / sample_role
+            / f"{sample_id}.npy"
+        )
         artifact_path = self._output_root / artifact_relpath
-        write_float_tensor_npy(artifact_path, self._latent_shape, latent_values)
+        if artifact_path.exists():
+            latent_artifact_digest = compute_file_digest(artifact_path)
+        else:
+            latent_values = self._build_tensor_values(derived_seed)
+            write_float_tensor_npy(artifact_path, self._latent_shape, latent_values)
+            latent_artifact_digest = compute_file_digest(artifact_path)
+
+        sample = self._build_latent_sample(
+            sample_id=sample_id,
+            split=split,
+            sample_role=sample_role,
+            derived_seed=derived_seed,
+            artifact_relpath=artifact_relpath,
+            artifact_path=artifact_path,
+            latent_artifact_digest=latent_artifact_digest,
+        )
+        self._sample_cache[cache_key] = sample
+        return sample
+
+    def _build_latent_sample(
+        self,
+        sample_id: str,
+        split: str,
+        sample_role: str,
+        derived_seed: int,
+        artifact_relpath: Path,
+        artifact_path: Path,
+        latent_artifact_digest: str,
+    ) -> LatentSample:
         latent_artifact_digest = compute_file_digest(artifact_path)
         return LatentSample(
             sample_id=sample_id,

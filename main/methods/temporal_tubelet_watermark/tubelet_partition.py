@@ -7,6 +7,7 @@ Module type: Semi-general module
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from main.core.digest import compute_object_digest
 from main.core.tensor_artifact import FloatTensorArtifact
@@ -146,6 +147,14 @@ def build_tubelet_descriptors(
     if not isinstance(partition_config, TubeletPartitionConfig):
         raise TypeError("partition_config must be a TubeletPartitionConfig instance")
 
+    return list(_build_cached_tubelet_descriptors(latent_shape, partition_config))
+
+
+@lru_cache(maxsize=32)
+def _build_cached_tubelet_descriptors(
+    latent_shape: tuple[int, int, int, int],
+    partition_config: TubeletPartitionConfig,
+) -> tuple[TubeletDescriptor, ...]:
     frame_count, _, height, width = latent_shape
     patch_height, patch_width = partition_config.spatial_patch_size
     stride_height, stride_width = partition_config.spatial_stride
@@ -198,7 +207,7 @@ def build_tubelet_descriptors(
                     )
                 )
                 tubelet_index += 1
-    return descriptors
+    return tuple(descriptors)
 
 
 def compute_tubelet_partition_digest(
@@ -216,7 +225,15 @@ def compute_tubelet_partition_digest(
     Returns:
         The stable partition digest.
     """
-    descriptors = build_tubelet_descriptors(latent_shape, partition_config)
+    return _build_cached_partition_digest(latent_shape, partition_config)
+
+
+@lru_cache(maxsize=32)
+def _build_cached_partition_digest(
+    latent_shape: tuple[int, int, int, int],
+    partition_config: TubeletPartitionConfig,
+) -> str:
+    descriptors = _build_cached_tubelet_descriptors(latent_shape, partition_config)
     return compute_object_digest(
         {
             "latent_shape": list(latent_shape),
@@ -276,7 +293,7 @@ def extract_tubelet_values(
 def dot_tubelet_direction(
     tensor_artifact: FloatTensorArtifact,
     tubelet_descriptor: TubeletDescriptor,
-    direction: list[float],
+    direction: list[float] | tuple[float, ...],
 ) -> float:
     """功能：直接对 tubelet payload 与 direction 做点积。
 
@@ -294,8 +311,8 @@ def dot_tubelet_direction(
         raise TypeError("tensor_artifact must be a FloatTensorArtifact instance")
     if not isinstance(tubelet_descriptor, TubeletDescriptor):
         raise TypeError("tubelet_descriptor must be a TubeletDescriptor instance")
-    if not isinstance(direction, list) or not direction:
-        raise ValueError("direction must be a non-empty list")
+    if not isinstance(direction, (list, tuple)) or not direction:
+        raise ValueError("direction must be a non-empty sequence")
     if len(direction) != len(tubelet_descriptor.flat_indices):
         raise ValueError("direction length does not match the tubelet payload size")
 
@@ -311,7 +328,7 @@ def dot_tubelet_direction(
 def add_tubelet_delta_in_place(
     tensor_artifact: FloatTensorArtifact,
     tubelet_descriptor: TubeletDescriptor,
-    direction: list[float],
+    direction: list[float] | tuple[float, ...],
     scale: float,
 ) -> None:
     """功能：对指定 tubelet 施加方向修正。
@@ -331,8 +348,8 @@ def add_tubelet_delta_in_place(
         raise TypeError("tensor_artifact must be a FloatTensorArtifact instance")
     if not isinstance(tubelet_descriptor, TubeletDescriptor):
         raise TypeError("tubelet_descriptor must be a TubeletDescriptor instance")
-    if not isinstance(direction, list) or not direction:
-        raise ValueError("direction must be a non-empty list")
+    if not isinstance(direction, (list, tuple)) or not direction:
+        raise ValueError("direction must be a non-empty sequence")
     if not isinstance(scale, (int, float)):
         raise TypeError("scale must be numeric")
 

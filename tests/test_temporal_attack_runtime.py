@@ -6,6 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from main.attacks.attack_registry import build_attack_registry
@@ -79,3 +80,34 @@ def test_temporal_attacks_transform_placeholder_sample_metadata() -> None:
         attacked_samples["temporal_crop"].latent_generation_seed_random
         != sample.latent_generation_seed_random
     )
+
+
+def test_temporal_attack_reuses_existing_artifact(tmp_path: Path) -> None:
+    """Validate that repeated governed attacks reuse the existing artifact output.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    backend = SyntheticVideoLatentPlaceholder()
+    backend.set_output_root(tmp_path)
+    sample = backend.build_sample(
+        "sample_test_attacked_positive_000001",
+        "test",
+        "attacked_positive",
+    )
+    temporal_crop = build_attack_registry(
+        load_json_config(ROOT / "configs" / "attacks" / "temporal_attack_matrix.json")
+    )[1]
+
+    first_attacked_sample = temporal_crop.apply(sample)
+    artifact_path = Path(first_attacked_sample.latent_artifact_path or "")
+    sentinel_mtime_ns = max(1, artifact_path.stat().st_mtime_ns - 1_000_000_000)
+    os.utime(artifact_path, ns=(sentinel_mtime_ns, sentinel_mtime_ns))
+    second_attacked_sample = temporal_crop.apply(sample)
+
+    assert first_attacked_sample.latent_artifact_digest == second_attacked_sample.latent_artifact_digest
+    assert first_attacked_sample.latent_shape == second_attacked_sample.latent_shape
+    assert artifact_path.stat().st_mtime_ns == sentinel_mtime_ns

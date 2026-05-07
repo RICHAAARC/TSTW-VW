@@ -6,6 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from main.backends.synthetic_video_latent import SyntheticVideoLatentPlaceholder
@@ -30,6 +31,9 @@ def test_synthetic_video_latent_backend_writes_reproducible_tensor_artifact(
         "test",
         "watermarked_positive",
     )
+    artifact_path = Path(first_sample.latent_artifact_path or "")
+    sentinel_mtime_ns = max(1, artifact_path.stat().st_mtime_ns - 1_000_000_000)
+    os.utime(artifact_path, ns=(sentinel_mtime_ns, sentinel_mtime_ns))
     second_sample = backend.build_sample(
         "sample_test_watermarked_positive_000001",
         "test",
@@ -37,11 +41,12 @@ def test_synthetic_video_latent_backend_writes_reproducible_tensor_artifact(
     )
 
     assert first_sample.latent_artifact_path is not None
-    assert Path(first_sample.latent_artifact_path).exists()
+    assert artifact_path.exists()
     assert first_sample.latent_artifact_relpath == second_sample.latent_artifact_relpath
     assert first_sample.latent_artifact_digest == second_sample.latent_artifact_digest
     assert first_sample.latent_tensor_digest_random == second_sample.latent_tensor_digest_random
     assert first_sample.latent_shape == (32, 4, 32, 32)
+    assert artifact_path.stat().st_mtime_ns == sentinel_mtime_ns
 
 
 def test_synthetic_video_latent_backend_separates_sample_identity(tmp_path: Path) -> None:
