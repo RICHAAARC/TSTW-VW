@@ -1,0 +1,13 @@
+{
+  "project_stage": "protocol_skeleton",
+  "target_construction_phase": "synthetic_tubelet_sync_probe",
+  "method_family": "temporal_tubelet_watermark",
+  "method_variant": "frame_prc",
+  "method_status": "reserved_for_next_stage",
+  "enable_frame_prc": true,
+  "enable_tubelet": false,
+  "enable_sync": false,
+  "enable_trajectory": false,
+  "tubelet_length": 1,
+  "fusion_rule": "tubelet_score_only"
+}

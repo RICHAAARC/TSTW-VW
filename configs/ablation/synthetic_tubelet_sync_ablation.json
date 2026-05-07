@@ -1,0 +1,14 @@
+{
+  "project_stage": "protocol_skeleton",
+  "target_construction_phase": "synthetic_tubelet_sync_probe",
+  "ablation_name": "synthetic_tubelet_sync_ablation",
+  "shared_protocol_name": "fixed_low_fpr_calibrated_detection",
+  "shared_attack_matrix_name": "temporal_attack_matrix",
+  "method_variants": [
+    "frame_prc",
+    "tubelet_only",
+    "tubelet_sync"
+  ],
+  "shared_target_fpr": 0.001,
+  "shared_table_builder_name": "table_builder"
+}

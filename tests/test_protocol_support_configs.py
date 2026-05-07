@@ -13,6 +13,9 @@ from tools.harness.validate_project_contract import (
     load_json_config,
     validate_ablation_placeholder_data,
     validate_attack_placeholder_data,
+    validate_synthetic_tubelet_sync_ablation_support_data,
+    validate_synthetic_tubelet_sync_protocol_support_data,
+    validate_temporal_attack_matrix_support_data,
 )
 
 
@@ -85,5 +88,113 @@ def test_attack_placeholder_requires_identity_attack_name() -> None:
     violations = validate_attack_placeholder_data(broken)
     assert any(
         violation["reason"] == "attack_name_placeholder_must_equal_identity_attack_placeholder"
+        for violation in violations
+    )
+
+
+def test_synthetic_tubelet_sync_protocol_support_config_passes() -> None:
+    """Validate that the reserved stage-1 protocol support config passes.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(
+        ROOT / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+    )
+    assert validate_synthetic_tubelet_sync_protocol_support_data(data) == []
+
+
+def test_synthetic_tubelet_sync_protocol_support_requires_mechanism_trace() -> None:
+    """Validate that the reserved protocol support config requires mechanism trace.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(
+        ROOT / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+    )
+    broken = deepcopy(data)
+    broken["mechanism_trace_required"] = False
+    violations = validate_synthetic_tubelet_sync_protocol_support_data(broken)
+    assert any(
+        violation["reason"] == "mechanism_trace_must_be_required"
+        for violation in violations
+    )
+
+
+def test_temporal_attack_matrix_support_config_passes() -> None:
+    """Validate that the reserved temporal attack matrix support config passes.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(
+        ROOT / "configs" / "attacks" / "temporal_attack_matrix.json"
+    )
+    assert validate_temporal_attack_matrix_support_data(data) == []
+
+
+def test_temporal_attack_matrix_requires_governed_attack_order() -> None:
+    """Validate that the reserved temporal attack matrix keeps the governed attack order.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(
+        ROOT / "configs" / "attacks" / "temporal_attack_matrix.json"
+    )
+    broken = deepcopy(data)
+    broken["attacks"] = broken["attacks"][:-1]
+    violations = validate_temporal_attack_matrix_support_data(broken)
+    assert any(
+        violation["reason"] == "stage_one_attack_names_must_match_governed_order"
+        for violation in violations
+    )
+
+
+def test_synthetic_tubelet_sync_ablation_support_config_passes() -> None:
+    """Validate that the reserved stage-1 ablation support config passes.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(
+        ROOT / "configs" / "ablation" / "synthetic_tubelet_sync_ablation.json"
+    )
+    assert validate_synthetic_tubelet_sync_ablation_support_data(data) == []
+
+
+def test_synthetic_tubelet_sync_ablation_requires_shared_attack_matrix_name() -> None:
+    """Validate that the reserved ablation support config keeps the governed attack matrix.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(
+        ROOT / "configs" / "ablation" / "synthetic_tubelet_sync_ablation.json"
+    )
+    broken = deepcopy(data)
+    broken["shared_attack_matrix_name"] = "identity_attack_placeholder"
+    violations = validate_synthetic_tubelet_sync_ablation_support_data(broken)
+    assert any(
+        violation["reason"] == "shared_attack_matrix_name_must_equal_temporal_attack_matrix"
         for violation in violations
     )

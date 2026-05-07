@@ -50,3 +50,12 @@ def test_governed_repository_reports_protocol_skeleton_status() -> None:
     assert report["directory_status"]["main"]["exists"] is True
     assert report["directory_status"]["paper_workflow"]["exists"] is False
     assert report["directory_status"]["outputs"]["exists"] is False
+    next_stage_readiness = report["next_stage_readiness"]
+    assert next_stage_readiness["target_construction_phase"] == "synthetic_tubelet_sync_probe"
+    assert next_stage_readiness["all_required_paths_present"] is True
+    assert (
+        next_stage_readiness["present_required_path_count"]
+        == next_stage_readiness["required_path_count"]
+    )
+    assert next_stage_readiness["required_paths"]["protocol_support_config"]["exists"] is True
+    assert next_stage_readiness["required_paths"]["synthetic_video_latent_module"]["exists"] is True

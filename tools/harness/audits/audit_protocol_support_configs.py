@@ -1,6 +1,6 @@
 """
-文件用途：执行阶段 0 support config 骨架审计。
-File purpose: Audit the governed stage-0 support config skeletons.
+文件用途：执行阶段 0 与阶段 1 入口 support config 骨架审计。
+File purpose: Audit the governed stage-0 support configs and the reserved stage-1 entry configs.
 Module type: General module
 """
 
@@ -20,6 +20,10 @@ from tools.harness.validate_project_contract import (
     load_json_config,
     validate_ablation_placeholder_data,
     validate_attack_placeholder_data,
+    validate_synthetic_tubelet_sync_ablation_support_data,
+    validate_synthetic_tubelet_sync_method_config_data,
+    validate_synthetic_tubelet_sync_protocol_support_data,
+    validate_temporal_attack_matrix_support_data,
 )
 
 
@@ -35,7 +39,28 @@ def run_audit(root: str | Path) -> dict[str, Any]:
     root_path = Path(root)
     ablation_path = root_path / "configs" / "ablation" / "ablation_placeholder.json"
     attack_path = root_path / "configs" / "attacks" / "identity_attack_placeholder.json"
-    checked_paths = [str(ablation_path), str(attack_path)]
+    stage_one_protocol_path = (
+        root_path / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+    )
+    temporal_attack_path = (
+        root_path / "configs" / "attacks" / "temporal_attack_matrix.json"
+    )
+    stage_one_ablation_path = (
+        root_path / "configs" / "ablation" / "synthetic_tubelet_sync_ablation.json"
+    )
+    stage_one_method_paths = [
+        root_path / "configs" / "method" / "frame_prc.json",
+        root_path / "configs" / "method" / "tubelet_only.json",
+        root_path / "configs" / "method" / "tubelet_sync.json",
+    ]
+    checked_paths = [
+        str(ablation_path),
+        str(attack_path),
+        str(stage_one_protocol_path),
+        str(temporal_attack_path),
+        str(stage_one_ablation_path),
+        *(str(method_path) for method_path in stage_one_method_paths),
+    ]
     violations: list[dict[str, Any]] = []
 
     if not ablation_path.exists():
@@ -62,6 +87,63 @@ def run_audit(root: str | Path) -> dict[str, Any]:
     else:
         for violation in validate_attack_placeholder_data(load_json_config(attack_path)):
             violation["path"] = str(attack_path)
+            violations.append(violation)
+
+    if not stage_one_protocol_path.exists():
+        violations.append(
+            {
+                "path": str(stage_one_protocol_path),
+                "reason": "missing_stage_one_protocol_support_config",
+            }
+        )
+    else:
+        for violation in validate_synthetic_tubelet_sync_protocol_support_data(
+            load_json_config(stage_one_protocol_path)
+        ):
+            violation["path"] = str(stage_one_protocol_path)
+            violations.append(violation)
+
+    if not temporal_attack_path.exists():
+        violations.append(
+            {
+                "path": str(temporal_attack_path),
+                "reason": "missing_temporal_attack_matrix_support_config",
+            }
+        )
+    else:
+        for violation in validate_temporal_attack_matrix_support_data(
+            load_json_config(temporal_attack_path)
+        ):
+            violation["path"] = str(temporal_attack_path)
+            violations.append(violation)
+
+    if not stage_one_ablation_path.exists():
+        violations.append(
+            {
+                "path": str(stage_one_ablation_path),
+                "reason": "missing_stage_one_ablation_support_config",
+            }
+        )
+    else:
+        for violation in validate_synthetic_tubelet_sync_ablation_support_data(
+            load_json_config(stage_one_ablation_path)
+        ):
+            violation["path"] = str(stage_one_ablation_path)
+            violations.append(violation)
+
+    for method_path in stage_one_method_paths:
+        if not method_path.exists():
+            violations.append(
+                {
+                    "path": str(method_path),
+                    "reason": "missing_stage_one_method_support_config",
+                }
+            )
+            continue
+        for violation in validate_synthetic_tubelet_sync_method_config_data(
+            load_json_config(method_path)
+        ):
+            violation["path"] = str(method_path)
             violations.append(violation)
 
     decision = "fail" if violations else "pass"

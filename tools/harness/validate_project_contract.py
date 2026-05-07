@@ -11,6 +11,25 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from main.attacks.temporal import (
+    ATTACK_MATRIX_NAME as TEMPORAL_ATTACK_MATRIX_NAME,
+    SUPPORTED_TEMPORAL_ATTACK_NAMES,
+)
+from main.backends.synthetic_video_latent import (
+    DEFAULT_LATENT_GENERATION_SEED,
+    DEFAULT_LATENT_SHAPE,
+    LATENT_BACKEND_NAME as SYNTHETIC_VIDEO_LATENT_BACKEND_NAME,
+    LATENT_DISTRIBUTION as SYNTHETIC_VIDEO_LATENT_DISTRIBUTION,
+    LATENT_STORAGE as SYNTHETIC_VIDEO_LATENT_STORAGE,
+)
+from main.methods.temporal_tubelet_watermark.synthetic_tubelet_sync_contract import (
+    METHOD_FAMILY as SYNTHETIC_TUBELET_SYNC_METHOD_FAMILY,
+    METHOD_STATUS as SYNTHETIC_TUBELET_SYNC_METHOD_STATUS,
+    SUPPORTED_METHOD_VARIANTS as SYNTHETIC_TUBELET_SYNC_METHOD_VARIANTS,
+    TARGET_CONSTRUCTION_PHASE as SYNTHETIC_TUBELET_SYNC_TARGET_PHASE,
+    build_reserved_method_support_matrix,
+)
+
 
 ROOT = Path(__file__).resolve().parents[2]
 REQUIRED_SAMPLE_ROLES = {
@@ -186,6 +205,13 @@ REQUIRED_ABLATION_METHOD_VARIANTS = {
 REQUIRED_ATTACK_PLACEHOLDER_FIELDS = {
     "attack_name_placeholder",
     "attack_params_placeholder",
+}
+REQUIRED_STAGE_ONE_OUTPUT_TABLES = {
+    "main_tpr_fpr_table.csv",
+    "ablation_table.csv",
+    "local_clip_curve.csv",
+    "temporal_attack_curve.csv",
+    "tubelet_length_ablation.csv",
 }
 
 
@@ -727,6 +753,371 @@ def validate_attack_placeholder_data(data: dict[str, Any]) -> list[dict[str, str
     return violations
 
 
+def validate_synthetic_tubelet_sync_protocol_support_data(
+    data: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Validate the reserved protocol config for the synthetic tubelet sync probe.
+
+    Args:
+        data: Parsed protocol support config.
+
+    Returns:
+        A list of validation violations.
+    """
+    violations: list[dict[str, str]] = []
+
+    if data.get("project_stage") != "protocol_skeleton":
+        violations.append(
+            {
+                "field": "project_stage",
+                "reason": "stage_one_support_project_stage_must_remain_protocol_skeleton",
+            }
+        )
+
+    if data.get("target_construction_phase") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
+        violations.append(
+            {
+                "field": "target_construction_phase",
+                "reason": "target_construction_phase_must_equal_synthetic_tubelet_sync_probe",
+            }
+        )
+
+    if data.get("protocol_name") != "fixed_low_fpr_calibrated_detection":
+        violations.append(
+            {
+                "field": "protocol_name",
+                "reason": "stage_one_protocol_name_must_equal_fixed_low_fpr_calibrated_detection",
+            }
+        )
+
+    if data.get("latent_backend_name") != SYNTHETIC_VIDEO_LATENT_BACKEND_NAME:
+        violations.append(
+            {
+                "field": "latent_backend_name",
+                "reason": "latent_backend_name_must_equal_synthetic_video_latent",
+            }
+        )
+
+    if data.get("latent_distribution") != SYNTHETIC_VIDEO_LATENT_DISTRIBUTION:
+        violations.append(
+            {
+                "field": "latent_distribution",
+                "reason": "latent_distribution_must_equal_standard_normal",
+            }
+        )
+
+    latent_shape = data.get("latent_shape")
+    if not isinstance(latent_shape, dict):
+        violations.append(
+            {
+                "field": "latent_shape",
+                "reason": "latent_shape_must_be_object",
+            }
+        )
+    elif latent_shape != DEFAULT_LATENT_SHAPE:
+        violations.append(
+            {
+                "field": "latent_shape",
+                "reason": "latent_shape_must_match_stage_one_default",
+            }
+        )
+
+    if data.get("latent_generation_seed") != DEFAULT_LATENT_GENERATION_SEED:
+        violations.append(
+            {
+                "field": "latent_generation_seed",
+                "reason": "latent_generation_seed_must_match_stage_one_default",
+            }
+        )
+
+    if data.get("latent_storage") != SYNTHETIC_VIDEO_LATENT_STORAGE:
+        violations.append(
+            {
+                "field": "latent_storage",
+                "reason": "latent_storage_must_equal_npy_artifact",
+            }
+        )
+
+    if data.get("attack_matrix_name") != TEMPORAL_ATTACK_MATRIX_NAME:
+        violations.append(
+            {
+                "field": "attack_matrix_name",
+                "reason": "attack_matrix_name_must_equal_temporal_attack_matrix",
+            }
+        )
+
+    required_method_variants = set(data.get("required_method_variants", []))
+    if not set(SYNTHETIC_TUBELET_SYNC_METHOD_VARIANTS).issubset(required_method_variants):
+        violations.append(
+            {
+                "field": "required_method_variants",
+                "reason": "missing_required_stage_one_method_variants",
+            }
+        )
+
+    if data.get("mechanism_trace_required") is not True:
+        violations.append(
+            {
+                "field": "mechanism_trace_required",
+                "reason": "mechanism_trace_must_be_required",
+            }
+        )
+
+    required_output_tables = set(data.get("required_output_tables", []))
+    if not REQUIRED_STAGE_ONE_OUTPUT_TABLES.issubset(required_output_tables):
+        violations.append(
+            {
+                "field": "required_output_tables",
+                "reason": "missing_required_stage_one_output_tables",
+            }
+        )
+
+    return violations
+
+
+def validate_temporal_attack_matrix_support_data(
+    data: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Validate the reserved temporal attack matrix config for the next stage.
+
+    Args:
+        data: Parsed temporal attack matrix config.
+
+    Returns:
+        A list of validation violations.
+    """
+    violations: list[dict[str, str]] = []
+
+    if data.get("project_stage") != "protocol_skeleton":
+        violations.append(
+            {
+                "field": "project_stage",
+                "reason": "temporal_attack_matrix_project_stage_must_remain_protocol_skeleton",
+            }
+        )
+
+    if data.get("target_construction_phase") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
+        violations.append(
+            {
+                "field": "target_construction_phase",
+                "reason": "target_construction_phase_must_equal_synthetic_tubelet_sync_probe",
+            }
+        )
+
+    if data.get("attack_matrix_name") != TEMPORAL_ATTACK_MATRIX_NAME:
+        violations.append(
+            {
+                "field": "attack_matrix_name",
+                "reason": "attack_matrix_name_must_equal_temporal_attack_matrix",
+            }
+        )
+
+    attacks = data.get("attacks")
+    if not isinstance(attacks, list) or not attacks:
+        violations.append(
+            {
+                "field": "attacks",
+                "reason": "attacks_must_be_non_empty_list",
+            }
+        )
+        return violations
+
+    attack_names: list[str] = []
+    for attack_entry in attacks:
+        if not isinstance(attack_entry, dict):
+            violations.append(
+                {
+                    "field": "attacks",
+                    "reason": "attack_entries_must_be_objects",
+                }
+            )
+            continue
+        attack_name = attack_entry.get("attack_name")
+        attack_params = attack_entry.get("attack_params")
+        if attack_name not in SUPPORTED_TEMPORAL_ATTACK_NAMES:
+            violations.append(
+                {
+                    "field": "attack_name",
+                    "reason": "unsupported_stage_one_attack_name",
+                }
+            )
+            continue
+        if not isinstance(attack_params, dict):
+            violations.append(
+                {
+                    "field": "attack_params",
+                    "reason": "attack_params_must_be_object",
+                }
+            )
+            continue
+        attack_names.append(attack_name)
+
+    if tuple(attack_names) != SUPPORTED_TEMPORAL_ATTACK_NAMES:
+        violations.append(
+            {
+                "field": "attacks",
+                "reason": "stage_one_attack_names_must_match_governed_order",
+            }
+        )
+
+    return violations
+
+
+def validate_synthetic_tubelet_sync_ablation_support_data(
+    data: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Validate the reserved ablation config for the synthetic tubelet sync probe.
+
+    Args:
+        data: Parsed ablation support config.
+
+    Returns:
+        A list of validation violations.
+    """
+    violations: list[dict[str, str]] = []
+
+    if data.get("project_stage") != "protocol_skeleton":
+        violations.append(
+            {
+                "field": "project_stage",
+                "reason": "stage_one_ablation_project_stage_must_remain_protocol_skeleton",
+            }
+        )
+
+    if data.get("target_construction_phase") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
+        violations.append(
+            {
+                "field": "target_construction_phase",
+                "reason": "target_construction_phase_must_equal_synthetic_tubelet_sync_probe",
+            }
+        )
+
+    if data.get("ablation_name") != "synthetic_tubelet_sync_ablation":
+        violations.append(
+            {
+                "field": "ablation_name",
+                "reason": "ablation_name_must_equal_synthetic_tubelet_sync_ablation",
+            }
+        )
+
+    if data.get("shared_protocol_name") != "fixed_low_fpr_calibrated_detection":
+        violations.append(
+            {
+                "field": "shared_protocol_name",
+                "reason": "shared_protocol_name_must_equal_fixed_low_fpr_calibrated_detection",
+            }
+        )
+
+    if data.get("shared_attack_matrix_name") != TEMPORAL_ATTACK_MATRIX_NAME:
+        violations.append(
+            {
+                "field": "shared_attack_matrix_name",
+                "reason": "shared_attack_matrix_name_must_equal_temporal_attack_matrix",
+            }
+        )
+
+    if tuple(data.get("method_variants", [])) != SYNTHETIC_TUBELET_SYNC_METHOD_VARIANTS:
+        violations.append(
+            {
+                "field": "method_variants",
+                "reason": "method_variants_must_match_stage_one_governed_order",
+            }
+        )
+
+    if data.get("shared_target_fpr") != 0.001:
+        violations.append(
+            {
+                "field": "shared_target_fpr",
+                "reason": "shared_target_fpr_must_equal_point_zero_zero_one",
+            }
+        )
+
+    if data.get("shared_table_builder_name") != "table_builder":
+        violations.append(
+            {
+                "field": "shared_table_builder_name",
+                "reason": "shared_table_builder_name_must_equal_table_builder",
+            }
+        )
+
+    return violations
+
+
+def validate_synthetic_tubelet_sync_method_config_data(
+    data: dict[str, Any],
+) -> list[dict[str, str]]:
+    """Validate a reserved method config for the synthetic tubelet sync probe.
+
+    Args:
+        data: Parsed method config.
+
+    Returns:
+        A list of validation violations.
+    """
+    violations: list[dict[str, str]] = []
+
+    if data.get("project_stage") != "protocol_skeleton":
+        violations.append(
+            {
+                "field": "project_stage",
+                "reason": "stage_one_method_project_stage_must_remain_protocol_skeleton",
+            }
+        )
+
+    if data.get("target_construction_phase") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
+        violations.append(
+            {
+                "field": "target_construction_phase",
+                "reason": "target_construction_phase_must_equal_synthetic_tubelet_sync_probe",
+            }
+        )
+
+    if data.get("method_family") != SYNTHETIC_TUBELET_SYNC_METHOD_FAMILY:
+        violations.append(
+            {
+                "field": "method_family",
+                "reason": "method_family_must_equal_temporal_tubelet_watermark",
+            }
+        )
+
+    method_variant = data.get("method_variant")
+    if method_variant not in SYNTHETIC_TUBELET_SYNC_METHOD_VARIANTS:
+        violations.append(
+            {
+                "field": "method_variant",
+                "reason": "unsupported_stage_one_method_variant",
+            }
+        )
+        return violations
+
+    if data.get("method_status") != SYNTHETIC_TUBELET_SYNC_METHOD_STATUS:
+        violations.append(
+            {
+                "field": "method_status",
+                "reason": "method_status_must_equal_reserved_for_next_stage",
+            }
+        )
+
+    expected_config = build_reserved_method_support_matrix()[method_variant]
+    for field_name in (
+        "enable_frame_prc",
+        "enable_tubelet",
+        "enable_sync",
+        "enable_trajectory",
+        "tubelet_length",
+        "fusion_rule",
+    ):
+        if data.get(field_name) != expected_config[field_name]:
+            violations.append(
+                {
+                    "field": field_name,
+                    "reason": f"unexpected_{field_name}_for_{method_variant}",
+                }
+            )
+
+    return violations
+
+
 def main(argv: list[str] | None = None) -> None:
     """Run the project contract validator as a CLI.
 
@@ -745,6 +1136,20 @@ def main(argv: list[str] | None = None) -> None:
     )
     ablation_path = root / "configs" / "ablation" / "ablation_placeholder.json"
     attack_path = root / "configs" / "attacks" / "identity_attack_placeholder.json"
+    stage_one_protocol_path = (
+        root / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+    )
+    temporal_attack_matrix_path = (
+        root / "configs" / "attacks" / "temporal_attack_matrix.json"
+    )
+    stage_one_ablation_path = (
+        root / "configs" / "ablation" / "synthetic_tubelet_sync_ablation.json"
+    )
+    stage_one_method_paths = [
+        root / "configs" / "method" / "frame_prc.json",
+        root / "configs" / "method" / "tubelet_only.json",
+        root / "configs" / "method" / "tubelet_sync.json",
+    ]
 
     payload = {
         "project_contract_violations": validate_project_contract_data(
@@ -762,6 +1167,50 @@ def main(argv: list[str] | None = None) -> None:
         "attack_placeholder_violations": validate_attack_placeholder_data(
             load_json_config(attack_path)
         ),
+        "synthetic_tubelet_sync_protocol_support_violations": (
+            validate_synthetic_tubelet_sync_protocol_support_data(
+                load_json_config(stage_one_protocol_path)
+            )
+            if stage_one_protocol_path.exists()
+            else [{
+                "field": "synthetic_tubelet_sync_probe",
+                "reason": "missing_stage_one_protocol_support_config",
+            }]
+        ),
+        "temporal_attack_matrix_support_violations": (
+            validate_temporal_attack_matrix_support_data(
+                load_json_config(temporal_attack_matrix_path)
+            )
+            if temporal_attack_matrix_path.exists()
+            else [{
+                "field": "temporal_attack_matrix",
+                "reason": "missing_temporal_attack_matrix_support_config",
+            }]
+        ),
+        "synthetic_tubelet_sync_ablation_support_violations": (
+            validate_synthetic_tubelet_sync_ablation_support_data(
+                load_json_config(stage_one_ablation_path)
+            )
+            if stage_one_ablation_path.exists()
+            else [{
+                "field": "synthetic_tubelet_sync_ablation",
+                "reason": "missing_stage_one_ablation_support_config",
+            }]
+        ),
+        "synthetic_tubelet_sync_method_support_violations": [
+            violation
+            for method_path in stage_one_method_paths
+            for violation in (
+                validate_synthetic_tubelet_sync_method_config_data(
+                    load_json_config(method_path)
+                )
+                if method_path.exists()
+                else [{
+                    "field": str(method_path.name),
+                    "reason": "missing_stage_one_method_support_config",
+                }]
+            )
+        ],
     }
     print(json.dumps(payload, indent=2, ensure_ascii=False))
 

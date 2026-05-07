@@ -22,6 +22,47 @@ EXPECTED_DIRECTORIES = [
     "paper_workflow",
     "outputs",
 ]
+STAGE_ONE_REQUIRED_PATHS = {
+    "protocol_support_config": "configs/protocol/synthetic_tubelet_sync_probe.json",
+    "temporal_attack_matrix_config": "configs/attacks/temporal_attack_matrix.json",
+    "ablation_support_config": "configs/ablation/synthetic_tubelet_sync_ablation.json",
+    "frame_prc_method_config": "configs/method/frame_prc.json",
+    "tubelet_only_method_config": "configs/method/tubelet_only.json",
+    "tubelet_sync_method_config": "configs/method/tubelet_sync.json",
+    "synthetic_video_latent_module": "main/backends/synthetic_video_latent.py",
+    "temporal_attack_module": "main/attacks/temporal.py",
+    "synthetic_tubelet_sync_contract_module": "main/methods/temporal_tubelet_watermark/synthetic_tubelet_sync_contract.py",
+}
+
+
+def _inspect_next_stage_readiness(root_path: Path) -> dict[str, Any]:
+    """Inspect whether the repository carries the reserved next-stage entry artifacts.
+
+    Args:
+        root_path: Repository root path.
+
+    Returns:
+        A readiness payload for the synthetic tubelet sync probe entry contract.
+    """
+    required_paths: dict[str, dict[str, Any]] = {}
+    present_count = 0
+    for artifact_name, relative_path in STAGE_ONE_REQUIRED_PATHS.items():
+        candidate = root_path / Path(relative_path)
+        exists = candidate.exists()
+        if exists:
+            present_count += 1
+        required_paths[artifact_name] = {
+            "exists": exists,
+            "path": str(candidate),
+        }
+
+    return {
+        "target_construction_phase": "synthetic_tubelet_sync_probe",
+        "all_required_paths_present": present_count == len(STAGE_ONE_REQUIRED_PATHS),
+        "present_required_path_count": present_count,
+        "required_path_count": len(STAGE_ONE_REQUIRED_PATHS),
+        "required_paths": required_paths,
+    }
 
 
 def inspect_repository(root: str | Path) -> dict[str, Any]:
@@ -63,6 +104,7 @@ def inspect_repository(root: str | Path) -> dict[str, Any]:
         "repository_mode": repository_mode,
         "directory_status": directory_status,
         "project_stage": project_stage,
+        "next_stage_readiness": _inspect_next_stage_readiness(root_path),
     }
 
 

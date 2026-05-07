@@ -29,6 +29,11 @@
 | method_family | protocol | none | true | false | false | Stable method family identifier for stage-0 records and configs. |
 | method_variant | protocol | none | true | false | false | Stable method variant identifier used by stage-0 configs and event records. |
 | method_status | protocol | none | true | false | false | Stage-0 method status field describing placeholder or random scaffold semantics. |
+| enable_frame_prc | protocol | none | true | false | false | Boolean switch reserved for the frame-wise baseline in the synthetic tubelet sync method-entry configs. |
+| enable_tubelet | protocol | none | true | false | false | Boolean switch reserved for tubelet evidence enablement in the synthetic tubelet sync method-entry configs. |
+| enable_sync | protocol | none | true | false | false | Boolean switch reserved for temporal synchronization enablement in the synthetic tubelet sync method-entry configs. |
+| enable_trajectory | protocol | none | true | false | false | Boolean switch reserved for trajectory evidence enablement in the synthetic tubelet sync method-entry configs. |
+| tubelet_length | protocol | none | true | false | false | Reserved tubelet-length field used by the synthetic tubelet sync method-entry configs. |
 | enabled_evidence | protocol | none | true | false | false | Evidence enablement container that freezes which evidence branches are active. |
 | fusion_rule | protocol | none | true | false | false | Stable fusion rule identifier used by stage-0 threshold and method configs. |
 | attack_name | protocol | none | true | false | false | Attack identifier written into stage-0 event records. |
@@ -53,6 +58,21 @@
 | payload_bits_digest_random | random | _digest_random | true | false | false | Digest-tracked random payload field; digest semantics are self-contained. |
 | protocol_name | protocol | none | true | false | false | Frozen protocol identifier for the fixed low-FPR calibrated detector skeleton. |
 | construction_phase | protocol | none | true | false | false | Semantic construction phase identifier aligned with the active governed stage. |
+| target_construction_phase | protocol | none | true | false | false | Reserved next-stage construction phase identifier used by support configs while the active project stage remains `protocol_skeleton`. |
+| latent_distribution | protocol | none | true | false | false | Governed latent distribution identifier reserved for the synthetic tubelet sync probe entry config. |
+| latent_shape | protocol | none | true | false | false | Reserved latent-shape container for the synthetic video latent support config. |
+| latent_generation_seed | protocol | none | true | false | false | Reserved deterministic seed field for the synthetic video latent support config. |
+| latent_storage | artifact_layout | none | true | false | false | Reserved latent artifact storage policy for the synthetic tubelet sync probe support config. |
+| attack_matrix_name | protocol | none | true | false | false | Stable attack-matrix identifier used by support configs and later stage-specific attack registries. |
+| attacks | protocol | none | true | false | false | Ordered attack-entry container used by the reserved temporal attack matrix config. |
+| required_method_variants | protocol | none | true | false | false | Ordered method-variant roster that the synthetic tubelet sync protocol support config requires. |
+| required_output_tables | artifact_layout | none | true | false | false | Ordered table roster required by the reserved synthetic tubelet sync protocol support config. |
+| mechanism_trace_required | protocol | none | true | false | false | Boolean field that freezes the requirement for `mechanism_trace` before stage-1 runtime promotion. |
+| ablation_name | protocol | none | true | false | false | Stable ablation identifier for governed comparison configs. |
+| shared_protocol_name | protocol | none | true | false | false | Stable shared protocol identifier carried by ablation support configs. |
+| shared_attack_matrix_name | protocol | none | true | false | false | Stable shared attack-matrix identifier carried by ablation support configs. |
+| shared_target_fpr | protocol | none | true | false | false | Materialized shared target FPR reserved by the synthetic tubelet sync ablation support config. |
+| shared_table_builder_name | protocol | none | true | false | false | Stable shared table-builder identifier reserved by the synthetic tubelet sync ablation support config. |
 | record_schema_name | schema | none | true | false | false | Canonical event score record schema identifier for protocol artifact governance. |
 | threshold_schema_name | schema | none | true | false | false | Canonical threshold record schema identifier for protocol artifact governance. |
 | manifest_schema_name | schema | none | true | false | false | Canonical run manifest schema identifier for protocol artifact governance. |

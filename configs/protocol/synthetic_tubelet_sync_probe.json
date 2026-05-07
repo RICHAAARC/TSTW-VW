@@ -1,0 +1,29 @@
+{
+  "project_stage": "protocol_skeleton",
+  "target_construction_phase": "synthetic_tubelet_sync_probe",
+  "protocol_name": "fixed_low_fpr_calibrated_detection",
+  "latent_backend_name": "synthetic_video_latent",
+  "latent_distribution": "standard_normal",
+  "latent_shape": {
+    "frames": 32,
+    "channels": 4,
+    "height": 32,
+    "width": 32
+  },
+  "latent_generation_seed": 20260507,
+  "latent_storage": "npy_artifact",
+  "attack_matrix_name": "temporal_attack_matrix",
+  "required_method_variants": [
+    "frame_prc",
+    "tubelet_only",
+    "tubelet_sync"
+  ],
+  "mechanism_trace_required": true,
+  "required_output_tables": [
+    "main_tpr_fpr_table.csv",
+    "ablation_table.csv",
+    "local_clip_curve.csv",
+    "temporal_attack_curve.csv",
+    "tubelet_length_ablation.csv"
+  ]
+}
