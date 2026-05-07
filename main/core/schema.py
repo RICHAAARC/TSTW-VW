@@ -69,10 +69,13 @@ REQUIRED_THRESHOLD_FIELDS = {
     "method_variant",
     "score_name",
     "target_fpr",
+    "validation_target_fpr",
+    "runtime_profile",
     "calibration_split",
     "calibration_negative_roles",
     "threshold_value",
     "threshold_quantile",
+    "sync_threshold_guard_band_multiplier",
     "num_calibration_negatives",
     "threshold_source_record_digest",
     "fusion_rule",
@@ -457,7 +460,18 @@ def validate_threshold_record(threshold_record: dict[str, Any]) -> None:
 
     ensure_non_empty_string(threshold_record["method_family"], "method_family")
     ensure_non_empty_string(threshold_record["method_variant"], "method_variant")
+    ensure_non_empty_string(threshold_record["runtime_profile"], "runtime_profile")
     ensure_supported_split(threshold_record["calibration_split"])
+    if not isinstance(threshold_record["target_fpr"], (int, float)):
+        raise ValueError("target_fpr must be numeric")
+    if not isinstance(threshold_record["validation_target_fpr"], (int, float)):
+        raise ValueError("validation_target_fpr must be numeric")
+    if not isinstance(threshold_record["threshold_value"], (int, float)):
+        raise ValueError("threshold_value must be numeric")
+    if not isinstance(threshold_record["threshold_quantile"], (int, float)):
+        raise ValueError("threshold_quantile must be numeric")
+    if not isinstance(threshold_record["sync_threshold_guard_band_multiplier"], (int, float)):
+        raise ValueError("sync_threshold_guard_band_multiplier must be numeric")
     calibration_negative_roles = threshold_record["calibration_negative_roles"]
     if not isinstance(calibration_negative_roles, list):
         raise ValueError("calibration_negative_roles must be a list")

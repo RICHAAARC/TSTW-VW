@@ -52,7 +52,7 @@ FORMAL_LATENT_SHAPE = {
     "width": 32,
 }
 PROOF_LATENT_SHAPE = {
-    "frames": 24,
+    "frames": 16,
     "channels": 4,
     "height": 16,
     "width": 16,

@@ -27,7 +27,7 @@ def test_stage0_table_rebuild_preserves_tables_digest(tmp_path: Path) -> None:
         None.
     """
     output_root = tmp_path / "outputs" / "runs" / "protocol_skeleton_run"
-    AblationRunner(ROOT).run(output_root, samples_per_role=2)
+    AblationRunner(ROOT).run(output_root, samples_per_role=2, runtime_profile_override="tiny")
     record_writer = RecordWriter(output_root)
     run_manifest = record_writer.read_run_manifest()
 

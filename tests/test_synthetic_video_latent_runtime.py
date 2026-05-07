@@ -54,7 +54,7 @@ def test_synthetic_video_latent_backend_builds_reproducible_sample() -> None:
         "width": 32,
     }
     assert support_config["proof_latent_shape"] == {
-        "frames": 24,
+        "frames": 16,
         "channels": 4,
         "height": 16,
         "width": 16,
@@ -125,4 +125,4 @@ def test_synthetic_video_latent_backend_supports_proof_runtime_profile() -> None
         "attacked_positive",
     )
 
-    assert proof_sample.latent_shape == (24, 4, 16, 16)
+    assert proof_sample.latent_shape == (16, 4, 16, 16)

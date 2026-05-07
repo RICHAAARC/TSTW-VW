@@ -55,7 +55,7 @@
     "width": 32
   },
   "proof_latent_shape": {
-    "frames": 24,
+    "frames": 16,
     "channels": 4,
     "height": 16,
     "width": 16

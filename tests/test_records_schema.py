@@ -31,7 +31,7 @@ def test_active_stage_records_schema_is_complete(tmp_path: Path) -> None:
         None.
     """
     output_root = tmp_path / "outputs" / "runs" / "synthetic_tubelet_sync_probe_run"
-    AblationRunner(ROOT).run(output_root, samples_per_role=2)
+    AblationRunner(ROOT).run(output_root, samples_per_role=2, runtime_profile_override="smoke")
     record_writer = RecordWriter(output_root)
 
     event_score_records = record_writer.read_event_score_records()
@@ -130,5 +130,8 @@ def test_active_stage_records_schema_is_complete(tmp_path: Path) -> None:
 
     for threshold_record in threshold_records:
         validate_threshold_record(threshold_record)
+        assert threshold_record["runtime_profile"] == "smoke"
+        assert isinstance(threshold_record["validation_target_fpr"], float)
+        assert isinstance(threshold_record["sync_threshold_guard_band_multiplier"], float)
 
     validate_run_manifest_record(run_manifest)

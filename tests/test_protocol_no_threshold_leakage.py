@@ -49,7 +49,7 @@ def test_threshold_source_digest_uses_only_calibration_negatives(tmp_path: Path)
         None.
     """
     output_root = tmp_path / "outputs" / "runs" / "protocol_skeleton_run"
-    AblationRunner(ROOT).run(output_root, samples_per_role=2)
+    AblationRunner(ROOT).run(output_root, samples_per_role=2, runtime_profile_override="tiny")
     record_writer = RecordWriter(output_root)
     event_score_records = record_writer.read_event_score_records()
     threshold_records = record_writer.read_threshold_records()

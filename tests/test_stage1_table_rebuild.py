@@ -89,7 +89,11 @@ def test_stage1_rebuild_restores_required_outputs(tmp_path: Path) -> None:
     report_text = record_writer.output_paths.report_path.read_text(encoding="utf-8")
     # 中文注释：tiny profile 仅证明完整闭环可生成 report；机制 check 字段在 tiny 下
     # 因 local_clip / tubelet_length 集合被裁剪而注定为 false，故只断言字段存在。
+    assert "- closure_target_pass:" in report_text
+    assert "- validation_target_fpr_pass:" in report_text
+    assert "- strict_target_fpr_pass:" in report_text
     assert "- required_local_clip_lengths_present:" in report_text
     assert "- required_tubelet_length_sweep_present:" in report_text
-    assert "- attacked_negative_fpr_meets_target_for_all_variants:" in report_text
+    assert "- attacked_negative_fpr_meets_validation_target_for_all_variants:" in report_text
+    assert "- attacked_negative_fpr_meets_strict_target_for_all_variants:" in report_text
     assert "- worst_attacked_negative_fpr_variants:" in report_text

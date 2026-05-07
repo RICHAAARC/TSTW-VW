@@ -24,6 +24,7 @@
 | quality_metric_placeholder | placeholder | _placeholder | true | false | true | Placeholder quality metric field for future governed replacement. |
 | target_fpr_placeholder | placeholder | _placeholder | true | false | true | Placeholder target FPR field used before full threshold materialization. |
 | target_fpr | protocol | none | true | false | false | Materialized target FPR used by stage-0 runtime records and tables. |
+| validation_target_fpr | protocol | none | true | false | false | Profile-scoped validation FPR target used for closure and proof reports when strict `target_fpr` is intentionally deferred. |
 | threshold_quantile_rule | protocol | none | true | false | false | Declared quantile rule for calibration-only threshold construction. |
 | allow_attack_specific_threshold | protocol | none | true | false | false | Boolean field that blocks attack-specific threshold divergence. |
 | method_family | protocol | none | true | false | false | Stable method family identifier for stage-0 records and configs. |
@@ -86,10 +87,12 @@
 | tubelet_length_ablation_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt tubelet-length ablation table. |
 | report_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt method validation report. |
 | threshold_source_record_digest | trace | none | true | false | false | Digest field that binds threshold materialization to an ordered calibration-negative source payload including event_id, sample_id, split, sample_role, method_variant, attack_name, and S_final. |
+| runtime_profile | protocol | none | true | false | false | Active runtime profile recorded in threshold and report artifacts so closure, proof, and formal tiers can be interpreted under distinct coverage and validation rules. |
 | calibration_split | protocol | none | true | false | false | Governed calibration split identifier written into threshold records. |
 | calibration_negative_roles | protocol | none | true | false | false | Governed calibration negative role list written into threshold records. |
 | threshold_value | protocol | none | true | false | false | Materialized threshold value for a governed threshold record. |
 | threshold_quantile | protocol | none | true | false | false | Materialized threshold quantile used to build a governed threshold record. |
+| sync_threshold_guard_band_multiplier | protocol | none | true | false | false | Profile-scoped guard-band multiplier applied to sync-enabled threshold calibration to reduce attacked-negative tail leakage under small calibration sample counts. |
 | num_calibration_negatives | protocol | none | true | false | false | Count of calibration-negative records used during threshold materialization. |
 | disabled_evidence | protocol | none | true | false | false | Explicit list of evidence branches disabled for a governed event record. |
 | decision | protocol | none | true | false | false | Detection decision field for a governed event record. |

@@ -104,6 +104,12 @@ class ReportBuilder:
             )
             for record in threshold_records
         }
+        strict_target_map = {
+            str(record["method_variant"]): float(record["target_fpr"])
+            for record in threshold_records
+        }
+        local_clip_lengths_present = set(local_clip_lengths) == required_local_clip_lengths
+        tubelet_length_sweep_present = set(tubelet_lengths) == required_tubelet_lengths
         tubelet_only_gain = _compare_variant_attack_metric(
             main_rows,
             left_variant="tubelet_only",
@@ -119,12 +125,34 @@ class ReportBuilder:
         clean_negative_fpr_controlled = _rows_metric_meets_target(
             main_rows,
             metric_name="clean_negative_FPR",
-            validation_target_map=validation_target_map,
+            target_map=validation_target_map,
         )
         attacked_negative_fpr_controlled = _rows_metric_meets_target(
             main_rows,
             metric_name="attacked_negative_FPR",
-            validation_target_map=validation_target_map,
+            target_map=validation_target_map,
+        )
+        clean_negative_fpr_strict = _rows_metric_meets_target(
+            main_rows,
+            metric_name="clean_negative_FPR",
+            target_map=strict_target_map,
+        )
+        attacked_negative_fpr_strict = _rows_metric_meets_target(
+            main_rows,
+            metric_name="attacked_negative_FPR",
+            target_map=strict_target_map,
+        )
+        closure_target_pass = (
+            local_clip_lengths_present
+            and tubelet_length_sweep_present
+            and tubelet_only_gain
+            and tubelet_sync_gain
+        )
+        validation_target_fpr_pass = (
+            clean_negative_fpr_controlled and attacked_negative_fpr_controlled
+        )
+        strict_target_fpr_pass = (
+            clean_negative_fpr_strict and attacked_negative_fpr_strict
         )
         max_attacked_negative_fpr, worst_attacked_negative_fpr_variants = _worst_variant_metric(
             main_rows,
@@ -143,10 +171,15 @@ class ReportBuilder:
                 f"- local_clip_curve_rows: {len(local_clip_rows)}",
                 f"- tubelet_length_rows: {len(tubelet_rows)}",
                 "",
+                "## Pass Summary",
+                f"- closure_target_pass: {str(closure_target_pass).lower()}",
+                f"- validation_target_fpr_pass: {str(validation_target_fpr_pass).lower()}",
+                f"- strict_target_fpr_pass: {str(strict_target_fpr_pass).lower()}",
+                "",
                 "## Coverage Checks",
-                f"- required_local_clip_lengths_present: {str(set(local_clip_lengths) == required_local_clip_lengths).lower()}",
+                f"- required_local_clip_lengths_present: {str(local_clip_lengths_present).lower()}",
                 f"- local_clip_lengths: {_format_number_sequence(local_clip_lengths)}",
-                f"- required_tubelet_length_sweep_present: {str(set(tubelet_lengths) == required_tubelet_lengths).lower()}",
+                f"- required_tubelet_length_sweep_present: {str(tubelet_length_sweep_present).lower()}",
                 f"- tubelet_lengths: {_format_number_sequence(tubelet_lengths)}",
                 "",
                 "## Mechanism Checks",
@@ -154,8 +187,10 @@ class ReportBuilder:
                 f"- tubelet_sync_beats_tubelet_only_under_temporal_crop_or_local_clip: {str(tubelet_sync_gain).lower()}",
                 "",
                 "## Threshold Checks",
-                f"- clean_negative_fpr_meets_target_for_all_variants: {str(clean_negative_fpr_controlled).lower()}",
-                f"- attacked_negative_fpr_meets_target_for_all_variants: {str(attacked_negative_fpr_controlled).lower()}",
+                f"- clean_negative_fpr_meets_validation_target_for_all_variants: {str(clean_negative_fpr_controlled).lower()}",
+                f"- attacked_negative_fpr_meets_validation_target_for_all_variants: {str(attacked_negative_fpr_controlled).lower()}",
+                f"- clean_negative_fpr_meets_strict_target_for_all_variants: {str(clean_negative_fpr_strict).lower()}",
+                f"- attacked_negative_fpr_meets_strict_target_for_all_variants: {str(attacked_negative_fpr_strict).lower()}",
                 f"- max_attacked_negative_fpr: {max_attacked_negative_fpr}",
                 f"- worst_attacked_negative_fpr_variants: {', '.join(worst_attacked_negative_fpr_variants)}",
                 "",
@@ -187,24 +222,18 @@ def _compare_variant_attack_metric(
         if float(left_row["attacked_positive_TPR"]) > float(right_row["attacked_positive_TPR"]):
             return True
     return False
-
-
-def _rows_metric_meets_target(main_rows: list[dict[str, Any]], metric_name: str) -> bool:
-    return all(float(row[metric_name]) <= float(row["target_fpr"]) for row in main_rows)
-
-
 def _rows_metric_meets_target(
     main_rows: list[dict[str, Any]],
     metric_name: str,
-    validation_target_map: dict[str, float] | None = None,
+    target_map: dict[str, float] | None = None,
 ) -> bool:
     for row in main_rows:
-        validation_target = float(row["target_fpr"])
-        if validation_target_map is not None:
-            validation_target = float(
-                validation_target_map.get(str(row["method_variant"]), validation_target)
+        target_value = float(row["target_fpr"])
+        if target_map is not None:
+            target_value = float(
+                target_map.get(str(row["method_variant"]), target_value)
             )
-        if float(row[metric_name]) > validation_target:
+        if float(row[metric_name]) > target_value:
             return False
     return True
 
