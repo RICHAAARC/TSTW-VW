@@ -35,14 +35,20 @@ def test_stage1_table_and_curve_rebuild_preserves_tables_digest(tmp_path: Path) 
     for csv_path in record_writer.output_paths.table_paths():
         assert csv_path.exists()
         csv_path.unlink()
+    for figure_path in record_writer.output_paths.figure_paths():
+        assert figure_path.exists()
+        figure_path.unlink()
     report_path = record_writer.output_paths.report_path
     assert report_path.exists()
     report_path.unlink()
 
     rebuilt_paths = TableBuilder().rebuild_tables(output_root)
     assert rebuilt_paths["report_path"].exists()
+    assert rebuilt_paths["sync_peak_examples_path"].exists()
     rebuilt_tables_digest = compute_path_collection_digest(record_writer.output_paths.table_paths())
+    rebuilt_figures_digest = compute_path_collection_digest(record_writer.output_paths.figure_paths())
     assert rebuilt_tables_digest == run_manifest["tables_digest"]
+    assert rebuilt_figures_digest == run_manifest["figures_digest"]
 
 
 def test_stage1_rebuild_restores_required_outputs(tmp_path: Path) -> None:
@@ -60,6 +66,8 @@ def test_stage1_rebuild_restores_required_outputs(tmp_path: Path) -> None:
 
     for path in record_writer.output_paths.table_paths():
         path.unlink()
+    for path in record_writer.output_paths.figure_paths():
+        path.unlink()
     record_writer.output_paths.report_path.unlink()
 
     TableBuilder().rebuild_tables(output_root)
@@ -68,6 +76,7 @@ def test_stage1_rebuild_restores_required_outputs(tmp_path: Path) -> None:
     assert record_writer.output_paths.local_clip_curve_path.exists()
     assert record_writer.output_paths.temporal_attack_curve_path.exists()
     assert record_writer.output_paths.tubelet_length_ablation_path.exists()
+    assert record_writer.output_paths.sync_peak_examples_path.exists()
     assert record_writer.output_paths.report_path.exists()
 
     local_clip_rows = list(
@@ -92,6 +101,8 @@ def test_stage1_rebuild_restores_required_outputs(tmp_path: Path) -> None:
     assert "- closure_target_pass:" in report_text
     assert "- validation_target_fpr_pass:" in report_text
     assert "- strict_target_fpr_pass:" in report_text
+    assert "- primary_method_variants:" in report_text
+    assert "- derived_ablation_variants:" in report_text
     assert "- required_local_clip_lengths_present:" in report_text
     assert "- required_tubelet_length_sweep_present:" in report_text
     assert "- attacked_negative_fpr_meets_validation_target_for_all_variants:" in report_text

@@ -30,6 +30,9 @@
 | allow_attack_specific_threshold | protocol | none | true | false | false | Boolean field that blocks attack-specific threshold divergence. |
 | method_family | protocol | none | true | false | false | Stable method family identifier for stage-0 records and configs. |
 | method_variant | protocol | none | true | false | false | Stable method variant identifier used by stage-0 configs and event records. |
+| base_method_variant | protocol | none | true | false | false | Primary method variant from which a derived ablation variant inherits its mechanism semantics. |
+| derived_variant | protocol | none | true | false | false | Boolean marker that distinguishes primary method variants from derived ablation variants. |
+| ablation_axis | protocol | none | true | false | false | Nullable axis name for derived ablation variants; current stage uses `tubelet_length`. |
 | method_status | protocol | none | true | false | false | Stage-0 method status field describing placeholder or random scaffold semantics. |
 | enable_frame_prc | protocol | none | true | false | false | Boolean switch reserved for the frame-wise baseline in the synthetic tubelet sync method-entry configs. |
 | enable_tubelet | protocol | none | true | false | false | Boolean switch reserved for tubelet evidence enablement in the synthetic tubelet sync method-entry configs. |
@@ -86,6 +89,7 @@
 | local_clip_curve_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt local-clip curve table. |
 | temporal_attack_curve_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt temporal-attack curve table. |
 | tubelet_length_ablation_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt tubelet-length ablation table. |
+| sync_peak_examples_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt sync peak examples figure. |
 | report_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt method validation report. |
 | threshold_source_record_digest | trace | none | true | false | false | Digest field that binds threshold materialization to an ordered calibration-negative source payload including event_id, sample_id, split, sample_role, method_variant, attack_name, and S_final. |
 | runtime_profile | protocol | none | true | false | false | Active runtime profile recorded in threshold and report artifacts so closure, proof, and formal tiers can be interpreted under distinct coverage and validation rules. |
@@ -136,7 +140,7 @@
 | records_digest | trace | none | true | false | false | Digest of the governed event-level record set. |
 | thresholds_digest | trace | none | true | false | false | Digest of the governed threshold artifact set. |
 | tables_digest | trace | none | true | false | false | Digest of the governed table artifact set. |
-| figures_digest_placeholder | placeholder | _placeholder | true | false | true | Placeholder digest field for figures that are intentionally absent in protocol_skeleton. |
+| figures_digest | trace | none | true | false | false | Digest of the governed figure artifact set. |
 | shared_target_fpr_placeholder | placeholder | _placeholder | true | false | true | Placeholder field that freezes the shared ablation target FPR before runtime materialization. |
 | shared_table_builder_placeholder | placeholder | _placeholder | true | false | true | Placeholder field that freezes a shared table builder contract for future ablations. |
 | attack_matrix_placeholder | placeholder | _placeholder | true | false | true | Placeholder field that freezes the stage-0 attack matrix skeleton. |

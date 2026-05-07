@@ -14,6 +14,7 @@
 - `records_digest`
 - `thresholds_digest`
 - `tables_digest`
+- `figures_digest`
 - `method_config_digest`
 - `protocol_config_digest`
 - `attack_matrix_digest`
@@ -22,5 +23,5 @@
 ## Stage Boundary
 
 - 当前阶段不在仓库中 check in 正式 `tables/`、`figures/` 或 `reports/`。
-- 当前阶段通过临时输出路径执行 table rebuild 验证，并冻结 schema、digest 字段和输出布局。
+- 当前阶段通过临时输出路径执行 table / figure / report rebuild 验证，并冻结 schema、digest 字段和输出布局。
 - 后续阶段实现真实 artifact pipeline 时，不得绕过 `configs/schema/protocol_artifact_schema.json` 中的冻结路径与字段口径。

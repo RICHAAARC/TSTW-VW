@@ -34,6 +34,7 @@ class ProtocolOutputPaths:
         local_clip_curve_path: Local-clip curve CSV path.
         temporal_attack_curve_path: Temporal-attack curve CSV path.
         tubelet_length_ablation_path: Tubelet-length ablation CSV path.
+        sync_peak_examples_path: Sync-peak figure PNG path.
         report_path: Method validation report path.
 
     Returns:
@@ -49,6 +50,7 @@ class ProtocolOutputPaths:
     local_clip_curve_path: Path
     temporal_attack_curve_path: Path
     tubelet_length_ablation_path: Path
+    sync_peak_examples_path: Path
     report_path: Path
 
     def table_paths(self) -> list[Path]:
@@ -69,6 +71,19 @@ class ProtocolOutputPaths:
             self.temporal_attack_curve_path,
             self.tubelet_length_ablation_path,
         ]
+
+    def figure_paths(self) -> list[Path]:
+        """功能：返回受治理 figure 产物路径列表。
+
+        Return the governed figure artifact paths.
+
+        Args:
+            None.
+
+        Returns:
+            A list containing all governed figure paths.
+        """
+        return [self.sync_peak_examples_path]
 
 
 def build_output_paths(output_root: str | Path) -> ProtocolOutputPaths:
@@ -93,6 +108,7 @@ def build_output_paths(output_root: str | Path) -> ProtocolOutputPaths:
         local_clip_curve_path=output_root_path / "tables" / "local_clip_curve.csv",
         temporal_attack_curve_path=output_root_path / "tables" / "temporal_attack_curve.csv",
         tubelet_length_ablation_path=output_root_path / "tables" / "tubelet_length_ablation.csv",
+        sync_peak_examples_path=output_root_path / "figures" / "sync_peak_examples.png",
         report_path=output_root_path / "reports" / "method_validation_report.md",
     )
 

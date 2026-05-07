@@ -74,9 +74,8 @@ class ManifestBuilder:
             "records_digest": compute_object_digest(event_score_records),
             "thresholds_digest": compute_object_digest(threshold_records),
             "tables_digest": compute_path_collection_digest(output_paths.table_paths()),
-            "figures_digest_placeholder": None,
+            "figures_digest": compute_path_collection_digest(output_paths.figure_paths()),
             "placeholder_fields": [
-                "figures_digest_placeholder",
                 "trajectory_observation_placeholder",
             ],
             "random_fields": [

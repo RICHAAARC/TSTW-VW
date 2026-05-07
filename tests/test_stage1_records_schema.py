@@ -32,6 +32,15 @@ def test_stage1_event_records_include_mechanism_trace(tmp_path: Path) -> None:
     for event_score_record in event_score_records:
         mechanism_trace = event_score_record["mechanism_trace"]
         assert isinstance(mechanism_trace, dict)
+        assert event_score_record["base_method_variant"]
+        assert isinstance(event_score_record["derived_variant"], bool)
+        assert event_score_record["tubelet_length"] == mechanism_trace["tubelet_length"]
+        if event_score_record["derived_variant"]:
+            assert event_score_record["base_method_variant"] == "tubelet_only"
+            assert event_score_record["ablation_axis"] == "tubelet_length"
+        else:
+            assert event_score_record["base_method_variant"] == event_score_record["method_variant"]
+            assert event_score_record["ablation_axis"] is None
         assert mechanism_trace["construction_phase"] == "synthetic_tubelet_sync_probe"
         assert mechanism_trace["latent_backend_name"] == "synthetic_video_latent"
         assert mechanism_trace["latent_artifact_digest"] == event_score_record["latent_tensor_digest_random"]

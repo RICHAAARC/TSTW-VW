@@ -13,6 +13,10 @@ MAIN_METRICS_COLUMNS = [
     "run_id",
     "method_family",
     "method_variant",
+    "base_method_variant",
+    "derived_variant",
+    "ablation_axis",
+    "tubelet_length",
     "target_fpr",
     "threshold_id",
     "split",
@@ -30,6 +34,10 @@ ABLATION_TABLE_COLUMNS = [
     "run_id",
     "method_family",
     "method_variant",
+    "base_method_variant",
+    "derived_variant",
+    "ablation_axis",
+    "tubelet_length",
     "enabled_tubelet_evidence",
     "enabled_sync_evidence",
     "enabled_trajectory_evidence",
@@ -43,6 +51,10 @@ ABLATION_TABLE_COLUMNS = [
 LOCAL_CLIP_CURVE_COLUMNS = [
     "run_id",
     "method_variant",
+    "base_method_variant",
+    "derived_variant",
+    "ablation_axis",
+    "tubelet_length",
     "clip_length",
     "local_clip_TPR",
     "local_clip_FPR",
@@ -53,6 +65,10 @@ LOCAL_CLIP_CURVE_COLUMNS = [
 TEMPORAL_ATTACK_CURVE_COLUMNS = [
     "run_id",
     "method_variant",
+    "base_method_variant",
+    "derived_variant",
+    "ablation_axis",
+    "tubelet_length",
     "attack_name",
     "attack_strength",
     "sample_role",
@@ -64,6 +80,9 @@ TEMPORAL_ATTACK_CURVE_COLUMNS = [
 TUBELET_LENGTH_ABLATION_COLUMNS = [
     "run_id",
     "method_variant",
+    "base_method_variant",
+    "derived_variant",
+    "ablation_axis",
     "tubelet_length",
     "attack_name",
     "attacked_positive_TPR",
@@ -118,11 +137,13 @@ def build_main_metrics_rows(
                 record for record in variant_test_records if record["attack_name"] == attack_name
             ]
             threshold_record = threshold_map[method_variant]
+            variant_metadata = _build_variant_metadata(attack_records[0])
             rows.append(
                 {
                     "run_id": attack_records[0]["run_id"],
                     "method_family": attack_records[0]["method_family"],
                     "method_variant": method_variant,
+                    **variant_metadata,
                     "target_fpr": attack_records[0]["target_fpr"],
                     "threshold_id": threshold_record["threshold_id"],
                     "split": "test",
@@ -183,11 +204,13 @@ def build_ablation_table_rows(
         if not variant_test_records:
             continue
         threshold_record = threshold_map[method_variant]
+        variant_metadata = _build_variant_metadata(variant_test_records[0])
         rows.append(
             {
                 "run_id": variant_test_records[0]["run_id"],
                 "method_family": variant_test_records[0]["method_family"],
                 "method_variant": method_variant,
+                **variant_metadata,
                 "enabled_tubelet_evidence": _is_evidence_enabled(
                     variant_test_records, "S_tubelet"
                 ),
@@ -262,6 +285,7 @@ def build_local_clip_curve_rows(
                 {
                     "run_id": grouped_records[0]["run_id"],
                     "method_variant": method_variant,
+                    **_build_variant_metadata(grouped_records[0]),
                     "clip_length": clip_length,
                     "local_clip_TPR": _safe_rate(
                         sum(1 for record in positive_records if record["decision"]),
@@ -328,6 +352,7 @@ def build_temporal_attack_curve_rows(
                         {
                             "run_id": grouped_records[0]["run_id"],
                             "method_variant": method_variant,
+                            **_build_variant_metadata(grouped_records[0]),
                             "attack_name": attack_name,
                             "attack_strength": attack_strength,
                             "sample_role": sample_role,
@@ -402,6 +427,7 @@ def build_tubelet_length_ablation_rows(
                 {
                     "run_id": attack_records[0]["run_id"],
                     "method_variant": method_variant,
+                    **_build_variant_metadata(attack_records[0]),
                     "tubelet_length": tubelet_length,
                     "attack_name": attack_name,
                     "attacked_positive_TPR": _safe_rate(
@@ -436,6 +462,15 @@ def _rate_for_role(event_score_records: list[dict[str, Any]], sample_role: str) 
 
 def _is_evidence_enabled(event_score_records: list[dict[str, Any]], score_name: str) -> bool:
     return any(record["evidence_scores"][score_name] is not None for record in event_score_records)
+
+
+def _build_variant_metadata(event_score_record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "base_method_variant": event_score_record["base_method_variant"],
+        "derived_variant": event_score_record["derived_variant"],
+        "ablation_axis": event_score_record["ablation_axis"],
+        "tubelet_length": event_score_record["tubelet_length"],
+    }
 
 
 def _derive_attack_strength(event_score_record: list[dict[str, Any]] | dict[str, Any]) -> float | int:

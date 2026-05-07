@@ -38,6 +38,27 @@ def test_active_stage_ablation_variants_share_split_and_attack_matrix(tmp_path: 
         "tubelet_only_lt01",
         "tubelet_sync",
     ]
+    derived_records = [
+        event_score_record
+        for event_score_record in event_score_records
+        if event_score_record["method_variant"] == "tubelet_only_lt01"
+    ]
+    assert derived_records
+    assert {record["base_method_variant"] for record in derived_records} == {"tubelet_only"}
+    assert {record["derived_variant"] for record in derived_records} == {True}
+    assert {record["ablation_axis"] for record in derived_records} == {"tubelet_length"}
+    assert {record["tubelet_length"] for record in derived_records} == {1}
+    primary_records = [
+        event_score_record
+        for event_score_record in event_score_records
+        if event_score_record["method_variant"] in {"frame_prc", "tubelet_only", "tubelet_sync"}
+    ]
+    assert all(
+        record["base_method_variant"] == record["method_variant"]
+        and not record["derived_variant"]
+        and record["ablation_axis"] is None
+        for record in primary_records
+    )
     assert {event_score_record["target_fpr"] for event_score_record in event_score_records} == {0.001}
     assert {event_score_record["attack_name"] for event_score_record in event_score_records} == {
         "frame_dropping",

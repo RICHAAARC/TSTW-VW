@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from main.analysis.curve_builder import CurveBuilder
+from main.analysis.figure_builder import FigureBuilder
 from main.analysis.report_builder import ReportBuilder
 from main.core.records import RecordWriter, build_output_paths
 from main.protocol.evaluator import (
@@ -37,6 +38,7 @@ class TableBuilder:
 
     def __init__(self) -> None:
         self._curve_builder = CurveBuilder()
+        self._figure_builder = FigureBuilder()
         self._report_builder = ReportBuilder()
 
     def build_tables(
@@ -83,12 +85,14 @@ class TableBuilder:
         )
         self._curve_builder.build_curves(event_score_records, threshold_records, output_root)
         self._report_builder.build_report(event_score_records, threshold_records, output_root)
+        self._figure_builder.build_figures(event_score_records, threshold_records, output_root)
         return {
             "main_metrics_path": output_paths.main_metrics_path,
             "ablation_table_path": output_paths.ablation_table_path,
             "tubelet_length_ablation_path": output_paths.tubelet_length_ablation_path,
             "local_clip_curve_path": output_paths.local_clip_curve_path,
             "temporal_attack_curve_path": output_paths.temporal_attack_curve_path,
+            "sync_peak_examples_path": output_paths.sync_peak_examples_path,
             "report_path": output_paths.report_path,
         }
 

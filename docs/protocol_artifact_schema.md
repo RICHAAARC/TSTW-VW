@@ -18,6 +18,7 @@
 | local_clip_curve_path | tables/local_clip_curve.csv | 冻结 local clip 曲线表的相对输出位置。 |
 | temporal_attack_curve_path | tables/temporal_attack_curve.csv | 冻结 temporal attack 曲线表的相对输出位置。 |
 | tubelet_length_ablation_path | tables/tubelet_length_ablation.csv | 冻结 tubelet length 消融表的相对输出位置。 |
+| sync_peak_examples_path | figures/sync_peak_examples.png | 冻结 sync peak examples figure 的相对输出位置。 |
 | report_path | reports/method_validation_report.md | 冻结方法验证报告的相对输出位置。 |
 
 ## Event Score Record
@@ -31,6 +32,10 @@
 | sample_role | yes | 必须来自四个受治理角色。 |
 | method_family | yes | 方法家族语义名。 |
 | method_variant | yes | 机制语义变体名。 |
+| base_method_variant | yes | 派生消融变体继承的主方法变体；主方法记录中等于 `method_variant`。 |
+| derived_variant | yes | 标记当前记录是否属于派生消融变体。 |
+| ablation_axis | yes | 派生消融轴；主方法记录使用空值编码，当前派生消融固定为 `tubelet_length`。 |
+| tubelet_length | yes | 当前记录对应的 tubelet length。 |
 | attack_name | yes | 攻击名或 identity placeholder 攻击名。 |
 | attack_params | yes | 攻击参数容器。 |
 | target_fpr | yes | 当前协议目标 FPR。 |
@@ -122,7 +127,7 @@
 | --- | --- | --- |
 | run_id | yes | 运行级唯一标识。 |
 | created_at | yes | ISO-8601 时间戳。 |
-| construction_phase | yes | 当前阶段固定为 `protocol_skeleton`。 |
+| construction_phase | yes | 当前阶段固定为 `synthetic_tubelet_sync_probe`。 |
 | protocol_name | yes | 当前协议固定为 `fixed_low_fpr_calibrated_detection`。 |
 | method_config_digest | yes | 方法配置摘要。 |
 | protocol_config_digest | yes | 协议配置摘要。 |
@@ -131,7 +136,7 @@
 | records_digest | yes | records 摘要。 |
 | thresholds_digest | yes | thresholds 摘要。 |
 | tables_digest | yes | tables 摘要。 |
-| figures_digest_placeholder | yes | 当前阶段 figures 未实现时的 placeholder digest 字段。 |
+| figures_digest | yes | figures 摘要。 |
 | placeholder_fields | yes | manifest 中显式列出的 placeholder 语义字段。 |
 | random_fields | yes | manifest 中显式列出的 random trace 字段。 |
 
@@ -144,6 +149,10 @@
 | run_id | yes | 运行级唯一标识。 |
 | method_family | yes | 方法家族语义名。 |
 | method_variant | yes | 机制语义变体名。 |
+| base_method_variant | yes | 主方法变体名。 |
+| derived_variant | yes | 是否为派生消融变体。 |
+| ablation_axis | yes | 派生消融轴，可为空。 |
+| tubelet_length | yes | 当前 tubelet length。 |
 | target_fpr | yes | 当前协议目标 FPR。 |
 | threshold_id | yes | 使用的 threshold 标识。 |
 | split | yes | 当前统计对应 split。 |
@@ -164,6 +173,10 @@
 | run_id | yes | 运行级唯一标识。 |
 | method_family | yes | 方法家族语义名。 |
 | method_variant | yes | 机制语义变体名。 |
+| base_method_variant | yes | 主方法变体名。 |
+| derived_variant | yes | 是否为派生消融变体。 |
+| ablation_axis | yes | 派生消融轴，可为空。 |
+| tubelet_length | yes | 当前 tubelet length。 |
 | enabled_tubelet_evidence | yes | 是否启用 tubelet evidence。 |
 | enabled_sync_evidence | yes | 是否启用 sync evidence。 |
 | enabled_trajectory_evidence | yes | 是否启用 trajectory evidence。 |
@@ -176,16 +189,20 @@
 
 ### Curve Tables
 
-`local_clip_curve.csv` 必须至少包含 `run_id`、`method_variant`、`clip_length`、`local_clip_TPR`、`local_clip_FPR`、`positive_count`、`negative_count` 与 `threshold_id`。
+`local_clip_curve.csv` 必须至少包含 `run_id`、`method_variant`、`base_method_variant`、`derived_variant`、`ablation_axis`、`tubelet_length`、`clip_length`、`local_clip_TPR`、`local_clip_FPR`、`positive_count`、`negative_count` 与 `threshold_id`。
 
-`temporal_attack_curve.csv` 必须至少包含 `run_id`、`method_variant`、`attack_name`、`attack_strength`、`sample_role`、`TPR`、`FPR`、`count` 与 `threshold_id`。
+`temporal_attack_curve.csv` 必须至少包含 `run_id`、`method_variant`、`base_method_variant`、`derived_variant`、`ablation_axis`、`tubelet_length`、`attack_name`、`attack_strength`、`sample_role`、`TPR`、`FPR`、`count` 与 `threshold_id`。
 
-`tubelet_length_ablation.csv` 必须至少包含 `run_id`、`method_variant`、`tubelet_length`、`attack_name`、`attacked_positive_TPR`、`attacked_negative_FPR`、`sync_alignment_error_mean` 与 `sync_peak_rank_median`。
+`tubelet_length_ablation.csv` 必须至少包含 `run_id`、`method_variant`、`base_method_variant`、`derived_variant`、`ablation_axis`、`tubelet_length`、`attack_name`、`attacked_positive_TPR`、`attacked_negative_FPR`、`sync_alignment_error_mean` 与 `sync_peak_rank_median`。
+
+## Figure Artifacts
+
+`sync_peak_examples.png` 必须由 governed records 通过 `FigureBuilder` 重建，并通过 run manifest 中的 `figures_digest` 绑定 provenance。该 figure 只服务于阶段 1 sync alignment 可解释性，不引入 notebook-only 或手工绘图路径。
 
 ## Stage Boundary
 
 - 当前文档冻结 schema 和路径，不声明任何具有方法性能意义的正式实验结论。
-- 当前阶段允许 synthetic tensor runtime 在临时输出路径下写出 records、thresholds、manifest、tables、curves 与 report，用于验证协议可执行性。
+- 当前阶段允许 synthetic tensor runtime 在临时输出路径下写出 records、thresholds、manifest、tables、curves、figures 与 report，用于验证协议可执行性。
 - `input_artifact_trace` 与 `mechanism_trace` 是当前阶段的长期 trace 字段；`latent_*_random` 字段作为兼容 trace 字段继续保留。
 - 当前阶段不得通过 notebook、终端脚本或临时文件绕过这些 schema 约束写入正式结果。
-- 进入下一阶段前，records、thresholds、manifest 与 tables 的真实实现必须继续遵守本文件和 `configs/schema/protocol_artifact_schema.json` 的冻结口径。
+- 进入下一阶段前，records、thresholds、manifest、tables 与 figures 的真实实现必须继续遵守本文件和 `configs/schema/protocol_artifact_schema.json` 的冻结口径。

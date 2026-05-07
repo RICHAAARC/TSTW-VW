@@ -76,6 +76,12 @@ class ReportBuilder:
         threshold_records: list[dict[str, Any]],
     ) -> str:
         variant_names = sorted({row["method_variant"] for row in main_rows})
+        primary_variant_names = sorted(
+            {row["method_variant"] for row in main_rows if not row["derived_variant"]}
+        )
+        derived_variant_names = sorted(
+            {row["method_variant"] for row in main_rows if row["derived_variant"]}
+        )
         attack_names = sorted({row["attack_name"] for row in main_rows})
         target_fprs = sorted({float(row["target_fpr"]) for row in main_rows})
         runtime_profiles = sorted(
@@ -164,6 +170,8 @@ class ReportBuilder:
                 "",
                 "## Summary",
                 f"- method_variants: {', '.join(variant_names)}",
+                f"- primary_method_variants: {', '.join(primary_variant_names)}",
+                f"- derived_ablation_variants: {_format_string_sequence(derived_variant_names)}",
                 f"- attack_names: {', '.join(attack_names)}",
                 f"- runtime_profiles: {', '.join(runtime_profiles)}",
                 f"- target_fprs: {_format_number_sequence(target_fprs)}",
@@ -265,3 +273,9 @@ def _format_number_sequence(values: list[int] | list[float]) -> str:
     if not values:
         return "none"
     return ", ".join(str(value) for value in values)
+
+
+def _format_string_sequence(values: list[str]) -> str:
+    if not values:
+        return "none"
+    return ", ".join(values)

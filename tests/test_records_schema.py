@@ -47,6 +47,7 @@ def test_active_stage_records_schema_is_complete(tmp_path: Path) -> None:
     assert record_writer.output_paths.local_clip_curve_path.exists()
     assert record_writer.output_paths.temporal_attack_curve_path.exists()
     assert record_writer.output_paths.tubelet_length_ablation_path.exists()
+    assert record_writer.output_paths.sync_peak_examples_path.exists()
     assert record_writer.output_paths.report_path.exists()
 
     for event_score_record in event_score_records:
@@ -55,11 +56,21 @@ def test_active_stage_records_schema_is_complete(tmp_path: Path) -> None:
         assert set(event_score_record["evidence_scores"].keys()) == EVIDENCE_SCORE_NAMES
         assert "placeholder_fields" in event_score_record
         assert "random_fields" in event_score_record
+        assert event_score_record["base_method_variant"]
+        assert isinstance(event_score_record["derived_variant"], bool)
+        assert isinstance(event_score_record["tubelet_length"], int)
         assert isinstance(mechanism_trace, dict)
         assert mechanism_trace["construction_phase"] == "synthetic_tubelet_sync_probe"
         assert mechanism_trace["latent_backend_name"] == event_score_record["latent_backend_name"]
         assert mechanism_trace["latent_artifact_digest"] == event_score_record["latent_tensor_digest_random"]
         assert mechanism_trace["latent_artifact_relpath"].endswith(".npy")
+        assert mechanism_trace["tubelet_length"] == event_score_record["tubelet_length"]
+        if event_score_record["derived_variant"]:
+            assert event_score_record["base_method_variant"] == "tubelet_only"
+            assert event_score_record["ablation_axis"] == "tubelet_length"
+        else:
+            assert event_score_record["base_method_variant"] == event_score_record["method_variant"]
+            assert event_score_record["ablation_axis"] is None
         assert (
             event_score_record["input_artifact_trace"]["backend_name"]
             == event_score_record["latent_backend_name"]
@@ -145,6 +156,8 @@ def test_active_stage_records_schema_is_complete(tmp_path: Path) -> None:
         )
 
     validate_run_manifest_record(run_manifest)
+    assert "figures_digest" in run_manifest
+    assert "figures_digest_placeholder" not in run_manifest
 
 
 def test_build_split_plan_supports_calibration_negative_overrides() -> None:

@@ -331,6 +331,11 @@ class ProtocolRunner:
                     ]
                 )
             )
+            base_method_variant = str(
+                method_config.get("base_method_variant", method_config["method_variant"])
+            )
+            derived_variant = base_method_variant != method_config["method_variant"]
+            tubelet_length = int(method_config.get("tubelet_length", 1))
             event_score_record = {
                 "run_id": run_id,
                 "event_id": f"{method_config['method_variant']}:{event_plan_entry.event_id}",
@@ -339,6 +344,10 @@ class ProtocolRunner:
                 "sample_role": event_plan_entry.sample_role,
                 "method_family": method_config["method_family"],
                 "method_variant": method_config["method_variant"],
+                "base_method_variant": base_method_variant,
+                "derived_variant": derived_variant,
+                "ablation_axis": "tubelet_length" if derived_variant else None,
+                "tubelet_length": tubelet_length,
                 "attack_name": event_plan_entry.attack_name,
                 "attack_params": attacked_sample.applied_attack_params or event_plan_entry.attack_params,
                 "target_fpr": target_fpr,

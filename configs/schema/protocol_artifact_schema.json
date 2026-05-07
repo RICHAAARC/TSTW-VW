@@ -14,6 +14,7 @@
     "local_clip_curve_path": "tables/local_clip_curve.csv",
     "temporal_attack_curve_path": "tables/temporal_attack_curve.csv",
     "tubelet_length_ablation_path": "tables/tubelet_length_ablation.csv",
+    "sync_peak_examples_path": "figures/sync_peak_examples.png",
     "report_path": "reports/method_validation_report.md"
   },
   "event_score_record": {
@@ -25,6 +26,10 @@
       "sample_role",
       "method_family",
       "method_variant",
+      "base_method_variant",
+      "derived_variant",
+      "ablation_axis",
+      "tubelet_length",
       "attack_name",
       "attack_params",
       "target_fpr",
@@ -85,6 +90,7 @@
     "required_null_encoding_fields": [
       "threshold_id",
       "failure_reason",
+      "ablation_axis",
       "S_tubelet",
       "S_sync",
       "S_traj"
@@ -121,7 +127,7 @@
       "records_digest",
       "thresholds_digest",
       "tables_digest",
-      "figures_digest_placeholder",
+      "figures_digest",
       "placeholder_fields",
       "random_fields"
     ]
@@ -131,6 +137,10 @@
       "run_id",
       "method_family",
       "method_variant",
+      "base_method_variant",
+      "derived_variant",
+      "ablation_axis",
+      "tubelet_length",
       "target_fpr",
       "threshold_id",
       "split",
@@ -148,6 +158,10 @@
       "run_id",
       "method_family",
       "method_variant",
+      "base_method_variant",
+      "derived_variant",
+      "ablation_axis",
+      "tubelet_length",
       "enabled_tubelet_evidence",
       "enabled_sync_evidence",
       "enabled_trajectory_evidence",
@@ -161,6 +175,10 @@
     "local_clip_curve_columns": [
       "run_id",
       "method_variant",
+      "base_method_variant",
+      "derived_variant",
+      "ablation_axis",
+      "tubelet_length",
       "clip_length",
       "local_clip_TPR",
       "local_clip_FPR",
@@ -171,6 +189,10 @@
     "temporal_attack_curve_columns": [
       "run_id",
       "method_variant",
+      "base_method_variant",
+      "derived_variant",
+      "ablation_axis",
+      "tubelet_length",
       "attack_name",
       "attack_strength",
       "sample_role",
@@ -182,6 +204,9 @@
     "tubelet_length_ablation_columns": [
       "run_id",
       "method_variant",
+      "base_method_variant",
+      "derived_variant",
+      "ablation_axis",
       "tubelet_length",
       "attack_name",
       "attacked_positive_TPR",

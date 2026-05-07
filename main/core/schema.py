@@ -38,6 +38,10 @@ REQUIRED_EVENT_SCORE_FIELDS = {
     "sample_role",
     "method_family",
     "method_variant",
+    "base_method_variant",
+    "derived_variant",
+    "ablation_axis",
+    "tubelet_length",
     "attack_name",
     "attack_params",
     "target_fpr",
@@ -95,7 +99,7 @@ REQUIRED_MANIFEST_FIELDS = {
     "records_digest",
     "thresholds_digest",
     "tables_digest",
-    "figures_digest_placeholder",
+    "figures_digest",
     "placeholder_fields",
     "random_fields",
 }
@@ -383,6 +387,27 @@ def validate_event_score_record(event_score_record: dict[str, Any]) -> None:
     ensure_supported_sample_role(event_score_record["sample_role"])
     ensure_non_empty_string(event_score_record["method_family"], "method_family")
     ensure_non_empty_string(event_score_record["method_variant"], "method_variant")
+    ensure_non_empty_string(
+        event_score_record["base_method_variant"],
+        "base_method_variant",
+    )
+    if not isinstance(event_score_record["derived_variant"], bool):
+        raise ValueError("derived_variant must be a boolean")
+    if (
+        not isinstance(event_score_record["tubelet_length"], int)
+        or event_score_record["tubelet_length"] < 1
+    ):
+        raise ValueError("tubelet_length must be a positive integer")
+    if event_score_record["derived_variant"]:
+        if event_score_record["base_method_variant"] == event_score_record["method_variant"]:
+            raise ValueError("derived variants must differ from base_method_variant")
+        if event_score_record["ablation_axis"] != "tubelet_length":
+            raise ValueError("derived variants must declare ablation_axis=tubelet_length")
+    else:
+        if event_score_record["base_method_variant"] != event_score_record["method_variant"]:
+            raise ValueError("non-derived variants must match base_method_variant")
+        if event_score_record["ablation_axis"] is not None:
+            raise ValueError("non-derived variants must use null ablation_axis")
     validate_evidence_scores(event_score_record["evidence_scores"])
     validate_input_artifact_trace(event_score_record["input_artifact_trace"])
 
@@ -525,3 +550,4 @@ def validate_run_manifest_record(run_manifest_record: dict[str, Any]) -> None:
         raise ValueError("placeholder_fields must be a list")
     if not isinstance(run_manifest_record["random_fields"], list):
         raise ValueError("random_fields must be a list")
+    ensure_non_empty_string(run_manifest_record["figures_digest"], "figures_digest")
