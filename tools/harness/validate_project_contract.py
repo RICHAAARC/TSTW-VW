@@ -85,8 +85,12 @@ REQUIRED_OUTPUT_LAYOUT = {
     "event_scores_path": "records/event_scores.jsonl",
     "thresholds_path": "thresholds/thresholds.json",
     "run_manifest_path": "artifacts/run_manifest.json",
-    "main_metrics_path": "tables/main_metrics.csv",
+    "main_metrics_path": "tables/main_tpr_fpr_table.csv",
     "ablation_table_path": "tables/ablation_table.csv",
+    "local_clip_curve_path": "tables/local_clip_curve.csv",
+    "temporal_attack_curve_path": "tables/temporal_attack_curve.csv",
+    "tubelet_length_ablation_path": "tables/tubelet_length_ablation.csv",
+    "report_path": "reports/method_validation_report.md",
 }
 REQUIRED_EVENT_SCORE_FIELDS = {
     "run_id",
@@ -109,8 +113,36 @@ REQUIRED_EVENT_SCORE_FIELDS = {
     "disabled_evidence",
     "decision",
     "failure_reason",
+    "mechanism_trace",
     "placeholder_fields",
     "random_fields",
+}
+REQUIRED_MECHANISM_TRACE_FIELDS = {
+    "construction_phase",
+    "latent_backend_name",
+    "reference_latent_shape",
+    "latent_shape",
+    "latent_artifact_relpath",
+    "latent_artifact_digest",
+    "tubelet_length",
+    "spatial_patch_size",
+    "partition_digest",
+    "embedding_rule",
+    "embedding_margin",
+    "mean_projection_before",
+    "mean_projection_after",
+    "mean_embedding_delta_norm",
+    "codebook_digest",
+    "sync_code_digest",
+    "payload_digest",
+    "sync_search_enabled",
+    "sync_estimated_offset",
+    "sync_ground_truth_offset",
+    "sync_alignment_error",
+    "sync_peak_rank",
+    "sync_search_space_size",
+    "sync_search_space_digest",
+    "clip_length",
 }
 REQUIRED_EVENT_SCORE_EVIDENCE_FIELDS = {
     "S_tubelet",
@@ -194,6 +226,37 @@ REQUIRED_ABLATION_TABLE_COLUMNS = {
     "attacked_negative_FPR",
     "clean_positive_TPR",
     "attacked_positive_TPR",
+}
+REQUIRED_LOCAL_CLIP_CURVE_COLUMNS = {
+    "run_id",
+    "method_variant",
+    "clip_length",
+    "local_clip_TPR",
+    "local_clip_FPR",
+    "positive_count",
+    "negative_count",
+    "threshold_id",
+}
+REQUIRED_TEMPORAL_ATTACK_CURVE_COLUMNS = {
+    "run_id",
+    "method_variant",
+    "attack_name",
+    "attack_strength",
+    "sample_role",
+    "TPR",
+    "FPR",
+    "count",
+    "threshold_id",
+}
+REQUIRED_TUBELET_LENGTH_ABLATION_COLUMNS = {
+    "run_id",
+    "method_variant",
+    "tubelet_length",
+    "attack_name",
+    "attacked_positive_TPR",
+    "attacked_negative_FPR",
+    "sync_alignment_error_mean",
+    "sync_peak_rank_median",
 }
 REQUIRED_ABLATION_METHOD_VARIANTS = {
     "empty_watermark_method_placeholder",
@@ -456,7 +519,7 @@ def validate_protocol_config_data(data: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def validate_protocol_artifact_schema_data(data: dict[str, Any]) -> list[dict[str, str]]:
-    """Validate the governed stage-0 protocol artifact schema skeleton.
+    """Validate the governed stage-one protocol artifact schema.
 
     Args:
         data: Parsed protocol artifact schema config data.
@@ -466,19 +529,19 @@ def validate_protocol_artifact_schema_data(data: dict[str, Any]) -> list[dict[st
     """
     violations: list[dict[str, str]] = []
 
-    if data.get("project_stage") != "protocol_skeleton":
+    if data.get("project_stage") != "synthetic_tubelet_sync_probe":
         violations.append(
             {
                 "field": "project_stage",
-                "reason": "artifact_schema_stage_must_equal_protocol_skeleton",
+                "reason": "artifact_schema_stage_must_equal_synthetic_tubelet_sync_probe",
             }
         )
 
-    if data.get("construction_phase") != "protocol_skeleton":
+    if data.get("construction_phase") != "synthetic_tubelet_sync_probe":
         violations.append(
             {
                 "field": "construction_phase",
-                "reason": "construction_phase_must_equal_protocol_skeleton",
+                "reason": "construction_phase_must_equal_synthetic_tubelet_sync_probe",
             }
         )
 
@@ -555,6 +618,16 @@ def validate_protocol_artifact_schema_data(data: dict[str, Any]) -> list[dict[st
             }
         )
 
+    if not REQUIRED_MECHANISM_TRACE_FIELDS.issubset(
+        set(event_score_record.get("required_mechanism_trace_fields", []))
+    ):
+        violations.append(
+            {
+                "field": "event_score_record.required_mechanism_trace_fields",
+                "reason": "missing_required_mechanism_trace_fields",
+            }
+        )
+
     if not REQUIRED_EVENT_SCORE_NULL_ENCODING_FIELDS.issubset(
         set(event_score_record.get("required_null_encoding_fields", []))
     ):
@@ -605,6 +678,36 @@ def validate_protocol_artifact_schema_data(data: dict[str, Any]) -> list[dict[st
             {
                 "field": "tables.ablation_table_columns",
                 "reason": "missing_required_ablation_table_columns",
+            }
+        )
+
+    if not REQUIRED_LOCAL_CLIP_CURVE_COLUMNS.issubset(
+        set(tables.get("local_clip_curve_columns", []))
+    ):
+        violations.append(
+            {
+                "field": "tables.local_clip_curve_columns",
+                "reason": "missing_required_local_clip_curve_columns",
+            }
+        )
+
+    if not REQUIRED_TEMPORAL_ATTACK_CURVE_COLUMNS.issubset(
+        set(tables.get("temporal_attack_curve_columns", []))
+    ):
+        violations.append(
+            {
+                "field": "tables.temporal_attack_curve_columns",
+                "reason": "missing_required_temporal_attack_curve_columns",
+            }
+        )
+
+    if not REQUIRED_TUBELET_LENGTH_ABLATION_COLUMNS.issubset(
+        set(tables.get("tubelet_length_ablation_columns", []))
+    ):
+        violations.append(
+            {
+                "field": "tables.tubelet_length_ablation_columns",
+                "reason": "missing_required_tubelet_length_ablation_columns",
             }
         )
 

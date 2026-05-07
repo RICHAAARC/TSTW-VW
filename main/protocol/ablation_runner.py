@@ -103,6 +103,7 @@ class AblationRunner:
                 event_plan,
                 method_config,
                 self._runtime_configs["protocol_config"],
+                output_root=output_root_path,
             )
             event_score_records.extend(variant_event_records)
             threshold_records.append(threshold_record)

@@ -41,7 +41,7 @@ def test_temporal_attack_registry_builds_all_governed_attacks() -> None:
 
 
 def test_temporal_attacks_transform_placeholder_sample_metadata() -> None:
-    """Validate that temporal placeholder attacks change shape and digest as expected.
+    """Validate that governed temporal attacks change artifact shape and digest as expected.
 
     Args:
         None.
@@ -64,7 +64,12 @@ def test_temporal_attacks_transform_placeholder_sample_metadata() -> None:
     assert attacked_samples["temporal_crop"].latent_shape == (20, 4, 32, 32)
     assert attacked_samples["frame_dropping"].latent_shape == (24, 4, 32, 32)
     assert attacked_samples["speed_change"].latent_shape == (26, 4, 32, 32)
-    assert attacked_samples["local_clip"].latent_shape == (4, 4, 32, 32)
+    assert attacked_samples["local_clip"].latent_shape == (
+        attacked_samples["local_clip"].applied_attack_params["clip_length"],
+        4,
+        32,
+        32,
+    )
     assert attacked_samples["latent_gaussian_noise"].latent_shape == sample.latent_shape
     assert (
         attacked_samples["latent_gaussian_noise"].latent_tensor_digest_random

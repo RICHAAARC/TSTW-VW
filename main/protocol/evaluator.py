@@ -40,6 +40,37 @@ ABLATION_TABLE_COLUMNS = [
     "clean_positive_TPR",
     "attacked_positive_TPR",
 ]
+LOCAL_CLIP_CURVE_COLUMNS = [
+    "run_id",
+    "method_variant",
+    "clip_length",
+    "local_clip_TPR",
+    "local_clip_FPR",
+    "positive_count",
+    "negative_count",
+    "threshold_id",
+]
+TEMPORAL_ATTACK_CURVE_COLUMNS = [
+    "run_id",
+    "method_variant",
+    "attack_name",
+    "attack_strength",
+    "sample_role",
+    "TPR",
+    "FPR",
+    "count",
+    "threshold_id",
+]
+TUBELET_LENGTH_ABLATION_COLUMNS = [
+    "run_id",
+    "method_variant",
+    "tubelet_length",
+    "attack_name",
+    "attacked_positive_TPR",
+    "attacked_negative_FPR",
+    "sync_alignment_error_mean",
+    "sync_peak_rank_median",
+]
 
 
 def _safe_rate(true_count: int, total_count: int) -> float:
@@ -181,6 +212,207 @@ def build_ablation_table_rows(
     return rows
 
 
+def build_local_clip_curve_rows(
+    event_score_records: list[dict[str, Any]],
+    threshold_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """功能：构建 local clip curve 表行。
+
+    Build rows for the governed local-clip curve table.
+
+    Args:
+        event_score_records: Governed event score records.
+        threshold_records: Governed threshold records.
+
+    Returns:
+        A list of local-clip curve row dictionaries.
+    """
+    threshold_map = {
+        threshold_record["method_variant"]: threshold_record
+        for threshold_record in threshold_records
+    }
+    rows: list[dict[str, Any]] = []
+    local_clip_records = [
+        record
+        for record in event_score_records
+        if record["split"] == "test" and record["attack_name"] == "local_clip"
+    ]
+    for method_variant in sorted({record["method_variant"] for record in local_clip_records}):
+        variant_records = [
+            record for record in local_clip_records if record["method_variant"] == method_variant
+        ]
+        for clip_length in sorted(
+            {
+                int(record["attack_params"].get("clip_length", 0))
+                for record in variant_records
+            }
+        ):
+            grouped_records = [
+                record
+                for record in variant_records
+                if int(record["attack_params"].get("clip_length", 0)) == clip_length
+            ]
+            positive_records = [
+                record for record in grouped_records if record["sample_role"] == "attacked_positive"
+            ]
+            negative_records = [
+                record for record in grouped_records if record["sample_role"] == "attacked_negative"
+            ]
+            rows.append(
+                {
+                    "run_id": grouped_records[0]["run_id"],
+                    "method_variant": method_variant,
+                    "clip_length": clip_length,
+                    "local_clip_TPR": _safe_rate(
+                        sum(1 for record in positive_records if record["decision"]),
+                        len(positive_records),
+                    ),
+                    "local_clip_FPR": _safe_rate(
+                        sum(1 for record in negative_records if record["decision"]),
+                        len(negative_records),
+                    ),
+                    "positive_count": len(positive_records),
+                    "negative_count": len(negative_records),
+                    "threshold_id": threshold_map[method_variant]["threshold_id"],
+                }
+            )
+    return rows
+
+
+def build_temporal_attack_curve_rows(
+    event_score_records: list[dict[str, Any]],
+    threshold_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """功能：构建 temporal attack curve 表行。
+
+    Build rows for the governed temporal-attack curve table.
+
+    Args:
+        event_score_records: Governed event score records.
+        threshold_records: Governed threshold records.
+
+    Returns:
+        A list of temporal-attack curve row dictionaries.
+    """
+    threshold_map = {
+        threshold_record["method_variant"]: threshold_record
+        for threshold_record in threshold_records
+    }
+    rows: list[dict[str, Any]] = []
+    curve_records = [record for record in event_score_records if record["split"] == "test"]
+    for method_variant in sorted({record["method_variant"] for record in curve_records}):
+        variant_records = [
+            record for record in curve_records if record["method_variant"] == method_variant
+        ]
+        for attack_name in sorted({record["attack_name"] for record in variant_records}):
+            attack_records = [
+                record for record in variant_records if record["attack_name"] == attack_name
+            ]
+            for sample_role in sorted({record["sample_role"] for record in attack_records}):
+                grouped_records = [
+                    record for record in attack_records if record["sample_role"] == sample_role
+                ]
+                rows.append(
+                    {
+                        "run_id": grouped_records[0]["run_id"],
+                        "method_variant": method_variant,
+                        "attack_name": attack_name,
+                        "attack_strength": _derive_attack_strength(grouped_records[0]),
+                        "sample_role": sample_role,
+                        "TPR": (
+                            _safe_rate(
+                                sum(1 for record in grouped_records if record["decision"]),
+                                len(grouped_records),
+                            )
+                            if sample_role.endswith("positive")
+                            else None
+                        ),
+                        "FPR": (
+                            _safe_rate(
+                                sum(1 for record in grouped_records if record["decision"]),
+                                len(grouped_records),
+                            )
+                            if sample_role.endswith("negative")
+                            else None
+                        ),
+                        "count": len(grouped_records),
+                        "threshold_id": threshold_map[method_variant]["threshold_id"],
+                    }
+                )
+    return rows
+
+
+def build_tubelet_length_ablation_rows(
+    event_score_records: list[dict[str, Any]],
+    threshold_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """功能：构建 tubelet length ablation 表行。
+
+    Build rows for the governed tubelet-length ablation table.
+
+    Args:
+        event_score_records: Governed event score records.
+        threshold_records: Governed threshold records.
+
+    Returns:
+        A list of tubelet-length ablation row dictionaries.
+    """
+    del threshold_records
+    rows: list[dict[str, Any]] = []
+    curve_records = [record for record in event_score_records if record["split"] == "test"]
+    for method_variant in sorted({record["method_variant"] for record in curve_records}):
+        variant_records = [
+            record for record in curve_records if record["method_variant"] == method_variant
+        ]
+        tubelet_length = int(
+            next(
+                record["mechanism_trace"]["tubelet_length"]
+                for record in variant_records
+                if record["mechanism_trace"].get("tubelet_length") is not None
+            )
+        )
+        for attack_name in sorted({record["attack_name"] for record in variant_records}):
+            attack_records = [
+                record for record in variant_records if record["attack_name"] == attack_name
+            ]
+            attacked_positive_records = [
+                record for record in attack_records if record["sample_role"] == "attacked_positive"
+            ]
+            attacked_negative_records = [
+                record for record in attack_records if record["sample_role"] == "attacked_negative"
+            ]
+            positive_sync_records = [
+                record
+                for record in attacked_positive_records
+                if record["mechanism_trace"].get("sync_alignment_error") is not None
+            ]
+            rows.append(
+                {
+                    "run_id": attack_records[0]["run_id"],
+                    "method_variant": method_variant,
+                    "tubelet_length": tubelet_length,
+                    "attack_name": attack_name,
+                    "attacked_positive_TPR": _safe_rate(
+                        sum(1 for record in attacked_positive_records if record["decision"]),
+                        len(attacked_positive_records),
+                    ),
+                    "attacked_negative_FPR": _safe_rate(
+                        sum(1 for record in attacked_negative_records if record["decision"]),
+                        len(attacked_negative_records),
+                    ),
+                    "sync_alignment_error_mean": _mean_numeric_field(
+                        positive_sync_records,
+                        "sync_alignment_error",
+                    ),
+                    "sync_peak_rank_median": _median_numeric_field(
+                        positive_sync_records,
+                        "sync_peak_rank",
+                    ),
+                }
+            )
+    return rows
+
+
 def _count_role(event_score_records: list[dict[str, Any]], sample_role: str) -> int:
     return sum(1 for record in event_score_records if record["sample_role"] == sample_role)
 
@@ -192,3 +424,45 @@ def _rate_for_role(event_score_records: list[dict[str, Any]], sample_role: str) 
 
 def _is_evidence_enabled(event_score_records: list[dict[str, Any]], score_name: str) -> bool:
     return any(record["evidence_scores"][score_name] is not None for record in event_score_records)
+
+
+def _derive_attack_strength(event_score_record: list[dict[str, Any]] | dict[str, Any]) -> float | int:
+    record = event_score_record[0] if isinstance(event_score_record, list) else event_score_record
+    attack_params = record.get("attack_params", {})
+    attack_name = record.get("attack_name")
+    if attack_name == "local_clip":
+        return int(attack_params.get("clip_length", 0))
+    if attack_name == "temporal_crop":
+        return int(attack_params.get("crop_length", 0))
+    if attack_name == "frame_dropping":
+        return float(attack_params.get("drop_rate", 0.0))
+    if attack_name == "speed_change":
+        return float(attack_params.get("speed_ratio", 0.0))
+    if attack_name == "latent_gaussian_noise":
+        return float(attack_params.get("sigma", 0.0))
+    return 0
+
+
+def _mean_numeric_field(event_score_records: list[dict[str, Any]], field_name: str) -> float | None:
+    values = [
+        float(record["mechanism_trace"][field_name])
+        for record in event_score_records
+        if record["mechanism_trace"].get(field_name) is not None
+    ]
+    if not values:
+        return None
+    return round(sum(values) / len(values), 6)
+
+
+def _median_numeric_field(event_score_records: list[dict[str, Any]], field_name: str) -> float | int | None:
+    values = sorted(
+        record["mechanism_trace"][field_name]
+        for record in event_score_records
+        if record["mechanism_trace"].get(field_name) is not None
+    )
+    if not values:
+        return None
+    middle_index = len(values) // 2
+    if len(values) % 2 == 1:
+        return values[middle_index]
+    return round((float(values[middle_index - 1]) + float(values[middle_index])) / 2.0, 6)

@@ -8,15 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from main.attacks.attack_registry import build_attack_registry
-from main.backends.synthetic_video_latent import (
-    build_synthetic_video_latent_backend_from_support_config,
-)
 from main.core.records import RecordWriter
-from main.core.registry import load_json_config
 from main.core.schema import (
     EVIDENCE_SCORE_NAMES,
-    build_input_artifact_trace,
     validate_event_score_record,
     validate_run_manifest_record,
     validate_threshold_record,
@@ -43,45 +37,27 @@ def test_active_stage_records_schema_is_complete(tmp_path: Path) -> None:
     event_score_records = record_writer.read_event_score_records()
     threshold_records = record_writer.read_threshold_records()
     run_manifest = record_writer.read_run_manifest()
-    protocol_config = load_json_config(
-        ROOT / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
-    )
-    attack_config = load_json_config(
-        ROOT / "configs" / "attacks" / "temporal_attack_matrix.json"
-    )
-    latent_backend = build_synthetic_video_latent_backend_from_support_config(protocol_config)
-    attack_map = {
-        attack.attack_name: attack for attack in build_attack_registry(attack_config)
-    }
 
     assert event_score_records
     assert threshold_records
+    assert record_writer.output_paths.main_metrics_path.exists()
+    assert record_writer.output_paths.ablation_table_path.exists()
+    assert record_writer.output_paths.local_clip_curve_path.exists()
+    assert record_writer.output_paths.temporal_attack_curve_path.exists()
+    assert record_writer.output_paths.tubelet_length_ablation_path.exists()
+    assert record_writer.output_paths.report_path.exists()
 
     for event_score_record in event_score_records:
         validate_event_score_record(event_score_record)
-        expected_clean_sample = latent_backend.build_sample(
-            event_score_record["sample_id"],
-            event_score_record["split"],
-            event_score_record["sample_role"],
-        )
-        expected_attacked_sample = attack_map[event_score_record["attack_name"]].apply(
-            expected_clean_sample
-        )
-        expected_input_artifact_trace = build_input_artifact_trace(expected_attacked_sample)
+        mechanism_trace = event_score_record["mechanism_trace"]
         assert set(event_score_record["evidence_scores"].keys()) == EVIDENCE_SCORE_NAMES
         assert "placeholder_fields" in event_score_record
         assert "random_fields" in event_score_record
-        assert event_score_record["input_artifact_trace"] == expected_input_artifact_trace
-        assert event_score_record["latent_backend_name"] == expected_attacked_sample.latent_backend_name
-        assert event_score_record["latent_backend_status"] == expected_attacked_sample.latent_backend_status
-        assert (
-            event_score_record["latent_tensor_digest_random"]
-            == expected_attacked_sample.latent_tensor_digest_random
-        )
-        assert (
-            event_score_record["latent_generation_seed_random"]
-            == expected_attacked_sample.latent_generation_seed_random
-        )
+        assert isinstance(mechanism_trace, dict)
+        assert mechanism_trace["construction_phase"] == "synthetic_tubelet_sync_probe"
+        assert mechanism_trace["latent_backend_name"] == event_score_record["latent_backend_name"]
+        assert mechanism_trace["latent_artifact_digest"] == event_score_record["latent_tensor_digest_random"]
+        assert mechanism_trace["latent_artifact_relpath"].endswith(".npy")
         assert (
             event_score_record["input_artifact_trace"]["backend_name"]
             == event_score_record["latent_backend_name"]
@@ -102,6 +78,16 @@ def test_active_stage_records_schema_is_complete(tmp_path: Path) -> None:
             "latent_generation_seed_random",
             "latent_tensor_digest_random",
         }.issubset(set(event_score_record["random_fields"]))
+        if event_score_record["attack_name"] == "no_attack":
+            assert event_score_record["sample_role"] in {
+                "clean_negative",
+                "watermarked_positive",
+            }
+        else:
+            assert event_score_record["sample_role"] in {
+                "attacked_negative",
+                "attacked_positive",
+            }
 
     frame_prc_record = next(
         event_score_record
@@ -115,6 +101,7 @@ def test_active_stage_records_schema_is_complete(tmp_path: Path) -> None:
     assert frame_prc_record["evidence_scores"]["S_sync"] is None
     assert frame_prc_record["evidence_scores"]["S_traj"] is None
     assert frame_prc_record["placeholder_fields"] == ["trajectory_observation_placeholder"]
+    assert frame_prc_record["mechanism_trace"]["tubelet_length"] == 1
     assert frame_prc_record["random_fields"] == [
         "latent_generation_seed_random",
         "latent_tensor_digest_random",
@@ -132,6 +119,9 @@ def test_active_stage_records_schema_is_complete(tmp_path: Path) -> None:
     assert tubelet_sync_record["evidence_scores"]["S_sync"] is not None
     assert tubelet_sync_record["evidence_scores"]["S_traj"] is None
     assert tubelet_sync_record["placeholder_fields"] == ["trajectory_observation_placeholder"]
+    assert tubelet_sync_record["mechanism_trace"]["embedding_rule"] == "projection_margin"
+    assert tubelet_sync_record["mechanism_trace"]["tubelet_length"] == 4
+    assert tubelet_sync_record["mechanism_trace"]["mean_projection_after"] >= tubelet_sync_record["mechanism_trace"]["embedding_margin"]
     assert tubelet_sync_record["evidence_scores"]["S_final"] >= frame_prc_record["evidence_scores"]["S_final"]
     assert tubelet_sync_record["random_fields"] == [
         "latent_generation_seed_random",

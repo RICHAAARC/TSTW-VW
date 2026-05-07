@@ -1,6 +1,6 @@
 {
-  "project_stage": "protocol_skeleton",
-  "construction_phase": "protocol_skeleton",
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "construction_phase": "synthetic_tubelet_sync_probe",
   "protocol_name": "fixed_low_fpr_calibrated_detection",
   "record_schema_name": "event_score_record",
   "threshold_schema_name": "threshold_record",
@@ -9,8 +9,12 @@
     "event_scores_path": "records/event_scores.jsonl",
     "thresholds_path": "thresholds/thresholds.json",
     "run_manifest_path": "artifacts/run_manifest.json",
-    "main_metrics_path": "tables/main_metrics.csv",
-    "ablation_table_path": "tables/ablation_table.csv"
+    "main_metrics_path": "tables/main_tpr_fpr_table.csv",
+    "ablation_table_path": "tables/ablation_table.csv",
+    "local_clip_curve_path": "tables/local_clip_curve.csv",
+    "temporal_attack_curve_path": "tables/temporal_attack_curve.csv",
+    "tubelet_length_ablation_path": "tables/tubelet_length_ablation.csv",
+    "report_path": "reports/method_validation_report.md"
   },
   "event_score_record": {
     "required_top_level_fields": [
@@ -34,6 +38,7 @@
       "disabled_evidence",
       "decision",
       "failure_reason",
+      "mechanism_trace",
       "placeholder_fields",
       "random_fields"
     ],
@@ -49,6 +54,33 @@
       "backend_status",
       "artifact_digest",
       "generation_seed_random"
+    ],
+    "required_mechanism_trace_fields": [
+      "construction_phase",
+      "latent_backend_name",
+      "reference_latent_shape",
+      "latent_shape",
+      "latent_artifact_relpath",
+      "latent_artifact_digest",
+      "tubelet_length",
+      "spatial_patch_size",
+      "partition_digest",
+      "embedding_rule",
+      "embedding_margin",
+      "mean_projection_before",
+      "mean_projection_after",
+      "mean_embedding_delta_norm",
+      "codebook_digest",
+      "sync_code_digest",
+      "payload_digest",
+      "sync_search_enabled",
+      "sync_estimated_offset",
+      "sync_ground_truth_offset",
+      "sync_alignment_error",
+      "sync_peak_rank",
+      "sync_search_space_size",
+      "sync_search_space_digest",
+      "clip_length"
     ],
     "required_null_encoding_fields": [
       "threshold_id",
@@ -125,6 +157,37 @@
       "attacked_negative_FPR",
       "clean_positive_TPR",
       "attacked_positive_TPR"
+    ],
+    "local_clip_curve_columns": [
+      "run_id",
+      "method_variant",
+      "clip_length",
+      "local_clip_TPR",
+      "local_clip_FPR",
+      "positive_count",
+      "negative_count",
+      "threshold_id"
+    ],
+    "temporal_attack_curve_columns": [
+      "run_id",
+      "method_variant",
+      "attack_name",
+      "attack_strength",
+      "sample_role",
+      "TPR",
+      "FPR",
+      "count",
+      "threshold_id"
+    ],
+    "tubelet_length_ablation_columns": [
+      "run_id",
+      "method_variant",
+      "tubelet_length",
+      "attack_name",
+      "attacked_positive_TPR",
+      "attacked_negative_FPR",
+      "sync_alignment_error_mean",
+      "sync_peak_rank_median"
     ]
   }
 }

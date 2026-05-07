@@ -1,6 +1,6 @@
 """
-文件用途：验证阶段 0 protocol artifact schema 骨架配置。
-File purpose: Validate the governed stage-0 protocol artifact schema configuration.
+文件用途：验证 stage-one protocol artifact schema 配置。
+File purpose: Validate the governed stage-one protocol artifact schema configuration.
 Module type: General module
 """
 
@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_protocol_artifact_schema_passes() -> None:
-    """Validate that the checked-in artifact schema satisfies stage-0 rules.
+    """Validate that the checked-in artifact schema satisfies stage-one rules.
 
     Args:
         None.
@@ -154,9 +154,34 @@ def test_protocol_artifact_output_layout_is_frozen() -> None:
         ROOT / "configs" / "schema" / "protocol_artifact_schema.json"
     )
     broken = deepcopy(data)
-    broken["output_layout"]["main_metrics_path"] = "tables/main_metrics_v1.csv"
+    broken["output_layout"]["main_metrics_path"] = "tables/main_tpr_fpr_table_v1.csv"
     violations = validate_protocol_artifact_schema_data(broken)
     assert any(
         violation["reason"] == "unexpected_protocol_artifact_output_path"
+        for violation in violations
+    )
+
+
+def test_missing_mechanism_trace_fields_fail() -> None:
+    """Validate that stage-one mechanism trace fields cannot be omitted from the schema.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    data = load_json_config(
+        ROOT / "configs" / "schema" / "protocol_artifact_schema.json"
+    )
+    broken = deepcopy(data)
+    broken["event_score_record"]["required_mechanism_trace_fields"] = [
+        field_name
+        for field_name in broken["event_score_record"]["required_mechanism_trace_fields"]
+        if field_name != "partition_digest"
+    ]
+    violations = validate_protocol_artifact_schema_data(broken)
+    assert any(
+        violation["reason"] == "missing_required_mechanism_trace_fields"
         for violation in violations
     )

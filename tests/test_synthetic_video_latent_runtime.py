@@ -1,6 +1,6 @@
 """
-文件用途：验证 synthetic video latent placeholder runtime 的最小运行语义。
-File purpose: Validate the minimal runtime behavior of the synthetic video latent placeholder backend.
+文件用途：验证 synthetic video latent tensor artifact runtime 的最小运行语义。
+File purpose: Validate the minimal runtime behavior of the synthetic video latent tensor-artifact backend.
 Module type: General module
 """
 
@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_synthetic_video_latent_backend_builds_reproducible_sample() -> None:
-    """Validate that identical inputs produce identical synthetic latent metadata.
+    """Validate that identical inputs produce identical synthetic latent artifacts.
 
     Args:
         None.
@@ -45,7 +45,7 @@ def test_synthetic_video_latent_backend_builds_reproducible_sample() -> None:
     )
 
     assert first_sample.latent_backend_name == LATENT_BACKEND_NAME
-    assert first_sample.latent_backend_status == "placeholder_runtime"
+    assert first_sample.latent_backend_status == "tensor_artifact_runtime"
     assert first_sample.latent_shape == (32, 4, 32, 32)
     assert (
         first_sample.latent_generation_seed_random
@@ -55,6 +55,8 @@ def test_synthetic_video_latent_backend_builds_reproducible_sample() -> None:
         first_sample.latent_tensor_digest_random
         == second_sample.latent_tensor_digest_random
     )
+    assert first_sample.latent_artifact_digest == second_sample.latent_artifact_digest
+    assert first_sample.latent_artifact_relpath == second_sample.latent_artifact_relpath
 
 
 def test_synthetic_video_latent_backend_separates_split_and_role() -> None:

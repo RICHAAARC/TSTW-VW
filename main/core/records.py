@@ -20,17 +20,21 @@ from main.core.schema import (
 
 @dataclass(frozen=True)
 class ProtocolOutputPaths:
-    """功能：定义阶段 0 运行产物的固定输出路径。
+    """功能：定义当前 formal stage 运行产物的固定输出路径。
 
-    Stage-0 output layout.
+    Output layout for the active formal stage.
 
     Args:
         root_path: Run root path.
         event_scores_path: Event score JSONL path.
         thresholds_path: Threshold JSON path.
         run_manifest_path: Run manifest JSON path.
-        main_metrics_path: Main metrics CSV path.
+        main_metrics_path: Main TPR/FPR CSV path.
         ablation_table_path: Ablation table CSV path.
+        local_clip_curve_path: Local-clip curve CSV path.
+        temporal_attack_curve_path: Temporal-attack curve CSV path.
+        tubelet_length_ablation_path: Tubelet-length ablation CSV path.
+        report_path: Method validation report path.
 
     Returns:
         None.
@@ -42,25 +46,35 @@ class ProtocolOutputPaths:
     run_manifest_path: Path
     main_metrics_path: Path
     ablation_table_path: Path
+    local_clip_curve_path: Path
+    temporal_attack_curve_path: Path
+    tubelet_length_ablation_path: Path
+    report_path: Path
 
     def table_paths(self) -> list[Path]:
-        """功能：返回受治理表格路径列表。
+        """功能：返回受治理 CSV 产物路径列表。
 
-        Return the governed table artifact paths.
+        Return the governed CSV artifact paths.
 
         Args:
             None.
 
         Returns:
-            A list containing the main metrics and ablation table paths.
+            A list containing all governed CSV table and curve paths.
         """
-        return [self.main_metrics_path, self.ablation_table_path]
+        return [
+            self.main_metrics_path,
+            self.ablation_table_path,
+            self.local_clip_curve_path,
+            self.temporal_attack_curve_path,
+            self.tubelet_length_ablation_path,
+        ]
 
 
 def build_output_paths(output_root: str | Path) -> ProtocolOutputPaths:
-    """功能：根据 run root 构建固定输出布局。
+    """功能：根据 run root 构建当前 formal stage 的固定输出布局。
 
-    Build the governed output layout for a run root.
+    Build the governed output layout for an active-stage run root.
 
     Args:
         output_root: Run root path.
@@ -74,8 +88,12 @@ def build_output_paths(output_root: str | Path) -> ProtocolOutputPaths:
         event_scores_path=output_root_path / "records" / "event_scores.jsonl",
         thresholds_path=output_root_path / "thresholds" / "thresholds.json",
         run_manifest_path=output_root_path / "artifacts" / "run_manifest.json",
-        main_metrics_path=output_root_path / "tables" / "main_metrics.csv",
+        main_metrics_path=output_root_path / "tables" / "main_tpr_fpr_table.csv",
         ablation_table_path=output_root_path / "tables" / "ablation_table.csv",
+        local_clip_curve_path=output_root_path / "tables" / "local_clip_curve.csv",
+        temporal_attack_curve_path=output_root_path / "tables" / "temporal_attack_curve.csv",
+        tubelet_length_ablation_path=output_root_path / "tables" / "tubelet_length_ablation.csv",
+        report_path=output_root_path / "reports" / "method_validation_report.md",
     )
 
 

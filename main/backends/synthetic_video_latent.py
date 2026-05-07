@@ -6,21 +6,27 @@ Module type: Semi-general module
 
 from __future__ import annotations
 
+from array import array
+from pathlib import Path
+import random
+import tempfile
 from typing import Any
 
-from main.core.digest import compute_object_digest
+from main.core.digest import compute_file_digest, compute_object_digest
 from main.core.schema import (
+    CONSTRUCTION_PHASE,
     LatentSample,
     ensure_supported_sample_role,
     ensure_supported_split,
 )
+from main.core.tensor_artifact import compute_numel, write_float_tensor_npy
 from main.methods.temporal_tubelet_watermark.interfaces import LatentBackend
 
 
 PROJECT_STAGE = "synthetic_tubelet_sync_probe"
 TARGET_CONSTRUCTION_PHASE = "synthetic_tubelet_sync_probe"
 LATENT_BACKEND_NAME = "synthetic_video_latent"
-LATENT_BACKEND_STATUS = "placeholder_runtime"
+LATENT_BACKEND_STATUS = "tensor_artifact_runtime"
 LATENT_DISTRIBUTION = "standard_normal"
 LATENT_STORAGE = "npy_artifact"
 DEFAULT_LATENT_SHAPE = {
@@ -90,9 +96,9 @@ def _normalize_latent_shape(
 
 
 class SyntheticVideoLatentPlaceholder(LatentBackend):
-    """功能：提供阶段 1 synthetic video latent 的可运行占位 backend。
+    """功能：提供阶段 1 synthetic video latent 的 tensor artifact backend。
 
-    Runnable placeholder backend for the stage-1 synthetic video latent entry.
+    Tensor-artifact backend for the stage-1 synthetic video latent entry.
 
     Args:
         latent_shape: Governed latent shape.
@@ -122,11 +128,25 @@ class SyntheticVideoLatentPlaceholder(LatentBackend):
         self._latent_generation_seed = latent_generation_seed
         self._latent_distribution = latent_distribution
         self._latent_storage = latent_storage
+        self._output_root = Path(tempfile.gettempdir()) / "tstw_vw_synthetic_probe_cache"
+
+    def set_output_root(self, output_root: str | Path) -> None:
+        """功能：设置当前 run 的 artifact 输出根目录。
+
+        Set the artifact output root for the current run.
+
+        Args:
+            output_root: Run output root path.
+
+        Returns:
+            None.
+        """
+        self._output_root = Path(output_root)
 
     def build_sample(self, sample_id: str, split: str, sample_role: str) -> LatentSample:
-        """功能：构建 deterministic synthetic video latent 样本元数据。
+        """功能：构建 deterministic synthetic video latent tensor artifact。
 
-        Build deterministic synthetic video latent sample metadata.
+        Build a deterministic synthetic video latent tensor artifact.
 
         Args:
             sample_id: Stable sample identifier.
@@ -142,27 +162,52 @@ class SyntheticVideoLatentPlaceholder(LatentBackend):
         ensure_supported_sample_role(sample_role)
 
         derived_seed = self._derive_seed(sample_id, split, sample_role)
-        latent_tensor_digest_random = compute_object_digest(
-            {
-                "latent_backend_name": LATENT_BACKEND_NAME,
-                "latent_distribution": self._latent_distribution,
-                "latent_storage": self._latent_storage,
-                "latent_shape": list(self._latent_shape),
-                "sample_id": sample_id,
-                "split": split,
-                "sample_role": sample_role,
-                "latent_generation_seed": derived_seed,
-            }
-        )
+        latent_values = self._build_tensor_values(derived_seed)
+        artifact_relpath = Path("artifacts") / "latents" / f"{sample_id}.npy"
+        artifact_path = self._output_root / artifact_relpath
+        write_float_tensor_npy(artifact_path, self._latent_shape, latent_values)
+        latent_artifact_digest = compute_file_digest(artifact_path)
         return LatentSample(
             sample_id=sample_id,
             split=split,
             sample_role=sample_role,
             latent_shape=self._latent_shape,
-            latent_tensor_digest_random=latent_tensor_digest_random,
+            latent_tensor_digest_random=latent_artifact_digest,
             latent_generation_seed_random=derived_seed,
             latent_backend_name=LATENT_BACKEND_NAME,
             latent_backend_status=LATENT_BACKEND_STATUS,
+            latent_artifact_relpath=artifact_relpath.as_posix(),
+            latent_artifact_path=str(artifact_path),
+            latent_artifact_digest=latent_artifact_digest,
+            run_root_path=str(self._output_root),
+            mechanism_trace={
+                "construction_phase": CONSTRUCTION_PHASE,
+                "latent_backend_name": LATENT_BACKEND_NAME,
+                "reference_latent_shape": list(self._latent_shape),
+                "latent_shape": list(self._latent_shape),
+                "latent_generation_seed": self._latent_generation_seed,
+                "latent_artifact_relpath": artifact_relpath.as_posix(),
+                "latent_artifact_digest": latent_artifact_digest,
+                "tubelet_length": None,
+                "spatial_patch_size": None,
+                "partition_digest": None,
+                "embedding_rule": None,
+                "embedding_margin": None,
+                "mean_projection_before": None,
+                "mean_projection_after": None,
+                "mean_embedding_delta_norm": None,
+                "codebook_digest": None,
+                "sync_code_digest": None,
+                "payload_digest": None,
+                "sync_search_enabled": False,
+                "sync_estimated_offset": None,
+                "sync_ground_truth_offset": None,
+                "sync_alignment_error": None,
+                "sync_peak_rank": None,
+                "sync_search_space_size": None,
+                "sync_search_space_digest": None,
+                "clip_length": None,
+            },
         )
 
     def _derive_seed(self, sample_id: str, split: str, sample_role: str) -> int:
@@ -179,6 +224,13 @@ class SyntheticVideoLatentPlaceholder(LatentBackend):
             }
         )
         return int(seed_digest[:12], 16)
+
+    def _build_tensor_values(self, derived_seed: int) -> array:
+        generator = random.Random(derived_seed)
+        return array(
+            "f",
+            [generator.gauss(0.0, 1.0) for _ in range(compute_numel(self._latent_shape))],
+        )
 
 
 def build_synthetic_video_latent_backend_from_support_config(

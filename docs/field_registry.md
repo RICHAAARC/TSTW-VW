@@ -81,6 +81,10 @@
 | run_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the governed run manifest. |
 | main_metrics_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt main metrics table. |
 | ablation_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt ablation table. |
+| local_clip_curve_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt local-clip curve table. |
+| temporal_attack_curve_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt temporal-attack curve table. |
+| tubelet_length_ablation_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt tubelet-length ablation table. |
+| report_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt method validation report. |
 | threshold_source_record_digest | trace | none | true | false | false | Digest field that binds threshold materialization to an ordered calibration-negative source payload including event_id, sample_id, split, sample_role, method_variant, attack_name, and S_final. |
 | calibration_split | protocol | none | true | false | false | Governed calibration split identifier written into threshold records. |
 | calibration_negative_roles | protocol | none | true | false | false | Governed calibration negative role list written into threshold records. |
@@ -90,6 +94,27 @@
 | disabled_evidence | protocol | none | true | false | false | Explicit list of evidence branches disabled for a governed event record. |
 | decision | protocol | none | true | false | false | Detection decision field for a governed event record. |
 | failure_reason | protocol | none | true | false | false | Failure reason field for a governed event record. |
+| mechanism_trace | protocol | none | true | false | false | Governed mechanism trace container written into stage-one event records. |
+| reference_latent_shape | protocol | none | true | false | false | Reference latent shape used to preserve the pre-attack synchronization search space. |
+| latent_artifact_relpath | artifact_layout | none | true | false | false | Relative path to the persisted tensor artifact used by embedding, attack, and detection. |
+| latent_artifact_digest | trace | none | true | false | false | File digest of the persisted tensor artifact currently used by the event record. |
+| partition_digest | trace | none | true | false | false | Digest of the governed tubelet partition layout. |
+| embedding_rule | protocol | none | true | false | false | Stable embedding rule identifier for the stage-one projection-margin mechanism. |
+| embedding_margin | protocol | none | true | false | false | Minimum coded projection margin enforced by the stage-one embedding rule. |
+| mean_projection_before | protocol | none | true | false | false | Mean coded tubelet projection before projection-margin embedding. |
+| mean_projection_after | protocol | none | true | false | false | Mean coded tubelet projection after projection-margin embedding. |
+| mean_embedding_delta_norm | protocol | none | true | false | false | Mean projection-margin delta norm applied during embedding. |
+| codebook_digest | trace | none | true | false | false | Digest of the deterministic tubelet direction codebook. |
+| sync_code_digest | trace | none | true | false | false | Digest of the deterministic synchronization code sequence. |
+| payload_digest | trace | none | true | false | false | Digest of the payload sign assignments used by the stage-one method. |
+| sync_search_enabled | protocol | none | true | false | false | Boolean field recording whether synchronization search was active for detection. |
+| sync_estimated_offset | protocol | none | true | false | false | Estimated synchronization offset selected by the stage-one detector. |
+| sync_ground_truth_offset | protocol | none | true | false | false | Ground-truth offset materialized by governed temporal attacks when available. |
+| sync_alignment_error | protocol | none | true | false | false | Absolute error between estimated and ground-truth synchronization offset. |
+| sync_peak_rank | protocol | none | true | false | false | Rank position of the ground-truth offset within the governed search scores. |
+| sync_search_space_size | protocol | none | true | false | false | Candidate count of the governed synchronization offset search space. |
+| sync_search_space_digest | trace | none | true | false | false | Digest of the governed synchronization search-space score map. |
+| clip_length | protocol | none | true | false | false | Materialized local-clip or crop length recorded in the stage-one mechanism trace. |
 | created_at | protocol | none | true | false | false | ISO-8601 timestamp field for governed threshold and manifest records. |
 | table_builder_name | protocol | none | false | false | false | Stable table builder identifier for stage-0 ablation governance. |
 | placeholder_fields | governance | none | true | false | false | Explicit list of placeholder-bound fields carried by governed records or manifests. |

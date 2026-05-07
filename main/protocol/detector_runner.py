@@ -7,6 +7,7 @@ Module type: General module
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from main.backends.synthetic_latent_backend_random import SyntheticLatentBackendRandom
@@ -84,6 +85,7 @@ class ProtocolRunner:
         event_plan: list[EventPlanEntry],
         method_config: dict[str, Any],
         protocol_config: dict[str, Any],
+        output_root: str | Path | None = None,
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """功能：运行阶段 0 的单方法执行闭环。
 
@@ -115,6 +117,8 @@ class ProtocolRunner:
             "method_variant"
         ]:
             raise ValueError("method_config method_variant must be a non-empty string")
+        if output_root is not None and hasattr(self._latent_backend, "set_output_root"):
+            self._latent_backend.set_output_root(Path(output_root))
 
         method = self._method_factory(method_config)
         target_fpr = float(protocol_config["threshold_protocol"]["target_fpr_placeholder"])
@@ -174,13 +178,28 @@ class ProtocolRunner:
             if event_plan_entry.sample_role not in allowed_sample_roles:
                 continue
 
-            latent_sample = self._latent_backend.build_sample(
+            source_sample_id, source_sample_role = self._resolve_source_identity(
                 event_plan_entry.sample_id,
-                event_plan_entry.split,
                 event_plan_entry.sample_role,
             )
-            attacked_sample = event_plan_entry.attack_object.apply(latent_sample)
+            latent_sample = self._latent_backend.build_sample(
+                source_sample_id,
+                event_plan_entry.split,
+                source_sample_role,
+            )
+            working_sample = latent_sample
+            if event_plan_entry.sample_role in {"watermarked_positive", "attacked_positive"}:
+                working_sample = method.embed(
+                    latent_sample,
+                    {
+                        "event_sample_id": event_plan_entry.sample_id,
+                        "event_sample_role": event_plan_entry.sample_role,
+                    },
+                )
+            attacked_sample = event_plan_entry.attack_object.apply(working_sample)
             detection_result = method.detect(attacked_sample, threshold_record)
+            mechanism_trace = dict(attacked_sample.mechanism_trace or {})
+            mechanism_trace.update(detection_result.mechanism_trace or {})
             record_random_fields = list(
                 dict.fromkeys(
                     [
@@ -199,7 +218,7 @@ class ProtocolRunner:
                 "method_family": method_config["method_family"],
                 "method_variant": method_config["method_variant"],
                 "attack_name": event_plan_entry.attack_name,
-                "attack_params": event_plan_entry.attack_params,
+                "attack_params": attacked_sample.applied_attack_params or event_plan_entry.attack_params,
                 "target_fpr": target_fpr,
                 "threshold_id": None if threshold_record is None else threshold_record["threshold_id"],
                 "input_artifact_trace": build_input_artifact_trace(attacked_sample),
@@ -211,9 +230,17 @@ class ProtocolRunner:
                 "disabled_evidence": detection_result.disabled_evidence,
                 "decision": detection_result.decision,
                 "failure_reason": detection_result.failure_reason,
+                "mechanism_trace": mechanism_trace,
                 "placeholder_fields": detection_result.placeholder_fields,
                 "random_fields": record_random_fields,
             }
             validate_event_score_record(event_score_record)
             event_score_records.append(event_score_record)
         return event_score_records
+
+    def _resolve_source_identity(self, sample_id: str, sample_role: str) -> tuple[str, str]:
+        if sample_role == "attacked_negative":
+            return sample_id.replace("attacked_negative", "clean_negative"), "clean_negative"
+        if sample_role == "attacked_positive":
+            return sample_id.replace("attacked_positive", "watermarked_positive"), "watermarked_positive"
+        return sample_id, sample_role

@@ -65,6 +65,16 @@ def build_event_plan(
     event_plan: list[EventPlanEntry] = []
     for split_plan_entry in split_plan:
         for attack_object in attack_registry:
+            if (
+                split_plan_entry.sample_role in {"clean_negative", "watermarked_positive"}
+                and attack_object.attack_name != "no_attack"
+            ):
+                continue
+            if (
+                split_plan_entry.sample_role in {"attacked_negative", "attacked_positive"}
+                and attack_object.attack_name == "no_attack"
+            ):
+                continue
             event_plan.append(
                 EventPlanEntry(
                     event_id=f"{split_plan_entry.sample_id}:{attack_object.attack_name}",

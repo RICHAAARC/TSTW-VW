@@ -10,6 +10,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from main.core.schema import DetectionResult, LatentSample
+from main.methods.temporal_tubelet_watermark.embedding import (
+    DEFAULT_EMBEDDING_MARGIN,
+    apply_projection_margin_embedding,
+    build_partition_config_from_method_config,
+)
 from main.methods.temporal_tubelet_watermark.evidence import (
     EmptyEvidenceExtractorPlaceholder,
     RandomEvidenceExtractorRandom,
@@ -236,10 +241,55 @@ class SyntheticProbeWatermarkMethod(BaseStageZeroWatermarkMethod):
 
     def __init__(self, runtime_config: MethodRuntimeConfig) -> None:
         super().__init__(runtime_config)
+        self._method_config = {
+            "method_family": runtime_config.method_family,
+            "method_variant": runtime_config.method_variant,
+            "method_status": runtime_config.method_status,
+            "tubelet_length": 1 if runtime_config.method_variant == "frame_prc" else 4,
+            "enable_frame_prc": runtime_config.method_variant == "frame_prc",
+            "enable_tubelet": runtime_config.enabled_evidence["tubelet"],
+            "enable_sync": runtime_config.enabled_evidence["sync"],
+            "enable_trajectory": runtime_config.enabled_evidence["trajectory"],
+            "fusion_rule": runtime_config.fusion_rule,
+        }
         self._evidence_extractor = SyntheticProbeEvidenceExtractor(
             runtime_config.method_variant,
+            self._method_config,
             runtime_config.enabled_evidence,
             runtime_config.fusion_rule,
+        )
+
+    def embed(self, sample: LatentSample, payload: dict[str, Any]) -> LatentSample:
+        if not isinstance(sample, LatentSample):
+            raise TypeError("sample must be a LatentSample instance")
+        if not isinstance(payload, dict):
+            raise TypeError("payload must be a dictionary")
+        return apply_projection_margin_embedding(
+            sample,
+            self.runtime_config.method_variant,
+            build_partition_config_from_method_config(self._method_config),
+            embedding_margin=DEFAULT_EMBEDDING_MARGIN,
+        )
+
+    def detect(
+        self,
+        sample: LatentSample,
+        threshold_record: dict[str, Any] | None,
+    ) -> DetectionResult:
+        if not isinstance(sample, LatentSample):
+            raise TypeError("sample must be a LatentSample instance")
+
+        evidence_scores, mechanism_trace = self._evidence_extractor.extract(sample)
+        disabled_evidence = build_disabled_evidence(self.runtime_config.enabled_evidence)
+        decision = self._build_decision(evidence_scores, threshold_record)
+        return DetectionResult(
+            evidence_scores=evidence_scores,
+            disabled_evidence=disabled_evidence,
+            decision=decision,
+            failure_reason=None,
+            mechanism_trace=mechanism_trace,
+            placeholder_fields=self._build_placeholder_fields(disabled_evidence),
+            random_fields=self._build_random_fields(evidence_scores),
         )
 
 

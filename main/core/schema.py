@@ -51,6 +51,7 @@ REQUIRED_EVENT_SCORE_FIELDS = {
     "disabled_evidence",
     "decision",
     "failure_reason",
+    "mechanism_trace",
     "placeholder_fields",
     "random_fields",
 }
@@ -97,9 +98,9 @@ REQUIRED_MANIFEST_FIELDS = {
 
 @dataclass(frozen=True)
 class LatentSample:
-    """功能：定义阶段 0 的随机 latent 样本结构。
+    """功能：定义当前 formal probe 阶段的 latent 样本结构。
 
-    Stage-0 latent sample model.
+    Latent sample model for the active formal probe stage.
 
     Args:
         sample_id: Stable sample identifier.
@@ -110,6 +111,11 @@ class LatentSample:
         latent_generation_seed_random: Deterministic latent seed.
         latent_backend_name: Stable latent backend identifier.
         latent_backend_status: Backend scaffold status.
+        latent_artifact_relpath: Relative artifact path for the tensor payload.
+        latent_artifact_path: Absolute artifact path for runtime-only tensor access.
+        latent_artifact_digest: File digest for the tensor artifact.
+        mechanism_trace: Trace payload accumulated along the sample lifecycle.
+        applied_attack_params: Materialized attack parameters after deterministic selection.
 
     Returns:
         None.
@@ -123,6 +129,12 @@ class LatentSample:
     latent_generation_seed_random: int
     latent_backend_name: str
     latent_backend_status: str
+    latent_artifact_relpath: str | None = None
+    latent_artifact_path: str | None = None
+    latent_artifact_digest: str | None = None
+    run_root_path: str | None = None
+    mechanism_trace: dict[str, Any] | None = None
+    applied_attack_params: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -138,6 +150,7 @@ class DetectionResult:
         failure_reason: Optional failure reason.
         placeholder_fields: Placeholder-governed field names.
         random_fields: Random-trace field names.
+        mechanism_trace: Optional detector-side trace payload.
 
     Returns:
         None.
@@ -149,6 +162,7 @@ class DetectionResult:
     failure_reason: str | None
     placeholder_fields: list[str]
     random_fields: list[str]
+    mechanism_trace: dict[str, Any] | None = None
 
 
 def ensure_non_empty_string(field_value: Any, field_name: str) -> None:
@@ -185,7 +199,10 @@ def build_input_artifact_trace(latent_sample: LatentSample) -> dict[str, Any]:
         "artifact_kind": "latent_tensor",
         "backend_name": latent_sample.latent_backend_name,
         "backend_status": latent_sample.latent_backend_status,
-        "artifact_digest": latent_sample.latent_tensor_digest_random,
+        "artifact_digest": (
+            latent_sample.latent_artifact_digest
+            or latent_sample.latent_tensor_digest_random
+        ),
         "generation_seed_random": latent_sample.latent_generation_seed_random,
     }
 
@@ -406,6 +423,8 @@ def validate_event_score_record(event_score_record: dict[str, Any]) -> None:
 
     if not isinstance(event_score_record["disabled_evidence"], list):
         raise ValueError("disabled_evidence must be a list")
+    if not isinstance(event_score_record["mechanism_trace"], dict):
+        raise ValueError("mechanism_trace must be a dictionary")
     if not isinstance(event_score_record["placeholder_fields"], list):
         raise ValueError("placeholder_fields must be a list")
     if not isinstance(event_score_record["random_fields"], list):
