@@ -80,8 +80,8 @@ class ManifestBuilder:
                 "trajectory_observation_placeholder",
             ],
             "random_fields": [
+                "latent_generation_seed_random",
                 "latent_tensor_digest_random",
-                "score_generation_seed_random",
             ],
         }
         validate_run_manifest_record(manifest_record)

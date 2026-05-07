@@ -40,8 +40,8 @@ def test_release_boundary_doc_places_release_stage_last() -> None:
     assert text.rfind("minimal_release_extraction") > text.rfind("full_paper_protocol")
 
 
-def test_project_contract_stage_remains_protocol_skeleton() -> None:
-    """Validate that the checked-in project stage has not advanced.
+def test_project_contract_stage_matches_active_formal_phase() -> None:
+    """Validate that the checked-in project stage matches the active formal phase.
 
     Args:
         None.
@@ -50,4 +50,4 @@ def test_project_contract_stage_remains_protocol_skeleton() -> None:
         None.
     """
     data = load_json_config(ROOT / "configs" / "project" / "project_contract.json")
-    assert data["project_stage"] == "protocol_skeleton"
+    assert data["project_stage"] == "synthetic_tubelet_sync_probe"

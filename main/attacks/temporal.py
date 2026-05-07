@@ -14,7 +14,7 @@ from main.core.digest import compute_object_digest
 from main.core.schema import LatentSample
 
 
-PROJECT_STAGE = "protocol_skeleton"
+PROJECT_STAGE = "synthetic_tubelet_sync_probe"
 TARGET_CONSTRUCTION_PHASE = "synthetic_tubelet_sync_probe"
 ATTACK_MATRIX_NAME = "temporal_attack_matrix"
 SUPPORTED_TEMPORAL_ATTACK_NAMES = (

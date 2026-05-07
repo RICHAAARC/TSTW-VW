@@ -1,7 +1,32 @@
 {
-  "project_stage": "protocol_skeleton",
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "construction_phase": "synthetic_tubelet_sync_probe",
   "target_construction_phase": "synthetic_tubelet_sync_probe",
   "protocol_name": "fixed_low_fpr_calibrated_detection",
+  "splits": [
+    "dev",
+    "calibration",
+    "test"
+  ],
+  "sample_roles": [
+    "clean_negative",
+    "attacked_negative",
+    "watermarked_positive",
+    "attacked_positive"
+  ],
+  "threshold_protocol": {
+    "score_name": "S_final",
+    "target_fpr_placeholder": 0.001,
+    "calibration_split": "calibration",
+    "calibration_negative_roles": [
+      "clean_negative",
+      "attacked_negative"
+    ],
+    "threshold_quantile_rule": "upper_tail",
+    "test_split": "test",
+    "test_threshold_update_allowed": false,
+    "allow_attack_specific_threshold": false
+  },
   "latent_backend_name": "synthetic_video_latent",
   "latent_distribution": "standard_normal",
   "latent_shape": {

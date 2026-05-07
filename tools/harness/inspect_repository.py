@@ -35,7 +35,10 @@ STAGE_ONE_REQUIRED_PATHS = {
 }
 
 
-def _inspect_next_stage_readiness(root_path: Path) -> dict[str, Any]:
+NEXT_STAGE_TARGET = "real_video_vae_latent_probe"
+
+
+def _inspect_next_stage_readiness(root_path: Path, project_stage: str | None) -> dict[str, Any]:
     """Inspect whether the repository carries the reserved next-stage entry artifacts.
 
     Args:
@@ -44,6 +47,15 @@ def _inspect_next_stage_readiness(root_path: Path) -> dict[str, Any]:
     Returns:
         A readiness payload for the synthetic tubelet sync probe entry contract.
     """
+    if project_stage == "synthetic_tubelet_sync_probe":
+        return {
+            "target_construction_phase": NEXT_STAGE_TARGET,
+            "all_required_paths_present": False,
+            "present_required_path_count": 0,
+            "required_path_count": 0,
+            "required_paths": {},
+        }
+
     required_paths: dict[str, dict[str, Any]] = {}
     present_count = 0
     for artifact_name, relative_path in STAGE_ONE_REQUIRED_PATHS.items():
@@ -104,7 +116,7 @@ def inspect_repository(root: str | Path) -> dict[str, Any]:
         "repository_mode": repository_mode,
         "directory_status": directory_status,
         "project_stage": project_stage,
-        "next_stage_readiness": _inspect_next_stage_readiness(root_path),
+        "next_stage_readiness": _inspect_next_stage_readiness(root_path, project_stage),
     }
 
 

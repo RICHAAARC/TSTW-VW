@@ -1,6 +1,6 @@
 """
-文件用途：验证仓库 intake 检查与阶段 0 目录边界。
-File purpose: Validate repository intake inspection and protocol_skeleton directory boundaries.
+文件用途：验证仓库 intake 检查与当前 formal stage 的目录边界。
+File purpose: Validate repository intake inspection and active formal-stage directory boundaries.
 Module type: General module
 """
 
@@ -31,8 +31,8 @@ def test_empty_repository_bootstrap_is_detected(tmp_path: Path) -> None:
     )
 
 
-def test_governed_repository_reports_protocol_skeleton_status() -> None:
-    """Validate that the current repository exposes stage and directory status.
+def test_governed_repository_reports_active_stage_status() -> None:
+    """Validate that the current repository exposes active-stage and directory status.
 
     Args:
         None.
@@ -42,7 +42,7 @@ def test_governed_repository_reports_protocol_skeleton_status() -> None:
     """
     report = inspect_repository(ROOT)
     assert report["repository_mode"] == "governed_repository"
-    assert report["project_stage"] == "protocol_skeleton"
+    assert report["project_stage"] == "synthetic_tubelet_sync_probe"
     assert report["directory_status"]["configs"]["exists"] is True
     assert report["directory_status"]["docs"]["exists"] is True
     assert report["directory_status"]["tools"]["exists"] is True
@@ -51,11 +51,8 @@ def test_governed_repository_reports_protocol_skeleton_status() -> None:
     assert report["directory_status"]["paper_workflow"]["exists"] is False
     assert report["directory_status"]["outputs"]["exists"] is False
     next_stage_readiness = report["next_stage_readiness"]
-    assert next_stage_readiness["target_construction_phase"] == "synthetic_tubelet_sync_probe"
-    assert next_stage_readiness["all_required_paths_present"] is True
-    assert (
-        next_stage_readiness["present_required_path_count"]
-        == next_stage_readiness["required_path_count"]
-    )
-    assert next_stage_readiness["required_paths"]["protocol_support_config"]["exists"] is True
-    assert next_stage_readiness["required_paths"]["synthetic_video_latent_module"]["exists"] is True
+    assert next_stage_readiness["target_construction_phase"] == "real_video_vae_latent_probe"
+    assert next_stage_readiness["all_required_paths_present"] is False
+    assert next_stage_readiness["present_required_path_count"] == 0
+    assert next_stage_readiness["required_path_count"] == 0
+    assert next_stage_readiness["required_paths"] == {}

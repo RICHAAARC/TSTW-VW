@@ -1,6 +1,6 @@
 {
-  "project_stage": "protocol_skeleton",
-  "construction_phase": "protocol_skeleton",
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "construction_phase": "synthetic_tubelet_sync_probe",
   "legacy_stage_id": null,
   "method_objects": [
     "temporal_synchronized_tubelet_code",
@@ -36,8 +36,9 @@
     "manifest_builder"
   ],
   "supported_method_variants": [
-    "empty_watermark_method_placeholder",
-    "random_score_detector_random"
+    "frame_prc",
+    "tubelet_only",
+    "tubelet_sync"
   ],
   "core_boundary_policy": {
     "governance_layer_paths": [

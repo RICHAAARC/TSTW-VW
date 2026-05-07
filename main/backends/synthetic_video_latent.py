@@ -17,7 +17,7 @@ from main.core.schema import (
 from main.methods.temporal_tubelet_watermark.interfaces import LatentBackend
 
 
-PROJECT_STAGE = "protocol_skeleton"
+PROJECT_STAGE = "synthetic_tubelet_sync_probe"
 TARGET_CONSTRUCTION_PHASE = "synthetic_tubelet_sync_probe"
 LATENT_BACKEND_NAME = "synthetic_video_latent"
 LATENT_BACKEND_STATUS = "placeholder_runtime"

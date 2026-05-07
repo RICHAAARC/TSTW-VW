@@ -74,7 +74,7 @@ def test_missing_trajectory_evidence_fails() -> None:
 
 
 def test_missing_stage0_method_variant_fails() -> None:
-    """Validate that stage-0 method variants remain frozen in the contract.
+    """Validate that active-stage method variants remain frozen in the contract.
 
     Args:
         None.
@@ -87,7 +87,7 @@ def test_missing_stage0_method_variant_fails() -> None:
     broken["supported_method_variants"] = [
         variant
         for variant in broken["supported_method_variants"]
-        if variant != "random_score_detector_random"
+        if variant != "tubelet_sync"
     ]
     violations = validate_project_contract_data(broken)
     assert any(

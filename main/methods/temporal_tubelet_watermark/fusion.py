@@ -73,6 +73,49 @@ def random_score_linear_fusion_random(evidence_scores: dict[str, float | None]) 
     return round(sum(available_scores) / len(available_scores), 6)
 
 
+def tubelet_score_only(evidence_scores: dict[str, float | None]) -> float:
+    """功能：返回 tubelet 分支分数作为最终分数。
+
+    Return the tubelet score as the governed final score.
+
+    Args:
+        evidence_scores: Governed evidence score payload.
+
+    Returns:
+        The tubelet-only final score.
+    """
+    if not isinstance(evidence_scores, dict):
+        raise TypeError("evidence_scores must be a dictionary")
+    tubelet_score = evidence_scores.get("S_tubelet")
+    if tubelet_score is None:
+        return 0.0
+    return round(float(tubelet_score), 6)
+
+
+def calibrated_tubelet_sync(evidence_scores: dict[str, float | None]) -> float:
+    """功能：融合 tubelet 与 sync 分支分数。
+
+    Fuse the tubelet and synchronization scores for the formal synthetic probe.
+
+    Args:
+        evidence_scores: Governed evidence score payload.
+
+    Returns:
+        The fused final score.
+    """
+    if not isinstance(evidence_scores, dict):
+        raise TypeError("evidence_scores must be a dictionary")
+    tubelet_score = evidence_scores.get("S_tubelet")
+    sync_score = evidence_scores.get("S_sync")
+    if tubelet_score is None and sync_score is None:
+        return 0.0
+    if tubelet_score is None:
+        return round(float(sync_score), 6)
+    if sync_score is None:
+        return round(float(tubelet_score), 6)
+    return round((0.65 * float(tubelet_score)) + (0.35 * float(sync_score)), 6)
+
+
 def get_fusion_rule(fusion_rule: str) -> Callable[[dict[str, float | None]], float]:
     """功能：根据配置名解析 fusion 规则。
 
@@ -90,4 +133,8 @@ def get_fusion_rule(fusion_rule: str) -> Callable[[dict[str, float | None]], flo
         return constant_zero_fusion_placeholder
     if fusion_rule == "random_score_linear_fusion_random":
         return random_score_linear_fusion_random
+    if fusion_rule == "tubelet_score_only":
+        return tubelet_score_only
+    if fusion_rule == "calibrated_tubelet_sync":
+        return calibrated_tubelet_sync
     raise ValueError(f"unsupported fusion_rule: {fusion_rule}")

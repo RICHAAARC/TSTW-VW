@@ -6,10 +6,10 @@
 
 ## Current Stage
 
-- `project_stage`: `protocol_skeleton`
-- 当前阶段允许构建阶段 0 所需的 `main/` 代码骨架、配置、文档、审计与测试。
-- 当前阶段允许实现 placeholder / random 驱动的最小 protocol runtime，用于冻结 records、thresholds、manifest 与 table rebuild 口径。
-- 当前阶段不得进入真实算法实现、真实模型接入、真实视频生成流程。
+- `project_stage`: `synthetic_tubelet_sync_probe`
+- 当前阶段允许在既有 protocol core 上运行 synthetic video latent、temporal attack matrix 与 `frame_prc` / `tubelet_only` / `tubelet_sync` 三个正式 method variant。
+- 当前阶段允许实现 synthetic / placeholder 驱动的最小 mechanism runtime，用于冻结 records、thresholds、manifest、table rebuild 与机制追踪口径。
+- 当前阶段不得进入真实 watermark 算法实现、真实 DiT / Flow Matching / VAE 接入、真实视频生成流程。
 
 ## Ordered Semantic Stages
 

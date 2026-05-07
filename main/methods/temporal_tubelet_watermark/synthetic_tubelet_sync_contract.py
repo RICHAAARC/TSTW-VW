@@ -7,10 +7,10 @@ Module type: Semi-general module
 from __future__ import annotations
 
 
-PROJECT_STAGE = "protocol_skeleton"
+PROJECT_STAGE = "synthetic_tubelet_sync_probe"
 TARGET_CONSTRUCTION_PHASE = "synthetic_tubelet_sync_probe"
 METHOD_FAMILY = "temporal_tubelet_watermark"
-METHOD_STATUS = "reserved_for_next_stage"
+METHOD_STATUS = "formal_synthetic_probe"
 SUPPORTED_METHOD_VARIANTS = (
     "frame_prc",
     "tubelet_only",

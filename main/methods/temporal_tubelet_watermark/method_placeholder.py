@@ -13,6 +13,7 @@ from main.core.schema import DetectionResult, LatentSample
 from main.methods.temporal_tubelet_watermark.evidence import (
     EmptyEvidenceExtractorPlaceholder,
     RandomEvidenceExtractorRandom,
+    SyntheticProbeEvidenceExtractor,
 )
 from main.methods.temporal_tubelet_watermark.fusion import build_disabled_evidence
 from main.methods.temporal_tubelet_watermark.interfaces import WatermarkMethod
@@ -221,6 +222,27 @@ class RandomScoreDetectorRandom(BaseStageZeroWatermarkMethod):
         return random_fields
 
 
+class SyntheticProbeWatermarkMethod(BaseStageZeroWatermarkMethod):
+    """功能：提供 formal synthetic probe 的最小方法运行时。
+
+    Minimal watermark method runtime for the formal synthetic probe stage.
+
+    Args:
+        runtime_config: Parsed method runtime config.
+
+    Returns:
+        None.
+    """
+
+    def __init__(self, runtime_config: MethodRuntimeConfig) -> None:
+        super().__init__(runtime_config)
+        self._evidence_extractor = SyntheticProbeEvidenceExtractor(
+            runtime_config.method_variant,
+            runtime_config.enabled_evidence,
+            runtime_config.fusion_rule,
+        )
+
+
 def build_method_runtime_config(method_config: dict[str, Any]) -> MethodRuntimeConfig:
     """功能：从 JSON 配置构建方法运行时配置。
 
@@ -235,23 +257,43 @@ def build_method_runtime_config(method_config: dict[str, Any]) -> MethodRuntimeC
     if not isinstance(method_config, dict):
         raise TypeError("method_config must be a dictionary")
 
-    enabled_evidence = method_config.get("enabled_evidence")
-    if not isinstance(enabled_evidence, dict):
-        raise ValueError("enabled_evidence must be a dictionary")
     for field_name in ("method_family", "method_variant", "method_status", "fusion_rule"):
         field_value = method_config.get(field_name)
         if not isinstance(field_value, str) or not field_value:
             raise ValueError(f"{field_name} must be a non-empty string")
 
+    enabled_evidence = method_config.get("enabled_evidence")
+    if isinstance(enabled_evidence, dict):
+        normalized_evidence = {
+            "tubelet": bool(enabled_evidence.get("tubelet", False)),
+            "sync": bool(enabled_evidence.get("sync", False)),
+            "trajectory": bool(enabled_evidence.get("trajectory", False)),
+        }
+    elif all(
+        field_name in method_config
+        for field_name in (
+            "enable_frame_prc",
+            "enable_tubelet",
+            "enable_sync",
+            "enable_trajectory",
+        )
+    ):
+        normalized_evidence = {
+            "tubelet": bool(method_config.get("enable_frame_prc", False))
+            or bool(method_config.get("enable_tubelet", False)),
+            "sync": bool(method_config.get("enable_sync", False)),
+            "trajectory": bool(method_config.get("enable_trajectory", False)),
+        }
+    else:
+        raise ValueError(
+            "method config must provide enabled_evidence or stage-one evidence switches"
+        )
+
     return MethodRuntimeConfig(
         method_family=method_config["method_family"],
         method_variant=method_config["method_variant"],
         method_status=method_config["method_status"],
-        enabled_evidence={
-            "tubelet": bool(enabled_evidence.get("tubelet", False)),
-            "sync": bool(enabled_evidence.get("sync", False)),
-            "trajectory": bool(enabled_evidence.get("trajectory", False)),
-        },
+        enabled_evidence=normalized_evidence,
         fusion_rule=method_config["fusion_rule"],
         score_generation_seed_random=method_config.get("score_generation_seed_random"),
     )
@@ -273,4 +315,6 @@ def build_method_from_config(method_config: dict[str, Any]) -> WatermarkMethod:
         return EmptyWatermarkMethodPlaceholder(runtime_config)
     if runtime_config.method_variant == "random_score_detector_random":
         return RandomScoreDetectorRandom(runtime_config)
+    if runtime_config.method_variant in {"frame_prc", "tubelet_only", "tubelet_sync"}:
+        return SyntheticProbeWatermarkMethod(runtime_config)
     raise ValueError(f"unsupported method_variant: {runtime_config.method_variant}")

@@ -1,5 +1,5 @@
 {
-  "project_stage": "protocol_skeleton",
+  "project_stage": "synthetic_tubelet_sync_probe",
   "target_construction_phase": "synthetic_tubelet_sync_probe",
   "ablation_name": "synthetic_tubelet_sync_ablation",
   "shared_protocol_name": "fixed_low_fpr_calibrated_detection",

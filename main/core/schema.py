@@ -1,6 +1,6 @@
 """
-文件用途：定义阶段 0 协议骨架所需的枚举、样本结构与记录校验。
-File purpose: Define the stage-0 protocol schema, sample models, and record validators.
+文件用途：定义当前 formal probe 阶段所需的枚举、样本结构与记录校验。
+File purpose: Define the active formal-probe protocol schema, sample models, and record validators.
 Module type: General module
 """
 
@@ -25,7 +25,7 @@ NEGATIVE_SAMPLE_ROLES = {"clean_negative", "attacked_negative"}
 POSITIVE_SAMPLE_ROLES = {"watermarked_positive", "attacked_positive"}
 EVIDENCE_SCORE_NAMES = set(EVIDENCE_SCORE_ORDER)
 
-CONSTRUCTION_PHASE = "protocol_skeleton"
+CONSTRUCTION_PHASE = "synthetic_tubelet_sync_probe"
 PROTOCOL_NAME = "fixed_low_fpr_calibrated_detection"
 IDENTITY_ATTACK_NAME = "identity_attack_placeholder"
 DEFAULT_LATENT_SHAPE = (16, 4, 32, 32)
@@ -469,7 +469,9 @@ def validate_run_manifest_record(run_manifest_record: dict[str, Any]) -> None:
         raise ValueError(f"missing run_manifest_record fields: {sorted(missing_fields)}")
 
     if run_manifest_record["construction_phase"] != CONSTRUCTION_PHASE:
-        raise ValueError("run_manifest_record construction_phase must equal protocol_skeleton")
+        raise ValueError(
+            "run_manifest_record construction_phase must equal synthetic_tubelet_sync_probe"
+        )
     if run_manifest_record["protocol_name"] != PROTOCOL_NAME:
         raise ValueError(
             "run_manifest_record protocol_name must equal fixed_low_fpr_calibrated_detection"

@@ -61,10 +61,7 @@ REQUIRED_PROTOCOL_RUNTIME_OBJECTS = {
     "table_builder",
     "manifest_builder",
 }
-REQUIRED_SUPPORTED_METHOD_VARIANTS = {
-    "empty_watermark_method_placeholder",
-    "random_score_detector_random",
-}
+REQUIRED_SUPPORTED_METHOD_VARIANTS = set(SYNTHETIC_TUBELET_SYNC_METHOD_VARIANTS)
 REQUIRED_GOVERNANCE_LAYER_PATHS = {
     "tools/harness",
     ".codex",
@@ -243,19 +240,19 @@ def validate_project_contract_data(data: dict[str, Any]) -> list[dict[str, str]]
     """
     violations: list[dict[str, str]] = []
 
-    if data.get("project_stage") != "protocol_skeleton":
+    if data.get("project_stage") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
         violations.append(
             {
                 "field": "project_stage",
-                "reason": "project_stage_must_equal_protocol_skeleton",
+                "reason": "project_stage_must_equal_synthetic_tubelet_sync_probe",
             }
         )
 
-    if data.get("construction_phase") != "protocol_skeleton":
+    if data.get("construction_phase") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
         violations.append(
             {
                 "field": "construction_phase",
-                "reason": "construction_phase_must_equal_protocol_skeleton",
+                "reason": "construction_phase_must_equal_synthetic_tubelet_sync_probe",
             }
         )
 
@@ -766,11 +763,11 @@ def validate_synthetic_tubelet_sync_protocol_support_data(
     """
     violations: list[dict[str, str]] = []
 
-    if data.get("project_stage") != "protocol_skeleton":
+    if data.get("project_stage") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
         violations.append(
             {
                 "field": "project_stage",
-                "reason": "stage_one_support_project_stage_must_remain_protocol_skeleton",
+                "reason": "stage_one_support_project_stage_must_equal_synthetic_tubelet_sync_probe",
             }
         )
 
@@ -787,6 +784,76 @@ def validate_synthetic_tubelet_sync_protocol_support_data(
             {
                 "field": "protocol_name",
                 "reason": "stage_one_protocol_name_must_equal_fixed_low_fpr_calibrated_detection",
+            }
+        )
+
+    if data.get("construction_phase") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
+        violations.append(
+            {
+                "field": "construction_phase",
+                "reason": "construction_phase_must_equal_synthetic_tubelet_sync_probe",
+            }
+        )
+
+    if not REQUIRED_SPLITS.issubset(set(data.get("splits", []))):
+        violations.append(
+            {
+                "field": "splits",
+                "reason": "missing_required_stage_one_splits",
+            }
+        )
+
+    if not REQUIRED_SAMPLE_ROLES.issubset(set(data.get("sample_roles", []))):
+        violations.append(
+            {
+                "field": "sample_roles",
+                "reason": "missing_required_stage_one_sample_roles",
+            }
+        )
+
+    threshold_protocol = data.get("threshold_protocol", {})
+    if threshold_protocol.get("calibration_split") != "calibration":
+        violations.append(
+            {
+                "field": "threshold_protocol.calibration_split",
+                "reason": "calibration_split_must_equal_calibration",
+            }
+        )
+    if threshold_protocol.get("score_name") != "S_final":
+        violations.append(
+            {
+                "field": "threshold_protocol.score_name",
+                "reason": "score_name_must_equal_s_final",
+            }
+        )
+    if threshold_protocol.get("threshold_quantile_rule") != "upper_tail":
+        violations.append(
+            {
+                "field": "threshold_protocol.threshold_quantile_rule",
+                "reason": "threshold_quantile_rule_must_equal_upper_tail",
+            }
+        )
+    if threshold_protocol.get("test_threshold_update_allowed") is not False:
+        violations.append(
+            {
+                "field": "threshold_protocol.test_threshold_update_allowed",
+                "reason": "test_threshold_updates_must_be_disabled",
+            }
+        )
+    if threshold_protocol.get("allow_attack_specific_threshold") is not False:
+        violations.append(
+            {
+                "field": "threshold_protocol.allow_attack_specific_threshold",
+                "reason": "attack_specific_thresholds_must_be_disabled",
+            }
+        )
+    if not {"clean_negative", "attacked_negative"}.issubset(
+        set(threshold_protocol.get("calibration_negative_roles", []))
+    ):
+        violations.append(
+            {
+                "field": "threshold_protocol.calibration_negative_roles",
+                "reason": "missing_required_calibration_negative_roles",
             }
         )
 
@@ -888,11 +955,11 @@ def validate_temporal_attack_matrix_support_data(
     """
     violations: list[dict[str, str]] = []
 
-    if data.get("project_stage") != "protocol_skeleton":
+    if data.get("project_stage") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
         violations.append(
             {
                 "field": "project_stage",
-                "reason": "temporal_attack_matrix_project_stage_must_remain_protocol_skeleton",
+                "reason": "temporal_attack_matrix_project_stage_must_equal_synthetic_tubelet_sync_probe",
             }
         )
 
@@ -976,11 +1043,11 @@ def validate_synthetic_tubelet_sync_ablation_support_data(
     """
     violations: list[dict[str, str]] = []
 
-    if data.get("project_stage") != "protocol_skeleton":
+    if data.get("project_stage") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
         violations.append(
             {
                 "field": "project_stage",
-                "reason": "stage_one_ablation_project_stage_must_remain_protocol_skeleton",
+                "reason": "stage_one_ablation_project_stage_must_equal_synthetic_tubelet_sync_probe",
             }
         )
 
@@ -1056,11 +1123,11 @@ def validate_synthetic_tubelet_sync_method_config_data(
     """
     violations: list[dict[str, str]] = []
 
-    if data.get("project_stage") != "protocol_skeleton":
+    if data.get("project_stage") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
         violations.append(
             {
                 "field": "project_stage",
-                "reason": "stage_one_method_project_stage_must_remain_protocol_skeleton",
+                "reason": "stage_one_method_project_stage_must_equal_synthetic_tubelet_sync_probe",
             }
         )
 
@@ -1094,7 +1161,7 @@ def validate_synthetic_tubelet_sync_method_config_data(
         violations.append(
             {
                 "field": "method_status",
-                "reason": "method_status_must_equal_reserved_for_next_stage",
+                "reason": "method_status_must_equal_formal_synthetic_probe",
             }
         )
 

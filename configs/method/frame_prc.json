@@ -1,9 +1,9 @@
 {
-  "project_stage": "protocol_skeleton",
+  "project_stage": "synthetic_tubelet_sync_probe",
   "target_construction_phase": "synthetic_tubelet_sync_probe",
   "method_family": "temporal_tubelet_watermark",
   "method_variant": "frame_prc",
-  "method_status": "reserved_for_next_stage",
+  "method_status": "formal_synthetic_probe",
   "enable_frame_prc": true,
   "enable_tubelet": false,
   "enable_sync": false,

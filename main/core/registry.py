@@ -38,6 +38,9 @@ class StageZeroConfigBundle:
     method_config_paths: dict[str, Path]
 
 
+ACTIVE_STAGE_CONSTRUCTION_PHASE = "synthetic_tubelet_sync_probe"
+
+
 def load_json_config(path: str | Path) -> dict[str, Any]:
     """功能：加载 JSON 配置文件。
 
@@ -109,6 +112,91 @@ def load_stage_zero_runtime_configs(repository_root: str | Path) -> dict[str, An
         A dictionary containing loaded config payloads and their paths.
     """
     config_bundle = load_stage_zero_config_bundle(repository_root)
+    return {
+        "bundle": config_bundle,
+        "project_contract": load_json_config(config_bundle.project_contract_path),
+        "protocol_config": load_json_config(config_bundle.protocol_config_path),
+        "artifact_schema": load_json_config(config_bundle.artifact_schema_path),
+        "ablation_config": load_json_config(config_bundle.ablation_config_path),
+        "attack_config": load_json_config(config_bundle.attack_config_path),
+        "method_configs": {
+            method_variant: load_json_config(config_path)
+            for method_variant, config_path in config_bundle.method_config_paths.items()
+        },
+    }
+
+
+def _build_method_config_paths(
+    root_path: Path,
+    method_variants: list[str],
+) -> dict[str, Path]:
+    method_config_paths: dict[str, Path] = {}
+    for method_variant in method_variants:
+        if not isinstance(method_variant, str) or not method_variant:
+            raise ValueError("method_variant entries must be non-empty strings")
+        method_config_paths[method_variant] = (
+            root_path / "configs" / "method" / f"{method_variant}.json"
+        )
+    return method_config_paths
+
+
+def load_active_runtime_config_bundle(repository_root: str | Path) -> StageZeroConfigBundle:
+    """功能：根据正式 construction phase 选择 active runtime 配置集合。
+
+    Build the active runtime config bundle for the current formal construction phase.
+
+    Args:
+        repository_root: Repository root path.
+
+    Returns:
+        A config bundle aligned with the active formal stage.
+    """
+    root_path = Path(repository_root)
+    project_contract_path = root_path / "configs" / "project" / "project_contract.json"
+    project_contract = load_json_config(project_contract_path)
+    construction_phase = project_contract.get("construction_phase")
+
+    if construction_phase == "protocol_skeleton":
+        return load_stage_zero_config_bundle(root_path)
+    if construction_phase != ACTIVE_STAGE_CONSTRUCTION_PHASE:
+        raise ValueError(f"unsupported active construction_phase: {construction_phase}")
+
+    ablation_config_path = (
+        root_path / "configs" / "ablation" / "synthetic_tubelet_sync_ablation.json"
+    )
+    ablation_config = load_json_config(ablation_config_path)
+    method_variants = ablation_config.get("method_variants", [])
+    if not isinstance(method_variants, list) or not method_variants:
+        raise ValueError("ablation method_variants must be a non-empty list")
+
+    return StageZeroConfigBundle(
+        project_contract_path=project_contract_path,
+        protocol_config_path=(
+            root_path / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+        ),
+        artifact_schema_path=(
+            root_path / "configs" / "schema" / "protocol_artifact_schema.json"
+        ),
+        ablation_config_path=ablation_config_path,
+        attack_config_path=(
+            root_path / "configs" / "attacks" / "temporal_attack_matrix.json"
+        ),
+        method_config_paths=_build_method_config_paths(root_path, method_variants),
+    )
+
+
+def load_active_runtime_configs(repository_root: str | Path) -> dict[str, Any]:
+    """功能：加载当前 formal stage 的全部 active runtime 配置内容。
+
+    Load the governed config payloads for the active formal runtime.
+
+    Args:
+        repository_root: Repository root path.
+
+    Returns:
+        A dictionary containing loaded config payloads and their paths.
+    """
+    config_bundle = load_active_runtime_config_bundle(repository_root)
     return {
         "bundle": config_bundle,
         "project_contract": load_json_config(config_bundle.project_contract_path),

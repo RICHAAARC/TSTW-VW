@@ -1,5 +1,5 @@
 {
-  "project_stage": "protocol_skeleton",
+  "project_stage": "synthetic_tubelet_sync_probe",
   "target_construction_phase": "synthetic_tubelet_sync_probe",
   "attack_matrix_name": "temporal_attack_matrix",
   "attacks": [
