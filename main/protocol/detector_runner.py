@@ -172,6 +172,8 @@ class ProtocolRunner:
         threshold_record: dict[str, Any] | None,
     ) -> list[dict[str, Any]]:
         event_score_records: list[dict[str, Any]] = []
+        source_sample_cache: dict[tuple[str, str, str], Any] = {}
+        embedded_sample_cache: dict[tuple[str, str, str], Any] = {}
         for event_plan_entry in event_plan:
             if event_plan_entry.split not in allowed_splits:
                 continue
@@ -182,20 +184,31 @@ class ProtocolRunner:
                 event_plan_entry.sample_id,
                 event_plan_entry.sample_role,
             )
-            latent_sample = self._latent_backend.build_sample(
-                source_sample_id,
+            source_sample_key = (
                 event_plan_entry.split,
                 source_sample_role,
+                source_sample_id,
             )
+            latent_sample = source_sample_cache.get(source_sample_key)
+            if latent_sample is None:
+                latent_sample = self._latent_backend.build_sample(
+                    source_sample_id,
+                    event_plan_entry.split,
+                    source_sample_role,
+                )
+                source_sample_cache[source_sample_key] = latent_sample
             working_sample = latent_sample
             if event_plan_entry.sample_role in {"watermarked_positive", "attacked_positive"}:
-                working_sample = method.embed(
-                    latent_sample,
-                    {
-                        "event_sample_id": event_plan_entry.sample_id,
-                        "event_sample_role": event_plan_entry.sample_role,
-                    },
-                )
+                working_sample = embedded_sample_cache.get(source_sample_key)
+                if working_sample is None:
+                    working_sample = method.embed(
+                        latent_sample,
+                        {
+                            "event_sample_id": event_plan_entry.sample_id,
+                            "event_sample_role": event_plan_entry.sample_role,
+                        },
+                    )
+                    embedded_sample_cache[source_sample_key] = working_sample
             attacked_sample = event_plan_entry.attack_object.apply(working_sample)
             detection_result = method.detect(attacked_sample, threshold_record)
             mechanism_trace = dict(attacked_sample.mechanism_trace or {})

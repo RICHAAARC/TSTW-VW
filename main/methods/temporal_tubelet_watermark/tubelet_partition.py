@@ -51,6 +51,7 @@ class TubeletDescriptor:
         height_stop: Exclusive height stop.
         width_start: Inclusive width start.
         width_stop: Exclusive width stop.
+        flat_indices: Precomputed flattened tensor indices for the tubelet payload.
 
     Returns:
         None.
@@ -64,6 +65,7 @@ class TubeletDescriptor:
     height_stop: int
     width_start: int
     width_stop: int
+    flat_indices: tuple[int, ...]
 
 
 def build_tubelet_partition_config(
@@ -184,6 +186,15 @@ def build_tubelet_descriptors(
                         height_stop=height_stop,
                         width_start=width_start,
                         width_stop=width_stop,
+                        flat_indices=_build_flat_indices(
+                            latent_shape,
+                            frame_start,
+                            frame_stop,
+                            height_start,
+                            height_stop,
+                            width_start,
+                            width_stop,
+                        ),
                     )
                 )
                 tubelet_index += 1
@@ -216,7 +227,19 @@ def compute_tubelet_partition_digest(
                 "spatial_stride": list(partition_config.spatial_stride),
                 "allow_partial_tubelet": partition_config.allow_partial_tubelet,
             },
-            "descriptors": [descriptor.__dict__ for descriptor in descriptors],
+            "descriptors": [
+                {
+                    "temporal_index": descriptor.temporal_index,
+                    "tubelet_index": descriptor.tubelet_index,
+                    "frame_start": descriptor.frame_start,
+                    "frame_stop": descriptor.frame_stop,
+                    "height_start": descriptor.height_start,
+                    "height_stop": descriptor.height_stop,
+                    "width_start": descriptor.width_start,
+                    "width_stop": descriptor.width_stop,
+                }
+                for descriptor in descriptors
+            ],
         }
     )
 
@@ -241,37 +264,48 @@ def extract_tubelet_values(
     if not isinstance(tubelet_descriptor, TubeletDescriptor):
         raise TypeError("tubelet_descriptor must be a TubeletDescriptor instance")
 
-    frame_count, channel_count, height, width = tensor_artifact.shape
-    del frame_count
-    values: list[float] = []
-    for frame_index in range(
-        tubelet_descriptor.frame_start, tubelet_descriptor.frame_stop
-    ):
-        for channel_index in range(channel_count):
-            for height_index in range(
-                tubelet_descriptor.height_start,
-                tubelet_descriptor.height_stop,
-            ):
-                for width_index in range(
-                    tubelet_descriptor.width_start,
-                    tubelet_descriptor.width_stop,
-                ):
-                    values.append(
-                        float(
-                            tensor_artifact.values[
-                                _flat_index(
-                                    tensor_artifact.shape,
-                                    frame_index,
-                                    channel_index,
-                                    height_index,
-                                    width_index,
-                                )
-                            ]
-                        )
-                    )
+    values = [
+        float(tensor_artifact.values[flat_index])
+        for flat_index in tubelet_descriptor.flat_indices
+    ]
     if not values:
         raise ValueError("tubelet extraction produced an empty payload")
     return values
+
+
+def dot_tubelet_direction(
+    tensor_artifact: FloatTensorArtifact,
+    tubelet_descriptor: TubeletDescriptor,
+    direction: list[float],
+) -> float:
+    """功能：直接对 tubelet payload 与 direction 做点积。
+
+    Compute the dot product between one tubelet payload and a direction vector.
+
+    Args:
+        tensor_artifact: Flattened tensor artifact.
+        tubelet_descriptor: Tubelet descriptor.
+        direction: Flattened direction vector.
+
+    Returns:
+        The payload-direction dot product.
+    """
+    if not isinstance(tensor_artifact, FloatTensorArtifact):
+        raise TypeError("tensor_artifact must be a FloatTensorArtifact instance")
+    if not isinstance(tubelet_descriptor, TubeletDescriptor):
+        raise TypeError("tubelet_descriptor must be a TubeletDescriptor instance")
+    if not isinstance(direction, list) or not direction:
+        raise ValueError("direction must be a non-empty list")
+    if len(direction) != len(tubelet_descriptor.flat_indices):
+        raise ValueError("direction length does not match the tubelet payload size")
+
+    return sum(
+        float(tensor_artifact.values[flat_index]) * float(direction_value)
+        for flat_index, direction_value in zip(
+            tubelet_descriptor.flat_indices,
+            direction,
+        )
+    )
 
 
 def add_tubelet_delta_in_place(
@@ -302,35 +336,14 @@ def add_tubelet_delta_in_place(
     if not isinstance(scale, (int, float)):
         raise TypeError("scale must be numeric")
 
-    direction_index = 0
-    _, channel_count, _, _ = tensor_artifact.shape
-    for frame_index in range(
-        tubelet_descriptor.frame_start, tubelet_descriptor.frame_stop
-    ):
-        for channel_index in range(channel_count):
-            for height_index in range(
-                tubelet_descriptor.height_start,
-                tubelet_descriptor.height_stop,
-            ):
-                for width_index in range(
-                    tubelet_descriptor.width_start,
-                    tubelet_descriptor.width_stop,
-                ):
-                    flat_index = _flat_index(
-                        tensor_artifact.shape,
-                        frame_index,
-                        channel_index,
-                        height_index,
-                        width_index,
-                    )
-                    tensor_artifact.values[flat_index] = float(
-                        tensor_artifact.values[flat_index]
-                        + (float(scale) * float(direction[direction_index]))
-                    )
-                    direction_index += 1
-
-    if direction_index != len(direction):
+    if len(direction) != len(tubelet_descriptor.flat_indices):
         raise ValueError("direction length does not match the tubelet payload size")
+
+    for flat_index, direction_value in zip(tubelet_descriptor.flat_indices, direction):
+        tensor_artifact.values[flat_index] = float(
+            tensor_artifact.values[flat_index]
+            + (float(scale) * float(direction_value))
+        )
 
 
 def _build_axis_starts(
@@ -356,6 +369,50 @@ def _build_axis_starts(
     if not starts:
         raise ValueError("partition produced no valid tubelet starts")
     return starts
+
+
+def _build_flat_indices(
+    latent_shape: tuple[int, int, int, int],
+    frame_start: int,
+    frame_stop: int,
+    height_start: int,
+    height_stop: int,
+    width_start: int,
+    width_stop: int,
+) -> tuple[int, ...]:
+    _, channel_count, _, _ = latent_shape
+    flat_indices: list[int] = []
+    for frame_index in range(frame_start, frame_stop):
+        for channel_index in range(channel_count):
+            for height_index in range(height_start, height_stop):
+                for width_index in range(width_start, width_stop):
+                    flat_indices.append(
+                        _flat_index(
+                            latent_shape,
+                            frame_index,
+                            channel_index,
+                            height_index,
+                            width_index,
+                        )
+                    )
+    if not flat_indices:
+        raise ValueError("tubelet flat-index construction produced an empty payload")
+    return tuple(flat_indices)
+
+
+def _flat_index(
+    latent_shape: tuple[int, int, int, int],
+    frame_index: int,
+    channel_index: int,
+    height_index: int,
+    width_index: int,
+) -> int:
+    frame_count, channel_count, height, width = latent_shape
+    del frame_count
+    return (
+        (((frame_index * channel_count) + channel_index) * height + height_index) * width
+        + width_index
+    )
 
 
 def _flat_index(

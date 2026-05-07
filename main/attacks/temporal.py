@@ -130,12 +130,13 @@ class TemporalAttackPlaceholder:
             materialized_attack_params,
             attacked_seed,
         )
+        attack_params_digest = compute_object_digest(materialized_attack_params)[:12]
         artifact_relpath = (
             Path("artifacts")
             / "latents"
             / "attacked"
             / self.attack_name
-            / f"{sample.sample_id}_{sample.latent_tensor_digest_random[:12]}.npy"
+            / f"{sample.sample_id}_{sample.latent_tensor_digest_random[:12]}_{attack_params_digest}.npy"
         )
         artifact_path = Path(sample.run_root_path) / artifact_relpath
         write_float_tensor_npy(artifact_path, attacked_shape, attacked_values)
@@ -208,6 +209,11 @@ class TemporalAttackPlaceholder:
             }
 
         if attack_name == "local_clip":
+            clip_length = attack_params.get("clip_length")
+            if isinstance(clip_length, int) and clip_length > 0:
+                return {
+                    "clip_length": int(clip_length),
+                }
             clip_lengths = attack_params.get("clip_lengths", [])
             if not isinstance(clip_lengths, list) or not clip_lengths:
                 raise ValueError("local_clip requires clip_lengths")
@@ -296,10 +302,13 @@ class TemporalAttackPlaceholder:
             }
 
         if self.attack_name == "local_clip":
-            clip_lengths = list(self.attack_params["clip_lengths"])
-            clip_length = clip_lengths[
-                sample.latent_generation_seed_random % len(clip_lengths)
-            ]
+            if "clip_lengths" in self.attack_params:
+                clip_lengths = list(self.attack_params["clip_lengths"])
+                clip_length = clip_lengths[
+                    sample.latent_generation_seed_random % len(clip_lengths)
+                ]
+            else:
+                clip_length = int(self.attack_params["clip_length"])
             max_start = max(0, frame_count - int(clip_length))
             clip_start_candidates = list(range(0, max_start + 1, 4)) or [0]
             clip_start = clip_start_candidates[

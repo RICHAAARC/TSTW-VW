@@ -9,6 +9,8 @@
     "tubelet_only",
     "tubelet_sync"
   ],
+  "tubelet_length_sweep_variant": "tubelet_only",
+  "tubelet_length_sweep": [1, 2, 4, 8, 16],
   "shared_target_fpr": 0.001,
   "shared_table_builder_name": "table_builder"
 }

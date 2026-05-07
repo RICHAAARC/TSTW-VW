@@ -6,3 +6,5 @@ outputs/
 dist/
 build/
 *.pyc
+.tmp*
+tmp*

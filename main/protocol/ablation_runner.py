@@ -96,8 +96,7 @@ class AblationRunner:
 
         ablation_config = self._runtime_configs["ablation_config"]
         method_configs = self._runtime_configs["method_configs"]
-        for method_variant in ablation_config["method_variants"]:
-            method_config = method_configs[method_variant]
+        for method_config in self._build_runtime_method_configs(ablation_config, method_configs):
             variant_event_records, threshold_record = self._protocol_runner.run_method_variant(
                 run_id,
                 event_plan,
@@ -132,6 +131,39 @@ class AblationRunner:
             threshold_records=threshold_records,
             run_manifest=run_manifest,
         )
+
+    def _build_runtime_method_configs(
+        self,
+        ablation_config: dict[str, Any],
+        method_configs: dict[str, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        runtime_method_configs = [
+            dict(method_configs[method_variant])
+            for method_variant in ablation_config["method_variants"]
+        ]
+        sweep_variant = ablation_config.get("tubelet_length_sweep_variant")
+        sweep_lengths = ablation_config.get("tubelet_length_sweep", [])
+        if (
+            isinstance(sweep_variant, str)
+            and sweep_variant in method_configs
+            and isinstance(sweep_lengths, list)
+            and sweep_lengths
+        ):
+            base_config = method_configs[sweep_variant]
+            default_length = int(base_config["tubelet_length"])
+            for tubelet_length in sweep_lengths:
+                if not isinstance(tubelet_length, int) or tubelet_length < 1:
+                    raise ValueError("tubelet_length_sweep entries must be positive integers")
+                if tubelet_length == default_length:
+                    continue
+                derived_method_config = dict(base_config)
+                derived_method_config["base_method_variant"] = sweep_variant
+                derived_method_config["method_variant"] = (
+                    f"{sweep_variant}_lt{int(tubelet_length):02d}"
+                )
+                derived_method_config["tubelet_length"] = int(tubelet_length)
+                runtime_method_configs.append(derived_method_config)
+        return runtime_method_configs
 
     def _resolve_latent_backend(self, protocol_config: dict[str, Any]) -> Any | None:
         if not isinstance(protocol_config, dict):

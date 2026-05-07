@@ -11,6 +11,7 @@ from pathlib import Path
 from main.attacks.temporal import TemporalAttackPlaceholder
 from main.backends.synthetic_video_latent import SyntheticVideoLatentPlaceholder
 from main.methods.temporal_tubelet_watermark.method_placeholder import build_method_from_config
+from main.methods.temporal_tubelet_watermark.synchronization import search_best_offset
 
 
 TUBELET_ONLY_CONFIG = {
@@ -126,3 +127,27 @@ def test_negative_sample_uses_same_sync_search_configuration(tmp_path: Path) -> 
 
     assert detection_result.mechanism_trace["sync_search_enabled"] is True
     assert detection_result.mechanism_trace["sync_ground_truth_offset"] == -8
+
+
+def test_sync_search_range_does_not_expand_from_ground_truth() -> None:
+    """Validate that ground truth is diagnostic-only and does not widen the search range.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    sync_result = search_best_offset(
+        temporal_scores={0: 0.5, 4: 0.25},
+        sync_codes={0: 1, 4: -1, 8: 1},
+        offset_search_min=-2,
+        offset_search_max=2,
+        ground_truth_offset=-8,
+    )
+
+    assert sync_result["sync_search_space_size"] == 5
+    assert sync_result["sync_peak_rank"] is None
+    assert sync_result["sync_alignment_error"] == abs(
+        sync_result["sync_estimated_offset"] - (-8)
+    )

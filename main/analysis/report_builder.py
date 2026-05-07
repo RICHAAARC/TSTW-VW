@@ -17,6 +17,10 @@ from main.protocol.evaluator import (
 from main.core.records import build_output_paths
 
 
+REQUIRED_LOCAL_CLIP_LENGTHS = {4, 8, 12, 16}
+REQUIRED_TUBELET_LENGTHS = {1, 2, 4, 8, 16}
+
+
 class ReportBuilder:
     """功能：构建 stage-one method validation report。
 
@@ -57,6 +61,9 @@ class ReportBuilder:
     ) -> str:
         variant_names = sorted({row["method_variant"] for row in main_rows})
         attack_names = sorted({row["attack_name"] for row in main_rows})
+        target_fprs = sorted({float(row["target_fpr"]) for row in main_rows})
+        local_clip_lengths = sorted({int(row["clip_length"]) for row in local_clip_rows})
+        tubelet_lengths = sorted({int(row["tubelet_length"]) for row in tubelet_rows})
         tubelet_only_gain = _compare_variant_attack_metric(
             main_rows,
             left_variant="tubelet_only",
@@ -69,6 +76,18 @@ class ReportBuilder:
             right_variant="tubelet_only",
             attack_names=["temporal_crop", "local_clip"],
         )
+        clean_negative_fpr_controlled = _rows_metric_meets_target(
+            main_rows,
+            metric_name="clean_negative_FPR",
+        )
+        attacked_negative_fpr_controlled = _rows_metric_meets_target(
+            main_rows,
+            metric_name="attacked_negative_FPR",
+        )
+        max_attacked_negative_fpr, worst_attacked_negative_fpr_variants = _worst_variant_metric(
+            main_rows,
+            metric_name="attacked_negative_FPR",
+        )
         return "\n".join(
             [
                 "# Method Validation Report",
@@ -76,12 +95,25 @@ class ReportBuilder:
                 "## Summary",
                 f"- method_variants: {', '.join(variant_names)}",
                 f"- attack_names: {', '.join(attack_names)}",
+                f"- target_fprs: {_format_number_sequence(target_fprs)}",
                 f"- local_clip_curve_rows: {len(local_clip_rows)}",
                 f"- tubelet_length_rows: {len(tubelet_rows)}",
+                "",
+                "## Coverage Checks",
+                f"- required_local_clip_lengths_present: {str(set(local_clip_lengths) == REQUIRED_LOCAL_CLIP_LENGTHS).lower()}",
+                f"- local_clip_lengths: {_format_number_sequence(local_clip_lengths)}",
+                f"- required_tubelet_length_sweep_present: {str(set(tubelet_lengths) == REQUIRED_TUBELET_LENGTHS).lower()}",
+                f"- tubelet_lengths: {_format_number_sequence(tubelet_lengths)}",
                 "",
                 "## Mechanism Checks",
                 f"- tubelet_only_beats_frame_prc_under_some_attack: {str(tubelet_only_gain).lower()}",
                 f"- tubelet_sync_beats_tubelet_only_under_temporal_crop_or_local_clip: {str(tubelet_sync_gain).lower()}",
+                "",
+                "## Threshold Checks",
+                f"- clean_negative_fpr_meets_target_for_all_variants: {str(clean_negative_fpr_controlled).lower()}",
+                f"- attacked_negative_fpr_meets_target_for_all_variants: {str(attacked_negative_fpr_controlled).lower()}",
+                f"- max_attacked_negative_fpr: {max_attacked_negative_fpr}",
+                f"- worst_attacked_negative_fpr_variants: {', '.join(worst_attacked_negative_fpr_variants)}",
                 "",
                 "## Rebuildability",
                 "- records_to_tables: true",
@@ -111,3 +143,36 @@ def _compare_variant_attack_metric(
         if float(left_row["attacked_positive_TPR"]) > float(right_row["attacked_positive_TPR"]):
             return True
     return False
+
+
+def _rows_metric_meets_target(main_rows: list[dict[str, Any]], metric_name: str) -> bool:
+    return all(float(row[metric_name]) <= float(row["target_fpr"]) for row in main_rows)
+
+
+def _worst_variant_metric(
+    main_rows: list[dict[str, Any]],
+    metric_name: str,
+) -> tuple[float, list[str]]:
+    variant_metric_map: dict[str, float] = {}
+    for row in main_rows:
+        method_variant = str(row["method_variant"])
+        metric_value = float(row[metric_name])
+        variant_metric_map[method_variant] = max(
+            variant_metric_map.get(method_variant, 0.0),
+            metric_value,
+        )
+    if not variant_metric_map:
+        return 0.0, []
+    worst_metric = round(max(variant_metric_map.values()), 6)
+    worst_variants = sorted(
+        method_variant
+        for method_variant, metric_value in variant_metric_map.items()
+        if metric_value == worst_metric
+    )
+    return worst_metric, worst_variants
+
+
+def _format_number_sequence(values: list[int] | list[float]) -> str:
+    if not values:
+        return "none"
+    return ", ".join(str(value) for value in values)

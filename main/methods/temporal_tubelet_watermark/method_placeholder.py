@@ -36,6 +36,8 @@ class MethodRuntimeConfig:
         method_status: Stage-0 scaffold status.
         enabled_evidence: Evidence enablement mapping.
         fusion_rule: Governed fusion rule name.
+        tubelet_length: Optional tubelet length for formal stage runtime variants.
+        base_method_variant: Optional base method variant for derived runtime variants.
         score_generation_seed_random: Optional random score seed.
 
     Returns:
@@ -47,6 +49,8 @@ class MethodRuntimeConfig:
     method_status: str
     enabled_evidence: dict[str, bool]
     fusion_rule: str
+    tubelet_length: int | None = None
+    base_method_variant: str | None = None
     score_generation_seed_random: int | None = None
 
 
@@ -241,19 +245,23 @@ class SyntheticProbeWatermarkMethod(BaseStageZeroWatermarkMethod):
 
     def __init__(self, runtime_config: MethodRuntimeConfig) -> None:
         super().__init__(runtime_config)
+        base_method_variant = runtime_config.base_method_variant or runtime_config.method_variant
+        if runtime_config.tubelet_length is None:
+            raise ValueError("synthetic probe methods require tubelet_length")
         self._method_config = {
             "method_family": runtime_config.method_family,
             "method_variant": runtime_config.method_variant,
+            "base_method_variant": base_method_variant,
             "method_status": runtime_config.method_status,
-            "tubelet_length": 1 if runtime_config.method_variant == "frame_prc" else 4,
-            "enable_frame_prc": runtime_config.method_variant == "frame_prc",
+            "tubelet_length": int(runtime_config.tubelet_length),
+            "enable_frame_prc": base_method_variant == "frame_prc",
             "enable_tubelet": runtime_config.enabled_evidence["tubelet"],
             "enable_sync": runtime_config.enabled_evidence["sync"],
             "enable_trajectory": runtime_config.enabled_evidence["trajectory"],
             "fusion_rule": runtime_config.fusion_rule,
         }
         self._evidence_extractor = SyntheticProbeEvidenceExtractor(
-            runtime_config.method_variant,
+            base_method_variant,
             self._method_config,
             runtime_config.enabled_evidence,
             runtime_config.fusion_rule,
@@ -268,6 +276,7 @@ class SyntheticProbeWatermarkMethod(BaseStageZeroWatermarkMethod):
             sample,
             self.runtime_config.method_variant,
             build_partition_config_from_method_config(self._method_config),
+            enable_sync=self.runtime_config.enabled_evidence["sync"],
             embedding_margin=DEFAULT_EMBEDDING_MARGIN,
         )
 
@@ -345,6 +354,8 @@ def build_method_runtime_config(method_config: dict[str, Any]) -> MethodRuntimeC
         method_status=method_config["method_status"],
         enabled_evidence=normalized_evidence,
         fusion_rule=method_config["fusion_rule"],
+        tubelet_length=method_config.get("tubelet_length"),
+        base_method_variant=method_config.get("base_method_variant"),
         score_generation_seed_random=method_config.get("score_generation_seed_random"),
     )
 
@@ -361,10 +372,11 @@ def build_method_from_config(method_config: dict[str, Any]) -> WatermarkMethod:
         A `WatermarkMethod` implementation.
     """
     runtime_config = build_method_runtime_config(method_config)
+    base_method_variant = runtime_config.base_method_variant or runtime_config.method_variant
     if runtime_config.method_variant == "empty_watermark_method_placeholder":
         return EmptyWatermarkMethodPlaceholder(runtime_config)
     if runtime_config.method_variant == "random_score_detector_random":
         return RandomScoreDetectorRandom(runtime_config)
-    if runtime_config.method_variant in {"frame_prc", "tubelet_only", "tubelet_sync"}:
+    if base_method_variant in {"frame_prc", "tubelet_only", "tubelet_sync"}:
         return SyntheticProbeWatermarkMethod(runtime_config)
     raise ValueError(f"unsupported method_variant: {runtime_config.method_variant}")

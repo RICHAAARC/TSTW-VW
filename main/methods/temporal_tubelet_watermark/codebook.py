@@ -85,7 +85,7 @@ def build_codebook_config() -> CodebookConfig:
 def build_tubelet_codebook(
     sample_id: str,
     tubelet_descriptors: list[TubeletDescriptor],
-    vector_length: int,
+    vector_length: int | None,
     codebook_config: CodebookConfig,
     enable_sync: bool,
     reference_temporal_indices: list[int] | None = None,
@@ -97,7 +97,7 @@ def build_tubelet_codebook(
     Args:
         sample_id: Stable source sample identifier.
         tubelet_descriptors: Tubelet descriptor list.
-        vector_length: Flattened tubelet vector length.
+        vector_length: Optional flattened tubelet vector length hint.
         codebook_config: Codebook configuration.
         enable_sync: Whether sync coupling is active.
 
@@ -108,7 +108,9 @@ def build_tubelet_codebook(
         raise ValueError("sample_id must be a non-empty string")
     if not isinstance(tubelet_descriptors, list) or not tubelet_descriptors:
         raise ValueError("tubelet_descriptors must be a non-empty list")
-    if not isinstance(vector_length, int) or vector_length < 1:
+    if vector_length is not None and (
+        not isinstance(vector_length, int) or vector_length < 1
+    ):
         raise ValueError("vector_length must be a positive integer")
     if not isinstance(codebook_config, CodebookConfig):
         raise TypeError("codebook_config must be a CodebookConfig instance")
@@ -132,6 +134,7 @@ def build_tubelet_codebook(
     direction_seed_payload: list[dict[str, int]] = []
 
     for descriptor in tubelet_descriptors:
+        descriptor_vector_length = len(descriptor.flat_indices)
         payload_code = _build_binary_code(
             codebook_config.payload_key,
             sample_id,
@@ -148,7 +151,7 @@ def build_tubelet_codebook(
         )
         directions[descriptor.tubelet_index] = _build_normalized_direction(
             direction_seed,
-            vector_length,
+            descriptor_vector_length,
             codebook_config.direction_normalization,
         )
         direction_seed_payload.append(
@@ -156,6 +159,7 @@ def build_tubelet_codebook(
                 "tubelet_index": descriptor.tubelet_index,
                 "temporal_index": descriptor.temporal_index,
                 "direction_seed": direction_seed,
+                "vector_length": descriptor_vector_length,
             }
         )
 

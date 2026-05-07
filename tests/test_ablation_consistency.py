@@ -6,6 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 from main.core.records import RecordWriter
@@ -34,6 +35,10 @@ def test_active_stage_ablation_variants_share_split_and_attack_matrix(tmp_path: 
     assert method_variants == [
         "frame_prc",
         "tubelet_only",
+        "tubelet_only_lt01",
+        "tubelet_only_lt02",
+        "tubelet_only_lt08",
+        "tubelet_only_lt16",
         "tubelet_sync",
     ]
     assert {event_score_record["target_fpr"] for event_score_record in event_score_records} == {0.001}
@@ -60,3 +65,21 @@ def test_active_stage_ablation_variants_share_split_and_attack_matrix(tmp_path: 
         for method_variant in method_variants
     }
     assert len({tuple(variant_plan) for variant_plan in variant_plans.values()}) == 1
+
+    local_clip_rows = list(
+        csv.DictReader(
+            RecordWriter(output_root).output_paths.local_clip_curve_path.open(
+                encoding="utf-8"
+            )
+        )
+    )
+    assert {int(row["clip_length"]) for row in local_clip_rows} == {4, 8, 12, 16}
+
+    tubelet_rows = list(
+        csv.DictReader(
+            RecordWriter(output_root).output_paths.tubelet_length_ablation_path.open(
+                encoding="utf-8"
+            )
+        )
+    )
+    assert {int(row["tubelet_length"]) for row in tubelet_rows} == {1, 2, 4, 8, 16}

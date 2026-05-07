@@ -308,37 +308,49 @@ def build_temporal_attack_curve_rows(
             attack_records = [
                 record for record in variant_records if record["attack_name"] == attack_name
             ]
-            for sample_role in sorted({record["sample_role"] for record in attack_records}):
-                grouped_records = [
-                    record for record in attack_records if record["sample_role"] == sample_role
+            attack_strengths = sorted(
+                {
+                    _derive_attack_strength(record)
+                    for record in attack_records
+                }
+            )
+            for attack_strength in attack_strengths:
+                strength_records = [
+                    record
+                    for record in attack_records
+                    if _derive_attack_strength(record) == attack_strength
                 ]
-                rows.append(
-                    {
-                        "run_id": grouped_records[0]["run_id"],
-                        "method_variant": method_variant,
-                        "attack_name": attack_name,
-                        "attack_strength": _derive_attack_strength(grouped_records[0]),
-                        "sample_role": sample_role,
-                        "TPR": (
-                            _safe_rate(
-                                sum(1 for record in grouped_records if record["decision"]),
-                                len(grouped_records),
-                            )
-                            if sample_role.endswith("positive")
-                            else None
-                        ),
-                        "FPR": (
-                            _safe_rate(
-                                sum(1 for record in grouped_records if record["decision"]),
-                                len(grouped_records),
-                            )
-                            if sample_role.endswith("negative")
-                            else None
-                        ),
-                        "count": len(grouped_records),
-                        "threshold_id": threshold_map[method_variant]["threshold_id"],
-                    }
-                )
+                for sample_role in sorted({record["sample_role"] for record in strength_records}):
+                    grouped_records = [
+                        record for record in strength_records if record["sample_role"] == sample_role
+                    ]
+                    rows.append(
+                        {
+                            "run_id": grouped_records[0]["run_id"],
+                            "method_variant": method_variant,
+                            "attack_name": attack_name,
+                            "attack_strength": attack_strength,
+                            "sample_role": sample_role,
+                            "TPR": (
+                                _safe_rate(
+                                    sum(1 for record in grouped_records if record["decision"]),
+                                    len(grouped_records),
+                                )
+                                if sample_role.endswith("positive")
+                                else None
+                            ),
+                            "FPR": (
+                                _safe_rate(
+                                    sum(1 for record in grouped_records if record["decision"]),
+                                    len(grouped_records),
+                                )
+                                if sample_role.endswith("negative")
+                                else None
+                            ),
+                            "count": len(grouped_records),
+                            "threshold_id": threshold_map[method_variant]["threshold_id"],
+                        }
+                    )
     return rows
 
 

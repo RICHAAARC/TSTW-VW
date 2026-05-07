@@ -46,14 +46,8 @@ def search_best_offset(
     if offset_search_min > offset_search_max:
         raise ValueError("offset_search_min must not exceed offset_search_max")
 
-    effective_min = offset_search_min
-    effective_max = offset_search_max
-    if ground_truth_offset is not None:
-        effective_min = min(offset_search_min, int(ground_truth_offset))
-        effective_max = max(offset_search_max, int(ground_truth_offset))
-
     offset_scores: dict[int, float] = {}
-    for offset_candidate in range(effective_min, effective_max + 1):
+    for offset_candidate in range(offset_search_min, offset_search_max + 1):
         offset_scores[offset_candidate] = round(
             sum(
                 float(temporal_score)
@@ -72,12 +66,15 @@ def search_best_offset(
     peak_rank = None
     alignment_error = None
     if ground_truth_offset is not None:
-        peak_rank = next(
-            rank
-            for rank, (offset_candidate, _) in enumerate(ranked_offsets, start=1)
-            if offset_candidate == ground_truth_offset
-        )
         alignment_error = abs(best_offset - ground_truth_offset)
+        peak_rank = next(
+            (
+                rank
+                for rank, (offset_candidate, _) in enumerate(ranked_offsets, start=1)
+                if offset_candidate == ground_truth_offset
+            ),
+            None,
+        )
 
     return {
         "sync_search_enabled": True,

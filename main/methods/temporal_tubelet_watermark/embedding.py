@@ -24,7 +24,7 @@ from main.methods.temporal_tubelet_watermark.tubelet_partition import (
     build_tubelet_descriptors,
     build_tubelet_partition_config,
     compute_tubelet_partition_digest,
-    extract_tubelet_values,
+    dot_tubelet_direction,
 )
 
 
@@ -70,7 +70,7 @@ def build_partition_config_from_method_config(
         temporal_stride=temporal_stride,
         spatial_stride=(int(spatial_stride[0]), int(spatial_stride[1])),
         allow_partial_tubelet=bool(
-            tubelet_partition.get("allow_partial_tubelet", False)
+            tubelet_partition.get("allow_partial_tubelet", True)
         ),
     )
 
@@ -80,6 +80,7 @@ def apply_projection_margin_embedding(
     method_variant: str,
     partition_config: TubeletPartitionConfig,
     codebook_config: CodebookConfig | None = None,
+    enable_sync: bool | None = None,
     embedding_margin: float = DEFAULT_EMBEDDING_MARGIN,
 ) -> LatentSample:
     """功能：对输入 sample 应用 projection-margin embedding。
@@ -91,6 +92,7 @@ def apply_projection_margin_embedding(
         method_variant: Governed method variant.
         partition_config: Tubelet partition configuration.
         codebook_config: Optional codebook configuration.
+        enable_sync: Optional override for sync-code coupling.
         embedding_margin: Minimum coded projection margin.
 
     Returns:
@@ -109,16 +111,16 @@ def apply_projection_margin_embedding(
 
     tensor_artifact = read_float_tensor_npy(sample.latent_artifact_path)
     tubelet_descriptors = build_tubelet_descriptors(sample.latent_shape, partition_config)
-    first_vector = extract_tubelet_values(tensor_artifact, tubelet_descriptors[0])
+    vector_length = len(tubelet_descriptors[0].flat_indices)
     resolved_codebook_config = (
         build_codebook_config() if codebook_config is None else codebook_config
     )
     codebook = build_tubelet_codebook(
         sample.sample_id,
         tubelet_descriptors,
-        len(first_vector),
+        vector_length,
         resolved_codebook_config,
-        enable_sync=method_variant == "tubelet_sync",
+        enable_sync=(method_variant.startswith("tubelet_sync") if enable_sync is None else enable_sync),
     )
 
     projection_before_values: list[float] = []
@@ -127,8 +129,11 @@ def apply_projection_margin_embedding(
     for descriptor in tubelet_descriptors:
         direction = codebook.directions[descriptor.tubelet_index]
         code_sign = codebook.combined_codes[descriptor.tubelet_index]
-        tubelet_values = extract_tubelet_values(tensor_artifact, descriptor)
-        coded_projection_before = code_sign * _dot_product(tubelet_values, direction)
+        coded_projection_before = code_sign * dot_tubelet_direction(
+            tensor_artifact,
+            descriptor,
+            direction,
+        )
         projection_before_values.append(coded_projection_before)
         if coded_projection_before < float(embedding_margin):
             delta_scale = float(embedding_margin) - coded_projection_before
@@ -139,11 +144,16 @@ def apply_projection_margin_embedding(
                 delta_scale * code_sign,
             )
             delta_norm_values.append(delta_scale)
+            direction_norm_squared = sum(
+                float(direction_value) * float(direction_value)
+                for direction_value in direction
+            )
+            projection_after_values.append(
+                coded_projection_before + (delta_scale * direction_norm_squared)
+            )
         else:
             delta_norm_values.append(0.0)
-
-        updated_values = extract_tubelet_values(tensor_artifact, descriptor)
-        projection_after_values.append(code_sign * _dot_product(updated_values, direction))
+            projection_after_values.append(coded_projection_before)
 
     artifact_relpath = (
         Path("artifacts")
@@ -195,9 +205,3 @@ def apply_projection_margin_embedding(
         latent_tensor_digest_random=artifact_digest,
         mechanism_trace=mechanism_trace,
     )
-
-
-def _dot_product(left_values: list[float], right_values: list[float]) -> float:
-    if len(left_values) != len(right_values):
-        raise ValueError("dot-product operands must share the same length")
-    return sum(float(left_value) * float(right_value) for left_value, right_value in zip(left_values, right_values))

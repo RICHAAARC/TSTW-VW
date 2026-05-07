@@ -23,9 +23,8 @@ from main.methods.temporal_tubelet_watermark.interfaces import EvidenceExtractor
 from main.methods.temporal_tubelet_watermark.synchronization import search_best_offset
 from main.methods.temporal_tubelet_watermark.tubelet_partition import (
     build_tubelet_descriptors,
-    build_tubelet_partition_config,
     compute_tubelet_partition_digest,
-    extract_tubelet_values,
+    dot_tubelet_direction,
 )
 
 
@@ -161,7 +160,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         partition_config = build_partition_config_from_method_config(self._method_config)
         descriptors = build_tubelet_descriptors(sample.latent_shape, partition_config)
         evidence_scores = build_empty_evidence_scores(0.0)
-        coded_projections, codebook = self._build_coded_projections(
+        payload_coded_projections, codebook = self._build_payload_coded_projections(
             sample,
             tensor_artifact,
             descriptors,
@@ -182,13 +181,14 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             }
         )
 
+        aligned_tubelet_projections = payload_coded_projections
         if self._enabled_evidence.get("tubelet", False):
-            evidence_scores["S_tubelet"] = round(
-                sum(coded_projections) / len(coded_projections),
-                6,
-            )
+            evidence_scores["S_tubelet"] = None
         if self._enabled_evidence.get("sync", False):
-            temporal_scores = self._aggregate_temporal_scores(descriptors, coded_projections)
+            temporal_scores = self._aggregate_temporal_scores(
+                descriptors,
+                payload_coded_projections,
+            )
             sync_result = search_best_offset(
                 temporal_scores,
                 codebook.sync_codes,
@@ -196,6 +196,12 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             )
             evidence_scores["S_sync"] = float(sync_result["sync_score"])
             mechanism_trace.update(sync_result)
+            aligned_tubelet_projections = self._align_tubelet_projections(
+                descriptors,
+                payload_coded_projections,
+                codebook.sync_codes,
+                int(sync_result["sync_estimated_offset"]),
+            )
         else:
             mechanism_trace.update(
                 {
@@ -207,20 +213,26 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                     "sync_search_space_digest": None,
                 }
             )
+        if self._enabled_evidence.get("tubelet", False):
+            evidence_scores["S_tubelet"] = round(
+                sum(aligned_tubelet_projections) / len(aligned_tubelet_projections),
+                6,
+            )
         if self._enabled_evidence.get("trajectory", False):
-            evidence_scores["S_traj"] = self._build_trajectory_score(coded_projections)
+            evidence_scores["S_traj"] = self._build_trajectory_score(
+                aligned_tubelet_projections
+            )
         evidence_scores["S_final"] = self._fusion_callable(evidence_scores)
         validate_evidence_scores(evidence_scores)
         return evidence_scores, mechanism_trace
 
-    def _build_coded_projections(
+    def _build_payload_coded_projections(
         self,
         sample: LatentSample,
         tensor_artifact: object,
         descriptors: list[object],
         partition_config: object,
     ) -> tuple[list[float], object]:
-        first_values = extract_tubelet_values(tensor_artifact, descriptors[0])
         reference_latent_shape = tuple(
             (sample.mechanism_trace or {}).get("reference_latent_shape", sample.latent_shape)
         )
@@ -231,22 +243,23 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         codebook = build_tubelet_codebook(
             sample.sample_id,
             descriptors,
-            len(first_values),
+            len(descriptors[0].flat_indices),
             build_codebook_config(),
             enable_sync=self._enabled_evidence.get("sync", False),
             reference_temporal_indices=[
                 descriptor.frame_start for descriptor in reference_descriptors
             ],
         )
-        coded_projections: list[float] = []
+        payload_coded_projections: list[float] = []
         for descriptor in descriptors:
             direction = codebook.directions[descriptor.tubelet_index]
-            code_sign = codebook.payload_codes[descriptor.tubelet_index]
-            tubelet_values = extract_tubelet_values(tensor_artifact, descriptor)
-            coded_projections.append(
-                self._clip_score(code_sign * self._dot_product(tubelet_values, direction))
+            payload_coded_projections.append(
+                self._clip_score(
+                    codebook.payload_codes[descriptor.tubelet_index]
+                    * dot_tubelet_direction(tensor_artifact, descriptor, direction)
+                )
             )
-        return coded_projections, codebook
+        return payload_coded_projections, codebook
 
     def _aggregate_temporal_scores(
         self,
@@ -264,10 +277,23 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
     def _build_trajectory_score(self, coded_projections: list[float]) -> float:
         return self._clip_score(median(coded_projections))
 
-    def _dot_product(self, left_values: list[float], right_values: list[float]) -> float:
-        if len(left_values) != len(right_values):
-            raise ValueError("dot-product operands must share the same length")
-        return sum(float(left_value) * float(right_value) for left_value, right_value in zip(left_values, right_values))
+    def _align_tubelet_projections(
+        self,
+        descriptors: list[object],
+        payload_coded_projections: list[float],
+        sync_codes: dict[int, int],
+        estimated_offset: int,
+    ) -> list[float]:
+        return [
+            self._clip_score(
+                float(payload_coded_projection)
+                * float(sync_codes.get(descriptor.frame_start - estimated_offset, 0))
+            )
+            for descriptor, payload_coded_projection in zip(
+                descriptors,
+                payload_coded_projections,
+            )
+        ]
 
     def _clip_score(self, score: float) -> float:
         return round(max(-1.0, min(1.0, score)), 6)
