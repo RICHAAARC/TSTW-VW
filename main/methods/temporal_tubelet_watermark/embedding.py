@@ -10,7 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from main.core.digest import compute_file_digest
+from main.core.digest import compute_file_digest, compute_object_digest
 from main.core.schema import LatentSample
 from main.core.tensor_artifact import read_float_tensor_npy, write_float_tensor_npy
 from main.methods.temporal_tubelet_watermark.codebook import (
@@ -30,6 +30,7 @@ from main.methods.temporal_tubelet_watermark.tubelet_partition import (
 
 EMBEDDING_RULE = "projection_margin"
 DEFAULT_EMBEDDING_MARGIN = 0.25
+_EMBEDDED_SAMPLE_CACHE: dict[tuple[str, str], LatentSample] = {}
 
 
 def build_partition_config_from_method_config(
@@ -109,6 +110,27 @@ def apply_projection_margin_embedding(
     if sample.latent_artifact_path is None or sample.run_root_path is None:
         raise ValueError("sample must carry latent_artifact_path and run_root_path")
 
+    resolved_enable_sync = (
+        method_variant.startswith("tubelet_sync") if enable_sync is None else bool(enable_sync)
+    )
+    embedding_cache_signature = _build_embedding_cache_signature(
+        sample,
+        partition_config,
+        resolved_enable_sync,
+        float(embedding_margin),
+    )
+    embedded_cache_key = (str(sample.run_root_path), embedding_cache_signature)
+    cached_sample = _EMBEDDED_SAMPLE_CACHE.get(embedded_cache_key)
+    if (
+        cached_sample is not None
+        and cached_sample.latent_artifact_path is not None
+        and Path(cached_sample.latent_artifact_path).exists()
+    ):
+        return cached_sample
+
+    artifact_relpath = _build_embedded_artifact_relpath(embedding_cache_signature)
+    artifact_path = Path(sample.run_root_path) / artifact_relpath
+
     tensor_artifact = read_float_tensor_npy(sample.latent_artifact_path)
     tubelet_descriptors = build_tubelet_descriptors(sample.latent_shape, partition_config)
     vector_length = len(tubelet_descriptors[0].flat_indices)
@@ -120,7 +142,7 @@ def apply_projection_margin_embedding(
         tubelet_descriptors,
         vector_length,
         resolved_codebook_config,
-        enable_sync=(method_variant.startswith("tubelet_sync") if enable_sync is None else enable_sync),
+        enable_sync=resolved_enable_sync,
     )
 
     projection_before_values: list[float] = []
@@ -155,14 +177,6 @@ def apply_projection_margin_embedding(
             delta_norm_values.append(0.0)
             projection_after_values.append(coded_projection_before)
 
-    artifact_relpath = (
-        Path("artifacts")
-        / "latents"
-        / "embedded"
-        / method_variant
-        / f"{sample.sample_id}.npy"
-    )
-    artifact_path = Path(sample.run_root_path) / artifact_relpath
     write_float_tensor_npy(artifact_path, tensor_artifact.shape, tensor_artifact.values)
     artifact_digest = compute_file_digest(artifact_path)
 
@@ -197,11 +211,45 @@ def apply_projection_margin_embedding(
             "payload_digest": codebook.payload_digest,
         }
     )
-    return replace(
+    embedded_sample = replace(
         sample,
         latent_artifact_relpath=artifact_relpath.as_posix(),
         latent_artifact_path=str(artifact_path),
         latent_artifact_digest=artifact_digest,
         latent_tensor_digest_random=artifact_digest,
         mechanism_trace=mechanism_trace,
+    )
+    _EMBEDDED_SAMPLE_CACHE[embedded_cache_key] = embedded_sample
+    return embedded_sample
+
+
+def _build_embedded_artifact_relpath(embedding_cache_signature: str) -> Path:
+    return (
+        Path("artifacts")
+        / "latents"
+        / "embedded"
+        / "shared"
+        / f"{embedding_cache_signature[:32]}.npy"
+    )
+
+
+def _build_embedding_cache_signature(
+    sample: LatentSample,
+    partition_config: TubeletPartitionConfig,
+    enable_sync: bool,
+    embedding_margin: float,
+) -> str:
+    return compute_object_digest(
+        {
+            "sample_id": sample.sample_id,
+            "source_digest": sample.latent_tensor_digest_random,
+            "latent_shape": list(sample.latent_shape),
+            "tubelet_length": partition_config.tubelet_length,
+            "spatial_patch_size": list(partition_config.spatial_patch_size),
+            "temporal_stride": partition_config.temporal_stride,
+            "spatial_stride": list(partition_config.spatial_stride),
+            "allow_partial_tubelet": partition_config.allow_partial_tubelet,
+            "enable_sync": bool(enable_sync),
+            "embedding_margin": round(float(embedding_margin), 6),
+        }
     )

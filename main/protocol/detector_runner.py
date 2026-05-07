@@ -6,8 +6,10 @@ Module type: General module
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from collections.abc import Callable
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from main.backends.synthetic_latent_backend_random import SyntheticLatentBackendRandom
@@ -20,6 +22,66 @@ from main.core.schema import (
 from main.methods.temporal_tubelet_watermark.method_placeholder import build_method_from_config
 from main.protocol.calibrator import ThresholdCalibrator
 from main.protocol.event_builder import EventPlanEntry
+
+
+@dataclass(frozen=True)
+class EventSubsetRuntimeProfile:
+    """功能：记录单个 split 子集的运行时 profile。
+
+    Runtime profile for one split-scoped event subset.
+
+    Args:
+        split: Governed split name.
+        event_count: Number of materialized event records.
+        source_artifact_seconds: Time spent materializing source artifacts.
+        embedded_artifact_seconds: Time spent materializing embedded artifacts.
+        attacked_artifact_seconds: Time spent materializing attacked artifacts.
+        artifact_generation_seconds: Aggregate artifact-generation time.
+        detection_seconds: Time spent in detector execution.
+        total_seconds: Total subset runtime.
+
+    Returns:
+        None.
+    """
+
+    split: str
+    event_count: int
+    source_artifact_seconds: float
+    embedded_artifact_seconds: float
+    attacked_artifact_seconds: float
+    artifact_generation_seconds: float
+    detection_seconds: float
+    total_seconds: float
+
+
+@dataclass(frozen=True)
+class MethodVariantRuntimeProfile:
+    """功能：记录单个方法变体的运行时 profile。
+
+    Runtime profile for one governed method variant.
+
+    Args:
+        method_variant: Governed method variant.
+        runtime_profile: Active runtime profile name.
+        event_count: Number of materialized event records.
+        threshold_calibration_seconds: Time spent in threshold calibration.
+        artifact_generation_seconds: Aggregate artifact-generation time.
+        detection_seconds: Aggregate detector execution time.
+        total_seconds: Total method-variant runtime.
+        split_profiles: Ordered split-level runtime profiles.
+
+    Returns:
+        None.
+    """
+
+    method_variant: str
+    runtime_profile: str
+    event_count: int
+    threshold_calibration_seconds: float
+    artifact_generation_seconds: float
+    detection_seconds: float
+    total_seconds: float
+    split_profiles: tuple[EventSubsetRuntimeProfile, ...]
 
 
 class ProtocolRunner:
@@ -86,7 +148,11 @@ class ProtocolRunner:
         method_config: dict[str, Any],
         protocol_config: dict[str, Any],
         output_root: str | Path | None = None,
-    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        return_runtime_profile: bool = False,
+    ) -> (
+        tuple[list[dict[str, Any]], dict[str, Any]]
+        | tuple[list[dict[str, Any]], dict[str, Any], MethodVariantRuntimeProfile]
+    ):
         """功能：运行阶段 0 的单方法执行闭环。
 
         Run the stage-0 protocol flow for one method variant.
@@ -96,9 +162,12 @@ class ProtocolRunner:
             event_plan: Shared event plan.
             method_config: Parsed method config.
             protocol_config: Parsed protocol config.
+            output_root: Optional run root for artifact materialization.
+            return_runtime_profile: Whether to append the runtime profile to the return tuple.
 
         Returns:
-            A tuple of event score records and a threshold record.
+            A tuple of event score records and a threshold record, with an optional
+            runtime profile when requested.
         """
         if not isinstance(run_id, str) or not run_id:
             raise ValueError("run_id must be a non-empty string")
@@ -120,9 +189,10 @@ class ProtocolRunner:
         if output_root is not None and hasattr(self._latent_backend, "set_output_root"):
             self._latent_backend.set_output_root(Path(output_root))
 
+        variant_start = perf_counter()
         method = self._method_factory(method_config)
         target_fpr = float(protocol_config["threshold_protocol"]["target_fpr_placeholder"])
-        dev_records = self._run_event_subset(
+        dev_records, dev_profile = self._run_event_subset(
             run_id,
             event_plan,
             method,
@@ -132,7 +202,7 @@ class ProtocolRunner:
             allowed_sample_roles=SAMPLE_ROLES,
             threshold_record=None,
         )
-        calibration_records = self._run_event_subset(
+        calibration_records, calibration_profile = self._run_event_subset(
             run_id,
             event_plan,
             method,
@@ -142,13 +212,15 @@ class ProtocolRunner:
             allowed_sample_roles=NEGATIVE_SAMPLE_ROLES,
             threshold_record=None,
         )
+        threshold_start = perf_counter()
         threshold_record = self._threshold_calibrator.calibrate(
             run_id,
             method_config,
             protocol_config,
             calibration_records,
         )
-        test_records = self._run_event_subset(
+        threshold_calibration_seconds = perf_counter() - threshold_start
+        test_records, test_profile = self._run_event_subset(
             run_id,
             event_plan,
             method,
@@ -158,6 +230,29 @@ class ProtocolRunner:
             allowed_sample_roles=SAMPLE_ROLES,
             threshold_record=threshold_record,
         )
+        split_profiles = (dev_profile, calibration_profile, test_profile)
+        variant_runtime_profile = MethodVariantRuntimeProfile(
+            method_variant=method_config["method_variant"],
+            runtime_profile=str(protocol_config.get("runtime_profile", "smoke")),
+            event_count=sum(profile.event_count for profile in split_profiles),
+            threshold_calibration_seconds=round(threshold_calibration_seconds, 6),
+            artifact_generation_seconds=round(
+                sum(profile.artifact_generation_seconds for profile in split_profiles),
+                6,
+            ),
+            detection_seconds=round(
+                sum(profile.detection_seconds for profile in split_profiles),
+                6,
+            ),
+            total_seconds=round(perf_counter() - variant_start, 6),
+            split_profiles=split_profiles,
+        )
+        if return_runtime_profile:
+            return (
+                dev_records + calibration_records + test_records,
+                threshold_record,
+                variant_runtime_profile,
+            )
         return dev_records + calibration_records + test_records, threshold_record
 
     def _run_event_subset(
@@ -170,10 +265,16 @@ class ProtocolRunner:
         allowed_splits: set[str],
         allowed_sample_roles: set[str],
         threshold_record: dict[str, Any] | None,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], EventSubsetRuntimeProfile]:
         event_score_records: list[dict[str, Any]] = []
         source_sample_cache: dict[tuple[str, str, str], Any] = {}
         embedded_sample_cache: dict[tuple[str, str, str], Any] = {}
+        split_name = next(iter(sorted(allowed_splits)))
+        subset_start = perf_counter()
+        source_artifact_seconds = 0.0
+        embedded_artifact_seconds = 0.0
+        attacked_artifact_seconds = 0.0
+        detection_seconds = 0.0
         for event_plan_entry in event_plan:
             if event_plan_entry.split not in allowed_splits:
                 continue
@@ -191,16 +292,19 @@ class ProtocolRunner:
             )
             latent_sample = source_sample_cache.get(source_sample_key)
             if latent_sample is None:
+                source_sample_start = perf_counter()
                 latent_sample = self._latent_backend.build_sample(
                     source_sample_id,
                     event_plan_entry.split,
                     source_sample_role,
                 )
+                source_artifact_seconds += perf_counter() - source_sample_start
                 source_sample_cache[source_sample_key] = latent_sample
             working_sample = latent_sample
             if event_plan_entry.sample_role in {"watermarked_positive", "attacked_positive"}:
                 working_sample = embedded_sample_cache.get(source_sample_key)
                 if working_sample is None:
+                    embedded_sample_start = perf_counter()
                     working_sample = method.embed(
                         latent_sample,
                         {
@@ -208,9 +312,14 @@ class ProtocolRunner:
                             "event_sample_role": event_plan_entry.sample_role,
                         },
                     )
+                    embedded_artifact_seconds += perf_counter() - embedded_sample_start
                     embedded_sample_cache[source_sample_key] = working_sample
+            attacked_sample_start = perf_counter()
             attacked_sample = event_plan_entry.attack_object.apply(working_sample)
+            attacked_artifact_seconds += perf_counter() - attacked_sample_start
+            detection_start = perf_counter()
             detection_result = method.detect(attacked_sample, threshold_record)
+            detection_seconds += perf_counter() - detection_start
             mechanism_trace = dict(attacked_sample.mechanism_trace or {})
             mechanism_trace.update(detection_result.mechanism_trace or {})
             record_random_fields = list(
@@ -249,7 +358,21 @@ class ProtocolRunner:
             }
             validate_event_score_record(event_score_record)
             event_score_records.append(event_score_record)
-        return event_score_records
+        artifact_generation_seconds = (
+            source_artifact_seconds
+            + embedded_artifact_seconds
+            + attacked_artifact_seconds
+        )
+        return event_score_records, EventSubsetRuntimeProfile(
+            split=split_name,
+            event_count=len(event_score_records),
+            source_artifact_seconds=round(source_artifact_seconds, 6),
+            embedded_artifact_seconds=round(embedded_artifact_seconds, 6),
+            attacked_artifact_seconds=round(attacked_artifact_seconds, 6),
+            artifact_generation_seconds=round(artifact_generation_seconds, 6),
+            detection_seconds=round(detection_seconds, 6),
+            total_seconds=round(perf_counter() - subset_start, 6),
+        )
 
     def _resolve_source_identity(self, sample_id: str, sample_role: str) -> tuple[str, str]:
         if sample_role == "attacked_negative":

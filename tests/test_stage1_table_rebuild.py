@@ -116,3 +116,56 @@ def test_stage1_proof_profile_meets_strict_gate(tmp_path: Path) -> None:
     assert "- validation_target_fpr_pass: true" in report_text
     assert "- strict_target_fpr_pass: true" in report_text
     assert "- attacked_negative_fpr_meets_strict_target_for_all_variants: true" in report_text
+
+
+def test_proof_profile_writes_expected_record_counts(tmp_path: Path) -> None:
+    """Validate that the proof profile materializes the expected governed artifact counts.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    output_root = tmp_path / "outputs" / "runs" / "synthetic_tubelet_sync_probe_proof_counts"
+    result = AblationRunner(ROOT).run(
+        output_root,
+        samples_per_role=2,
+        runtime_profile_override="proof",
+        emit_progress_logs=False,
+    )
+    record_writer = RecordWriter(output_root)
+
+    assert len(result.event_score_records) == 1008
+    assert len(result.threshold_records) == 7
+    assert len(result.method_variant_runtime_profiles) == 7
+    assert record_writer.output_paths.report_path.exists()
+    assert record_writer.output_paths.run_manifest_path.exists()
+
+
+def test_proof_profile_supports_single_variant_benchmark_runs(tmp_path: Path) -> None:
+    """Validate that proof runs can target a single derived variant for benchmarking.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    output_root = tmp_path / "outputs" / "runs" / "synthetic_tubelet_sync_probe_lt01_benchmark"
+    result = AblationRunner(ROOT).run(
+        output_root,
+        samples_per_role=2,
+        runtime_profile_override="proof",
+        method_variants=["tubelet_only_lt01"],
+        emit_progress_logs=False,
+    )
+
+    assert len(result.event_score_records) == 144
+    assert len(result.threshold_records) == 1
+    assert [record["method_variant"] for record in result.threshold_records] == [
+        "tubelet_only_lt01"
+    ]
+    assert [profile.method_variant for profile in result.method_variant_runtime_profiles] == [
+        "tubelet_only_lt01"
+    ]

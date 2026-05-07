@@ -26,7 +26,7 @@ from main.core.schema import (
     validate_event_score_record,
     validate_threshold_record,
 )
-from main.protocol.detector_runner import ProtocolRunner
+from main.protocol.detector_runner import MethodVariantRuntimeProfile, ProtocolRunner
 from main.protocol.event_builder import build_event_plan
 from main.protocol.split_builder import build_split_plan
 
@@ -53,6 +53,7 @@ class AblationRunResult:
     event_score_records: list[dict[str, Any]]
     threshold_records: list[dict[str, Any]]
     run_manifest: dict[str, Any]
+    method_variant_runtime_profiles: list[MethodVariantRuntimeProfile]
 
 
 class AblationRunner:
@@ -80,6 +81,8 @@ class AblationRunner:
         output_root: str | Path,
         samples_per_role: int = 2,
         runtime_profile_override: str | None = None,
+        method_variants: list[str] | None = None,
+        emit_progress_logs: bool | None = None,
     ) -> AblationRunResult:
         """功能：运行当前 formal stage 的完整共享协议。
 
@@ -91,12 +94,16 @@ class AblationRunner:
             runtime_profile_override: Optional runtime profile override
                 (one of ``tiny``/``smoke``/``proof``/``formal``) used to drive the
                 latent backend shape selection and tubelet sweep tier.
+            method_variants: Optional explicit method-variant allowlist.
+            emit_progress_logs: Optional override for variant-level progress logging.
 
         Returns:
             A `StageZeroRunResult` instance.
         """
         if not isinstance(samples_per_role, int) or samples_per_role < 1:
             raise ValueError("samples_per_role must be a positive integer")
+        if method_variants is not None:
+            self._validate_method_variant_allowlist(method_variants)
 
         protocol_config = self._resolve_protocol_config(runtime_profile_override)
         runtime_profile = protocol_config.get("runtime_profile")
@@ -119,37 +126,64 @@ class AblationRunner:
         event_plan = build_event_plan(split_plan, attack_registry)
         event_score_records: list[dict[str, Any]] = []
         threshold_records: list[dict[str, Any]] = []
+        method_variant_runtime_profiles: list[MethodVariantRuntimeProfile] = []
 
         ablation_config = self._runtime_configs["ablation_config"]
         method_configs = self._runtime_configs["method_configs"]
+        runtime_method_configs = self._build_runtime_method_configs(
+            ablation_config,
+            method_configs,
+            runtime_profile,
+            method_variants,
+        )
         record_writer = RecordWriter(output_root_path)
         # 中文注释：在阶段 1 性能收口阶段，我们要求 records 与 thresholds
         # 在每个 method variant 完成后立即增量落盘，避免完整 ablation 中途
         # 终止时无任何正式 records / thresholds 可用作可重建证据。
         self._reset_incremental_outputs(record_writer)
-        for method_config in self._build_runtime_method_configs(
-            ablation_config,
-            method_configs,
+        should_emit_progress_logs = self._resolve_emit_progress_logs(
             runtime_profile,
-        ):
-            variant_event_records, threshold_record = protocol_runner.run_method_variant(
+            emit_progress_logs,
+        )
+        total_variants = len(runtime_method_configs)
+        for variant_index, method_config in enumerate(runtime_method_configs, start=1):
+            if should_emit_progress_logs:
+                self._emit_variant_start(
+                    runtime_profile,
+                    variant_index,
+                    total_variants,
+                    method_config,
+                )
+            (
+                variant_event_records,
+                threshold_record,
+                variant_runtime_profile,
+            ) = protocol_runner.run_method_variant(
                 run_id,
                 event_plan,
                 method_config,
                 protocol_config,
                 output_root=output_root_path,
+                return_runtime_profile=True,
             )
             event_score_records.extend(variant_event_records)
             threshold_records.append(threshold_record)
+            method_variant_runtime_profiles.append(variant_runtime_profile)
             self._append_event_score_records(record_writer, variant_event_records)
             self._rewrite_threshold_records(record_writer, threshold_records)
+            if should_emit_progress_logs:
+                self._emit_variant_complete(
+                    runtime_profile,
+                    variant_index,
+                    total_variants,
+                    method_config,
+                    variant_runtime_profile,
+                )
 
         self._table_builder.build_tables(event_score_records, threshold_records, output_root_path)
         run_manifest = self._manifest_builder.build_run_manifest(
             run_id=run_id,
-            method_config_paths=list(
-                self._runtime_configs["bundle"].method_config_paths.values()
-            ),
+            method_config_paths=self._resolve_runtime_method_config_paths(runtime_method_configs),
             protocol_config_path=self._runtime_configs["bundle"].protocol_config_path,
             attack_config_path=self._runtime_configs["bundle"].attack_config_path,
             ablation_config_path=self._runtime_configs["bundle"].ablation_config_path,
@@ -164,6 +198,7 @@ class AblationRunner:
             event_score_records=event_score_records,
             threshold_records=threshold_records,
             run_manifest=run_manifest,
+            method_variant_runtime_profiles=method_variant_runtime_profiles,
         )
 
     def _resolve_protocol_config(
@@ -221,6 +256,7 @@ class AblationRunner:
         ablation_config: dict[str, Any],
         method_configs: dict[str, dict[str, Any]],
         runtime_profile: str | None,
+        method_variants: list[str] | None,
     ) -> list[dict[str, Any]]:
         runtime_method_configs = [
             dict(method_configs[method_variant])
@@ -248,7 +284,25 @@ class AblationRunner:
                 )
                 derived_method_config["tubelet_length"] = int(tubelet_length)
                 runtime_method_configs.append(derived_method_config)
-        return runtime_method_configs
+        if method_variants is None:
+            return runtime_method_configs
+        method_config_by_variant = {
+            runtime_method_config["method_variant"]: runtime_method_config
+            for runtime_method_config in runtime_method_configs
+        }
+        missing_variants = [
+            method_variant
+            for method_variant in method_variants
+            if method_variant not in method_config_by_variant
+        ]
+        if missing_variants:
+            raise ValueError(
+                f"unsupported method_variants: {', '.join(sorted(missing_variants))}"
+            )
+        return [
+            dict(method_config_by_variant[method_variant])
+            for method_variant in method_variants
+        ]
 
     def _resolve_tubelet_length_sweep(
         self,
@@ -273,6 +327,109 @@ class AblationRunner:
         if protocol_config.get("latent_backend_name") != SYNTHETIC_VIDEO_LATENT_BACKEND_NAME:
             return None
         return build_synthetic_video_latent_backend_from_support_config(protocol_config)
+
+    def _resolve_runtime_method_config_paths(
+        self,
+        runtime_method_configs: list[dict[str, Any]],
+    ) -> list[Path]:
+        method_config_paths = self._runtime_configs["bundle"].method_config_paths
+        resolved_paths: list[Path] = []
+        seen_variants: set[str] = set()
+        for method_config in runtime_method_configs:
+            base_method_variant = str(
+                method_config.get("base_method_variant", method_config["method_variant"])
+            )
+            if base_method_variant in seen_variants:
+                continue
+            if base_method_variant not in method_config_paths:
+                raise ValueError(
+                    f"missing method config path for base_method_variant: {base_method_variant}"
+                )
+            seen_variants.add(base_method_variant)
+            resolved_paths.append(method_config_paths[base_method_variant])
+        return resolved_paths
+
+    def _validate_method_variant_allowlist(self, method_variants: list[str]) -> None:
+        if not isinstance(method_variants, list) or not method_variants:
+            raise ValueError("method_variants must be a non-empty list when provided")
+        seen_variants: set[str] = set()
+        for method_variant in method_variants:
+            if not isinstance(method_variant, str) or not method_variant:
+                raise ValueError("method_variants entries must be non-empty strings")
+            if method_variant in seen_variants:
+                raise ValueError("method_variants entries must be unique")
+            seen_variants.add(method_variant)
+
+    def _resolve_emit_progress_logs(
+        self,
+        runtime_profile: str | None,
+        emit_progress_logs: bool | None,
+    ) -> bool:
+        if isinstance(emit_progress_logs, bool):
+            return emit_progress_logs
+        return runtime_profile in {"proof", "formal"}
+
+    def _emit_variant_start(
+        self,
+        runtime_profile: str | None,
+        variant_index: int,
+        total_variants: int,
+        method_config: dict[str, Any],
+    ) -> None:
+        tubelet_length = method_config.get("tubelet_length")
+        print(
+            (
+                f"[{runtime_profile}] variant {variant_index}/{total_variants} start "
+                f"{method_config['method_variant']}"
+                f" tubelet_length={tubelet_length}"
+            ),
+            flush=True,
+        )
+
+    def _emit_variant_complete(
+        self,
+        runtime_profile: str | None,
+        variant_index: int,
+        total_variants: int,
+        method_config: dict[str, Any],
+        variant_runtime_profile: MethodVariantRuntimeProfile,
+    ) -> None:
+        split_summary = ", ".join(
+            (
+                f"{split_profile.split}:events={split_profile.event_count}"
+                f" total={split_profile.total_seconds:.3f}s"
+                f" artifact={split_profile.artifact_generation_seconds:.3f}s"
+                f" detect={split_profile.detection_seconds:.3f}s"
+            )
+            for split_profile in variant_runtime_profile.split_profiles
+        )
+        message = (
+            f"[{runtime_profile}] variant {variant_index}/{total_variants} done "
+            f"{method_config['method_variant']} events={variant_runtime_profile.event_count} "
+            f"total={variant_runtime_profile.total_seconds:.3f}s "
+            f"artifact={variant_runtime_profile.artifact_generation_seconds:.3f}s "
+            f"detect={variant_runtime_profile.detection_seconds:.3f}s "
+            f"threshold={variant_runtime_profile.threshold_calibration_seconds:.3f}s"
+        )
+        if self._is_tubelet_length_sweep_derived_variant(method_config):
+            message += " derived_tubelet_profile=true"
+        print(f"{message} split_profile=[{split_summary}]", flush=True)
+
+    def _is_tubelet_length_sweep_derived_variant(
+        self,
+        method_config: dict[str, Any],
+    ) -> bool:
+        sweep_variant = self._runtime_configs["ablation_config"].get(
+            "tubelet_length_sweep_variant"
+        )
+        if not isinstance(sweep_variant, str) or not sweep_variant:
+            return False
+        base_method_variant = method_config.get("base_method_variant")
+        return (
+            isinstance(base_method_variant, str)
+            and base_method_variant == sweep_variant
+            and method_config["method_variant"] != base_method_variant
+        )
 
     def _resolve_split_role_sample_counts(
         self,
