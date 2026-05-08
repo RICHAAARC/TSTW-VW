@@ -286,8 +286,14 @@ class SyntheticProbeWatermarkMethod(BaseStageZeroWatermarkMethod):
             sample,
             self.runtime_config.method_variant,
             build_partition_config_from_method_config(self._method_config),
-            enable_sync=self.runtime_config.enabled_evidence["sync"],
+            enable_sync=self._sync_code_couples_payload_embedding(),
             embedding_margin=DEFAULT_EMBEDDING_MARGIN,
+        )
+
+    def _sync_code_couples_payload_embedding(self) -> bool:
+        return (
+            self.runtime_config.enabled_evidence["sync"]
+            and self.runtime_config.fusion_rule != "sync_rescue_fusion"
         )
 
     def detect(

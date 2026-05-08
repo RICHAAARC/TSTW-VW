@@ -35,7 +35,18 @@ TUBELET_SYNC_CONFIG = {
     "enable_sync": True,
     "enable_trajectory": False,
     "tubelet_length": 4,
-    "fusion_rule": "calibrated_tubelet_sync",
+    "score_calibration": {
+        "embedding_projection_support_weight": 0.45,
+    },
+    "sync_search": {
+        "offset_search_min": -16,
+        "offset_search_max": 16,
+        "enable_scale_search": True,
+        "scale_candidates": [0.8, 1.0, 1.25],
+        "scale_search_snap_radius": 3,
+    },
+    "lambda_sync": 0.1,
+    "fusion_rule": "sync_rescue_fusion",
 }
 
 

@@ -9,6 +9,8 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+import pytest
+
 from main.core.records import RecordWriter
 from main.protocol.ablation_runner import AblationRunner
 
@@ -16,6 +18,7 @@ from main.protocol.ablation_runner import AblationRunner
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.smoke
 def test_active_stage_ablation_variants_share_split_and_attack_matrix(tmp_path: Path) -> None:
     """Validate that active-stage method variants share split plan, attack matrix, and target FPR.
 

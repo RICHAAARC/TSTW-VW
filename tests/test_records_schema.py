@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
 from main.core.records import RecordWriter
 from main.core.schema import (
     EVIDENCE_SCORE_NAMES,
@@ -23,6 +25,7 @@ from main.protocol.split_builder import build_split_plan
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.smoke
 def test_active_stage_records_schema_is_complete(tmp_path: Path) -> None:
     """Validate that active-stage runtime writes complete governed records.
 

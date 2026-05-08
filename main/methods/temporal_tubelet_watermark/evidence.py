@@ -153,7 +153,6 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         evidence_scores = build_empty_evidence_scores(0.0)
         (
             payload_coded_projections,
-            combined_coded_projections,
             codebook,
             reference_descriptor_map,
         ) = self._build_payload_coded_projections(
@@ -280,7 +279,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         tensor_artifact: object,
         descriptors: list[object],
         partition_config: object,
-    ) -> tuple[list[float], list[float], object, dict[tuple[int, int, int], object]]:
+    ) -> tuple[list[float], object, dict[tuple[int, int, int], object]]:
         reference_latent_shape = tuple(
             (sample.mechanism_trace or {}).get("reference_latent_shape", sample.latent_shape)
         )
@@ -297,7 +296,6 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             enable_sync=self._enabled_evidence.get("sync", False),
         )
         payload_coded_projections: list[float] = []
-        combined_coded_projections: list[float] = []
         for descriptor in descriptors:
             reference_descriptor = self._resolve_reference_descriptor(
                 reference_descriptor_map,
@@ -321,17 +319,10 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                     * raw_projection
                 )
             )
-            combined_coded_projections.append(
-                self._clip_score(
-                    codebook.combined_codes[reference_descriptor.tubelet_index]
-                    * raw_projection
-                )
-            )
-        if not payload_coded_projections or not combined_coded_projections:
+        if not payload_coded_projections:
             raise ValueError("projection extraction produced no valid tubelets")
         return (
             payload_coded_projections,
-            combined_coded_projections,
             codebook,
             reference_descriptor_map,
         )
@@ -421,7 +412,6 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         scale_candidate: float,
     ) -> float:
         candidate_payload_projections: list[float] = []
-        candidate_sync_products: list[float] = []
         for descriptor in descriptors:
             reference_descriptor = self._resolve_reference_descriptor(
                 reference_descriptor_map,
@@ -443,19 +433,13 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 codebook.payload_codes[reference_descriptor.tubelet_index]
                 * raw_projection
             )
-            sync_code = codebook.sync_codes.get(reference_descriptor.frame_start, 0)
             candidate_payload_projections.append(payload_projection)
-            candidate_sync_products.append(float(payload_projection) * float(sync_code))
-        if not candidate_sync_products:
+        if not candidate_payload_projections:
             return -1.0
-        temporal_support = sum(candidate_sync_products) / len(candidate_sync_products)
         projection_support = sum(candidate_payload_projections) / len(
             candidate_payload_projections
         )
-        return round(
-            temporal_support + (0.1 * projection_support),
-            6,
-        )
+        return round(projection_support, 6)
 
     def _build_sync_search_result(
         self,
@@ -574,10 +558,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 continue
             aligned_projections.append(
                 self._clip_score(
-                    (
-                        codebook.payload_codes[reference_descriptor.tubelet_index]
-                        * codebook.sync_codes.get(reference_descriptor.frame_start, 1)
-                    )
+                    codebook.payload_codes[reference_descriptor.tubelet_index]
                     * raw_projection
                 )
             )

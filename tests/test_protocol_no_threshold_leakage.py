@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from main.core.digest import compute_object_digest
 from main.core.records import RecordWriter
 from main.protocol.ablation_runner import AblationRunner
@@ -40,6 +42,7 @@ def _build_threshold_source_payload(records: list[dict[str, object]]) -> list[di
     ]
 
 
+@pytest.mark.smoke
 def test_threshold_source_digest_uses_only_calibration_negatives(tmp_path: Path) -> None:
     """Validate that threshold traceability uses only calibration-negative records.
 
@@ -106,6 +109,7 @@ def test_threshold_source_digest_uses_only_calibration_negatives(tmp_path: Path)
         )
 
 
+@pytest.mark.smoke
 def test_threshold_guard_bands_are_config_declared_and_calibration_only(tmp_path: Path) -> None:
     """Validate that guard-band fields are materialized from protocol config.
 

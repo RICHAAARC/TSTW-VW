@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from main.core.records import RecordWriter
 from main.protocol.ablation_runner import AblationRunner
 
@@ -15,6 +17,7 @@ from main.protocol.ablation_runner import AblationRunner
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.smoke
 def test_stage1_event_records_include_mechanism_trace(tmp_path: Path) -> None:
     """Validate that stage-one event records include the governed mechanism trace.
 
@@ -59,6 +62,7 @@ def test_stage1_event_records_include_mechanism_trace(tmp_path: Path) -> None:
         )
 
 
+@pytest.mark.smoke
 def test_stage1_records_do_not_inline_tensor_payload(tmp_path: Path) -> None:
     """Validate that event records reference tensor artifacts instead of inlining payloads.
 

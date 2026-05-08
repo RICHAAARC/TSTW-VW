@@ -11,8 +11,20 @@ import pytest
 
 from main.attacks.temporal import TemporalAttackPlaceholder
 from main.backends.synthetic_video_latent import SyntheticVideoLatentPlaceholder
+from main.core.tensor_artifact import read_float_tensor_npy
+from main.methods.temporal_tubelet_watermark.codebook import (
+    build_codebook_config,
+    build_tubelet_codebook,
+)
+from main.methods.temporal_tubelet_watermark.embedding import (
+    build_partition_config_from_method_config,
+)
 from main.methods.temporal_tubelet_watermark.fusion import sync_rescue_fusion
 from main.methods.temporal_tubelet_watermark.method_placeholder import build_method_from_config
+from main.methods.temporal_tubelet_watermark.tubelet_partition import (
+    build_tubelet_descriptors,
+    dot_tubelet_direction,
+)
 
 
 TUBELET_ONLY_CONFIG = {
@@ -130,6 +142,31 @@ def test_unaligned_payload_matches_tubelet_only_on_same_sample(tmp_path: Path) -
     assert sync_result.evidence_scores["S_tubelet"] == tubelet_only_result.evidence_scores["S_tubelet"]
 
 
+@pytest.mark.unit
+def test_aligned_payload_uses_payload_code_not_sync_code(tmp_path: Path) -> None:
+    cropped_sample = _build_sync_embedded_crop(tmp_path)
+    sync_result = build_method_from_config(TUBELET_SYNC_CONFIG).detect(
+        cropped_sample,
+        threshold_record=None,
+    )
+    mechanism_trace = sync_result.mechanism_trace
+    pure_payload_score, sync_coupled_payload_score = _rebuild_aligned_payload_scores(
+        cropped_sample,
+        int(mechanism_trace["sync_estimated_offset"]),
+    )
+
+    assert mechanism_trace["S_payload_aligned"] == pure_payload_score
+    assert mechanism_trace["S_payload_aligned"] != sync_coupled_payload_score
+    assert sync_result.evidence_scores["S_sync"] == mechanism_trace["S_sync_positive_margin"]
+    assert mechanism_trace["S_payload_rescue_gain"] == round(
+        max(
+            0.0,
+            mechanism_trace["S_payload_aligned"] - mechanism_trace["S_payload_unaligned"],
+        ),
+        6,
+    )
+
+
 def _build_sync_embedded_crop(tmp_path: Path):
     backend = SyntheticVideoLatentPlaceholder()
     backend.set_output_root(tmp_path)
@@ -143,3 +180,89 @@ def _build_sync_embedded_crop(tmp_path: Path):
         "temporal_crop",
         {"crop_start_candidates": [8], "crop_length": 20},
     ).apply(watermarked_sample)
+
+
+def _rebuild_aligned_payload_scores(cropped_sample, estimated_offset: int) -> tuple[float, float]:
+    tensor_artifact = read_float_tensor_npy(cropped_sample.latent_artifact_path)
+    partition_config = build_partition_config_from_method_config(TUBELET_SYNC_CONFIG)
+    observed_descriptors = build_tubelet_descriptors(
+        cropped_sample.latent_shape,
+        partition_config,
+    )
+    reference_shape = tuple(cropped_sample.mechanism_trace["reference_latent_shape"])
+    reference_descriptors = build_tubelet_descriptors(reference_shape, partition_config)
+    reference_descriptor_map = {
+        (
+            descriptor.frame_start,
+            descriptor.height_start,
+            descriptor.width_start,
+        ): descriptor
+        for descriptor in reference_descriptors
+    }
+    codebook = build_tubelet_codebook(
+        cropped_sample.sample_id,
+        reference_descriptors,
+        len(reference_descriptors[0].flat_indices),
+        build_codebook_config(),
+        enable_sync=True,
+    )
+    pure_payload_projections: list[float] = []
+    sync_coupled_projections: list[float] = []
+    for observed_descriptor in observed_descriptors:
+        reference_descriptor = reference_descriptor_map.get(
+            (
+                observed_descriptor.frame_start - estimated_offset,
+                observed_descriptor.height_start,
+                observed_descriptor.width_start,
+            )
+        )
+        if reference_descriptor is None:
+            continue
+        direction = codebook.directions[reference_descriptor.tubelet_index]
+        raw_projection = _dot_observed_tubelet_direction(
+            tensor_artifact,
+            observed_descriptor,
+            direction,
+        )
+        payload_code = codebook.payload_codes[reference_descriptor.tubelet_index]
+        sync_code = codebook.sync_codes.get(reference_descriptor.frame_start, 1)
+        pure_payload_projections.append(_clip_score(payload_code * raw_projection))
+        sync_coupled_projections.append(
+            _clip_score(payload_code * sync_code * raw_projection)
+        )
+    embedding_support = max(
+        0.0,
+        min(
+            1.0,
+            float(cropped_sample.mechanism_trace["mean_projection_after"])
+            - float(cropped_sample.mechanism_trace["mean_projection_before"]),
+        ),
+    )
+    return (
+        _score_payload_projections(pure_payload_projections, embedding_support),
+        _score_payload_projections(sync_coupled_projections, embedding_support),
+    )
+
+
+def _dot_observed_tubelet_direction(
+    tensor_artifact,
+    descriptor,
+    direction: tuple[float, ...],
+) -> float:
+    if len(descriptor.flat_indices) == len(direction):
+        return dot_tubelet_direction(tensor_artifact, descriptor, direction)
+    return sum(
+        float(tensor_artifact.values[flat_index]) * float(direction_value)
+        for flat_index, direction_value in zip(
+            descriptor.flat_indices,
+            direction[: len(descriptor.flat_indices)],
+        )
+    )
+
+
+def _score_payload_projections(projections: list[float], embedding_support: float) -> float:
+    return _clip_score((sum(projections) / len(projections)) + (embedding_support * 0.45))
+
+
+def _clip_score(score: float) -> float:
+    return round(max(-1.0, min(1.0, score)), 6)
