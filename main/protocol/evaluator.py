@@ -9,6 +9,17 @@ from __future__ import annotations
 from typing import Any
 
 
+PRIMARY_STAGE1_METHOD_VARIANTS = (
+    "frame_prc",
+    "tubelet_only",
+    "tubelet_sync",
+)
+SYNC_RESCUE_PRIMARY_COMPLETION_ATTACKS = (
+    "temporal_crop",
+    "local_clip",
+)
+SPEED_CHANGE_PRIMARY_COMPLETION_SCOPE = False
+
 MAIN_METRICS_COLUMNS = [
     "run_id",
     "method_family",
@@ -90,6 +101,10 @@ TUBELET_LENGTH_ABLATION_COLUMNS = [
     "sync_alignment_error_mean",
     "sync_peak_rank_median",
 ]
+
+
+def is_primary_stage1_method_variant(method_variant: str) -> bool:
+    return method_variant in PRIMARY_STAGE1_METHOD_VARIANTS
 
 
 def _safe_rate(true_count: int, total_count: int) -> float:

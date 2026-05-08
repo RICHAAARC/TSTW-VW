@@ -1,6 +1,5 @@
 """
-文件用途：提供阶段 1 synthetic video latent backend 的受治理默认值与可运行占位实现。
-File purpose: Provide governed defaults and a runnable placeholder implementation for the stage-1 synthetic video latent backend.
+File purpose: Provide governed defaults and runtime implementation for the synthetic video latent backend.
 Module type: Semi-general module
 """
 
@@ -128,9 +127,9 @@ def _normalize_latent_shape(
 
 
 class SyntheticVideoLatentPlaceholder(LatentBackend):
-    """功能：提供阶段 1 synthetic video latent 的 tensor artifact backend。
+    """功能：提供 synthetic video latent 的 tensor artifact backend 兼容类名。
 
-    Tensor-artifact backend for the stage-1 synthetic video latent entry.
+    Compatibility class name for the governed synthetic video latent backend.
 
     Args:
         latent_shape: Governed latent shape.
@@ -282,6 +281,10 @@ class SyntheticVideoLatentPlaceholder(LatentBackend):
                 "sync_peak_rank": None,
                 "sync_search_space_size": None,
                 "sync_search_space_digest": None,
+                "sync_estimated_scale": None,
+                "sync_ground_truth_scale": 1.0,
+                "sync_scale_error": None,
+                "sync_alignment_mode": None,
                 "clip_length": None,
             },
         )
@@ -309,9 +312,12 @@ class SyntheticVideoLatentPlaceholder(LatentBackend):
         )
 
 
+SyntheticVideoLatentBackend = SyntheticVideoLatentPlaceholder
+
+
 def build_synthetic_video_latent_backend_from_support_config(
     support_config: dict[str, Any],
-) -> SyntheticVideoLatentPlaceholder:
+) -> SyntheticVideoLatentBackend:
     """功能：根据 support config 构建 synthetic video latent backend。
 
     Build a synthetic video latent backend from the reserved support config.
@@ -324,7 +330,7 @@ def build_synthetic_video_latent_backend_from_support_config(
     """
     if not isinstance(support_config, dict):
         raise TypeError("support_config must be a dictionary")
-    return SyntheticVideoLatentPlaceholder(
+    return SyntheticVideoLatentBackend(
         latent_shape=_resolve_support_config_latent_shape(support_config),
         latent_generation_seed=support_config.get(
             "latent_generation_seed",

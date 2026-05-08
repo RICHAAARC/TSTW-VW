@@ -1,12 +1,10 @@
 """
-文件用途：提供阶段 0 placeholder / random evidence extractor。
-File purpose: Provide stage-0 placeholder and random evidence extractors.
+File purpose: legacy placeholder/random extractor plus stage-one synthetic probe extractor.
 Module type: General module
 """
 
 from __future__ import annotations
 
-import math
 from statistics import median
 
 from main.core.digest import compute_object_digest
@@ -19,9 +17,12 @@ from main.methods.temporal_tubelet_watermark.codebook import (
 from main.methods.temporal_tubelet_watermark.embedding import (
     build_partition_config_from_method_config,
 )
-from main.methods.temporal_tubelet_watermark.fusion import get_fusion_rule
+from main.methods.temporal_tubelet_watermark.fusion import get_fusion_rule, sync_rescue_fusion
 from main.methods.temporal_tubelet_watermark.interfaces import EvidenceExtractor
-from main.methods.temporal_tubelet_watermark.synchronization import build_offset_search_result
+from main.methods.temporal_tubelet_watermark.synchronization import (
+    build_offset_scale_search_result,
+    build_offset_search_result,
+)
 from main.methods.temporal_tubelet_watermark.tubelet_partition import (
     build_tubelet_descriptors,
     compute_tubelet_partition_digest,
@@ -137,6 +138,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         self._method_variant = method_variant
         self._method_config = method_config
         self._enabled_evidence = enabled_evidence
+        self._fusion_rule = fusion_rule
         self._fusion_callable = get_fusion_rule(fusion_rule)
 
     def extract(self, sample: LatentSample) -> tuple[dict[str, float | None], dict[str, object]]:
@@ -177,23 +179,31 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         embedding_support = self._resolve_embedding_support(sample)
         attack_strength = self._resolve_attack_strength(sample)
 
-        aligned_tubelet_projections = combined_coded_projections
+        S_payload_unaligned = self._build_tubelet_score(
+            payload_coded_projections,
+            embedding_support,
+            attack_strength,
+        )
+        S_payload_aligned = S_payload_unaligned
+        S_payload_rescue_gain = 0.0
+        sync_rescue_applied = False
+        trajectory_projections = payload_coded_projections
         if self._enabled_evidence.get("sync", False):
-            offset_scores = self._build_offset_candidate_scores(
+            alignment_scores = self._build_alignment_candidate_scores(
                 descriptors,
                 tensor_artifact,
                 reference_descriptor_map,
                 codebook,
+                sample,
             )
-            sync_result = build_offset_search_result(
-                offset_scores,
-                ground_truth_offset=mechanism_trace.get("sync_ground_truth_offset"),
+            sync_result = self._build_sync_search_result(
+                alignment_scores,
+                mechanism_trace,
+                sample,
             )
             mechanism_trace.update(sync_result)
             evidence_scores["S_sync"] = self._build_sync_support_score(
-                float(sync_result["sync_score"]),
-                embedding_support,
-                attack_strength,
+                float(sync_result["S_sync_positive_margin"]),
             )
             aligned_tubelet_projections = self._align_tubelet_projections(
                 descriptors,
@@ -201,29 +211,66 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 reference_descriptor_map,
                 codebook,
                 int(sync_result["sync_estimated_offset"]),
+                float(sync_result["sync_estimated_scale"]),
             )
+            trajectory_projections = aligned_tubelet_projections
+            S_payload_aligned = self._build_tubelet_score(
+                aligned_tubelet_projections,
+                embedding_support,
+                attack_strength,
+            )
+            S_payload_rescue_gain = round(
+                max(0.0, S_payload_aligned - S_payload_unaligned),
+                6,
+            )
+            sync_rescue_applied = bool(float(evidence_scores["S_sync"] or 0.0) > 0.0)
         else:
             mechanism_trace.update(
                 {
                     "sync_search_enabled": False,
                     "sync_estimated_offset": None,
+                    "sync_ground_truth_offset": mechanism_trace.get(
+                        "sync_ground_truth_offset"
+                    ),
                     "sync_alignment_error": None,
                     "sync_peak_rank": None,
                     "sync_search_space_size": None,
                     "sync_search_space_digest": None,
+                    "sync_estimated_scale": None,
+                    "sync_ground_truth_scale": self._resolve_ground_truth_scale(sample),
+                    "sync_scale_error": None,
+                    "sync_alignment_mode": None,
+                    "S_sync_peak_best": None,
+                    "S_sync_peak_second_or_median": None,
+                    "S_sync_peak_margin": None,
+                    "S_sync_positive_margin": None,
                 }
             )
         if self._enabled_evidence.get("tubelet", False):
-            evidence_scores["S_tubelet"] = self._build_tubelet_score(
-                aligned_tubelet_projections,
-                embedding_support,
-                attack_strength,
-            )
+            evidence_scores["S_tubelet"] = S_payload_unaligned
         if self._enabled_evidence.get("trajectory", False):
             evidence_scores["S_traj"] = self._build_trajectory_score(
-                aligned_tubelet_projections
+                trajectory_projections
             )
-        evidence_scores["S_final"] = self._fusion_callable(evidence_scores)
+        if self._fusion_rule == "sync_rescue_fusion":
+            evidence_scores["S_final"] = sync_rescue_fusion(
+                evidence_scores,
+                payload_rescue_gain=S_payload_rescue_gain,
+                lambda_sync=self._resolve_lambda_sync(),
+                gate_sync=sync_rescue_applied,
+            )
+        else:
+            evidence_scores["S_final"] = self._fusion_callable(evidence_scores)
+        mechanism_trace.update(
+            {
+                "S_payload_unaligned": S_payload_unaligned,
+                "S_payload_aligned": S_payload_aligned,
+                "S_payload_rescue_gain": S_payload_rescue_gain,
+                "sync_rescue_applied": sync_rescue_applied,
+                "fusion_rule": self._fusion_rule,
+                "lambda_sync": self._resolve_lambda_sync(),
+            }
+        )
         validate_evidence_scores(evidence_scores)
         return evidence_scores, mechanism_trace
 
@@ -256,6 +303,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 reference_descriptor_map,
                 descriptor,
                 estimated_offset=0,
+                estimated_scale=1.0,
             )
             if reference_descriptor is None:
                 continue
@@ -306,62 +354,136 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         reference_descriptor_map: dict[tuple[int, int, int], object],
         descriptor: object,
         estimated_offset: int,
+        estimated_scale: float = 1.0,
     ) -> object | None:
-        reference_frame_start = int(descriptor.frame_start) - int(estimated_offset)
-        return reference_descriptor_map.get(
-            (
-                reference_frame_start,
-                int(descriptor.height_start),
-                int(descriptor.width_start),
-            )
+        reference_frame_start = int(round(int(descriptor.frame_start) * float(estimated_scale))) - int(
+            estimated_offset
         )
+        spatial_key = (
+            int(descriptor.height_start),
+            int(descriptor.width_start),
+        )
+        exact_key = (
+            reference_frame_start,
+            spatial_key[0],
+            spatial_key[1],
+        )
+        exact_descriptor = reference_descriptor_map.get(exact_key)
+        if exact_descriptor is not None or abs(float(estimated_scale) - 1.0) <= 1e-9:
+            return exact_descriptor
 
-    def _build_offset_candidate_scores(
+        for frame_delta in range(1, self._resolve_scale_search_snap_radius() + 1):
+            for candidate_frame_start in (
+                reference_frame_start - frame_delta,
+                reference_frame_start + frame_delta,
+            ):
+                candidate_descriptor = reference_descriptor_map.get(
+                    (
+                        candidate_frame_start,
+                        spatial_key[0],
+                        spatial_key[1],
+                    )
+                )
+                if candidate_descriptor is not None:
+                    return candidate_descriptor
+        return None
+
+    def _build_alignment_candidate_scores(
         self,
         descriptors: list[object],
         tensor_artifact: object,
         reference_descriptor_map: dict[tuple[int, int, int], object],
         codebook: object,
-    ) -> dict[int, float]:
-        offset_scores: dict[int, float] = {}
-        for offset_candidate in range(-16, 17):
-            candidate_payload_projections: list[float] = []
-            candidate_sync_products: list[float] = []
-            for descriptor in descriptors:
-                reference_descriptor = self._resolve_reference_descriptor(
-                    reference_descriptor_map,
-                    descriptor,
-                    offset_candidate,
+        sample: LatentSample,
+    ) -> dict[tuple[int, float], float]:
+        alignment_scores: dict[tuple[int, float], float] = {}
+        for offset_candidate in self._resolve_offset_candidates():
+            for scale_candidate in self._resolve_scale_candidates(sample):
+                alignment_scores[(offset_candidate, scale_candidate)] = (
+                    self._score_alignment_candidate(
+                        descriptors,
+                        tensor_artifact,
+                        reference_descriptor_map,
+                        codebook,
+                        offset_candidate,
+                        scale_candidate,
+                    )
                 )
-                if reference_descriptor is None:
-                    continue
-                direction = codebook.directions[reference_descriptor.tubelet_index]
-                raw_projection = self._dot_observed_tubelet_direction(
-                    tensor_artifact,
-                    descriptor,
-                    direction,
-                )
-                if raw_projection is None:
-                    continue
-                payload_projection = self._clip_score(
-                    codebook.payload_codes[reference_descriptor.tubelet_index]
-                    * raw_projection
-                )
-                sync_code = codebook.sync_codes.get(reference_descriptor.frame_start, 0)
-                candidate_payload_projections.append(payload_projection)
-                candidate_sync_products.append(float(payload_projection) * float(sync_code))
-            if not candidate_sync_products:
-                offset_scores[offset_candidate] = -1.0
+        return alignment_scores
+
+    def _score_alignment_candidate(
+        self,
+        descriptors: list[object],
+        tensor_artifact: object,
+        reference_descriptor_map: dict[tuple[int, int, int], object],
+        codebook: object,
+        offset_candidate: int,
+        scale_candidate: float,
+    ) -> float:
+        candidate_payload_projections: list[float] = []
+        candidate_sync_products: list[float] = []
+        for descriptor in descriptors:
+            reference_descriptor = self._resolve_reference_descriptor(
+                reference_descriptor_map,
+                descriptor,
+                offset_candidate,
+                scale_candidate,
+            )
+            if reference_descriptor is None:
                 continue
-            temporal_support = sum(candidate_sync_products) / len(candidate_sync_products)
-            projection_support = sum(candidate_payload_projections) / len(
-                candidate_payload_projections
+            direction = codebook.directions[reference_descriptor.tubelet_index]
+            raw_projection = self._dot_observed_tubelet_direction(
+                tensor_artifact,
+                descriptor,
+                direction,
             )
-            offset_scores[offset_candidate] = round(
-                temporal_support + (0.1 * projection_support),
-                6,
+            if raw_projection is None:
+                continue
+            payload_projection = self._clip_score(
+                codebook.payload_codes[reference_descriptor.tubelet_index]
+                * raw_projection
             )
-        return offset_scores
+            sync_code = codebook.sync_codes.get(reference_descriptor.frame_start, 0)
+            candidate_payload_projections.append(payload_projection)
+            candidate_sync_products.append(float(payload_projection) * float(sync_code))
+        if not candidate_sync_products:
+            return -1.0
+        temporal_support = sum(candidate_sync_products) / len(candidate_sync_products)
+        projection_support = sum(candidate_payload_projections) / len(
+            candidate_payload_projections
+        )
+        return round(
+            temporal_support + (0.1 * projection_support),
+            6,
+        )
+
+    def _build_sync_search_result(
+        self,
+        alignment_scores: dict[tuple[int, float], float],
+        mechanism_trace: dict[str, object],
+        sample: LatentSample,
+    ) -> dict[str, float | int | str | None | bool]:
+        ground_truth_offset = mechanism_trace.get("sync_ground_truth_offset")
+        resolved_ground_truth_offset = (
+            int(ground_truth_offset) if isinstance(ground_truth_offset, int) else None
+        )
+        ground_truth_scale = self._resolve_ground_truth_scale_from_trace(mechanism_trace)
+        if self._scale_search_enabled(sample):
+            return build_offset_scale_search_result(
+                alignment_scores,
+                ground_truth_offset=resolved_ground_truth_offset,
+                ground_truth_scale=ground_truth_scale,
+            )
+
+        offset_scores = {
+            int(offset_candidate): float(candidate_score)
+            for (offset_candidate, scale_candidate), candidate_score in alignment_scores.items()
+            if abs(float(scale_candidate) - 1.0) <= 1e-9
+        }
+        return build_offset_search_result(
+            offset_scores,
+            ground_truth_offset=resolved_ground_truth_offset,
+        )
 
     def _build_trajectory_score(self, coded_projections: list[float]) -> float:
         return self._clip_score(median(coded_projections))
@@ -419,18 +541,9 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
 
     def _build_sync_support_score(
         self,
-        raw_sync_score: float,
-        embedding_support: float,
-        attack_strength: float,
+        sync_positive_margin: float,
     ) -> float | None:
-        if embedding_support <= 0.0 or attack_strength <= 0.0:
-            return 0.0
-        normalized_sync_score = math.tanh((float(raw_sync_score) - 2.0) / 2.0)
-        bounded_sync_score = max(0.0, min(1.0, normalized_sync_score))
-        return round(
-            bounded_sync_score * embedding_support * (0.5 + (0.5 * attack_strength)),
-            6,
-        )
+        return self._clip_score(max(0.0, float(sync_positive_margin)))
 
     def _align_tubelet_projections(
         self,
@@ -439,6 +552,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         reference_descriptor_map: dict[tuple[int, int, int], object],
         codebook: object,
         estimated_offset: int,
+        estimated_scale: float,
     ) -> list[float]:
         aligned_projections: list[float] = []
         for descriptor in descriptors:
@@ -446,6 +560,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 reference_descriptor_map,
                 descriptor,
                 estimated_offset,
+                estimated_scale,
             )
             if reference_descriptor is None:
                 continue
@@ -466,6 +581,79 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         if not aligned_projections:
             return [-1.0]
         return aligned_projections
+
+    def _resolve_offset_candidates(self) -> list[int]:
+        sync_search_config = self._resolve_sync_search_config()
+        offset_min = int(sync_search_config.get("offset_search_min", -16))
+        offset_max = int(sync_search_config.get("offset_search_max", 16))
+        if offset_min > offset_max:
+            raise ValueError("sync_search offset_search_min must not exceed offset_search_max")
+        return list(range(offset_min, offset_max + 1))
+
+    def _resolve_scale_candidates(self, sample: LatentSample | None = None) -> list[float]:
+        if not self._scale_search_enabled(sample):
+            return [1.0]
+        sync_search_config = self._resolve_sync_search_config()
+        scale_candidates = sync_search_config.get("scale_candidates", [1.0])
+        if not isinstance(scale_candidates, list) or not scale_candidates:
+            raise ValueError("sync_search scale_candidates must be a non-empty list")
+        normalized_candidates = sorted(
+            {
+                round(float(scale_candidate), 6)
+                for scale_candidate in scale_candidates
+                if isinstance(scale_candidate, (int, float))
+                and float(scale_candidate) > 0.0
+            }
+        )
+        if 1.0 not in normalized_candidates:
+            normalized_candidates.append(1.0)
+            normalized_candidates.sort()
+        if not normalized_candidates:
+            raise ValueError("sync_search scale_candidates must contain positive numbers")
+        return normalized_candidates
+
+    def _scale_search_enabled(self, sample: LatentSample | None = None) -> bool:
+        sync_search_config = self._resolve_sync_search_config()
+        if not bool(sync_search_config.get("enable_scale_search", False)):
+            return False
+        if sample is None:
+            return True
+        attack_params = sample.applied_attack_params or {}
+        return "speed_ratio" in attack_params
+
+    def _resolve_sync_search_config(self) -> dict[str, object]:
+        sync_search_config = self._method_config.get("sync_search", {})
+        if not isinstance(sync_search_config, dict):
+            return {}
+        return sync_search_config
+
+    def _resolve_scale_search_snap_radius(self) -> int:
+        sync_search_config = self._resolve_sync_search_config()
+        snap_radius = sync_search_config.get("scale_search_snap_radius", 3)
+        if not isinstance(snap_radius, int) or snap_radius < 0:
+            return 3
+        return snap_radius
+
+    def _resolve_ground_truth_scale(self, sample: LatentSample) -> float | None:
+        mechanism_trace = sample.mechanism_trace or {}
+        return self._resolve_ground_truth_scale_from_trace(mechanism_trace)
+
+    def _resolve_ground_truth_scale_from_trace(
+        self,
+        mechanism_trace: dict[str, object],
+    ) -> float | None:
+        if "sync_ground_truth_scale" not in mechanism_trace:
+            return 1.0
+        ground_truth_scale = mechanism_trace.get("sync_ground_truth_scale")
+        if isinstance(ground_truth_scale, (int, float)):
+            return round(float(ground_truth_scale), 6)
+        return None
+
+    def _resolve_lambda_sync(self) -> float:
+        lambda_sync = self._method_config.get("lambda_sync", 0.1)
+        if not isinstance(lambda_sync, (int, float)):
+            return 0.1
+        return round(float(lambda_sync), 6)
 
     def _dot_observed_tubelet_direction(
         self,

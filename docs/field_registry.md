@@ -41,8 +41,15 @@
 | tubelet_length | protocol | none | true | false | false | Reserved tubelet-length field used by the synthetic tubelet sync method-entry configs. |
 | enabled_evidence | protocol | none | true | false | false | Evidence enablement container that freezes which evidence branches are active. |
 | fusion_rule | protocol | none | true | false | false | Stable fusion rule identifier used by stage-0 threshold and method configs. |
+| lambda_sync | protocol | none | true | false | false | Configured sync-rescue fusion weight applied to calibrated synchronization margin. |
 | score_calibration | protocol | none | true | false | false | Governed method-config container for profile-independent score calibration parameters used by the synthetic tubelet sync probe. |
 | embedding_projection_support_weight | protocol | none | true | false | false | Auditable score-calibration weight that maps recorded projection-margin embedding support into the stage-one tubelet projection score. |
+| sync_search | protocol | none | true | false | false | Governed method-config container for offset and optional scale synchronization search parameters. |
+| offset_search_min | protocol | none | true | false | false | Minimum candidate offset for governed synchronization search. |
+| offset_search_max | protocol | none | true | false | false | Maximum candidate offset for governed synchronization search. |
+| enable_scale_search | protocol | none | true | false | false | Boolean switch allowing offset-scale candidate synchronization search on speed-change samples. |
+| scale_candidates | protocol | none | true | false | false | Governed positive scale candidates used by speed-change synchronization search. |
+| scale_search_snap_radius | protocol | none | true | false | false | Maximum frame-start snap radius used when mapping scaled observed tubelets to reference descriptors. |
 | attack_name | protocol | none | true | false | false | Attack identifier written into stage-0 event records. |
 | attack_params | protocol | none | true | false | false | Attack parameter object written into stage-0 event records. |
 | score_name | protocol | none | true | false | false | Governed score identifier used by threshold records. |
@@ -127,6 +134,18 @@
 | sync_peak_rank | protocol | none | true | false | false | Rank position of the ground-truth offset within the governed search scores. |
 | sync_search_space_size | protocol | none | true | false | false | Candidate count of the governed synchronization offset search space. |
 | sync_search_space_digest | trace | none | true | false | false | Digest of the governed synchronization search-space score map. |
+| sync_estimated_scale | protocol | none | true | false | false | Estimated temporal scale selected by offset-scale synchronization search. |
+| sync_ground_truth_scale | protocol | none | true | false | false | Ground-truth temporal scale materialized by governed temporal attacks when available. |
+| sync_scale_error | protocol | none | true | false | false | Absolute error between estimated and ground-truth temporal scale when both are available. |
+| sync_alignment_mode | protocol | none | true | false | false | Synchronization search mode used for the event, either offset or offset_scale. |
+| S_payload_unaligned | protocol | none | true | false | false | Payload-only score before synchronization alignment, mapped to `S_tubelet` for sync-rescue records. |
+| S_payload_aligned | protocol | none | true | false | false | Payload evidence score after applying the estimated synchronization alignment. |
+| S_payload_rescue_gain | protocol | none | true | false | false | Non-negative score gain from aligned payload evidence over unaligned payload evidence. |
+| S_sync_peak_best | protocol | none | true | false | false | Best raw synchronization candidate score before positive-margin calibration. |
+| S_sync_peak_second_or_median | protocol | none | true | false | false | Second-best or median synchronization score used as the peak-margin baseline. |
+| S_sync_peak_margin | protocol | none | true | false | false | Raw difference between best synchronization peak and its comparison baseline. |
+| S_sync_positive_margin | protocol | none | true | false | false | Non-negative calibrated synchronization peak margin mapped to `S_sync`. |
+| sync_rescue_applied | protocol | none | true | false | false | Boolean trace field showing whether sync-rescue gain was gated into the final score. |
 | clip_length | protocol | none | true | false | false | Materialized local-clip or crop length recorded in the stage-one mechanism trace. |
 | created_at | protocol | none | true | false | false | ISO-8601 timestamp field for governed threshold and manifest records. |
 | table_builder_name | protocol | none | false | false | false | Stable table builder identifier for stage-0 ablation governance. |

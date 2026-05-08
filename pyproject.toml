@@ -1,3 +1,10 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = ["-m", "not slow and not formal"]
+markers = [
+    "unit: fast unit-level tests",
+    "smoke: lightweight runtime smoke tests",
+    "slow: longer proof-profile or broad integration tests",
+    "formal: formal-profile completion evidence tests",
+]

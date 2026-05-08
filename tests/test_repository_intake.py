@@ -49,7 +49,7 @@ def test_governed_repository_reports_active_stage_status() -> None:
     assert report["directory_status"]["tests"]["exists"] is True
     assert report["directory_status"]["main"]["exists"] is True
     assert report["directory_status"]["paper_workflow"]["exists"] is False
-    assert report["directory_status"]["outputs"]["exists"] is False
+    assert "outputs/" in (ROOT / ".gitignore").read_text(encoding="utf-8")
     next_stage_readiness = report["next_stage_readiness"]
     assert next_stage_readiness["target_construction_phase"] == "real_video_vae_latent_probe"
     assert next_stage_readiness["all_required_paths_present"] is False

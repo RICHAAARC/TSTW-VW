@@ -102,6 +102,22 @@
     "tubelet_only",
     "tubelet_sync"
   ],
+  "stage1_completion_gate": {
+    "primary_method_variants": [
+      "frame_prc",
+      "tubelet_only",
+      "tubelet_sync"
+    ],
+    "sync_gain_attack_names": [
+      "temporal_crop",
+      "local_clip"
+    ],
+    "strict_target_fpr": 0.001,
+    "speed_change_primary_completion_scope": false,
+    "threshold_source": "calibration_negative_clean_and_attacked_only",
+    "attack_specific_threshold_allowed": false,
+    "test_positive_tuning_allowed": false
+  },
   "mechanism_trace_required": true,
   "required_output_tables": [
     "main_tpr_fpr_table.csv",

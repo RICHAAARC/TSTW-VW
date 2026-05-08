@@ -14,6 +14,7 @@ from main.core.digest import compute_object_digest
 
 OFFSET_SEARCH_MIN = -16
 OFFSET_SEARCH_MAX = 16
+DEFAULT_SYNC_SCALE = 1.0
 
 
 def search_best_offset(
@@ -78,12 +79,89 @@ def build_offset_search_result(
     if not isinstance(offset_scores, dict) or not offset_scores:
         raise ValueError("offset_scores must be a non-empty dictionary")
 
-    ranked_offsets = sorted(
-        offset_scores.items(),
-        key=lambda item: (-float(item[1]), abs(item[0])),
+    candidates = [
+        {
+            "offset": int(offset_candidate),
+            "scale": DEFAULT_SYNC_SCALE,
+            "score": float(candidate_score),
+        }
+        for offset_candidate, candidate_score in offset_scores.items()
+    ]
+    return _build_search_result(
+        candidates,
+        ground_truth_offset=ground_truth_offset,
+        ground_truth_scale=None,
+        alignment_mode="offset",
     )
-    best_offset, best_raw_score = ranked_offsets[0]
-    normalized_score = _normalize_sync_score(list(offset_scores.values()), best_raw_score)
+
+
+def build_offset_scale_search_result(
+    candidate_scores: dict[tuple[int, float], float],
+    ground_truth_offset: int | None = None,
+    ground_truth_scale: float | None = None,
+) -> dict[str, float | int | str | None | bool]:
+    """Build synchronization diagnostics from offset-scale candidates.
+
+    Args:
+        candidate_scores: Candidate scores keyed by ``(offset, scale)``.
+        ground_truth_offset: Optional known ground-truth offset.
+        ground_truth_scale: Optional known ground-truth scale.
+
+    Returns:
+        A dictionary containing the synchronization diagnostics.
+    """
+    if not isinstance(candidate_scores, dict) or not candidate_scores:
+        raise ValueError("candidate_scores must be a non-empty dictionary")
+
+    candidates: list[dict[str, float | int]] = []
+    for candidate_key, candidate_score in candidate_scores.items():
+        if (
+            not isinstance(candidate_key, tuple)
+            or len(candidate_key) != 2
+            or not isinstance(candidate_key[0], int)
+            or not isinstance(candidate_key[1], (int, float))
+        ):
+            raise TypeError("candidate_scores keys must be (offset, scale) tuples")
+        candidates.append(
+            {
+                "offset": int(candidate_key[0]),
+                "scale": round(float(candidate_key[1]), 6),
+                "score": float(candidate_score),
+            }
+        )
+    return _build_search_result(
+        candidates,
+        ground_truth_offset=ground_truth_offset,
+        ground_truth_scale=ground_truth_scale,
+        alignment_mode="offset_scale",
+    )
+
+
+def _build_search_result(
+    candidates: list[dict[str, float | int]],
+    ground_truth_offset: int | None,
+    ground_truth_scale: float | None,
+    alignment_mode: str,
+) -> dict[str, float | int | str | None | bool]:
+    if not candidates:
+        raise ValueError("candidates must be non-empty")
+
+    ranked_candidates = sorted(
+        candidates,
+        key=lambda item: (
+            -float(item["score"]),
+            abs(int(item["offset"])),
+            abs(float(item["scale"]) - DEFAULT_SYNC_SCALE),
+        ),
+    )
+    best_candidate = ranked_candidates[0]
+    best_offset = int(best_candidate["offset"])
+    best_scale = round(float(best_candidate["scale"]), 6)
+    best_raw_score = float(best_candidate["score"])
+    all_scores = [float(candidate["score"]) for candidate in candidates]
+    second_or_median = _resolve_second_or_median_score(ranked_candidates)
+    peak_margin = round(best_raw_score - second_or_median, 6)
+    positive_margin = round(max(0.0, peak_margin), 6)
     peak_rank = None
     alignment_error = None
     if ground_truth_offset is not None:
@@ -91,11 +169,30 @@ def build_offset_search_result(
         peak_rank = next(
             (
                 rank
-                for rank, (offset_candidate, _) in enumerate(ranked_offsets, start=1)
-                if offset_candidate == ground_truth_offset
+                for rank, candidate in enumerate(ranked_candidates, start=1)
+                if _candidate_matches_ground_truth(
+                    candidate,
+                    ground_truth_offset,
+                    ground_truth_scale,
+                )
             ),
             None,
         )
+    scale_error = None
+    if ground_truth_scale is not None:
+        scale_error = round(abs(best_scale - float(ground_truth_scale)), 6)
+
+    sorted_candidates = sorted(
+        [
+            {
+                "offset": int(candidate["offset"]),
+                "scale": round(float(candidate["scale"]), 6),
+                "score": round(float(candidate["score"]), 6),
+            }
+            for candidate in candidates
+        ],
+        key=lambda item: (int(item["offset"]), float(item["scale"])),
+    )
 
     return {
         "sync_search_enabled": True,
@@ -103,11 +200,41 @@ def build_offset_search_result(
         "sync_ground_truth_offset": ground_truth_offset,
         "sync_alignment_error": alignment_error,
         "sync_peak_rank": peak_rank,
-        "sync_score": normalized_score,
-        "sync_search_space_size": len(offset_scores),
-        "sync_search_space_digest": compute_object_digest(offset_scores),
-        "sync_score_median": round(median(offset_scores.values()), 6),
+        "sync_score": positive_margin,
+        "sync_search_space_size": len(candidates),
+        "sync_search_space_digest": compute_object_digest(sorted_candidates),
+        "sync_score_median": round(median(all_scores), 6),
+        "sync_estimated_scale": best_scale,
+        "sync_ground_truth_scale": (
+            None if ground_truth_scale is None else round(float(ground_truth_scale), 6)
+        ),
+        "sync_scale_error": scale_error,
+        "sync_alignment_mode": alignment_mode,
+        "S_sync_peak_best": round(best_raw_score, 6),
+        "S_sync_peak_second_or_median": round(second_or_median, 6),
+        "S_sync_peak_margin": peak_margin,
+        "S_sync_positive_margin": positive_margin,
     }
+
+
+def _resolve_second_or_median_score(
+    ranked_candidates: list[dict[str, float | int]],
+) -> float:
+    if len(ranked_candidates) == 1:
+        return float(ranked_candidates[0]["score"])
+    return float(ranked_candidates[1]["score"])
+
+
+def _candidate_matches_ground_truth(
+    candidate: dict[str, float | int],
+    ground_truth_offset: int,
+    ground_truth_scale: float | None,
+) -> bool:
+    if int(candidate["offset"]) != int(ground_truth_offset):
+        return False
+    if ground_truth_scale is None:
+        return True
+    return abs(float(candidate["scale"]) - float(ground_truth_scale)) <= 1e-6
 
 
 def _normalize_sync_score(all_scores: list[float], best_score: float) -> float:

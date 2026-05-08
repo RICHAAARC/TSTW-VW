@@ -116,6 +116,40 @@ def calibrated_tubelet_sync(evidence_scores: dict[str, float | None]) -> float:
     return round((0.65 * float(tubelet_score)) + (0.35 * float(sync_score)), 6)
 
 
+def sync_rescue_fusion(
+    evidence_scores: dict[str, float | None],
+    payload_rescue_gain: float = 0.0,
+    lambda_sync: float = 0.1,
+    gate_sync: bool = False,
+) -> float:
+    """Fuse an unaligned payload score with gated sync-rescue evidence.
+
+    Args:
+        evidence_scores: Governed evidence score payload.
+        payload_rescue_gain: Non-negative aligned-payload rescue gain.
+        lambda_sync: Configured sync-margin weight.
+        gate_sync: Whether the calibrated sync margin is positive.
+
+    Returns:
+        The sync-rescue final score.
+    """
+    if not isinstance(evidence_scores, dict):
+        raise TypeError("evidence_scores must be a dictionary")
+    if not isinstance(payload_rescue_gain, (int, float)):
+        raise TypeError("payload_rescue_gain must be numeric")
+    if not isinstance(lambda_sync, (int, float)):
+        raise TypeError("lambda_sync must be numeric")
+    tubelet_score = evidence_scores.get("S_tubelet")
+    sync_score = evidence_scores.get("S_sync")
+    base_score = 0.0 if tubelet_score is None else float(tubelet_score)
+    positive_sync_score = 0.0 if sync_score is None else max(0.0, float(sync_score))
+    gated_rescue_gain = max(0.0, float(payload_rescue_gain)) if gate_sync else 0.0
+    return round(
+        base_score + gated_rescue_gain + (float(lambda_sync) * positive_sync_score),
+        6,
+    )
+
+
 def get_fusion_rule(fusion_rule: str) -> Callable[[dict[str, float | None]], float]:
     """功能：根据配置名解析 fusion 规则。
 
@@ -137,4 +171,6 @@ def get_fusion_rule(fusion_rule: str) -> Callable[[dict[str, float | None]], flo
         return tubelet_score_only
     if fusion_rule == "calibrated_tubelet_sync":
         return calibrated_tubelet_sync
+    if fusion_rule == "sync_rescue_fusion":
+        return sync_rescue_fusion
     raise ValueError(f"unsupported fusion_rule: {fusion_rule}")

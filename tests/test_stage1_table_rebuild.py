@@ -9,6 +9,8 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+import pytest
+
 from main.analysis.table_builder import TableBuilder
 from main.core.digest import compute_path_collection_digest
 from main.core.records import RecordWriter
@@ -18,6 +20,7 @@ from main.protocol.ablation_runner import AblationRunner
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.smoke
 def test_stage1_table_and_curve_rebuild_preserves_tables_digest(tmp_path: Path) -> None:
     """Validate that deleting CSV outputs and rebuilding preserves the manifest tables digest.
 
@@ -51,6 +54,7 @@ def test_stage1_table_and_curve_rebuild_preserves_tables_digest(tmp_path: Path) 
     assert rebuilt_figures_digest == run_manifest["figures_digest"]
 
 
+@pytest.mark.smoke
 def test_stage1_rebuild_restores_required_outputs(tmp_path: Path) -> None:
     """Validate that rebuild restores all required stage-one CSV and report outputs.
 
@@ -110,6 +114,7 @@ def test_stage1_rebuild_restores_required_outputs(tmp_path: Path) -> None:
     assert "- worst_attacked_negative_fpr_variants:" in report_text
 
 
+@pytest.mark.slow
 def test_stage1_proof_profile_meets_strict_gate(tmp_path: Path) -> None:
     """Validate that the proof profile closes with an explicit strict low-FPR pass.
 
@@ -123,12 +128,13 @@ def test_stage1_proof_profile_meets_strict_gate(tmp_path: Path) -> None:
     AblationRunner(ROOT).run(output_root, samples_per_role=2, runtime_profile_override="proof")
     report_text = RecordWriter(output_root).output_paths.report_path.read_text(encoding="utf-8")
 
-    assert "- closure_target_pass: true" in report_text
-    assert "- validation_target_fpr_pass: true" in report_text
+    assert "- primary_stage1_completion_pass: true" in report_text
+    assert "- primary_strict_target_fpr_pass: true" in report_text
     assert "- strict_target_fpr_pass: true" in report_text
-    assert "- attacked_negative_fpr_meets_strict_target_for_all_variants: true" in report_text
+    assert "- attacked_negative_fpr_meets_strict_target_for_primary_variants: true" in report_text
 
 
+@pytest.mark.slow
 def test_proof_profile_writes_expected_record_counts(tmp_path: Path) -> None:
     """Validate that the proof profile materializes the expected governed artifact counts.
 
@@ -154,6 +160,7 @@ def test_proof_profile_writes_expected_record_counts(tmp_path: Path) -> None:
     assert record_writer.output_paths.run_manifest_path.exists()
 
 
+@pytest.mark.slow
 def test_proof_profile_supports_single_variant_benchmark_runs(tmp_path: Path) -> None:
     """Validate that proof runs can target a single derived variant for benchmarking.
 

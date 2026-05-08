@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from main.analysis.table_builder import TableBuilder
 from main.core.digest import compute_path_collection_digest
 from main.core.records import RecordWriter
@@ -17,6 +19,7 @@ from main.protocol.ablation_runner import AblationRunner
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.smoke
 def test_stage0_table_rebuild_preserves_tables_digest(tmp_path: Path) -> None:
     """Validate that deleting and rebuilding a table preserves the tables digest.
 

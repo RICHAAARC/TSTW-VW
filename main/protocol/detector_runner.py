@@ -1,6 +1,5 @@
 """
-文件用途：提供阶段 0 的 protocol runner 骨架。
-File purpose: Provide the stage-0 protocol runner scaffold.
+File purpose: Provide the governed protocol runner for protocol skeleton and synthetic tubelet-sync probe.
 Module type: General module
 """
 

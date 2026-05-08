@@ -10,9 +10,13 @@ from pathlib import Path
 from typing import Any
 
 from main.protocol.evaluator import (
+    PRIMARY_STAGE1_METHOD_VARIANTS,
+    SPEED_CHANGE_PRIMARY_COMPLETION_SCOPE,
+    SYNC_RESCUE_PRIMARY_COMPLETION_ATTACKS,
     build_local_clip_curve_rows,
     build_main_metrics_rows,
     build_tubelet_length_ablation_rows,
+    is_primary_stage1_method_variant,
 )
 from main.core.records import build_output_paths
 
@@ -76,13 +80,25 @@ class ReportBuilder:
         threshold_records: list[dict[str, Any]],
     ) -> str:
         variant_names = sorted({row["method_variant"] for row in main_rows})
+        primary_main_rows = [
+            row
+            for row in main_rows
+            if is_primary_stage1_method_variant(str(row["method_variant"]))
+            and not row["derived_variant"]
+        ]
+        derived_main_rows = [
+            row
+            for row in main_rows
+            if row not in primary_main_rows
+        ]
         primary_variant_names = sorted(
-            {row["method_variant"] for row in main_rows if not row["derived_variant"]}
+            {row["method_variant"] for row in primary_main_rows}
         )
         derived_variant_names = sorted(
-            {row["method_variant"] for row in main_rows if row["derived_variant"]}
+            {row["method_variant"] for row in derived_main_rows}
         )
         attack_names = sorted({row["attack_name"] for row in main_rows})
+        primary_attack_names = sorted({row["attack_name"] for row in primary_main_rows})
         target_fprs = sorted({float(row["target_fpr"]) for row in main_rows})
         runtime_profiles = sorted(
             {str(record.get("runtime_profile", "smoke")) for record in threshold_records}
@@ -116,17 +132,26 @@ class ReportBuilder:
         }
         local_clip_lengths_present = set(local_clip_lengths) == required_local_clip_lengths
         tubelet_length_sweep_present = set(tubelet_lengths) == required_tubelet_lengths
+        primary_variants_complete = set(primary_variant_names) == set(
+            PRIMARY_STAGE1_METHOD_VARIANTS
+        )
         tubelet_only_gain = _compare_variant_attack_metric(
-            main_rows,
+            primary_main_rows,
             left_variant="tubelet_only",
             right_variant="frame_prc",
-            attack_names=attack_names,
+            attack_names=primary_attack_names,
         )
         tubelet_sync_gain = _compare_variant_attack_metric(
-            main_rows,
+            primary_main_rows,
             left_variant="tubelet_sync",
             right_variant="tubelet_only",
-            attack_names=["temporal_crop", "local_clip"],
+            attack_names=list(SYNC_RESCUE_PRIMARY_COMPLETION_ATTACKS),
+        )
+        tubelet_sync_speed_change_gain = _compare_variant_attack_metric(
+            primary_main_rows,
+            left_variant="tubelet_sync",
+            right_variant="tubelet_only",
+            attack_names=["speed_change"],
         )
         clean_negative_fpr_controlled = _rows_metric_meets_target(
             main_rows,
@@ -148,17 +173,56 @@ class ReportBuilder:
             metric_name="attacked_negative_FPR",
             target_map=strict_target_map,
         )
-        closure_target_pass = (
-            local_clip_lengths_present
-            and tubelet_length_sweep_present
+        primary_clean_negative_fpr_strict = _rows_metric_meets_target(
+            primary_main_rows,
+            metric_name="clean_negative_FPR",
+            target_map=strict_target_map,
+        )
+        primary_attacked_negative_fpr_strict = _rows_metric_meets_target(
+            primary_main_rows,
+            metric_name="attacked_negative_FPR",
+            target_map=strict_target_map,
+        )
+        derived_clean_negative_fpr_strict = _rows_metric_meets_target(
+            derived_main_rows,
+            metric_name="clean_negative_FPR",
+            target_map=strict_target_map,
+        )
+        derived_attacked_negative_fpr_strict = _rows_metric_meets_target(
+            derived_main_rows,
+            metric_name="attacked_negative_FPR",
+            target_map=strict_target_map,
+        )
+        primary_strict_target_fpr_pass = (
+            primary_clean_negative_fpr_strict
+            and primary_attacked_negative_fpr_strict
+        )
+        derived_sweep_strict_target_fpr_pass = (
+            derived_clean_negative_fpr_strict
+            and derived_attacked_negative_fpr_strict
+        )
+        primary_stage1_completion_pass = (
+            primary_variants_complete
+            and local_clip_lengths_present
             and tubelet_only_gain
             and tubelet_sync_gain
+            and primary_strict_target_fpr_pass
+        )
+        closure_target_pass = (
+            primary_stage1_completion_pass
+            and tubelet_length_sweep_present
         )
         validation_target_fpr_pass = (
             clean_negative_fpr_controlled and attacked_negative_fpr_controlled
         )
         strict_target_fpr_pass = (
             clean_negative_fpr_strict and attacked_negative_fpr_strict
+        )
+        overall_stage1_audit_pass = (
+            primary_stage1_completion_pass
+            and derived_sweep_strict_target_fpr_pass
+            and tubelet_length_sweep_present
+            and validation_target_fpr_pass
         )
         max_attacked_negative_fpr, worst_attacked_negative_fpr_variants = _worst_variant_metric(
             main_rows,
@@ -183,8 +247,14 @@ class ReportBuilder:
                 f"- closure_target_pass: {str(closure_target_pass).lower()}",
                 f"- validation_target_fpr_pass: {str(validation_target_fpr_pass).lower()}",
                 f"- strict_target_fpr_pass: {str(strict_target_fpr_pass).lower()}",
+                f"- primary_stage1_completion_pass: {str(primary_stage1_completion_pass).lower()}",
+                f"- primary_strict_target_fpr_pass: {str(primary_strict_target_fpr_pass).lower()}",
+                f"- derived_sweep_strict_target_fpr_pass: {str(derived_sweep_strict_target_fpr_pass).lower()}",
+                f"- overall_stage1_audit_pass: {str(overall_stage1_audit_pass).lower()}",
                 "",
                 "## Coverage Checks",
+                f"- primary_variants_complete: {str(primary_variants_complete).lower()}",
+                f"- primary_expected_method_variants: {', '.join(PRIMARY_STAGE1_METHOD_VARIANTS)}",
                 f"- required_local_clip_lengths_present: {str(local_clip_lengths_present).lower()}",
                 f"- local_clip_lengths: {_format_number_sequence(local_clip_lengths)}",
                 f"- required_tubelet_length_sweep_present: {str(tubelet_length_sweep_present).lower()}",
@@ -193,12 +263,19 @@ class ReportBuilder:
                 "## Mechanism Checks",
                 f"- tubelet_only_beats_frame_prc_under_some_attack: {str(tubelet_only_gain).lower()}",
                 f"- tubelet_sync_beats_tubelet_only_under_temporal_crop_or_local_clip: {str(tubelet_sync_gain).lower()}",
+                f"- tubelet_sync_beats_tubelet_only_under_speed_change: {str(tubelet_sync_speed_change_gain).lower()}",
+                f"- speed_change_in_primary_completion_scope: {str(SPEED_CHANGE_PRIMARY_COMPLETION_SCOPE).lower()}",
                 "",
                 "## Threshold Checks",
+                "- validation_target_fpr_pass_scope: engineering_profile_only",
                 f"- clean_negative_fpr_meets_validation_target_for_all_variants: {str(clean_negative_fpr_controlled).lower()}",
                 f"- attacked_negative_fpr_meets_validation_target_for_all_variants: {str(attacked_negative_fpr_controlled).lower()}",
                 f"- clean_negative_fpr_meets_strict_target_for_all_variants: {str(clean_negative_fpr_strict).lower()}",
                 f"- attacked_negative_fpr_meets_strict_target_for_all_variants: {str(attacked_negative_fpr_strict).lower()}",
+                f"- clean_negative_fpr_meets_strict_target_for_primary_variants: {str(primary_clean_negative_fpr_strict).lower()}",
+                f"- attacked_negative_fpr_meets_strict_target_for_primary_variants: {str(primary_attacked_negative_fpr_strict).lower()}",
+                f"- clean_negative_fpr_meets_strict_target_for_derived_sweep: {str(derived_clean_negative_fpr_strict).lower()}",
+                f"- attacked_negative_fpr_meets_strict_target_for_derived_sweep: {str(derived_attacked_negative_fpr_strict).lower()}",
                 f"- max_attacked_negative_fpr: {max_attacked_negative_fpr}",
                 f"- worst_attacked_negative_fpr_variants: {', '.join(worst_attacked_negative_fpr_variants)}",
                 "",

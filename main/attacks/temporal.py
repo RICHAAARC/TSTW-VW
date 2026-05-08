@@ -204,6 +204,9 @@ class TemporalAttackPlaceholder:
                 "sync_ground_truth_offset": materialized_attack_params.get(
                     "ground_truth_offset"
                 ),
+                "sync_ground_truth_scale": materialized_attack_params.get(
+                    "ground_truth_scale"
+                ),
                 "clip_length": materialized_attack_params.get("clip_length"),
             }
         )
@@ -327,6 +330,7 @@ class TemporalAttackPlaceholder:
                 "original_frame_count": frame_count,
                 "observed_frame_count": int(crop_length),
                 "ground_truth_offset": -int(crop_start),
+                "ground_truth_scale": 1.0,
             }
 
         if self.attack_name == "frame_dropping":
@@ -347,6 +351,7 @@ class TemporalAttackPlaceholder:
                 "original_frame_count": frame_count,
                 "observed_frame_count": len(kept_indices),
                 "ground_truth_offset": None,
+                "ground_truth_scale": None,
             }
 
         if self.attack_name == "speed_change":
@@ -358,6 +363,7 @@ class TemporalAttackPlaceholder:
                 "original_frame_count": frame_count,
                 "observed_frame_count": observed_frame_count,
                 "ground_truth_offset": None,
+                "ground_truth_scale": speed_ratio,
             }
 
         if self.attack_name == "local_clip":
@@ -382,6 +388,7 @@ class TemporalAttackPlaceholder:
                 "original_frame_count": frame_count,
                 "observed_frame_count": int(clip_length),
                 "ground_truth_offset": -int(clip_start),
+                "ground_truth_scale": 1.0,
             }
 
         if self.attack_name == "latent_gaussian_noise":
@@ -390,6 +397,7 @@ class TemporalAttackPlaceholder:
                 "original_frame_count": frame_count,
                 "observed_frame_count": frame_count,
                 "ground_truth_offset": None,
+                "ground_truth_scale": 1.0,
             }
 
         return {}

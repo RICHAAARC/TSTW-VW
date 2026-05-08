@@ -67,6 +67,6 @@ def build_reserved_method_support_matrix() -> dict[str, dict[str, object]]:
             "enable_sync": True,
             "enable_trajectory": False,
             "tubelet_length": 4,
-            "fusion_rule": "calibrated_tubelet_sync",
+            "fusion_rule": "sync_rescue_fusion",
         },
     }

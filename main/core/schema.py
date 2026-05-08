@@ -148,9 +148,9 @@ class LatentSample:
 
 @dataclass(frozen=True)
 class DetectionResult:
-    """功能：定义阶段 0 检测输出结构。
+    """功能：定义受治理检测输出结构。
 
-    Stage-0 detection result model.
+    Governed detection result model.
 
     Args:
         evidence_scores: Governed evidence score payload.

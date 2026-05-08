@@ -39,6 +39,8 @@ class MethodRuntimeConfig:
         tubelet_length: Optional tubelet length for formal stage runtime variants.
         base_method_variant: Optional base method variant for derived runtime variants.
         score_calibration: Optional governed score-calibration parameters.
+        sync_search: Optional governed synchronization search parameters.
+        lambda_sync: Optional configured sync-rescue weight.
         score_generation_seed_random: Optional random score seed.
 
     Returns:
@@ -53,6 +55,8 @@ class MethodRuntimeConfig:
     tubelet_length: int | None = None
     base_method_variant: str | None = None
     score_calibration: dict[str, float] | None = None
+    sync_search: dict[str, Any] | None = None
+    lambda_sync: float | None = None
     score_generation_seed_random: int | None = None
 
 
@@ -262,6 +266,10 @@ class SyntheticProbeWatermarkMethod(BaseStageZeroWatermarkMethod):
             "enable_trajectory": runtime_config.enabled_evidence["trajectory"],
             "fusion_rule": runtime_config.fusion_rule,
             "score_calibration": dict(runtime_config.score_calibration or {}),
+            "sync_search": dict(runtime_config.sync_search or {}),
+            "lambda_sync": 0.1
+            if runtime_config.lambda_sync is None
+            else float(runtime_config.lambda_sync),
         }
         self._evidence_extractor = SyntheticProbeEvidenceExtractor(
             base_method_variant,
@@ -360,6 +368,8 @@ def build_method_runtime_config(method_config: dict[str, Any]) -> MethodRuntimeC
         tubelet_length=method_config.get("tubelet_length"),
         base_method_variant=method_config.get("base_method_variant"),
         score_calibration=_build_score_calibration(method_config),
+        sync_search=_build_sync_search_config(method_config),
+        lambda_sync=_build_optional_float(method_config, "lambda_sync"),
         score_generation_seed_random=method_config.get("score_generation_seed_random"),
     )
 
@@ -378,6 +388,24 @@ def _build_score_calibration(method_config: dict[str, Any]) -> dict[str, float] 
             raise TypeError("score_calibration values must be numeric")
         normalized_calibration[field_name] = float(field_value)
     return normalized_calibration
+
+
+def _build_sync_search_config(method_config: dict[str, Any]) -> dict[str, Any] | None:
+    sync_search_config = method_config.get("sync_search")
+    if sync_search_config is None:
+        return None
+    if not isinstance(sync_search_config, dict):
+        raise TypeError("sync_search must be a dictionary")
+    return dict(sync_search_config)
+
+
+def _build_optional_float(method_config: dict[str, Any], field_name: str) -> float | None:
+    field_value = method_config.get(field_name)
+    if field_value is None:
+        return None
+    if not isinstance(field_value, (int, float)):
+        raise TypeError(f"{field_name} must be numeric")
+    return float(field_value)
 
 
 def build_method_from_config(method_config: dict[str, Any]) -> WatermarkMethod:
