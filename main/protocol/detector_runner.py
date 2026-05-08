@@ -84,9 +84,9 @@ class MethodVariantRuntimeProfile:
 
 
 class ProtocolRunner:
-    """功能：执行阶段 0 的单方法 protocol runtime。
+    """功能：执行受治理的单方法 protocol runtime。
 
-    Stage-0 single-method protocol runner scaffold.
+    Governed single-method protocol runner.
 
     Args:
         None.
@@ -101,9 +101,9 @@ class ProtocolRunner:
         method_factory: Callable[[dict[str, Any]], Any] | None = None,
         threshold_calibrator: Any | None = None,
     ) -> None:
-        """功能：构建可注入依赖的阶段 0 protocol runner。
+        """功能：构建可注入依赖的受治理 protocol runner。
 
-        Build a stage-0 protocol runner with injectable backend, method factory,
+        Build a governed protocol runner with injectable backend, method factory,
         and threshold calibrator dependencies.
 
         Args:
@@ -152,9 +152,9 @@ class ProtocolRunner:
         tuple[list[dict[str, Any]], dict[str, Any]]
         | tuple[list[dict[str, Any]], dict[str, Any], MethodVariantRuntimeProfile]
     ):
-        """功能：运行阶段 0 的单方法执行闭环。
+        """功能：运行受治理的单方法执行闭环。
 
-        Run the stage-0 protocol flow for one method variant.
+        Run the governed protocol flow for one method variant.
 
         Args:
             run_id: Stable run identifier.

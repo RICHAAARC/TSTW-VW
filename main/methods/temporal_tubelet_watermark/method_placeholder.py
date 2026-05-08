@@ -1,6 +1,5 @@
 """
-文件用途：提供阶段 0 的 placeholder / random watermark method。
-File purpose: Provide stage-0 placeholder and random watermark method scaffolds.
+File purpose: Provide legacy placeholder/random methods and the synthetic tubelet-sync method runtime.
 Module type: General module
 """
 
@@ -26,14 +25,14 @@ from main.methods.temporal_tubelet_watermark.interfaces import WatermarkMethod
 
 @dataclass(frozen=True)
 class MethodRuntimeConfig:
-    """功能：定义阶段 0 方法配置结构。
+    """功能：定义受治理方法配置结构。
 
-    Stage-0 method runtime config model.
+    Governed method runtime config model.
 
     Args:
         method_family: Stable method family name.
         method_variant: Stable method variant name.
-        method_status: Stage-0 scaffold status.
+        method_status: Governed method status.
         enabled_evidence: Evidence enablement mapping.
         fusion_rule: Governed fusion rule name.
         tubelet_length: Optional tubelet length for formal stage runtime variants.
@@ -61,9 +60,9 @@ class MethodRuntimeConfig:
 
 
 class BaseStageZeroWatermarkMethod(WatermarkMethod):
-    """功能：提供阶段 0 watermark method 的公共行为。
+    """功能：提供受治理 watermark method 的公共行为。
 
-    Shared stage-0 watermark method behavior.
+    Shared governed watermark method behavior.
 
     Args:
         runtime_config: Parsed method runtime config.
@@ -80,7 +79,7 @@ class BaseStageZeroWatermarkMethod(WatermarkMethod):
     def embed(self, sample: LatentSample, payload: dict[str, Any]) -> LatentSample:
         """功能：返回不修改样本的 placeholder embed 结果。
 
-        Return the input sample unchanged for the stage-0 scaffold.
+        Return the input sample unchanged for legacy placeholder methods.
 
         Args:
             sample: Input latent sample.
@@ -100,9 +99,9 @@ class BaseStageZeroWatermarkMethod(WatermarkMethod):
         sample: LatentSample,
         threshold_record: dict[str, Any] | None,
     ) -> DetectionResult:
-        """功能：运行阶段 0 检测骨架。
+        """功能：运行受治理检测。
 
-        Run stage-0 detection for a single sample.
+        Run governed detection for a single sample.
 
         Args:
             sample: Input latent sample.
@@ -133,7 +132,7 @@ class BaseStageZeroWatermarkMethod(WatermarkMethod):
     ) -> list[DetectionResult]:
         """功能：运行批量检测骨架。
 
-        Run stage-0 detection for a batch of samples.
+        Run governed detection for a batch of samples.
 
         Args:
             samples: Input latent samples.
@@ -207,7 +206,7 @@ class EmptyWatermarkMethodPlaceholder(BaseStageZeroWatermarkMethod):
 
 
 class RandomScoreDetectorRandom(BaseStageZeroWatermarkMethod):
-    """功能：提供可复现随机分数的阶段 0 方法。
+    """功能：提供可复现随机分数的 legacy 方法。
 
     Reproducible random-score watermark method scaffold.
 
@@ -409,9 +408,9 @@ def _build_optional_float(method_config: dict[str, Any], field_name: str) -> flo
 
 
 def build_method_from_config(method_config: dict[str, Any]) -> WatermarkMethod:
-    """功能：根据配置构建阶段 0 方法实例。
+    """功能：根据配置构建受治理方法实例。
 
-    Build a stage-0 method instance from config.
+    Build a governed method instance from config.
 
     Args:
         method_config: Parsed JSON method config.

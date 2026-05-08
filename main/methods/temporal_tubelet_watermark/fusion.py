@@ -1,6 +1,5 @@
 """
-文件用途：提供阶段 0 方法骨架的 fusion 规则。
-File purpose: Provide stage-0 scaffold fusion rules.
+File purpose: Provide governed fusion rules for protocol skeleton and synthetic tubelet-sync probe.
 Module type: General module
 """
 
@@ -36,7 +35,7 @@ def build_disabled_evidence(enabled_evidence: dict[str, bool]) -> list[str]:
 def constant_zero_fusion_placeholder(evidence_scores: dict[str, float | None]) -> float:
     """功能：返回常数零分数的 placeholder fusion。
 
-    Return a constant-zero final score for the placeholder method.
+    Return a constant-zero final score for the legacy placeholder method.
 
     Args:
         evidence_scores: Governed evidence score payload.
@@ -68,7 +67,7 @@ def random_score_linear_fusion_random(evidence_scores: dict[str, float | None]) 
         if evidence_scores.get(score_name) is not None
     ]
     if not available_scores:
-        # 中文注释：当没有有效 evidence 时，阶段 0 仍需返回稳定分数而非抛弃字段。
+        # 中文注释：当没有有效 evidence 时，协议仍需返回稳定分数而非抛弃字段。
         return 0.0
     return round(sum(available_scores) / len(available_scores), 6)
 

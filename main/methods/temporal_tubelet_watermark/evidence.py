@@ -574,7 +574,10 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 continue
             aligned_projections.append(
                 self._clip_score(
-                    codebook.combined_codes[reference_descriptor.tubelet_index]
+                    (
+                        codebook.payload_codes[reference_descriptor.tubelet_index]
+                        * codebook.sync_codes.get(reference_descriptor.frame_start, 1)
+                    )
                     * raw_projection
                 )
             )

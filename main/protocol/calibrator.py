@@ -1,6 +1,5 @@
 """
-文件用途：实现阶段 0 的 threshold calibrator 骨架。
-File purpose: Implement the stage-0 threshold calibrator scaffold.
+File purpose: Implement the governed threshold calibrator for protocol skeleton and synthetic tubelet-sync probe.
 Module type: General module
 """
 
@@ -107,7 +106,7 @@ def _resolve_tubelet_length_guard_band_multiplier(
 class ThresholdCalibrator:
     """功能：根据 calibration negative records 生成固定阈值。
 
-    Calibrator for stage-0 fixed low-FPR thresholds.
+    Calibrator for governed fixed low-FPR thresholds.
 
     Args:
         None.
