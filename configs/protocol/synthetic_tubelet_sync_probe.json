@@ -32,7 +32,7 @@
     "sync_threshold_guard_band_multiplier_by_profile": {
       "tiny": 1.5,
       "smoke": 1.5,
-      "proof": 1.5,
+      "proof": 0.25,
       "formal": 1.25
     },
     "tubelet_length_threshold_guard_band_multiplier_by_profile": {
@@ -49,11 +49,11 @@
       "proof": {
         "default": 0.0,
         "length_ge_08": 0.25,
-        "length_ge_16": 0.75
+        "length_ge_16": 1.0
       },
       "formal": {
-        "default": 0.0,
-        "length_ge_08": 0.25,
+        "default": 0.75,
+        "length_ge_08": 1.5,
         "length_ge_16": 0.75
       }
     },

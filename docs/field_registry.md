@@ -41,6 +41,8 @@
 | tubelet_length | protocol | none | true | false | false | Reserved tubelet-length field used by the synthetic tubelet sync method-entry configs. |
 | enabled_evidence | protocol | none | true | false | false | Evidence enablement container that freezes which evidence branches are active. |
 | fusion_rule | protocol | none | true | false | false | Stable fusion rule identifier used by stage-0 threshold and method configs. |
+| score_calibration | protocol | none | true | false | false | Governed method-config container for profile-independent score calibration parameters used by the synthetic tubelet sync probe. |
+| embedding_projection_support_weight | protocol | none | true | false | false | Auditable score-calibration weight that maps recorded projection-margin embedding support into the stage-one tubelet projection score. |
 | attack_name | protocol | none | true | false | false | Attack identifier written into stage-0 event records. |
 | attack_params | protocol | none | true | false | false | Attack parameter object written into stage-0 event records. |
 | score_name | protocol | none | true | false | false | Governed score identifier used by threshold records. |

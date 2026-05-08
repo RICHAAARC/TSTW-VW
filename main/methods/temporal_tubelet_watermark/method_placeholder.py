@@ -38,6 +38,7 @@ class MethodRuntimeConfig:
         fusion_rule: Governed fusion rule name.
         tubelet_length: Optional tubelet length for formal stage runtime variants.
         base_method_variant: Optional base method variant for derived runtime variants.
+        score_calibration: Optional governed score-calibration parameters.
         score_generation_seed_random: Optional random score seed.
 
     Returns:
@@ -51,6 +52,7 @@ class MethodRuntimeConfig:
     fusion_rule: str
     tubelet_length: int | None = None
     base_method_variant: str | None = None
+    score_calibration: dict[str, float] | None = None
     score_generation_seed_random: int | None = None
 
 
@@ -259,6 +261,7 @@ class SyntheticProbeWatermarkMethod(BaseStageZeroWatermarkMethod):
             "enable_sync": runtime_config.enabled_evidence["sync"],
             "enable_trajectory": runtime_config.enabled_evidence["trajectory"],
             "fusion_rule": runtime_config.fusion_rule,
+            "score_calibration": dict(runtime_config.score_calibration or {}),
         }
         self._evidence_extractor = SyntheticProbeEvidenceExtractor(
             base_method_variant,
@@ -356,8 +359,25 @@ def build_method_runtime_config(method_config: dict[str, Any]) -> MethodRuntimeC
         fusion_rule=method_config["fusion_rule"],
         tubelet_length=method_config.get("tubelet_length"),
         base_method_variant=method_config.get("base_method_variant"),
+        score_calibration=_build_score_calibration(method_config),
         score_generation_seed_random=method_config.get("score_generation_seed_random"),
     )
+
+
+def _build_score_calibration(method_config: dict[str, Any]) -> dict[str, float] | None:
+    score_calibration = method_config.get("score_calibration")
+    if score_calibration is None:
+        return None
+    if not isinstance(score_calibration, dict):
+        raise TypeError("score_calibration must be a dictionary")
+    normalized_calibration: dict[str, float] = {}
+    for field_name, field_value in score_calibration.items():
+        if not isinstance(field_name, str) or not field_name:
+            raise ValueError("score_calibration field names must be non-empty strings")
+        if not isinstance(field_value, (int, float)):
+            raise TypeError("score_calibration values must be numeric")
+        normalized_calibration[field_name] = float(field_value)
+    return normalized_calibration
 
 
 def build_method_from_config(method_config: dict[str, Any]) -> WatermarkMethod:

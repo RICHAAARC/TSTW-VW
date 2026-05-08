@@ -9,5 +9,8 @@
   "enable_sync": false,
   "enable_trajectory": false,
   "tubelet_length": 1,
+  "score_calibration": {
+    "embedding_projection_support_weight": 0.0
+  },
   "fusion_rule": "tubelet_score_only"
 }

@@ -57,6 +57,27 @@ def search_best_offset(
             6,
         )
 
+    return build_offset_search_result(offset_scores, ground_truth_offset)
+
+
+def build_offset_search_result(
+    offset_scores: dict[int, float],
+    ground_truth_offset: int | None = None,
+) -> dict[str, float | int | None]:
+    """功能：从候选 offset 分数构建同步搜索诊断。
+
+    Build synchronization diagnostics from precomputed candidate-offset scores.
+
+    Args:
+        offset_scores: Candidate scores keyed by offset.
+        ground_truth_offset: Optional known ground-truth offset.
+
+    Returns:
+        A dictionary containing the synchronization diagnostics.
+    """
+    if not isinstance(offset_scores, dict) or not offset_scores:
+        raise ValueError("offset_scores must be a non-empty dictionary")
+
     ranked_offsets = sorted(
         offset_scores.items(),
         key=lambda item: (-float(item[1]), abs(item[0])),

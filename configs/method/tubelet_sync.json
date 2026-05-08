@@ -9,5 +9,8 @@
   "enable_sync": true,
   "enable_trajectory": false,
   "tubelet_length": 4,
+  "score_calibration": {
+    "embedding_projection_support_weight": 0.25
+  },
   "fusion_rule": "calibrated_tubelet_sync"
 }
