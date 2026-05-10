@@ -255,6 +255,11 @@ class RealVideoVaeLatentRunner:
             "dataset_summary": dataset_summary,
             "vae_metadata": vae_metadata,
         }
+        runtime_manifest_overrides = runtime_config_overrides.get(
+            "colab_runtime_manifest_overrides"
+        )
+        if isinstance(runtime_manifest_overrides, dict):
+            runtime_manifest.update(runtime_manifest_overrides)
         git_commit = runtime_config_overrides.get("git_commit")
         if isinstance(git_commit, str) and git_commit:
             runtime_manifest["git_commit"] = git_commit
