@@ -703,6 +703,20 @@ class RealVideoVaeLatentRunner:
             profile_key,
             backend_config["latent_shape"],
         )
+
+        profile_override_fields = (
+            "vae_backend_name",
+            "vae_backend_version",
+            "vae_model_local_path",
+            "vae_encode_mode",
+            "vae_decode_mode",
+            "allow_mock_vae_backend",
+        )
+        for field_name in profile_override_fields:
+            runtime_field_name = f"{runtime_profile}_{field_name}"
+            if runtime_field_name in backend_config:
+                resolved_backend_config[field_name] = backend_config[runtime_field_name]
+
         return resolved_backend_config
 
     def _build_method_config_paths(self, ablation_config: dict[str, Any]) -> dict[str, Path]:

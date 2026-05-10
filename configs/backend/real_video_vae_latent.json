@@ -31,7 +31,18 @@
   "latent_generation_seed": 20260510,
   "video_fps": 8,
   "vae_backend_name": "video_vae_tensor_runtime",
+  "formal_vae_backend_name": "diffusers_autoencoder_kl_framewise",
   "vae_backend_version": "framewise_tensor_runtime",
+  "formal_vae_backend_version": "autoencoder_kl_local_formal",
+  "vae_model_local_path": "",
+  "formal_vae_model_local_path": "resolved_by_model_override",
+  "vae_dtype": "float16_on_cuda_float32_on_cpu",
   "vae_encode_mode": "framewise",
-  "vae_decode_mode": "framewise"
+  "formal_vae_encode_mode": "framewise_deterministic_mode",
+  "vae_decode_mode": "framewise",
+  "formal_vae_decode_mode": "framewise_decode",
+  "batch_size_frames": 8,
+  "latent_downsample_factor": 8,
+  "allow_mock_vae_backend": true,
+  "formal_allow_mock_vae_backend": false
 }
