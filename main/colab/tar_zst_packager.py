@@ -111,12 +111,31 @@ def pack_run_to_tar_zst(
     subprocess.run(command, check=True)
 
     decision = str(checks_payload.get("RealVideoVaeLatentDecision", "INCONCLUSIVE"))
+    if not decision:
+        decision = "INCONCLUSIVE"
+    archive_relpath = archive_path.relative_to(drive_dir.parent) if drive_dir.parent in archive_path.parents else archive_path.name
     summary_payload = {
         "run_id": run_id,
         "construction_phase": run_manifest.get("construction_phase"),
         "decision": decision,
         "status": bool(checks_payload.get("status", False)),
+        "archive_format": "tar.zst",
         "archive_path": str(archive_path),
+        "archive_relpath": str(archive_relpath),
+        "summary_path": str(summary_path),
+        "checks_path": str(checks_path),
+        "excluded_patterns": [
+            "*.pth",
+            "*.pt",
+            "*.ckpt",
+            "*.safetensors",
+            "*.bin",
+            "session_models/**",
+            "model_cache/**",
+            ".cache/**",
+            "__pycache__/**",
+            "tmp/**",
+        ] if exclude_large_intermediate_latents else [],
     }
     summary_path.write_text(json.dumps(summary_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     checks_path.write_text(json.dumps(checks_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

@@ -74,6 +74,11 @@ def test_real_video_vae_latent_notebook_exists_and_uses_governed_entrypoints() -
     assert "main.colab.notebook_result_checker" in notebook_text
     assert "main.colab.drive_packager" in notebook_text
     assert "main.colab.tar_zst_packager" in notebook_text
+    # P9: tar.zst packager 必须被实际调用，且 tar.zst 是主 Drive 归档输出
+    assert "pack_run_to_tar_zst(" in notebook_text
+    assert "drive_archive_path = tar_pack[" in notebook_text
+    # P9: zip 只作本地副产物，不能作为唯一 Drive 归档路径
+    assert "compat_pack_root = run_root" in notebook_text
     assert "colab_real_video_vae_latent_runtime_config.json" in notebook_text
     assert "real_video_vae_latent_probe_completion_formal" in notebook_text
     assert "/content/TSTW_runtime" in notebook_text

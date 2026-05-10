@@ -6,6 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -39,12 +40,24 @@ def test_stage2_tar_zst_packager_outputs_archive_and_checks(tmp_path: Path) -> N
         run_root=output_root,
         drive_result_dir=tmp_path / "packed_tar_zst",
         checks_payload=checks_payload,
+        exclude_large_intermediate_latents=True,
     )
 
     assert packaged_paths["archive_path"].exists()
     assert packaged_paths["summary_path"].exists()
     assert packaged_paths["checks_path"].exists()
+    summary_payload = json.loads(packaged_paths["summary_path"].read_text(encoding="utf-8"))
+    assert summary_payload["archive_format"] == "tar.zst"
+    assert summary_payload["decision"] == checks_payload["RealVideoVaeLatentDecision"]
+    assert summary_payload["checks_path"] == str(packaged_paths["checks_path"])
+    assert summary_payload["summary_path"] == str(packaged_paths["summary_path"])
+    assert summary_payload["excluded_patterns"]
+
     tar_listing = subprocess.check_output(["tar", "--list", "--file", str(packaged_paths["archive_path"])], text=True)
     assert "records/event_scores.jsonl" in tar_listing
     assert "thresholds/thresholds.json" in tar_listing
     assert "tables/quality_table.csv" in tar_listing
+    assert "reports/vae_latent_probe_report.md" in tar_listing
+    assert "artifacts/run_manifest.json" in tar_listing
+    assert "artifacts/artifact_manifest.json" in tar_listing
+    assert "artifacts/colab_runtime_manifest.json" in tar_listing
