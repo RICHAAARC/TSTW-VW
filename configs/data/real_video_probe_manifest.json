@@ -1,0 +1,47 @@
+{
+  "dataset_name": "real_video_probe_dataset",
+  "dataset_version": "real_video_probe_manifest",
+  "root_policy": "resolved_by_runtime",
+  "samples": [
+    {
+      "video_source_id": "rvp_000001",
+      "relpath": "datasets/real_video_probe/source/rvp_000001.mp4",
+      "split": "calibration",
+      "base_role": "negative_source",
+      "prompt_or_caption": null,
+      "expected_frame_count": 16,
+      "expected_fps": 8,
+      "expected_resolution": [16, 16]
+    },
+    {
+      "video_source_id": "rvp_000002",
+      "relpath": "datasets/real_video_probe/source/rvp_000002.mp4",
+      "split": "calibration",
+      "base_role": "negative_source",
+      "prompt_or_caption": null,
+      "expected_frame_count": 16,
+      "expected_fps": 8,
+      "expected_resolution": [16, 16]
+    },
+    {
+      "video_source_id": "rvp_000101",
+      "relpath": "datasets/real_video_probe/source/rvp_000101.mp4",
+      "split": "test",
+      "base_role": "negative_source",
+      "prompt_or_caption": null,
+      "expected_frame_count": 16,
+      "expected_fps": 8,
+      "expected_resolution": [16, 16]
+    },
+    {
+      "video_source_id": "rvp_000102",
+      "relpath": "datasets/real_video_probe/source/rvp_000102.mp4",
+      "split": "test",
+      "base_role": "negative_source",
+      "prompt_or_caption": null,
+      "expected_frame_count": 16,
+      "expected_fps": 8,
+      "expected_resolution": [16, 16]
+    }
+  ]
+}

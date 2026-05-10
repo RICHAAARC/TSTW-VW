@@ -1,0 +1,19 @@
+{
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "target_construction_phase": "real_video_vae_latent_probe",
+  "ablation_name": "real_video_vae_latent_ablation",
+  "shared_protocol_name": "fixed_low_fpr_calibrated_detection",
+  "shared_attack_matrix_name": "real_video_attack_matrix",
+  "method_variants": [
+    "frame_prc",
+    "tubelet_only",
+    "tubelet_sync"
+  ],
+  "tubelet_length_sweep_variant": "tubelet_only",
+  "tubelet_length_sweep_tiny": [1, 4],
+  "tubelet_length_sweep_smoke": [1, 4],
+  "tubelet_length_sweep_proof": [1, 2, 4, 8, 16],
+  "tubelet_length_sweep_formal": [1, 2, 4, 8, 16],
+  "shared_target_fpr": 0.001,
+  "shared_table_builder_name": "stage2_artifacts"
+}

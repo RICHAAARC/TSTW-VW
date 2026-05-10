@@ -1,0 +1,39 @@
+{
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "target_construction_phase": "real_video_vae_latent_probe",
+  "attack_matrix_name": "real_video_attack_smoke_matrix",
+  "attacks": [
+    {
+      "attack_name": "no_attack",
+      "attack_params": {}
+    },
+    {
+      "attack_name": "h264_compression",
+      "attack_params": {
+        "codec": "libx264",
+        "crf": 28,
+        "preset": "medium"
+      }
+    },
+    {
+      "attack_name": "temporal_crop",
+      "attack_params": {
+        "crop_start_candidates": [
+          4,
+          8,
+          12
+        ],
+        "crop_length": 20
+      }
+    },
+    {
+      "attack_name": "local_clip",
+      "attack_params": {
+        "clip_lengths": [
+          8,
+          16
+        ]
+      }
+    }
+  ]
+}

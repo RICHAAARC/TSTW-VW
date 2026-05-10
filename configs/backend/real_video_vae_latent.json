@@ -1,0 +1,37 @@
+{
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "target_construction_phase": "real_video_vae_latent_probe",
+  "latent_backend_name": "real_video_vae_latent",
+  "latent_backend_status": "video_vae_tensor_scaffold_runtime",
+  "runtime_profile": "smoke",
+  "latent_shape": {
+    "frames": 16,
+    "channels": 4,
+    "height": 16,
+    "width": 16
+  },
+  "formal_latent_shape": {
+    "frames": 32,
+    "channels": 4,
+    "height": 32,
+    "width": 32
+  },
+  "proof_latent_shape": {
+    "frames": 16,
+    "channels": 4,
+    "height": 16,
+    "width": 16
+  },
+  "tiny_latent_shape": {
+    "frames": 8,
+    "channels": 2,
+    "height": 8,
+    "width": 8
+  },
+  "latent_generation_seed": 20260510,
+  "video_fps": 8,
+  "vae_backend_name": "video_vae_tensor_runtime",
+  "vae_backend_version": "framewise_tensor_runtime",
+  "vae_encode_mode": "framewise",
+  "vae_decode_mode": "framewise"
+}

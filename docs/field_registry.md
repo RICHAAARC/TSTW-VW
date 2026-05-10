@@ -168,6 +168,70 @@
 | attack_name_placeholder | placeholder | _placeholder | true | false | true | Placeholder attack name field for the governed identity attack skeleton. |
 | attack_params_placeholder | placeholder | _placeholder | true | false | true | Placeholder attack parameter container for the governed identity attack skeleton. |
 | shared_attack_matrix_required | governance | none | true | false | false | Boolean governance field that blocks per-variant attack matrix divergence. |
+| stage2_outputs | protocol | none | true | false | false | Declared output-toggle container for the stage-two real-video VAE latent scaffold. |
+| video_source_id | protocol | none | true | false | false | Stable video-source identifier recorded in stage-two mechanism traces. |
+| video_source_relpath | artifact_layout | none | true | false | false | Relative path to the persisted source video artifact for stage-two records. |
+| video_source_digest | trace | none | true | false | false | File digest of the persisted source video artifact for stage-two records. |
+| video_frame_count | protocol | none | true | false | false | Frame count of the persisted stage-two video artifact. |
+| video_fps | protocol | none | true | false | false | Declared frame rate of the persisted stage-two video artifact. |
+| video_resolution | protocol | none | true | false | false | Declared `[height, width]` resolution of the persisted stage-two video artifact. |
+| vae_backend_name | protocol | none | true | false | false | Stage-two VAE backend identifier recorded in mechanism traces and runtime manifests. |
+| vae_backend_version | protocol | none | true | false | false | Stage-two VAE backend version string recorded in mechanism traces and runtime manifests. |
+| vae_config_digest | trace | none | true | false | false | Digest of the placeholder stage-two VAE configuration payload. |
+| vae_encode_mode | protocol | none | true | false | false | Declared stage-two VAE encode mode. |
+| vae_decode_mode | protocol | none | true | false | false | Declared stage-two VAE decode mode. |
+| encoded_latent_relpath | artifact_layout | none | true | false | false | Relative path to the encoded latent artifact in the stage-two scaffold. |
+| encoded_latent_digest | trace | none | true | false | false | Digest of the encoded latent artifact in the stage-two scaffold. |
+| watermarked_latent_relpath | artifact_layout | none | true | false | false | Relative path to the copied watermarked latent artifact in the stage-two scaffold. |
+| watermarked_latent_digest | trace | none | true | false | false | Digest of the copied watermarked latent artifact in the stage-two scaffold. |
+| decoded_video_relpath | artifact_layout | none | true | false | false | Relative path to the decoded placeholder video artifact in the stage-two scaffold. |
+| decoded_video_digest | trace | none | true | false | false | Digest of the decoded placeholder video artifact in the stage-two scaffold. |
+| attacked_video_relpath | artifact_layout | none | true | false | false | Relative path to the attacked placeholder video artifact in the stage-two scaffold. |
+| attacked_video_digest | trace | none | true | false | false | Digest of the attacked placeholder video artifact in the stage-two scaffold. |
+| reencoded_latent_relpath | artifact_layout | none | true | false | false | Relative path to the re-encoded latent artifact in the stage-two scaffold. |
+| reencoded_latent_digest | trace | none | true | false | false | Digest of the re-encoded latent artifact in the stage-two scaffold. |
+| quality_metrics | protocol | none | true | false | false | Top-level stage-two quality-metrics payload written into event records. |
+| temporal_metrics | protocol | none | true | false | false | Top-level stage-two temporal-metrics payload written into event records. |
+| vae_reconstruction_psnr | protocol | none | true | false | false | Placeholder-derived PSNR summary used by the stage-two scaffold quality payload. |
+| vae_reconstruction_ssim | protocol | none | true | false | false | Placeholder-derived SSIM summary used by the stage-two scaffold quality payload. |
+| watermarked_video_psnr | protocol | none | true | false | false | Placeholder-derived PSNR summary for decoded or attacked comparison videos in stage two. |
+| watermarked_video_ssim | protocol | none | true | false | false | Placeholder-derived SSIM summary for decoded or attacked comparison videos in stage two. |
+| watermarked_video_lpips | protocol | none | true | false | false | Reserved LPIPS field; the current stage-two scaffold records it as disabled. |
+| clip_similarity_score | protocol | none | true | false | false | Reserved CLIP-similarity field; the current stage-two scaffold records it as disabled. |
+| disabled_quality_metrics | protocol | none | true | false | false | Explicit list of quality metrics disabled in the current stage-two scaffold. |
+| quality_failure_reason | protocol | none | true | false | false | Recorded reason when a placeholder quality threshold is violated in stage two. |
+| temporal_consistency_score | protocol | none | true | false | false | Placeholder-derived temporal consistency score computed from video artifacts. |
+| flicker_score | protocol | none | true | false | false | Placeholder-derived flicker score computed from frame-difference deltas. |
+| motion_consistency_score | protocol | none | true | false | false | Reserved motion-consistency field; the current stage-two scaffold records it as disabled. |
+| disabled_temporal_metrics | protocol | none | true | false | false | Explicit list of temporal metrics disabled in the current stage-two scaffold. |
+| artifact_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the stage-two artifact manifest. |
+| colab_runtime_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the stage-two runtime manifest. |
+| colab_stage2_runtime_config_path | artifact_layout | none | false | false | false | Relative layout path for the stage-two runtime-config manifest. |
+| real_video_attack_breakdown_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two real-video attack breakdown table. |
+| quality_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two quality table. |
+| temporal_consistency_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two temporal consistency table. |
+| stage2_governance_summary_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two governance summary table. |
+| quality_robustness_tradeoff_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two quality-robustness tradeoff figure. |
+| method_variants_summary | governance | none | false | false | false | Comma-separated method-variant summary emitted by the stage-two governance summary table and consumed by the stage-two report. |
+| attack_names_summary | governance | none | false | false | false | Comma-separated attack-name summary emitted by the stage-two governance summary table and consumed by the stage-two report. |
+| target_fprs_summary | governance | none | false | false | false | Comma-separated target-FPR summary emitted by the stage-two governance summary table and consumed by the stage-two report. |
+| event_record_count | protocol | none | false | false | false | Count of stage-two event score records summarized by the governance summary table. |
+| threshold_record_count | protocol | none | false | false | false | Count of stage-two threshold records summarized by the governance summary table. |
+| clean_negative_fpr_controlled | governance | none | false | false | false | Boolean summary flag indicating whether clean-negative FPR stays within the governed target across rebuilt main metrics rows. |
+| attacked_negative_fpr_reported | governance | none | false | false | false | Boolean summary flag indicating whether attacked-negative FPR is materialized for every stage-two attack breakdown row. |
+| quality_table_non_empty | governance | none | false | false | false | Boolean summary flag indicating that the rebuilt stage-two quality table contains governed rows. |
+| quality_metrics_runtime | governance | none | false | false | false | Quality-metrics runtime label emitted by the stage-two governance summary table and consumed by the stage-two report. |
+| temporal_table_non_empty | governance | none | false | false | false | Boolean summary flag indicating that the rebuilt stage-two temporal consistency table contains governed rows. |
+| temporal_metrics_runtime | governance | none | false | false | false | Temporal-metrics runtime label emitted by the stage-two governance summary table and consumed by the stage-two report. |
+| records_to_tables | governance | none | false | false | false | Boolean summary flag indicating that governed stage-two records are sufficient to rebuild tables. |
+| records_to_report | governance | none | false | false | false | Boolean summary flag indicating that governed stage-two records are sufficient to rebuild the report. |
+| records_to_failure_gallery | governance | none | false | false | false | Boolean summary flag indicating that governed stage-two records are sufficient to rebuild the failure-case gallery. |
+| stage2_decision | governance | none | false | false | false | Structured stage-two governance decision written into the governance summary table and mirrored by the Markdown report. |
+| blocking_reasons | governance | none | false | false | false | Semicolon-separated blocking reasons explaining the current stage-two governance decision. |
+| next_allowed_stage | governance | none | false | false | false | Governed next-stage recommendation emitted by the stage-two governance summary table. |
+| video_vae_backend_placeholder | placeholder | _placeholder | true | false | true | Placeholder VAE backend field reserved while the repository remains under stage-one governance. |
+| clip_similarity_placeholder | placeholder | _placeholder | true | false | true | Placeholder field representing disabled CLIP-similarity support in the stage-two scaffold. |
+| motion_consistency_placeholder | placeholder | _placeholder | true | false | true | Placeholder field representing disabled motion-consistency support in the stage-two scaffold. |
 
 ## Notes
 

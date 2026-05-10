@@ -1,0 +1,92 @@
+{
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "target_construction_phase": "real_video_vae_latent_probe",
+  "attack_matrix_name": "real_video_attack_matrix",
+  "attacks": [
+    {
+      "attack_name": "no_attack",
+      "attack_params": {}
+    },
+    {
+      "attack_name": "h264_compression",
+      "attack_params": {
+        "codec": "libx264",
+        "crf": 28,
+        "preset": "medium"
+      }
+    },
+    {
+      "attack_name": "h265_compression",
+      "attack_params": {
+        "codec": "libx265",
+        "crf": 30,
+        "preset": "medium"
+      }
+    },
+    {
+      "attack_name": "spatial_resize",
+      "attack_params": {
+        "scale": 0.75,
+        "restore_resolution": true,
+        "interpolation": "bilinear"
+      }
+    },
+    {
+      "attack_name": "crop_resize",
+      "attack_params": {
+        "crop_ratio": 0.85,
+        "restore_resolution": true
+      }
+    },
+    {
+      "attack_name": "gaussian_noise",
+      "attack_params": {
+        "sigma": 0.02,
+        "value_range": "0_1"
+      }
+    },
+    {
+      "attack_name": "blur",
+      "attack_params": {
+        "kernel_size": 5,
+        "sigma": 1.0
+      }
+    },
+    {
+      "attack_name": "temporal_crop",
+      "attack_params": {
+        "crop_start_candidates": [
+          4,
+          8,
+          12
+        ],
+        "crop_length": 20
+      }
+    },
+    {
+      "attack_name": "frame_dropping",
+      "attack_params": {
+        "drop_rate": 0.25,
+        "drop_policy": "deterministic_keyed"
+      }
+    },
+    {
+      "attack_name": "speed_change",
+      "attack_params": {
+        "speed_ratio": 1.25,
+        "resample_policy": "nearest"
+      }
+    },
+    {
+      "attack_name": "local_clip",
+      "attack_params": {
+        "clip_lengths": [
+          4,
+          8,
+          12,
+          16
+        ]
+      }
+    }
+  ]
+}

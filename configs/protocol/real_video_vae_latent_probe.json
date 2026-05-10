@@ -1,0 +1,58 @@
+{
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "construction_phase": "real_video_vae_latent_probe",
+  "target_construction_phase": "real_video_vae_latent_probe",
+  "protocol_name": "fixed_low_fpr_calibrated_detection",
+  "latent_backend_name": "real_video_vae_latent",
+  "runtime_profile": "smoke",
+  "sample_roles": [
+    "clean_negative",
+    "attacked_negative",
+    "watermarked_positive",
+    "attacked_positive"
+  ],
+  "splits": [
+    "dev",
+    "calibration",
+    "test"
+  ],
+  "required_method_variants": [
+    "frame_prc",
+    "tubelet_only",
+    "tubelet_sync"
+  ],
+  "threshold_protocol": {
+    "score_name": "S_final",
+    "target_fpr_placeholder": 0.001,
+    "validation_target_fpr_by_profile": {
+      "tiny": 1.0,
+      "smoke": 0.25,
+      "proof": 0.5,
+      "formal": 0.001
+    },
+    "calibration_split": "calibration",
+    "calibration_negative_roles": [
+      "clean_negative",
+      "attacked_negative"
+    ],
+    "threshold_quantile_rule": "upper_tail",
+    "test_split": "test",
+    "test_threshold_update_allowed": false,
+    "allow_attack_specific_threshold": false
+  },
+  "stage2_outputs": {
+    "write_video_artifacts": true,
+    "write_latent_artifacts": true,
+    "write_quality_metrics": true,
+    "write_temporal_metrics": true,
+    "write_failure_gallery": true
+  },
+  "required_output_tables": [
+    "main_tpr_fpr_table.csv",
+    "ablation_table.csv",
+    "real_video_attack_breakdown.csv",
+    "quality_table.csv",
+    "temporal_consistency_table.csv",
+    "stage2_governance_summary.csv"
+  ]
+}
