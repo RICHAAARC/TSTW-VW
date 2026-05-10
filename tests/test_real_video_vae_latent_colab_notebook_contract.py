@@ -97,6 +97,10 @@ def test_real_video_vae_latent_notebook_exists_and_uses_governed_entrypoints() -
     assert "session_model_manifest.json" in notebook_text
     assert "session_only_no_drive_model_storage" in notebook_text
     assert "snapshot_download" in notebook_text
+    assert "from main.colab.runtime_check import run_runtime_preflight_check" in notebook_text
+    assert "runtime_check_report = run_runtime_preflight_check(" in notebook_text
+    assert "subprocess.run([sys.executable, '-m', 'pip', 'install', 'pytest', 'diffusers', 'accelerate', 'transformers', 'safetensors'" in notebook_text
+    assert "'lpips', 'pytorch-msssim'" in notebook_text
     assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
     assert "dataset_manifest_path=local_dataset_manifest_path" in notebook_text
     assert "tar" in notebook_text and "--zstd" in notebook_text
