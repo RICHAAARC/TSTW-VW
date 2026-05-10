@@ -1,8 +1,8 @@
 # TSTW-VW
 
-本仓库当前处于 `protocol_skeleton` 阶段。
+本仓库当前 active formal stage 为 `synthetic_tubelet_sync_probe`。
 
-当前仓库包含阶段 0 所需的 governance 层与 placeholder / random 驱动的 runtime skeleton；不包含真实视频水印算法、不包含真实 DiT / Flow Matching 接入、不包含真实视频生成流程。
+当前仓库包含 synthetic tubelet sync probe 所需的 governance 层与 synthetic / placeholder 驱动的 runtime scaffold；同时保留受治理的阶段 2 transition-preparation 入口，包括 real-video VAE latent scaffold 模块与 Colab notebook entrypoint。仓库仍不包含真实视频水印算法、不包含真实 DiT / Flow Matching 接入、不包含真实视频生成流程。
 
 ## Current Scope
 
@@ -12,6 +12,7 @@
 - 提供可执行的 harness 审计脚本与 pytest 最小闭环。
 - 提供阶段 0 的 placeholder / random runtime skeleton，包括 synthetic latent backend、protocol runner、threshold calibrator、record writer、ablation runner 与 table rebuild scaffold。
 - 冻结阶段 0 的 event score record、threshold record、run manifest 与 table output layout schema skeleton。
+- 提供阶段 2 的 real-video VAE latent scaffold、结果检查器、打包器与单一 Colab notebook 入口，用于受治理的 transition-preparation 验证。
 
 ## Formal Config Entries
 
@@ -80,7 +81,7 @@ python tools/harness/run_all_audits.py
 ## Stage-0 Support Freeze
 
 - 当前阶段冻结 attack placeholder config、ablation shared-protocol config、claim 边界与 artifact rebuild 约束。
-- 当前阶段允许创建 `main/` 下的 stage-0 代码骨架，但仍不得创建 `paper_workflow/` 或 `minimal_release/` 目录。
+- 当前阶段允许保留 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb` 作为受治理的 transition-preparation 入口，但仍不得创建额外 notebook 或 `minimal_release/` 目录。
 - 当前阶段只允许为后续阶段声明边界，不允许提前创建 release artifacts。
 
 ## Next-Stage Gate

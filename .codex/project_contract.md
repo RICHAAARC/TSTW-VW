@@ -7,8 +7,10 @@
 ## Current Stage
 
 - `project_stage`: `synthetic_tubelet_sync_probe`
+- `target_construction_phase`: `real_video_vae_latent_probe`
 - 当前阶段允许在既有 protocol core 上运行 synthetic video latent、temporal attack matrix 与 `frame_prc` / `tubelet_only` / `tubelet_sync` 三个正式 method variant。
 - 当前阶段允许实现 synthetic / placeholder 驱动的最小 mechanism runtime，用于冻结 records、thresholds、manifest、table rebuild 与机制追踪口径。
+- 当前阶段允许保留单一 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb` 作为 stage-two transition-preparation 的远程 GPU entrypoint，但其职责仅限于环境准备、配置写入、模块调用、结果检查与结果打包。
 - 当前阶段不得进入真实 watermark 算法实现、真实 DiT / Flow Matching / VAE 接入、真实视频生成流程。
 
 ## Ordered Semantic Stages
@@ -102,6 +104,6 @@
 
 1. Do not implement real watermark embedding or detection algorithms.
 2. Do not integrate real DiT backends, Flow Matching backends, or video VAE backends.
-3. Do not create notebook-only protocol logic.
+3. Do not create notebook-only protocol logic; the governed stage-two Colab entrypoint may exist only when it delegates formal outputs to repository modules.
 4. Do not check in formal experiment outputs under `outputs/`; stage-0 tests may use temporary output roots or ephemeral `outputs/runs` paths.
 5. Do not bypass harness audits or pytest gates.

@@ -40,6 +40,7 @@ def test_stage2_tables_and_report_rebuild_from_records(tmp_path: Path) -> None:
     assert len(rows) == 1
     assert rows[0]["stage2_decision"] == "INCONCLUSIVE"
     assert rows[0]["next_allowed_stage"] == "remain_in_real_video_vae_latent_probe"
+    assert "notebook_entrypoint_deferred_under_current_stage_governance" not in rows[0]["blocking_reasons"]
     report_text = rebuilt_paths["report_path"].read_text(encoding="utf-8")
     assert f"- method_variants: {rows[0]['method_variants_summary']}" in report_text
     assert f"- attack_names: {rows[0]['attack_names_summary']}" in report_text

@@ -6,6 +6,8 @@ Module type: General module
 
 from __future__ import annotations
 
+import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -17,6 +19,80 @@ if str(ROOT) not in sys.path:
 
 from tools.harness.lib.file_scanner import iter_text_files, read_text
 from tools.harness.lib.json_report import build_report, exit_with_report
+
+
+FORMAL_OUTPUT_FRAGMENTS = ("tables/", "thresholds/")
+DIRECT_WRITE_HINTS = (
+    "write_text(",
+    "write_bytes(",
+    ".to_csv(",
+    ".to_json(",
+    "json.dump(",
+    "csv.writer(",
+    "csv.dictwriter(",
+    "open(",
+    ".open(",
+    "shutil.copy(",
+    "shutil.copytree(",
+    "path(",
+    "mkdir(",
+    "makedirs(",
+    "touch(",
+    "cp ",
+    "mv ",
+    "rm ",
+)
+
+
+def _extract_notebook_sources(notebook_text: str) -> list[str]:
+    """Extract cell sources from a notebook JSON payload.
+
+    Args:
+        notebook_text: Raw notebook text.
+
+    Returns:
+        A list of notebook cell sources.
+    """
+    try:
+        notebook_payload = json.loads(notebook_text)
+    except json.JSONDecodeError:
+        return [notebook_text]
+
+    cell_sources: list[str] = []
+    for cell in notebook_payload.get("cells", []):
+        if not isinstance(cell, dict):
+            continue
+        source = cell.get("source", [])
+        if isinstance(source, list):
+            cell_sources.append("".join(str(line) for line in source))
+        elif isinstance(source, str):
+            cell_sources.append(source)
+    return cell_sources
+
+
+def _find_direct_output_write_reason(cell_source: str) -> str | None:
+    """Identify whether a notebook cell directly writes formal outputs.
+
+    Args:
+        cell_source: Notebook cell source text.
+
+    Returns:
+        A violation reason, or `None` when the cell is safe.
+    """
+    for raw_line in cell_source.splitlines():
+        normalized_line = raw_line.strip().lower()
+        if not normalized_line:
+            continue
+        if not any(fragment in normalized_line for fragment in FORMAL_OUTPUT_FRAGMENTS):
+            continue
+        if any(hint in normalized_line for hint in DIRECT_WRITE_HINTS) or re.search(
+            r"(>|>>).*?(tables/|thresholds/)",
+            normalized_line,
+        ):
+            if "thresholds/" in normalized_line:
+                return "notebook_writes_thresholds_directly"
+            return "notebook_writes_tables_directly"
+    return None
 
 
 def run_audit(root: str | Path) -> dict[str, Any]:
@@ -36,30 +112,17 @@ def run_audit(root: str | Path) -> dict[str, Any]:
         if file_path.suffix.lower() != ".ipynb":
             continue
         checked_paths.append(str(file_path))
-        text = read_text(file_path)
-        if "tables/" in text:
+        for cell_source in _extract_notebook_sources(read_text(file_path)):
+            violation_reason = _find_direct_output_write_reason(cell_source)
+            if violation_reason is None:
+                continue
             violations.append(
                 {
                     "path": str(file_path),
-                    "reason": "notebook_writes_tables_directly",
+                    "reason": violation_reason,
                 }
             )
-        if "thresholds/" in text:
-            violations.append(
-                {
-                    "path": str(file_path),
-                    "reason": "notebook_writes_thresholds_directly",
-                }
-            )
-        if "ProtocolRunner" not in text and (
-            "tables/" in text or "thresholds/" in text
-        ):
-            violations.append(
-                {
-                    "path": str(file_path),
-                    "reason": "notebook_bypasses_formal_runner",
-                }
-            )
+            break
 
     decision = "fail" if violations else "pass"
     return build_report(

@@ -574,7 +574,6 @@ def build_stage2_governance_summary_rows(
         stage2_decision = "INCONCLUSIVE"
         blocking_reasons = [
             "video_vae_backend_placeholder",
-            "notebook_entrypoint_deferred_under_current_stage_governance",
             "real_video_runtime_not_enabled",
         ]
         if not clean_negative_fpr_controlled:

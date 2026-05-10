@@ -22,6 +22,21 @@ EXPECTED_DIRECTORIES = [
     "paper_workflow",
     "outputs",
 ]
+STAGE_TWO_REQUIRED_PATHS = {
+    "stage2_protocol_config": "configs/protocol/real_video_vae_latent_probe.json",
+    "stage2_backend_config": "configs/backend/real_video_vae_latent.json",
+    "stage2_attack_matrix_config": "configs/attacks/real_video_attack_matrix.json",
+    "stage2_ablation_config": "configs/ablation/real_video_vae_latent_ablation.json",
+    "stage2_backend_module": "main/backends/real_video_vae_latent.py",
+    "stage2_vae_registry_module": "main/vae/vae_registry.py",
+    "stage2_runner_module": "main/protocol/stage2_runner.py",
+    "stage2_artifact_builder_module": "main/analysis/stage2_artifacts.py",
+    "stage2_result_checker_module": "main/colab/notebook_result_checker.py",
+    "stage2_drive_packager_module": "main/colab/drive_packager.py",
+    "stage2_colab_notebook": (
+        "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb"
+    ),
+}
 STAGE_ONE_REQUIRED_PATHS = {
     "protocol_support_config": "configs/protocol/synthetic_tubelet_sync_probe.json",
     "temporal_attack_matrix_config": "configs/attacks/temporal_attack_matrix.json",
@@ -38,6 +53,48 @@ STAGE_ONE_REQUIRED_PATHS = {
 NEXT_STAGE_TARGET = "real_video_vae_latent_probe"
 
 
+def _read_project_contract(root_path: Path) -> dict[str, Any]:
+    """Read the governed project contract when it exists.
+
+    Args:
+        root_path: Repository root path.
+
+    Returns:
+        Parsed contract payload or an empty dictionary.
+    """
+    contract_path = root_path / "configs" / "project" / "project_contract.json"
+    if not contract_path.exists():
+        return {}
+    try:
+        return json.loads(contract_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
+def _build_required_paths(root_path: Path, path_map: dict[str, str]) -> tuple[int, dict[str, dict[str, Any]]]:
+    """Build a normalized required-path readiness payload.
+
+    Args:
+        root_path: Repository root path.
+        path_map: Artifact-name to relative-path map.
+
+    Returns:
+        The present-path count and the normalized required-path payload.
+    """
+    required_paths: dict[str, dict[str, Any]] = {}
+    present_count = 0
+    for artifact_name, relative_path in path_map.items():
+        candidate = root_path / Path(relative_path)
+        exists = candidate.exists()
+        if exists:
+            present_count += 1
+        required_paths[artifact_name] = {
+            "exists": exists,
+            "path": str(candidate),
+        }
+    return present_count, required_paths
+
+
 def _inspect_next_stage_readiness(root_path: Path, project_stage: str | None) -> dict[str, Any]:
     """Inspect whether the repository carries the reserved next-stage entry artifacts.
 
@@ -47,26 +104,25 @@ def _inspect_next_stage_readiness(root_path: Path, project_stage: str | None) ->
     Returns:
         A readiness payload for the synthetic tubelet sync probe entry contract.
     """
+    project_contract = _read_project_contract(root_path)
+    target_construction_phase = project_contract.get(
+        "target_construction_phase",
+        NEXT_STAGE_TARGET,
+    )
     if project_stage == "synthetic_tubelet_sync_probe":
+        present_count, required_paths = _build_required_paths(
+            root_path,
+            STAGE_TWO_REQUIRED_PATHS,
+        )
         return {
-            "target_construction_phase": NEXT_STAGE_TARGET,
-            "all_required_paths_present": False,
-            "present_required_path_count": 0,
-            "required_path_count": 0,
-            "required_paths": {},
+            "target_construction_phase": target_construction_phase,
+            "all_required_paths_present": present_count == len(STAGE_TWO_REQUIRED_PATHS),
+            "present_required_path_count": present_count,
+            "required_path_count": len(STAGE_TWO_REQUIRED_PATHS),
+            "required_paths": required_paths,
         }
 
-    required_paths: dict[str, dict[str, Any]] = {}
-    present_count = 0
-    for artifact_name, relative_path in STAGE_ONE_REQUIRED_PATHS.items():
-        candidate = root_path / Path(relative_path)
-        exists = candidate.exists()
-        if exists:
-            present_count += 1
-        required_paths[artifact_name] = {
-            "exists": exists,
-            "path": str(candidate),
-        }
+    present_count, required_paths = _build_required_paths(root_path, STAGE_ONE_REQUIRED_PATHS)
 
     return {
         "target_construction_phase": "synthetic_tubelet_sync_probe",
@@ -100,14 +156,11 @@ def inspect_repository(root: str | Path) -> dict[str, Any]:
         }
 
     project_stage = None
-    contract_path = root_path / "configs" / "project" / "project_contract.json"
-    if contract_path.exists():
-        try:
-            project_stage = json.loads(contract_path.read_text(encoding="utf-8")).get(
-                "project_stage"
-            )
-        except json.JSONDecodeError:
-            project_stage = "unreadable"
+    project_contract = _read_project_contract(root_path)
+    if project_contract:
+        project_stage = project_contract.get("project_stage")
+    elif (root_path / "configs" / "project" / "project_contract.json").exists():
+        project_stage = "unreadable"
 
     repository_mode = (
         "empty_repository_bootstrap" if present_count == 0 else "governed_repository"

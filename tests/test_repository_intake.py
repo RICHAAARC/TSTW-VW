@@ -48,11 +48,14 @@ def test_governed_repository_reports_active_stage_status() -> None:
     assert report["directory_status"]["tools"]["exists"] is True
     assert report["directory_status"]["tests"]["exists"] is True
     assert report["directory_status"]["main"]["exists"] is True
-    assert report["directory_status"]["paper_workflow"]["exists"] is False
+    assert report["directory_status"]["paper_workflow"]["exists"] is True
     assert "outputs/" in (ROOT / ".gitignore").read_text(encoding="utf-8")
     next_stage_readiness = report["next_stage_readiness"]
     assert next_stage_readiness["target_construction_phase"] == "real_video_vae_latent_probe"
-    assert next_stage_readiness["all_required_paths_present"] is False
-    assert next_stage_readiness["present_required_path_count"] == 0
-    assert next_stage_readiness["required_path_count"] == 0
-    assert next_stage_readiness["required_paths"] == {}
+    assert next_stage_readiness["all_required_paths_present"] is True
+    assert next_stage_readiness["present_required_path_count"] == 11
+    assert next_stage_readiness["required_path_count"] == 11
+    assert next_stage_readiness["required_paths"]["stage2_colab_notebook"]["exists"] is True
+    assert (
+        next_stage_readiness["required_paths"]["stage2_runner_module"]["exists"] is True
+    )

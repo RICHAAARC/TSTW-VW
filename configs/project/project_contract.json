@@ -1,6 +1,7 @@
 {
   "project_stage": "synthetic_tubelet_sync_probe",
   "construction_phase": "synthetic_tubelet_sync_probe",
+  "target_construction_phase": "real_video_vae_latent_probe",
   "legacy_stage_id": null,
   "method_objects": [
     "temporal_synchronized_tubelet_code",

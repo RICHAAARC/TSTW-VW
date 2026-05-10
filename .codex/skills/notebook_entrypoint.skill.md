@@ -25,25 +25,26 @@ Applies to future `.ipynb` files, notebook execution entrypoints, and notebook a
 ## Blocking Rules
 
 - Notebooks must not be the only place where governed protocol logic exists.
-- Notebooks must not write formal `tables/` or `thresholds/` artifacts directly.
-- Current stage must not create notebooks.
+- Notebooks must not write formal `records/`, `thresholds/`, `tables/`, `figures/`, or `reports/` artifacts directly.
+- While `project_stage` remains `synthetic_tubelet_sync_probe`, only `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb` may exist, and only as a transition-preparation entrypoint.
 
 ## Allowed Changes
 
 - Add notebook governance documentation.
 - Add notebook audit scripts.
-- Add tests that confirm a notebook-free bootstrap passes.
+- Add or update the governed stage-two Colab notebook entrypoint.
+- Add tests that confirm the governed notebook contract and output-bypass audit.
 
 ## Forbidden Changes
 
-- Creating `paper_workflow` notebooks in `protocol_skeleton`.
+- Creating additional `paper_workflow` notebooks before an explicit stage-transition decision.
 - Writing formal output paths directly from notebook cells.
 - Encoding protocol-only logic inside notebook code cells.
 
 ## Required Tests
 
-- Pass audit when no notebooks exist.
-- Flag notebook output bypass patterns when notebooks are later introduced.
+- Pass the stage-two Colab notebook contract test.
+- Flag notebook output bypass patterns when notebooks attempt direct formal-output writes.
 
 ## Required Audit Hooks
 

@@ -101,6 +101,7 @@ class Stage2Runner:
         attack_matrix_path: str | Path | None = None,
         ablation_config_path: str | Path | None = None,
         dataset_manifest_path: str | Path | None = None,
+        runtime_config_path: str | Path | None = None,
     ) -> Stage2RunResult:
         """功能：运行阶段 2 占位协议并写出 records、tables 与 manifests。
 
@@ -117,6 +118,7 @@ class Stage2Runner:
             attack_matrix_path: Optional attack config path.
             ablation_config_path: Optional ablation config path.
             dataset_manifest_path: Optional dataset manifest path.
+            runtime_config_path: Optional Colab runtime-config override path.
 
         Returns:
             A `Stage2RunResult` instance.
@@ -158,6 +160,7 @@ class Stage2Runner:
         attack_config = load_json_config(attack_matrix_file)
         ablation_config = load_json_config(ablation_config_file)
         dataset_manifest = load_dataset_manifest(dataset_manifest_file)
+        runtime_config_overrides = self._load_runtime_config(runtime_config_path)
         dataset_summary = summarize_dataset_manifest(dataset_manifest)
         vae_backend = resolve_vae_backend(backend_config)
         vae_metadata = vae_backend.backend_metadata()
@@ -203,18 +206,22 @@ class Stage2Runner:
             output_root_path,
         )
         output_paths = build_stage2_output_paths(output_root_path)
-        runtime_config_payload = {
-            "run_mode": run_mode,
-            "construction_phase": protocol_config["construction_phase"],
-            "protocol_config": str(protocol_config_file.relative_to(self._repository_root)).replace("\\", "/"),
-            "backend_config": str(backend_config_file.relative_to(self._repository_root)).replace("\\", "/"),
-            "attack_matrix_config": str(attack_matrix_file.relative_to(self._repository_root)).replace("\\", "/"),
-            "ablation_config": str(ablation_config_file.relative_to(self._repository_root)).replace("\\", "/"),
-            "dataset_manifest": str(dataset_manifest_file.relative_to(self._repository_root)).replace("\\", "/"),
-            "target_fpr": protocol_config["threshold_protocol"]["target_fpr_placeholder"],
-            "method_variants": [method_config["method_variant"] for method_config in runtime_method_configs],
-        }
+        runtime_config_payload = dict(runtime_config_overrides)
+        runtime_config_payload.update(
+            {
+                "run_mode": run_mode,
+                "construction_phase": protocol_config["construction_phase"],
+                "protocol_config": str(protocol_config_file.relative_to(self._repository_root)).replace("\\", "/"),
+                "backend_config": str(backend_config_file.relative_to(self._repository_root)).replace("\\", "/"),
+                "attack_matrix_config": str(attack_matrix_file.relative_to(self._repository_root)).replace("\\", "/"),
+                "ablation_config": str(ablation_config_file.relative_to(self._repository_root)).replace("\\", "/"),
+                "dataset_manifest": str(dataset_manifest_file.relative_to(self._repository_root)).replace("\\", "/"),
+                "target_fpr": protocol_config["threshold_protocol"]["target_fpr_placeholder"],
+                "method_variants": [method_config["method_variant"] for method_config in runtime_method_configs],
+            }
+        )
         self._write_json(output_paths.colab_stage2_runtime_config_path, runtime_config_payload)
+        runtime_config_digest = compute_object_digest(runtime_config_payload)
         runtime_manifest = {
             "run_id": run_id,
             "construction_phase": protocol_config["construction_phase"],
@@ -223,10 +230,17 @@ class Stage2Runner:
             "python_version": platform.python_version(),
             "platform": platform.platform(),
             "working_directory": str(self._repository_root),
-            "notebook_entrypoint_present": False,
+            "notebook_entrypoint_present": (
+                self._repository_root
+                / "paper_workflow"
+                / "Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb"
+            ).exists(),
             "dataset_summary": dataset_summary,
             "vae_metadata": vae_metadata,
         }
+        git_commit = runtime_config_overrides.get("git_commit")
+        if isinstance(git_commit, str) and git_commit:
+            runtime_manifest["git_commit"] = git_commit
         self._write_json(output_paths.colab_runtime_manifest_path, runtime_manifest)
         artifact_manifest = self._build_artifact_manifest(event_score_records)
         self._write_json(output_paths.artifact_manifest_path, artifact_manifest)
@@ -241,6 +255,7 @@ class Stage2Runner:
             "protocol_config_digest": compute_file_digest(protocol_config_file),
             "attack_matrix_digest": compute_file_digest(attack_matrix_file),
             "ablation_config_digest": compute_file_digest(ablation_config_file),
+            "runtime_config_digest": runtime_config_digest,
             "records_digest": compute_object_digest(event_score_records),
             "thresholds_digest": compute_object_digest(threshold_records),
             "tables_digest": compute_path_collection_digest(output_paths.table_paths()),
@@ -644,9 +659,36 @@ class Stage2Runner:
 
     def _resolve_config_path(self, path: str | Path | None, default_path: Path) -> Path:
         resolved_path = default_path if path is None else Path(path)
+        if path is not None and not resolved_path.is_absolute():
+            repo_relative_path = self._repository_root / resolved_path
+            if repo_relative_path.exists():
+                resolved_path = repo_relative_path
         if not resolved_path.exists():
             raise FileNotFoundError(resolved_path)
         return resolved_path
+
+    def _load_runtime_config(self, runtime_config_path: str | Path | None) -> dict[str, Any]:
+        """Load an optional Colab runtime-config payload.
+
+        Args:
+            runtime_config_path: Optional runtime-config JSON path.
+
+        Returns:
+            A normalized runtime-config dictionary.
+        """
+        if runtime_config_path is None:
+            return {}
+        resolved_path = Path(runtime_config_path)
+        if not resolved_path.is_absolute():
+            repo_relative_path = self._repository_root / resolved_path
+            if repo_relative_path.exists():
+                resolved_path = repo_relative_path
+        if not resolved_path.exists():
+            raise FileNotFoundError(resolved_path)
+        runtime_config = load_json_config(resolved_path)
+        if not isinstance(runtime_config, dict):
+            raise TypeError("runtime_config must be a dictionary")
+        return runtime_config
 
     def _resolve_backend_config(self, runtime_profile: str, backend_config: dict[str, Any]) -> dict[str, Any]:
         resolved_backend_config = copy.deepcopy(backend_config)
@@ -765,6 +807,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--attack-matrix", default=None)
     parser.add_argument("--ablation-config", default=None)
     parser.add_argument("--dataset-manifest", default=None)
+    parser.add_argument("--runtime-config", default=None)
     args = parser.parse_args(argv)
     Stage2Runner(ROOT).run(
         output_root=args.run_root,
@@ -776,6 +819,7 @@ def main(argv: list[str] | None = None) -> None:
         attack_matrix_path=args.attack_matrix,
         ablation_config_path=args.ablation_config,
         dataset_manifest_path=args.dataset_manifest,
+        runtime_config_path=args.runtime_config,
     )
 
 

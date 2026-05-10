@@ -72,7 +72,7 @@
 | payload_bits_digest_random | random | _digest_random | true | false | false | Digest-tracked random payload field; digest semantics are self-contained. |
 | protocol_name | protocol | none | true | false | false | Frozen protocol identifier for the fixed low-FPR calibrated detector skeleton. |
 | construction_phase | protocol | none | true | false | false | Semantic construction phase identifier aligned with the active governed stage. |
-| target_construction_phase | protocol | none | true | false | false | Reserved next-stage construction phase identifier used by support configs while the active project stage remains `protocol_skeleton`. |
+| target_construction_phase | protocol | none | true | false | false | Reserved next-stage construction phase identifier used by support configs and project contract while the active project stage remains `synthetic_tubelet_sync_probe`. |
 | latent_distribution | protocol | none | true | false | false | Governed latent distribution identifier reserved for the synthetic tubelet sync probe entry config. |
 | latent_shape | protocol | none | true | false | false | Reserved latent-shape container for the synthetic video latent support config. |
 | latent_generation_seed | protocol | none | true | false | false | Reserved deterministic seed field for the synthetic video latent support config. |
@@ -207,6 +207,9 @@
 | artifact_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the stage-two artifact manifest. |
 | colab_runtime_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the stage-two runtime manifest. |
 | colab_stage2_runtime_config_path | artifact_layout | none | false | false | false | Relative layout path for the stage-two runtime-config manifest. |
+| notebook_entrypoint_present | governance | none | false | false | false | Boolean runtime-manifest field indicating whether the governed stage-two Colab notebook entrypoint exists in the repository at run time. |
+| git_commit | trace | none | false | false | false | Source commit identifier recorded in the stage-two Colab runtime manifest when provided by the notebook runtime config. |
+| runtime_config_digest | trace | none | false | false | false | Digest of the persisted stage-two Colab runtime-config payload recorded in the run manifest for rebuild provenance. |
 | real_video_attack_breakdown_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two real-video attack breakdown table. |
 | quality_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two quality table. |
 | temporal_consistency_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two temporal consistency table. |

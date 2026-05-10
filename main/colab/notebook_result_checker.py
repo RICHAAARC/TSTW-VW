@@ -54,7 +54,7 @@ def check_stage2_outputs(
     stage2_decision = report_fields.get("Stage2Decision", "INCONCLUSIVE")
     blocking_reasons = [
         reason.strip()
-        for reason in report_fields.get("BlockingReasons", "").split(",")
+        for reason in report_fields.get("BlockingReasons", "").replace(";", ",").split(",")
         if reason.strip()
     ]
     next_allowed_stage = report_fields.get(
