@@ -165,6 +165,10 @@ class RealVideoVaeLatentRunner:
         backend_config["dataset_manifest_path"] = str(dataset_manifest_file)
         if "local_dataset_root" in runtime_config_overrides:
             backend_config["local_dataset_root"] = runtime_config_overrides["local_dataset_root"]
+        if "local_vae_model_root" in runtime_config_overrides:
+            backend_config["vae_model_local_path"] = runtime_config_overrides["local_vae_model_root"]
+        elif "vae_model_local_path" in runtime_config_overrides:
+            backend_config["vae_model_local_path"] = runtime_config_overrides["vae_model_local_path"]
         if "frame_sampling_policy" in dataset_manifest:
             backend_config["frame_sampling_policy"] = dataset_manifest["frame_sampling_policy"]
         if "default_frame_count" in dataset_manifest:

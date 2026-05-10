@@ -117,6 +117,7 @@ def write_video_mp4(
         format="FFMPEG",
         fps=fps,
         codec=codec,
+        macro_block_size=1,
         ffmpeg_params=["-crf", str(int(crf)), "-pix_fmt", "yuv420p"],
     )
     for frame in frame_u8:

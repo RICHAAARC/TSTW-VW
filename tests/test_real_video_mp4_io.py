@@ -6,7 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
-import shutil
+import importlib.util
 from pathlib import Path
 
 import numpy as np
@@ -26,8 +26,8 @@ def test_real_video_mp4_io_roundtrip_and_probe(tmp_path: Path) -> None:
     Returns:
         None.
     """
-    if shutil.which("ffmpeg") is None:
-        pytest.skip("ffmpeg is unavailable")
+    if importlib.util.find_spec("imageio_ffmpeg") is None:
+        pytest.skip("imageio_ffmpeg is unavailable")
 
     source_frames = np.random.default_rng(20260510).random((6, 12, 16, 3), dtype=np.float32)
     output_path = tmp_path / "tiny_source.mp4"
@@ -43,6 +43,28 @@ def test_real_video_mp4_io_roundtrip_and_probe(tmp_path: Path) -> None:
     assert loaded.frames.shape[0] >= 1
     assert loaded.fps >= 1
     assert probed["frame_count"] == loaded.frames.shape[0]
+
+
+@pytest.mark.unit
+def test_real_video_mp4_io_preserves_8x8_resolution(tmp_path: Path) -> None:
+    """Validate mp4 writer keeps non-16-multiple resolution unchanged.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    if importlib.util.find_spec("imageio_ffmpeg") is None:
+        pytest.skip("imageio_ffmpeg is unavailable")
+
+    source_frames = np.random.default_rng(20260510).random((4, 8, 8, 3), dtype=np.float32)
+    output_path = tmp_path / "tiny_8x8_source.mp4"
+    write_video_mp4(source_frames, output_path, fps=8, codec="libx264", crf=20)
+
+    probed = probe_video_metadata(output_path)
+    assert probed["height"] == 8
+    assert probed["width"] == 8
 
 
 @pytest.mark.unit
