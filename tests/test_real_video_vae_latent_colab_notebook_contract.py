@@ -79,14 +79,23 @@ def test_real_video_vae_latent_notebook_exists_and_uses_governed_entrypoints() -
     assert "/content/TSTW_runtime" in notebook_text
     assert "/content/drive/MyDrive" in notebook_text
     assert "result_registry.jsonl" in notebook_text
+    assert "family_registry.jsonl" in notebook_text
     assert "colab_runtime_manifest_overrides" in notebook_text
     assert "artifacts' / 'colab_runtime_manifest.json" in notebook_text or 'artifacts" / "colab_runtime_manifest.json' in notebook_text
+    assert "FAMILY_ID" in notebook_text
+    assert "WORKFLOW_KEY" in notebook_text
+    assert "STEP_KEY" in notebook_text
+    assert "results' / 'families'" in notebook_text or 'results" / "families"' in notebook_text
     assert "formal_validation_summary" in notebook_text
     assert "drive_result_summary" in notebook_text
     assert "result_registry_entry" in notebook_text
+    assert "session_model_manifest.json" in notebook_text
+    assert "session_only_no_drive_model_storage" in notebook_text
+    assert "snapshot_download" in notebook_text
     assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
     assert "dataset_manifest_path=local_dataset_manifest_path" in notebook_text
     assert "tar" in notebook_text and "--zstd" in notebook_text
+    assert "/content/drive/MyDrive/Models" not in notebook_text
     assert "tables/" not in notebook_text
     assert "thresholds/" not in notebook_text
     assert "D:\\" not in notebook_text
