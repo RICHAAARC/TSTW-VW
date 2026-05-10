@@ -7,7 +7,7 @@
 5. Current-stage runtime work may implement only the minimum synthetic / placeholder-driven mechanism runtime needed to freeze records, thresholds, manifests, table rebuilds, and mechanism traces.
 6. Real DiT, Flow Matching, video VAE, real video generation, and real watermark algorithm integration are forbidden in the current stage.
 7. Bypassing harness audits is forbidden.
-8. Ambiguous stage naming such as `*_v1`, `*_v2`, `*_p0`, `*_p1`, `stage_0`, or `stage_1` is forbidden.
+8. Ambiguous stage naming patterns such as `*_v[0-9]+`, `*_p[0-9]+`, `stage[0-9]+`, `stage_[0-9]+`, `stage-[0-9]+`, `test_stage[0-9]+_*`, or `run_stage[0-9]+_*` are forbidden.
 9. All placeholder fields must end with `_placeholder`.
 10. All random-trace fields must end with `_random` or `_digest_random`.
 11. Placeholder fields cannot support supported claims; supported claims must map to governed records, thresholds, tables, curves, reports, or manifests.

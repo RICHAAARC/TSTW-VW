@@ -27,7 +27,7 @@ Applies to file names, test file names, module names, config keys, JSON keys, Py
 - Formal names must use `snake_case`.
 - `method_variant` must use mechanism semantics.
 - `full`, `default`, `new`, `old`, `best`, and `final_method` are blocked as formal `method_variant` values.
-- `stage1`, `stage2`, `stage-1`, `stage_1`, `stage-2`, `stage_2`, `*_v1`, `*_v2`, `*_v3`, `*_p0`, `*_p1`, and `*_p2` are blocked as weak semantic names.
+- Weak semantic names matching patterns `stage[0-9]+`, `stage_[0-9]+`, `stage-[0-9]+` (any digit), `*_v[0-9]+`, `*_p[0-9]+` (any digit), `test_stage[0-9]+_*`, and `run_stage[0-9]+_*` are blocked as weak semantic names.
 
 ## Allowed Changes
 

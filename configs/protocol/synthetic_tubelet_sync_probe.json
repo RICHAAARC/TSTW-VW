@@ -102,7 +102,7 @@
     "tubelet_only",
     "tubelet_sync"
   ],
-  "stage1_completion_gate": {
+  "synthetic_tubelet_sync_probe_completion_gate": {
     "primary_method_variants": [
       "frame_prc",
       "tubelet_only",

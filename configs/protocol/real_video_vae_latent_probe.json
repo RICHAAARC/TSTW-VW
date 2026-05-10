@@ -40,7 +40,7 @@
     "test_threshold_update_allowed": false,
     "allow_attack_specific_threshold": false
   },
-  "stage2_outputs": {
+  "real_video_vae_latent_probe_outputs": {
     "write_video_artifacts": true,
     "write_latent_artifacts": true,
     "write_quality_metrics": true,

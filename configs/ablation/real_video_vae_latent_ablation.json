@@ -15,5 +15,5 @@
   "tubelet_length_sweep_proof": [1, 2, 4, 8, 16],
   "tubelet_length_sweep_formal": [1, 2, 4, 8, 16],
   "shared_target_fpr": 0.001,
-  "shared_table_builder_name": "stage2_artifacts"
+  "shared_table_builder_name": "table_builder"
 }

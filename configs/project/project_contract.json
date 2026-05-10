@@ -96,27 +96,15 @@
   "naming_governance": {
     "case_style": "snake_case",
     "forbidden_suffixes": [
-      "_v1",
-      "_v2",
-      "_v3",
-      "_p0",
-      "_p1",
-      "_p2"
+      "_v[0-9]+",
+      "_p[0-9]+"
     ],
     "forbidden_weak_name_patterns": [
-      "stage0",
-      "stage1",
-      "stage2",
-      "stage_0",
-      "stage_1",
-      "stage_2",
-      "stage-0",
-      "stage-1",
-      "stage-2",
-      "test_stage1_*",
-      "test_stage2_*",
-      "run_stage1_*",
-      "run_stage2_*"
+      "stage[0-9]+",
+      "stage_[0-9]+",
+      "stage-[0-9]+",
+      "test_stage[0-9]+_*",
+      "run_stage[0-9]+_*"
     ],
     "allowed_semantic_stage_names": [
       "protocol_skeleton",

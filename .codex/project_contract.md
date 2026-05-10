@@ -89,8 +89,8 @@
 ### Naming Governance
 
 - All formal names must use `snake_case`.
-- Global weak naming such as `stage0`, `stage1`, `stage2`, `stage_0`, `stage_1`, `stage_2`, `stage-0`, `stage-1`, `stage-2`, `*_v1`, `*_v2`, `*_v3`, `*_p0`, `*_p1`, and `*_p2` are blocking violations.
-- Future Codex changes must not introduce weak semantic names such as `stage1`, `stage2`, `v1`, or `p1` for formal files, fields, configs, reports, or method variants.
+- Global weak naming patterns (regex-based) such as `stage[0-9]+` (stage0, stage1, stage999), `stage_[0-9]+`, `stage-[0-9]+`, `*_v[0-9]+` (*_v1, *_v999), `*_p[0-9]+` (*_p0, *_p999), `test_stage[0-9]+_*`, and `run_stage[0-9]+_*` are blocking violations that apply to any present and future version number.
+- Future Codex changes must not introduce weak semantic names for formal files, fields, configs, reports, or method variants.
 - `method_variant` must use mechanism semantics; `full`, `default`, `new`, `old`, `best`, and `final_method` are blocking violations.
 
 ### Placeholder And Random Governance
