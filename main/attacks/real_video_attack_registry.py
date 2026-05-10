@@ -187,23 +187,47 @@ class VideoTensorAttackPlaceholder:
         raise ValueError(f"unsupported attack_name: {self.attack_name}")
 
 
-def build_real_video_attack_registry(attack_config: dict[str, Any]) -> list[Any]:
+def build_real_video_attack_registry(
+    attack_config: dict[str, Any],
+    *,
+    runtime_kind: str = "tensor_scaffold",
+) -> list[Any]:
     """功能：根据配置构建阶段 2 attack registry。
 
     Build the stage-two attack registry from a parsed config.
 
     Args:
         attack_config: Parsed attack config.
+        runtime_kind: Runtime mode - "tensor_scaffold" or "real_video".
 
     Returns:
         A list of materialized attack objects.
     """
+    if runtime_kind not in {"tensor_scaffold", "real_video"}:
+        raise ValueError(f"unsupported runtime_kind: {runtime_kind}")
+
     if not isinstance(attack_config, dict):
         raise TypeError("attack_config must be a dictionary")
     attack_entries = attack_config.get("attacks")
     if not isinstance(attack_entries, list) or not attack_entries:
         raise ValueError("attacks must be a non-empty list")
 
+    if runtime_kind == "tensor_scaffold":
+        return _build_tensor_scaffold_attack_registry(attack_entries)
+    return _build_real_video_attack_registry(attack_entries)
+
+
+def _build_tensor_scaffold_attack_registry(attack_entries: list[dict[str, Any]]) -> list[Any]:
+    """功能：构建 tensor scaffold attack registry（占位）。
+
+    Build tensor scaffold attack registry (placeholder mode).
+
+    Args:
+        attack_entries: List of attack configuration entries.
+
+    Returns:
+        A list of materialized attack objects.
+    """
     attack_registry: list[Any] = []
     for attack_entry in attack_entries:
         attack_name = attack_entry["attack_name"]
@@ -216,4 +240,50 @@ def build_real_video_attack_registry(attack_config: dict[str, Any]) -> list[Any]
         attack_registry.append(
             VideoTensorAttackPlaceholder(attack_name=attack_name, attack_params=attack_params)
         )
+    return attack_registry
+
+
+def _build_real_video_attack_registry(attack_entries: list[dict[str, Any]]) -> list[Any]:
+    """功能：构建真实视频 attack registry。
+
+    Build real video attack registry for video files.
+
+    Args:
+        attack_entries: List of attack configuration entries.
+
+    Returns:
+        A list of materialized attack objects.
+    """
+    # 动态导入真实视频攻击类，避免在 formal 模式下的硬依赖
+    from main.attacks.compression import H264CompressionAttack, H265CompressionAttack
+    from main.attacks.spatial import BlurAttack, CropResizeAttack, SpatialResizeAttack
+    from main.attacks.video_noise import GaussianNoiseVideoAttack
+
+    attack_registry: list[Any] = []
+    for attack_entry in attack_entries:
+        attack_name = attack_entry["attack_name"]
+        attack_params = attack_entry["attack_params"]
+
+        if attack_name in SUPPORTED_TEMPORAL_ATTACK_NAMES:
+            # 时间攻击使用占位实现
+            attack_registry.append(
+                TemporalAttackPlaceholder(attack_name=attack_name, attack_params=attack_params)
+            )
+            continue
+
+        if attack_name == "h264_compression":
+            attack_registry.append(H264CompressionAttack(attack_params))
+        elif attack_name == "h265_compression":
+            attack_registry.append(H265CompressionAttack(attack_params))
+        elif attack_name == "spatial_resize":
+            attack_registry.append(SpatialResizeAttack(attack_params))
+        elif attack_name == "crop_resize":
+            attack_registry.append(CropResizeAttack(attack_params))
+        elif attack_name == "gaussian_noise":
+            attack_registry.append(GaussianNoiseVideoAttack(attack_params))
+        elif attack_name == "blur":
+            attack_registry.append(BlurAttack(attack_params))
+        else:
+            raise ValueError(f"unsupported attack_name: {attack_name}")
+
     return attack_registry
