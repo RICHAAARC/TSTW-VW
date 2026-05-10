@@ -15,22 +15,21 @@ NOTEBOOK_PATH = ROOT / "paper_workflow" / "Stage2_Real_Video_VAE_Latent_Probe_Co
 REQUIRED_CELL_TITLES = [
     "00_runtime_mode_and_user_config",
     "01_mount_google_drive",
-    "02_clone_or_update_repository",
-    "03_install_dependencies",
-    "04_verify_repository_contract",
-    "05_prepare_drive_directories",
-    "06_write_or_select_stage2_configs",
-    "07_prepare_or_validate_video_dataset",
+    "02_read_drive_state_and_overrides",
+    "03_prepare_local_workspace",
+    "04_clone_or_update_repository",
+    "05_install_dependencies",
+    "06_copy_and_validate_dataset",
+    "07_copy_and_validate_models",
     "08_check_gpu_and_runtime",
-    "09_load_vae_model",
+    "09_verify_repository_contract",
     "10_run_unit_tests_smoke",
-    "11_run_stage2_smoke",
-    "12_check_stage2_smoke_outputs",
-    "13_run_stage2_formal",
-    "14_rebuild_tables_and_reports",
-    "15_validate_stage2_results",
-    "16_pack_results_to_drive",
-    "17_print_final_summary",
+    "11_run_stage2_completion_formal",
+    "12_rebuild_tables_and_reports",
+    "13_validate_formal_outputs",
+    "14_pack_run_to_drive",
+    "15_update_result_registry",
+    "16_print_final_summary",
 ]
 
 
@@ -75,7 +74,11 @@ def test_real_video_vae_latent_notebook_exists_and_uses_governed_entrypoints() -
     assert "main.colab.notebook_result_checker" in notebook_text
     assert "main.colab.drive_packager" in notebook_text
     assert "colab_real_video_vae_latent_runtime_config.json" in notebook_text
-    assert "/content/drive/MyDrive/tstw_stage2" in notebook_text
+    assert "/content/TSTW_runtime" in notebook_text
+    assert "/content/drive/MyDrive" in notebook_text
+    assert "result_registry.jsonl" in notebook_text
+    assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
+    assert "tar" in notebook_text and "--zstd" in notebook_text
     assert "tables/" not in notebook_text
     assert "thresholds/" not in notebook_text
     assert "D:\\" not in notebook_text
