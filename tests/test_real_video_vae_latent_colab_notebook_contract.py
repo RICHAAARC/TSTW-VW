@@ -73,7 +73,9 @@ def test_real_video_vae_latent_notebook_exists_and_uses_governed_entrypoints() -
     assert "main.analysis.real_video_vae_latent_artifacts" in notebook_text
     assert "main.colab.notebook_result_checker" in notebook_text
     assert "main.colab.drive_packager" in notebook_text
+    assert "main.colab.tar_zst_packager" in notebook_text
     assert "colab_real_video_vae_latent_runtime_config.json" in notebook_text
+    assert "real_video_vae_latent_probe_completion_formal" in notebook_text
     assert "/content/TSTW_runtime" in notebook_text
     assert "/content/drive/MyDrive" in notebook_text
     assert "result_registry.jsonl" in notebook_text
