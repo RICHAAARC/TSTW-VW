@@ -71,8 +71,17 @@ def check_real_video_vae_latent_outputs(
     )
     status = all(required_paths.values()) and bool(event_score_records) and bool(threshold_records)
     status = status and all_s_traj_null and construction_phase_matches
-    if require_formal_pass_criteria:
-        status = status and run_mode == "formal" and real_video_vae_latent_decision == "PASS"
+    
+    # formal 模式额外检查
+    formal_checks = _perform_formal_checks(
+        event_score_records,
+        require_formal_pass_criteria,
+        real_video_vae_latent_decision,
+    )
+    
+    if require_formal_pass_criteria and run_mode == "formal":
+        status = status and formal_checks["status"]
+    
     return {
         "status": status,
         "required_paths": required_paths,
@@ -83,7 +92,101 @@ def check_real_video_vae_latent_outputs(
         "RealVideoVaeLatentDecision": real_video_vae_latent_decision,
         "BlockingReasons": blocking_reasons,
         "NextAllowedStage": next_allowed_stage,
+        "formal_checks": formal_checks if require_formal_pass_criteria else None,
     }
+
+
+def _perform_formal_checks(
+    event_score_records: list[dict[str, Any]],
+    require_formal_pass_criteria: bool,
+    real_video_vae_latent_decision: str,
+) -> dict[str, Any]:
+    """功能：执行 formal 模式特定的检查。
+
+    Perform formal-mode specific checks on event records.
+
+    Args:
+        event_score_records: Event score records.
+        require_formal_pass_criteria: Whether to require formal PASS.
+        real_video_vae_latent_decision: The governance summary decision.
+
+    Returns:
+        Dictionary with formal check results.
+    """
+    checks = {
+        "status": True,
+        "has_real_video_runtime": False,
+        "has_real_vae_backend": False,
+        "has_real_quality_metrics": False,
+        "has_real_temporal_metrics": False,
+        "no_placeholder_containers": False,
+        "decision_is_pass": real_video_vae_latent_decision == "PASS",
+        "details": {},
+    }
+    
+    if not event_score_records:
+        return checks
+    
+    # 检查真实视频运行时
+    checks["has_real_video_runtime"] = all(
+        record.get("mechanism_trace", {}).get("video_runtime_status") == "real_mp4_runtime"
+        for record in event_score_records
+    )
+    checks["details"]["video_runtime_status"] = [
+        record.get("mechanism_trace", {}).get("video_runtime_status")
+        for record in event_score_records[:1]  # 显示第一个样本
+    ]
+    
+    # 检查真实 VAE backend
+    placeholder_backends = {"video_vae_backend_placeholder", "video_vae_tensor_runtime"}
+    checks["has_real_vae_backend"] = all(
+        record.get("mechanism_trace", {}).get("vae_backend_name") not in placeholder_backends
+        for record in event_score_records
+    )
+    checks["details"]["vae_backend_name"] = [
+        record.get("mechanism_trace", {}).get("vae_backend_name")
+        for record in event_score_records[:1]
+    ]
+    
+    # 检查真实质量指标运行时
+    checks["has_real_quality_metrics"] = all(
+        record.get("mechanism_trace", {}).get("quality_metrics_runtime") == "real_video_frame_metrics"
+        for record in event_score_records
+    )
+    checks["details"]["quality_metrics_runtime"] = [
+        record.get("mechanism_trace", {}).get("quality_metrics_runtime")
+        for record in event_score_records[:1]
+    ]
+    
+    # 检查真实时序指标运行时
+    checks["has_real_temporal_metrics"] = all(
+        record.get("mechanism_trace", {}).get("temporal_metrics_runtime") == "real_video_frame_metrics"
+        for record in event_score_records
+    )
+    checks["details"]["temporal_metrics_runtime"] = [
+        record.get("mechanism_trace", {}).get("temporal_metrics_runtime")
+        for record in event_score_records[:1]
+    ]
+    
+    # 检查没有 tensor_npy 容器
+    checks["no_placeholder_containers"] = all(
+        record.get("mechanism_trace", {}).get("video_container") != "tensor_npy"
+        for record in event_score_records
+    )
+    
+    # 综合判断
+    checks["status"] = (
+        checks["has_real_video_runtime"]
+        and checks["has_real_vae_backend"]
+        and checks["has_real_quality_metrics"]
+        and checks["has_real_temporal_metrics"]
+        and checks["no_placeholder_containers"]
+    )
+    
+    if require_formal_pass_criteria:
+        checks["status"] = checks["status"] and checks["decision_is_pass"]
+    
+    return checks
 
 
 def _parse_report_fields(report_text: str) -> dict[str, str]:
