@@ -1,6 +1,6 @@
 """
-文件用途：根据配置构建阶段 0 的攻击注册表。
-File purpose: Build the stage-0 attack registry from governed config.
+鏂囦欢鐢ㄩ€旓細鏍规嵁閰嶇疆鏋勫缓闃舵 0 鐨勬敾鍑绘敞鍐岃〃銆?
+File purpose: Build the protocol skeleton runtime attack registry from governed config.
 Module type: General module
 """
 
@@ -15,9 +15,9 @@ from main.attacks.temporal import TemporalAttackPlaceholder
 def build_attack_registry(
     attack_config: dict[str, Any],
 ) -> list[IdentityAttackPlaceholder | TemporalAttackPlaceholder]:
-    """功能：构建阶段 0 攻击实例列表。
+    """鍔熻兘锛氭瀯寤洪樁娈?0 鏀诲嚮瀹炰緥鍒楄〃銆?
 
-    Build the stage-0 attack instance list.
+    Build the protocol skeleton runtime attack instance list.
 
     Args:
         attack_config: Parsed JSON attack config.

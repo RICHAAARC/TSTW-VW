@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Any
 
 from main.core.records import RecordWriter
-from main.protocol.stage2_paths import build_stage2_output_paths
+from main.protocol.real_video_vae_latent_paths import build_real_video_vae_latent_output_paths
 
 
-def check_stage2_outputs(
+def check_real_video_vae_latent_outputs(
     run_root: str | Path,
     construction_phase: str = "real_video_vae_latent_probe",
     run_mode: str = "smoke",
@@ -34,7 +34,7 @@ def check_stage2_outputs(
     Returns:
         A dictionary containing the check results.
     """
-    output_paths = build_stage2_output_paths(run_root)
+    output_paths = build_real_video_vae_latent_output_paths(run_root)
     record_writer = RecordWriter(run_root)
     event_score_records = record_writer.read_event_score_records()
     threshold_records = record_writer.read_threshold_records()
@@ -46,12 +46,12 @@ def check_stage2_outputs(
         "real_video_attack_breakdown": output_paths.real_video_attack_breakdown_path.exists(),
         "quality_table": output_paths.quality_table_path.exists(),
         "temporal_consistency_table": output_paths.temporal_consistency_table_path.exists(),
-        "stage2_governance_summary": output_paths.stage2_governance_summary_path.exists(),
+        "real_video_vae_latent_governance_summary": output_paths.real_video_vae_latent_governance_summary_path.exists(),
         "report": output_paths.report_path.exists(),
         "colab_runtime_manifest": output_paths.colab_runtime_manifest_path.exists(),
         "artifact_manifest": output_paths.artifact_manifest_path.exists(),
     }
-    stage2_decision = report_fields.get("Stage2Decision", "INCONCLUSIVE")
+    real_video_vae_latent_decision = report_fields.get("RealVideoVaeLatentDecision", "INCONCLUSIVE")
     blocking_reasons = [
         reason.strip()
         for reason in report_fields.get("BlockingReasons", "").replace(";", ",").split(",")
@@ -72,7 +72,7 @@ def check_stage2_outputs(
     status = all(required_paths.values()) and bool(event_score_records) and bool(threshold_records)
     status = status and all_s_traj_null and construction_phase_matches
     if require_formal_pass_criteria:
-        status = status and run_mode == "formal" and stage2_decision == "PASS"
+        status = status and run_mode == "formal" and real_video_vae_latent_decision == "PASS"
     return {
         "status": status,
         "required_paths": required_paths,
@@ -80,7 +80,7 @@ def check_stage2_outputs(
         "threshold_count": len(threshold_records),
         "all_s_traj_null": all_s_traj_null,
         "construction_phase_matches": construction_phase_matches,
-        "Stage2Decision": stage2_decision,
+        "RealVideoVaeLatentDecision": real_video_vae_latent_decision,
         "BlockingReasons": blocking_reasons,
         "NextAllowedStage": next_allowed_stage,
     }
@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--require-formal-pass-criteria", action="store_true")
     parser.add_argument("--output-path", default=None)
     args = parser.parse_args(argv)
-    result = check_stage2_outputs(
+    result = check_real_video_vae_latent_outputs(
         run_root=args.run_root,
         construction_phase=args.construction_phase,
         run_mode=args.run_mode,

@@ -26,7 +26,7 @@ Applies to stage naming, stage configuration, stage-related docs, and progressio
 
 - `protocol_skeleton` cannot be skipped.
 - Progression directly to `synthetic_tubelet_sync_probe` or higher before satisfying bootstrap gates is blocked.
-- `stage_0`, `stage_1`, `*_v1`, and `*_p0` style stage identifiers are blocked as formal stage names.
+- `protocol_skeleton`, `synthetic_tubelet_sync_probe`, `*_v1`, and `*_p0` style stage identifiers are blocked as formal stage names.
 
 ## Allowed Changes
 
@@ -42,7 +42,7 @@ Applies to stage naming, stage configuration, stage-related docs, and progressio
 
 ## Required Tests
 
-- Reject `stage_0` as a formal `project_stage`.
+- Reject `protocol_skeleton` as a formal `project_stage`.
 - Reject version-like stage names.
 - Accept `protocol_skeleton` as the active stage.
 

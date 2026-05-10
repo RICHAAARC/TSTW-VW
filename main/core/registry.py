@@ -1,6 +1,6 @@
 """
-文件用途：加载阶段 0 runtime 所需的正式配置集合。
-File purpose: Load the governed config bundle required by the stage-0 runtime skeleton.
+鏂囦欢鐢ㄩ€旓細鍔犺浇闃舵 0 runtime 鎵€闇€鐨勬寮忛厤缃泦鍚堛€?
+File purpose: Load the governed config bundle required by the protocol skeleton runtime runtime skeleton.
 Module type: General module
 """
 
@@ -14,9 +14,9 @@ from typing import Any
 
 @dataclass(frozen=True)
 class StageZeroConfigBundle:
-    """功能：定义阶段 0 runtime 的正式配置集合。
+    """鍔熻兘锛氬畾涔夐樁娈?0 runtime 鐨勬寮忛厤缃泦鍚堛€?
 
-    Stage-0 runtime config bundle.
+    Protocol Skeleton runtime config bundle.
 
     Args:
         project_contract_path: Project contract config path.
@@ -42,7 +42,7 @@ ACTIVE_STAGE_CONSTRUCTION_PHASE = "synthetic_tubelet_sync_probe"
 
 
 def load_json_config(path: str | Path) -> dict[str, Any]:
-    """功能：加载 JSON 配置文件。
+    """鍔熻兘锛氬姞杞?JSON 閰嶇疆鏂囦欢銆?
 
     Load a JSON config file.
 
@@ -59,9 +59,9 @@ def load_json_config(path: str | Path) -> dict[str, Any]:
 
 
 def load_stage_zero_config_bundle(repository_root: str | Path) -> StageZeroConfigBundle:
-    """功能：构建阶段 0 runtime 的配置路径集合。
+    """鍔熻兘锛氭瀯寤洪樁娈?0 runtime 鐨勯厤缃矾寰勯泦鍚堛€?
 
-    Build the config bundle for the stage-0 runtime skeleton.
+    Build the config bundle for the protocol skeleton runtime runtime skeleton.
 
     Args:
         repository_root: Repository root path.
@@ -101,9 +101,9 @@ def load_stage_zero_config_bundle(repository_root: str | Path) -> StageZeroConfi
 
 
 def load_stage_zero_runtime_configs(repository_root: str | Path) -> dict[str, Any]:
-    """功能：加载阶段 0 runtime 的全部正式配置内容。
+    """鍔熻兘锛氬姞杞介樁娈?0 runtime 鐨勫叏閮ㄦ寮忛厤缃唴瀹广€?
 
-    Load all governed config payloads for the stage-0 runtime skeleton.
+    Load all governed config payloads for the protocol skeleton runtime runtime skeleton.
 
     Args:
         repository_root: Repository root path.
@@ -141,7 +141,7 @@ def _build_method_config_paths(
 
 
 def load_active_runtime_config_bundle(repository_root: str | Path) -> StageZeroConfigBundle:
-    """功能：根据正式 construction phase 选择 active runtime 配置集合。
+    """鍔熻兘锛氭牴鎹寮?construction phase 閫夋嫨 active runtime 閰嶇疆闆嗗悎銆?
 
     Build the active runtime config bundle for the current formal construction phase.
 
@@ -186,7 +186,7 @@ def load_active_runtime_config_bundle(repository_root: str | Path) -> StageZeroC
 
 
 def load_active_runtime_configs(repository_root: str | Path) -> dict[str, Any]:
-    """功能：加载当前 formal stage 的全部 active runtime 配置内容。
+    """鍔熻兘锛氬姞杞藉綋鍓?formal stage 鐨勫叏閮?active runtime 閰嶇疆鍐呭銆?
 
     Load the governed config payloads for the active formal runtime.
 

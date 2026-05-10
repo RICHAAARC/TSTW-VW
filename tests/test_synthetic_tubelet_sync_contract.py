@@ -1,6 +1,6 @@
 """
-文件用途：验证阶段 1 synthetic tubelet sync 入口 method config 契约。
-File purpose: Validate the reserved method-config contract for the stage-1 synthetic tubelet sync entry.
+鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 1 synthetic tubelet sync 鍏ュ彛 method config 濂戠害銆?
+File purpose: Validate the reserved method-config contract for the synthetic_tubelet_sync_probe synthetic tubelet sync entry.
 Module type: General module
 """
 
@@ -36,7 +36,7 @@ def test_reserved_method_support_matrix_keeps_three_stage_one_variants() -> None
 
 
 def test_stage_one_method_support_configs_pass() -> None:
-    """Validate that all reserved stage-1 method configs pass the contract.
+    """Validate that all reserved synthetic_tubelet_sync_probe method configs pass the contract.
 
     Args:
         None.

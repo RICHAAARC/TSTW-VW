@@ -21,6 +21,27 @@ SKIP_DIRECTORY_NAMES = {
     "audit_reports",
 }
 
+DEFAULT_GOVERNED_SCAN_ROOTS = (
+    "configs",
+    "docs",
+    "main",
+    "tests",
+    "tools",
+    ".codex",
+    "AGENTS.md",
+    "README.md",
+)
+
+DEFAULT_EXCLUDED_ROOTS = (
+    "docs/builds",
+    "audit_reports",
+    "outputs",
+    "__pycache__",
+    ".pytest_cache",
+    "dist",
+    "build",
+)
+
 BINARY_SUFFIXES = {
     ".png",
     ".jpg",
@@ -110,3 +131,30 @@ def read_text(path: str | Path) -> str:
         return file_path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return file_path.read_text(encoding="utf-8", errors="ignore")
+
+
+def iter_governed_text_files(
+    root: str | Path,
+    scan_roots: tuple[str, ...] | list[str] | None = None,
+) -> Iterator[Path]:
+    """Iterate governed text files from declared scan roots.
+
+    Args:
+        root: Repository root path.
+        scan_roots: Optional governed scan roots.
+
+    Returns:
+        An iterator of governed text file paths.
+    """
+    root_path = Path(root)
+    for relative_root in scan_roots or DEFAULT_GOVERNED_SCAN_ROOTS:
+        candidate = root_path / relative_root
+        if not candidate.exists() or should_skip_path(candidate):
+            continue
+        if candidate.is_file():
+            if candidate.suffix.lower() in BINARY_SUFFIXES:
+                continue
+            yield candidate
+            continue
+        for file_path in iter_text_files(candidate):
+            yield file_path

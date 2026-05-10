@@ -1,4 +1,4 @@
-"""
+﻿"""
 文件用途：提供仓库 intake 检查与空仓库分类能力。
 File purpose: Provide repository intake inspection and empty bootstrap classification.
 Module type: General module
@@ -22,18 +22,18 @@ EXPECTED_DIRECTORIES = [
     "paper_workflow",
     "outputs",
 ]
-STAGE_TWO_REQUIRED_PATHS = {
-    "stage2_protocol_config": "configs/protocol/real_video_vae_latent_probe.json",
-    "stage2_backend_config": "configs/backend/real_video_vae_latent.json",
-    "stage2_attack_matrix_config": "configs/attacks/real_video_attack_matrix.json",
-    "stage2_ablation_config": "configs/ablation/real_video_vae_latent_ablation.json",
-    "stage2_backend_module": "main/backends/real_video_vae_latent.py",
-    "stage2_vae_registry_module": "main/vae/vae_registry.py",
-    "stage2_runner_module": "main/protocol/stage2_runner.py",
-    "stage2_artifact_builder_module": "main/analysis/stage2_artifacts.py",
-    "stage2_result_checker_module": "main/colab/notebook_result_checker.py",
-    "stage2_drive_packager_module": "main/colab/drive_packager.py",
-    "stage2_colab_notebook": (
+REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS = {
+    "real_video_vae_latent_protocol_config": "configs/protocol/real_video_vae_latent_probe.json",
+    "real_video_vae_latent_backend_config": "configs/backend/real_video_vae_latent.json",
+    "real_video_vae_latent_attack_matrix_config": "configs/attacks/real_video_attack_matrix.json",
+    "real_video_vae_latent_ablation_config": "configs/ablation/real_video_vae_latent_ablation.json",
+    "real_video_vae_latent_backend_module": "main/backends/real_video_vae_latent.py",
+    "real_video_vae_latent_vae_registry_module": "main/vae/vae_registry.py",
+    "real_video_vae_latent_runner_module": "main/protocol/real_video_vae_latent_runner.py",
+    "real_video_vae_latent_artifact_builder_module": "main/analysis/real_video_vae_latent_artifacts.py",
+    "real_video_vae_latent_result_checker_module": "main/colab/notebook_result_checker.py",
+    "real_video_vae_latent_drive_packager_module": "main/colab/drive_packager.py",
+    "real_video_vae_latent_colab_notebook": (
         "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb"
     ),
 }
@@ -112,13 +112,13 @@ def _inspect_next_stage_readiness(root_path: Path, project_stage: str | None) ->
     if project_stage == "synthetic_tubelet_sync_probe":
         present_count, required_paths = _build_required_paths(
             root_path,
-            STAGE_TWO_REQUIRED_PATHS,
+            REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS,
         )
         return {
             "target_construction_phase": target_construction_phase,
-            "all_required_paths_present": present_count == len(STAGE_TWO_REQUIRED_PATHS),
+            "all_required_paths_present": present_count == len(REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS),
             "present_required_path_count": present_count,
-            "required_path_count": len(STAGE_TWO_REQUIRED_PATHS),
+            "required_path_count": len(REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS),
             "required_paths": required_paths,
         }
 

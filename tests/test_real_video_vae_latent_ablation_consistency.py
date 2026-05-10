@@ -1,6 +1,5 @@
 """
-文件用途：验证阶段 2 scaffold 消融配置共享同一协议语义。
-File purpose: Validate that the stage-two scaffold ablation config shares one protocol contract.
+鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 2 scaffold 娑堣瀺閰嶇疆鍏变韩鍚屼竴鍗忚璇箟銆?File purpose: Validate that the stage-two scaffold ablation config shares one protocol contract.
 Module type: General module
 """
 
@@ -11,7 +10,7 @@ from pathlib import Path
 from main.core.registry import load_json_config
 
 
-def test_stage2_ablation_config_reuses_shared_protocol_semantics() -> None:
+def test_real_video_vae_latent_ablation_config_reuses_shared_protocol_semantics() -> None:
     """Validate that stage-two ablation config reuses one shared protocol contract.
 
     Args:

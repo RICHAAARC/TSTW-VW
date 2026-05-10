@@ -8,7 +8,7 @@ Freeze formal naming rules for files, directories, modules, configuration fields
 
 ## Scope
 
-Applies to every new formal file, directory, field, method variant, config entry, and report identifier.
+Applies to file names, test file names, module names, config keys, JSON keys, Python dict keys, comment example fields, and Markdown code blocks.
 
 ## Required Inputs
 
@@ -27,7 +27,7 @@ Applies to every new formal file, directory, field, method variant, config entry
 - Formal names must use `snake_case`.
 - `method_variant` must use mechanism semantics.
 - `full`, `default`, `new`, `old`, `best`, and `final_method` are blocked as formal `method_variant` values.
-- `*_v1`, `*_v2`, `*_p0`, and `*_p1` are blocked as formal names.
+- `stage1`, `stage2`, `stage-1`, `stage_1`, `stage-2`, `stage_2`, `*_v1`, `*_v2`, `*_v3`, `*_p0`, `*_p1`, and `*_p2` are blocked as weak semantic names.
 
 ## Allowed Changes
 
@@ -45,7 +45,12 @@ Applies to every new formal file, directory, field, method variant, config entry
 
 - Accept `tubelet_sync` as a valid mechanism name.
 - Reject `full` as a `method_variant`.
-- Reject `protocol_skeleton_v1` and similar names.
+- Reject `main/protocol/stage2_runner.py`.
+- Reject `tests/test_stage2_records_schema.py`.
+- Reject `tools/harness/run_stage1_profile.py`.
+- Accept `main/protocol/real_video_vae_latent_runner.py`.
+- Accept `tests/test_real_video_vae_latent_records_schema.py`.
+- Accept `tools/harness/run_synthetic_tubelet_sync_profile.py`.
 
 ## Required Audit Hooks
 

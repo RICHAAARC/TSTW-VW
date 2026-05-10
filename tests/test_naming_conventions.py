@@ -1,6 +1,5 @@
 """
-文件用途：验证命名治理规则与命名审计行为。
-File purpose: Validate naming governance helper functions and the naming audit behavior.
+鏂囦欢鐢ㄩ€旓細楠岃瘉鍛藉悕娌荤悊瑙勫垯涓庡懡鍚嶅璁¤涓恒€?File purpose: Validate naming governance helper functions and the naming audit behavior.
 Module type: General module
 """
 
@@ -55,8 +54,8 @@ def test_version_like_name_protocol_skeleton_v1_fails() -> None:
     )
 
 
-def test_stage_0_as_project_stage_fails(tmp_path: Path) -> None:
-    """Validate that `stage_0` is blocked as a formal project stage.
+def test_protocol_skeleton_as_project_stage_fails(tmp_path: Path) -> None:
+    """Validate that `protocol_skeleton` is blocked as a formal project stage.
 
     Args:
         tmp_path: Temporary repository root.
@@ -67,7 +66,7 @@ def test_stage_0_as_project_stage_fails(tmp_path: Path) -> None:
     config_root = tmp_path / "configs" / "project"
     config_root.mkdir(parents=True)
     (config_root / "bad_config.json").write_text(
-        '{"project_stage": "stage_0", "method_variant": "tubelet_sync"}\n',
+        '{"project_stage": "protocol_skeleton", "method_variant": "tubelet_sync"}\n',
         encoding="utf-8",
     )
 

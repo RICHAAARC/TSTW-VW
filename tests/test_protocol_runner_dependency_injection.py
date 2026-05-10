@@ -1,6 +1,5 @@
 """
-文件用途：验证 ProtocolRunner 的依赖注入与方法家族解耦行为。
-File purpose: Validate ProtocolRunner dependency injection and method-family decoupling.
+鏂囦欢鐢ㄩ€旓細楠岃瘉 ProtocolRunner 鐨勪緷璧栨敞鍏ヤ笌鏂规硶瀹舵棌瑙ｈ€﹁涓恒€?File purpose: Validate ProtocolRunner dependency injection and method-family decoupling.
 Module type: General module
 """
 
@@ -134,7 +133,7 @@ def _build_minimal_event_plan() -> list[EventPlanEntry]:
 
 
 def test_protocol_runner_default_constructor_runs_stage0_slice() -> None:
-    """Validate that the default ProtocolRunner still runs the stage-0 slice.
+    """Validate that the default ProtocolRunner still runs the protocol skeleton runtime slice.
 
     Args:
         None.

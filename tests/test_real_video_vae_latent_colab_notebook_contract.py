@@ -45,7 +45,7 @@ def _cell_text(cell: dict[str, object]) -> str:
     return str(source)
 
 
-def test_stage2_notebook_exists_and_uses_governed_entrypoints() -> None:
+def test_real_video_vae_latent_notebook_exists_and_uses_governed_entrypoints() -> None:
     """Validate that the stage-two notebook exists and delegates to governed modules.
 
     Args:
@@ -70,11 +70,11 @@ def test_stage2_notebook_exists_and_uses_governed_entrypoints() -> None:
         title_positions.append(matching_index)
     assert title_positions == sorted(title_positions)
 
-    assert "main.protocol.stage2_runner" in notebook_text
-    assert "main.analysis.stage2_artifacts" in notebook_text
+    assert "main.protocol.real_video_vae_latent_runner" in notebook_text
+    assert "main.analysis.real_video_vae_latent_artifacts" in notebook_text
     assert "main.colab.notebook_result_checker" in notebook_text
     assert "main.colab.drive_packager" in notebook_text
-    assert "colab_stage2_runtime_config.json" in notebook_text
+    assert "colab_real_video_vae_latent_runtime_config.json" in notebook_text
     assert "/content/drive/MyDrive/tstw_stage2" in notebook_text
     assert "tables/" not in notebook_text
     assert "thresholds/" not in notebook_text
@@ -83,7 +83,7 @@ def test_stage2_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "/Users/" not in notebook_text
 
 
-def test_stage2_notebook_cells_use_python_metadata() -> None:
+def test_real_video_vae_latent_notebook_cells_use_python_metadata() -> None:
     """Validate that every code cell declares Python language metadata.
 
     Args:

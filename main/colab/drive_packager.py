@@ -12,11 +12,11 @@ from pathlib import Path
 from typing import Any
 import zipfile
 
-from main.colab.notebook_result_checker import check_stage2_outputs
-from main.protocol.stage2_paths import build_stage2_output_paths
+from main.colab.notebook_result_checker import check_real_video_vae_latent_outputs
+from main.protocol.real_video_vae_latent_paths import build_real_video_vae_latent_output_paths
 
 
-def pack_stage2_run(
+def pack_real_video_vae_latent_run(
     run_root: str | Path,
     drive_output_dir: str | Path,
     include_records: bool = True,
@@ -52,8 +52,8 @@ def pack_stage2_run(
         raise FileNotFoundError(run_root_path)
     output_dir = Path(drive_output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_paths = build_stage2_output_paths(run_root_path)
-    checks_payload = check_stage2_outputs(run_root_path)
+    output_paths = build_real_video_vae_latent_output_paths(run_root_path)
+    checks_payload = check_real_video_vae_latent_outputs(run_root_path)
     run_manifest = json.loads(output_paths.run_manifest_path.read_text(encoding="utf-8"))
     runtime_manifest = json.loads(output_paths.colab_runtime_manifest_path.read_text(encoding="utf-8"))
     run_id = str(run_manifest["run_id"])
@@ -79,7 +79,7 @@ def pack_stage2_run(
                 output_paths.run_manifest_path,
                 output_paths.artifact_manifest_path,
                 output_paths.colab_runtime_manifest_path,
-                output_paths.colab_stage2_runtime_config_path,
+                output_paths.colab_real_video_vae_latent_runtime_config_path,
             ):
                 if manifest_path.exists():
                     archive.write(manifest_path, arcname=_build_archive_name(run_root_path, manifest_path))
@@ -94,7 +94,7 @@ def pack_stage2_run(
         "run_id": run_id,
         "git_commit": runtime_manifest.get("git_commit", "unknown"),
         "construction_phase": run_manifest.get("construction_phase"),
-        "Stage2Decision": checks_payload["Stage2Decision"],
+        "RealVideoVaeLatentDecision": checks_payload["RealVideoVaeLatentDecision"],
         "BlockingReasons": checks_payload["BlockingReasons"],
     }
     summary_path.write_text(
@@ -149,7 +149,7 @@ def main(argv: list[str] | None = None) -> None:
             args.include_manifest,
         )
     )
-    pack_stage2_run(
+    pack_real_video_vae_latent_run(
         run_root=args.run_root,
         drive_output_dir=args.drive_output_dir,
         include_records=True if not include_any else args.include_records,

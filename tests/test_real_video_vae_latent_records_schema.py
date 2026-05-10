@@ -13,15 +13,15 @@ import pytest
 
 from main.core.digest import compute_object_digest
 from main.core.records import RecordWriter
-from main.protocol.stage2_runner import Stage2Runner
-from tests.stage2_test_support import run_stage2_tiny
+from main.protocol.real_video_vae_latent_runner import RealVideoVaeLatentRunner
+from tests.real_video_vae_latent_test_support import run_real_video_vae_latent_tiny
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.smoke
-def test_stage2_event_records_include_quality_and_temporal_payloads(tmp_path: Path) -> None:
+def test_real_video_vae_latent_event_records_include_quality_and_temporal_payloads(tmp_path: Path) -> None:
     """Validate that stage-two event records include quality and temporal payloads.
 
     Args:
@@ -30,7 +30,7 @@ def test_stage2_event_records_include_quality_and_temporal_payloads(tmp_path: Pa
     Returns:
         None.
     """
-    output_root = run_stage2_tiny(tmp_path)
+    output_root = run_real_video_vae_latent_tiny(tmp_path)
     record_writer = RecordWriter(output_root)
     event_score_records = record_writer.read_event_score_records()
     threshold_records = record_writer.read_threshold_records()
@@ -41,7 +41,7 @@ def test_stage2_event_records_include_quality_and_temporal_payloads(tmp_path: Pa
         (output_root / "artifacts" / "colab_runtime_manifest.json").read_text(encoding="utf-8")
     )
     runtime_config = json.loads(
-        (output_root / "artifacts" / "colab_stage2_runtime_config.json").read_text(encoding="utf-8")
+        (output_root / "artifacts" / "colab_real_video_vae_latent_runtime_config.json").read_text(encoding="utf-8")
     )
 
     assert event_score_records
@@ -64,7 +64,7 @@ def test_stage2_event_records_include_quality_and_temporal_payloads(tmp_path: Pa
 
 
 @pytest.mark.smoke
-def test_stage2_runtime_manifest_tracks_runtime_config_and_notebook_entrypoint(
+def test_real_video_vae_latent_runtime_manifest_tracks_runtime_config_and_notebook_entrypoint(
     tmp_path: Path,
 ) -> None:
     """Validate that stage-two runtime config is persisted and digested.
@@ -87,7 +87,7 @@ def test_stage2_runtime_manifest_tracks_runtime_config_and_notebook_entrypoint(
         encoding="utf-8",
     )
 
-    Stage2Runner(ROOT).run(
+    RealVideoVaeLatentRunner(ROOT).run(
         output_root=output_root,
         run_mode="smoke",
         samples_per_role=1,
@@ -96,7 +96,7 @@ def test_stage2_runtime_manifest_tracks_runtime_config_and_notebook_entrypoint(
     )
 
     merged_runtime_config = json.loads(
-        (output_root / "artifacts" / "colab_stage2_runtime_config.json").read_text(
+        (output_root / "artifacts" / "colab_real_video_vae_latent_runtime_config.json").read_text(
             encoding="utf-8"
         )
     )

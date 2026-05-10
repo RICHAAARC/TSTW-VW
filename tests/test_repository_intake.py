@@ -55,7 +55,7 @@ def test_governed_repository_reports_active_stage_status() -> None:
     assert next_stage_readiness["all_required_paths_present"] is True
     assert next_stage_readiness["present_required_path_count"] == 11
     assert next_stage_readiness["required_path_count"] == 11
-    assert next_stage_readiness["required_paths"]["stage2_colab_notebook"]["exists"] is True
+    assert next_stage_readiness["required_paths"]["real_video_vae_latent_colab_notebook"]["exists"] is True
     assert (
-        next_stage_readiness["required_paths"]["stage2_runner_module"]["exists"] is True
+        next_stage_readiness["required_paths"]["real_video_vae_latent_runner_module"]["exists"] is True
     )

@@ -71,15 +71,61 @@
   "field_governance": {
     "placeholder_suffix": "_placeholder",
     "random_suffix": "_random",
-    "random_digest_suffix": "_digest_random"
+    "random_digest_suffix": "_digest_random",
+    "registry_path": "docs/field_registry.md",
+    "scan_roots": [
+      "configs",
+      "docs",
+      "main",
+      "tests",
+      "tools",
+      ".codex",
+      "AGENTS.md",
+      "README.md"
+    ],
+    "excluded_roots": [
+      "docs/builds",
+      "audit_reports",
+      "outputs",
+      "__pycache__",
+      ".pytest_cache",
+      "dist",
+      "build"
+    ]
   },
   "naming_governance": {
     "case_style": "snake_case",
     "forbidden_suffixes": [
       "_v1",
       "_v2",
+      "_v3",
       "_p0",
-      "_p1"
+      "_p1",
+      "_p2"
+    ],
+    "forbidden_weak_name_patterns": [
+      "stage0",
+      "stage1",
+      "stage2",
+      "stage_0",
+      "stage_1",
+      "stage_2",
+      "stage-0",
+      "stage-1",
+      "stage-2",
+      "test_stage1_*",
+      "test_stage2_*",
+      "run_stage1_*",
+      "run_stage2_*"
+    ],
+    "allowed_semantic_stage_names": [
+      "protocol_skeleton",
+      "synthetic_tubelet_sync_probe",
+      "real_video_vae_latent_probe",
+      "trajectory_statistic_probe",
+      "trajectory_aware_sampling_probe",
+      "full_paper_protocol",
+      "minimal_release_extraction"
     ],
     "forbidden_method_variants": [
       "full",

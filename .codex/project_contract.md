@@ -2,16 +2,16 @@
 
 ## Long-Term Goal
 
-本项目的长期目标是逐阶段构建一个面向 DiT / Flow Matching 视频生成模型的时空同步轨迹水印研究框架，并以统一 records、thresholds、tables、manifest 协议支撑后续机制验证与论文实验。
+鏈」鐩殑闀挎湡鐩爣鏄€愰樁娈垫瀯寤轰竴涓潰鍚?DiT / Flow Matching 瑙嗛鐢熸垚妯″瀷鐨勬椂绌哄悓姝ヨ建杩规按鍗扮爺绌舵鏋讹紝骞朵互缁熶竴 records銆乼hresholds銆乼ables銆乵anifest 鍗忚鏀拺鍚庣画鏈哄埗楠岃瘉涓庤鏂囧疄楠屻€?
 
 ## Current Stage
 
 - `project_stage`: `synthetic_tubelet_sync_probe`
 - `target_construction_phase`: `real_video_vae_latent_probe`
-- 当前阶段允许在既有 protocol core 上运行 synthetic video latent、temporal attack matrix 与 `frame_prc` / `tubelet_only` / `tubelet_sync` 三个正式 method variant。
-- 当前阶段允许实现 synthetic / placeholder 驱动的最小 mechanism runtime，用于冻结 records、thresholds、manifest、table rebuild 与机制追踪口径。
-- 当前阶段允许保留单一 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb` 作为 stage-two transition-preparation 的远程 GPU entrypoint，但其职责仅限于环境准备、配置写入、模块调用、结果检查与结果打包。
-- 当前阶段不得进入真实 watermark 算法实现、真实 DiT / Flow Matching / VAE 接入、真实视频生成流程。
+- 褰撳墠闃舵鍏佽鍦ㄦ棦鏈?protocol core 涓婅繍琛?synthetic video latent銆乼emporal attack matrix 涓?`frame_prc` / `tubelet_only` / `tubelet_sync` 涓変釜姝ｅ紡 method variant銆?
+- 褰撳墠闃舵鍏佽瀹炵幇 synthetic / placeholder 椹卞姩鐨勬渶灏?mechanism runtime锛岀敤浜庡喕缁?records銆乼hresholds銆乵anifest銆乼able rebuild 涓庢満鍒惰拷韪彛寰勩€?
+- 褰撳墠闃舵鍏佽淇濈暀鍗曚竴 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb` 浣滀负 stage-two transition-preparation 鐨勮繙绋?GPU entrypoint锛屼絾鍏惰亴璐ｄ粎闄愪簬鐜鍑嗗銆侀厤缃啓鍏ャ€佹ā鍧楄皟鐢ㄣ€佺粨鏋滄鏌ヤ笌缁撴灉鎵撳寘銆?
+- 褰撳墠闃舵涓嶅緱杩涘叆鐪熷疄 watermark 绠楁硶瀹炵幇銆佺湡瀹?DiT / Flow Matching / VAE 鎺ュ叆銆佺湡瀹炶棰戠敓鎴愭祦绋嬨€?
 
 ## Ordered Semantic Stages
 
@@ -29,7 +29,7 @@
 2. `flow_matching_trajectory_statistic`
 3. `fixed_low_fpr_calibrated_detector`
 
-## Stage-0 Runtime Skeleton
+## Protocol Skeleton Runtime Objects
 
 1. `latent_backend`
 2. `watermark_method`
@@ -41,7 +41,7 @@
 8. `table_builder`
 9. `manifest_builder`
 
-## Stage-0 Method Variants
+## Protocol Skeleton Bootstrap Method Variants
 
 1. `empty_watermark_method_placeholder`
 2. `random_score_detector_random`
@@ -74,7 +74,7 @@
 4. Supported claims must map to tables, curves, or audit-approved evidence outputs.
 5. Placeholder fields must never support supported claims.
 6. Tables, figures, and reports must remain rebuildable from governed records and manifests.
-7. Stage-0 runtime outputs must follow the governed `records/`, `thresholds/`, `artifacts/`, and `tables/` layout.
+7. Protocol skeleton runtime outputs must follow the governed `records/`, `thresholds/`, `artifacts/`, and `tables/` layout.
 
 ## Core Boundary / Gate Layering
 
@@ -89,7 +89,8 @@
 ### Naming Governance
 
 - All formal names must use `snake_case`.
-- Stage names such as `stage_0`, `stage_1`, `*_v1`, `*_v2`, `*_p0`, and `*_p1` are blocking violations.
+- Global weak naming such as `stage0`, `stage1`, `stage2`, `stage_0`, `stage_1`, `stage_2`, `stage-0`, `stage-1`, `stage-2`, `*_v1`, `*_v2`, `*_v3`, `*_p0`, `*_p1`, and `*_p2` are blocking violations.
+- Future Codex changes must not introduce weak semantic names such as `stage1`, `stage2`, `v1`, or `p1` for formal files, fields, configs, reports, or method variants.
 - `method_variant` must use mechanism semantics; `full`, `default`, `new`, `old`, `best`, and `final_method` are blocking violations.
 
 ### Placeholder And Random Governance
@@ -105,5 +106,5 @@
 1. Do not implement real watermark embedding or detection algorithms.
 2. Do not integrate real DiT backends, Flow Matching backends, or video VAE backends.
 3. Do not create notebook-only protocol logic; the governed stage-two Colab entrypoint may exist only when it delegates formal outputs to repository modules.
-4. Do not check in formal experiment outputs under `outputs/`; stage-0 tests may use temporary output roots or ephemeral `outputs/runs` paths.
+4. Do not check in formal experiment outputs under `outputs/`; protocol skeleton runtime tests may use temporary output roots or ephemeral `outputs/runs` paths.
 5. Do not bypass harness audits or pytest gates.

@@ -1,5 +1,5 @@
 """
-文件用途：验证 stage-one event record 中的 mechanism_trace 与正式机制字段语义。
+鏂囦欢鐢ㄩ€旓細楠岃瘉 stage-one event record 涓殑 mechanism_trace 涓庢寮忔満鍒跺瓧娈佃涔夈€?
 File purpose: Validate stage-one event records for mechanism-trace and formal mechanism fields.
 Module type: General module
 """
@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.smoke
-def test_stage1_event_records_include_mechanism_trace(tmp_path: Path) -> None:
+def test_synthetic_tubelet_sync_event_records_include_mechanism_trace(tmp_path: Path) -> None:
     """Validate that stage-one event records include the governed mechanism trace.
 
     Args:
@@ -63,7 +63,7 @@ def test_stage1_event_records_include_mechanism_trace(tmp_path: Path) -> None:
 
 
 @pytest.mark.smoke
-def test_stage1_records_do_not_inline_tensor_payload(tmp_path: Path) -> None:
+def test_synthetic_tubelet_sync_records_do_not_inline_tensor_payload(tmp_path: Path) -> None:
     """Validate that event records reference tensor artifacts instead of inlining payloads.
 
     Args:

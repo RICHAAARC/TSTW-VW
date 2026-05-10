@@ -1,6 +1,6 @@
 """
-文件用途：验证阶段 0 support config 骨架配置。
-File purpose: Validate the governed stage-0 support config skeletons.
+鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 0 support config 楠ㄦ灦閰嶇疆銆?
+File purpose: Validate the governed protocol skeleton runtime support config skeletons.
 Module type: General module
 """
 
@@ -70,7 +70,7 @@ def test_attack_placeholder_config_passes() -> None:
 
 
 def test_attack_placeholder_requires_identity_attack_name() -> None:
-    """Validate that the stage-0 attack matrix remains identity-only.
+    """Validate that the protocol skeleton runtime attack matrix remains identity-only.
 
     Args:
         None.
@@ -93,7 +93,7 @@ def test_attack_placeholder_requires_identity_attack_name() -> None:
 
 
 def test_synthetic_tubelet_sync_protocol_support_config_passes() -> None:
-    """Validate that the reserved stage-1 protocol support config passes.
+    """Validate that the reserved synthetic_tubelet_sync_probe protocol support config passes.
 
     Args:
         None.
@@ -165,7 +165,7 @@ def test_temporal_attack_matrix_requires_governed_attack_order() -> None:
 
 
 def test_synthetic_tubelet_sync_ablation_support_config_passes() -> None:
-    """Validate that the reserved stage-1 ablation support config passes.
+    """Validate that the reserved synthetic_tubelet_sync_probe ablation support config passes.
 
     Args:
         None.

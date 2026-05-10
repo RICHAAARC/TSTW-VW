@@ -8,13 +8,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from main.protocol.stage2_runner import Stage2Runner
+from main.protocol.real_video_vae_latent_runner import RealVideoVaeLatentRunner
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run_stage2_tiny(tmp_path: Path) -> Path:
+def run_real_video_vae_latent_tiny(tmp_path: Path) -> Path:
     """功能：执行最小阶段 2 smoke 运行并返回输出目录。
 
     Run the minimal stage-two smoke flow and return its output root.
@@ -26,7 +26,7 @@ def run_stage2_tiny(tmp_path: Path) -> Path:
         The stage-two run root path.
     """
     output_root = tmp_path / "outputs" / "runs" / "real_video_vae_latent_probe_scaffold"
-    Stage2Runner(ROOT).run(
+    RealVideoVaeLatentRunner(ROOT).run(
         output_root=output_root,
         run_mode="smoke",
         samples_per_role=1,

@@ -17,10 +17,14 @@ if str(ROOT) not in sys.path:
 
 from tools.harness.lib.field_rules import (
     check_random_field_has_seed_or_digest,
-    find_placeholder_field_violations,
-    find_random_field_violations,
+    find_governed_field_candidates,
+    find_placeholder_suffix_violations,
+    find_random_suffix_violations,
+    find_unregistered_governed_fields,
+    load_field_registry,
+    validate_field_registry_row,
 )
-from tools.harness.lib.file_scanner import iter_text_files, read_text
+from tools.harness.lib.file_scanner import iter_governed_text_files, read_text
 from tools.harness.lib.json_report import build_report, exit_with_report
 
 
@@ -69,39 +73,42 @@ def run_audit(root: str | Path) -> dict[str, Any]:
     violations: list[dict[str, Any]] = []
     checked_paths: list[str] = []
 
-    governed_roots = [root_path / "configs", root_path / "docs"]
-    for governed_root in governed_roots:
-        if not governed_root.exists():
-            continue
-        for file_path in iter_text_files(governed_root):
-            checked_paths.append(str(file_path))
-            text = read_text(file_path)
-            violations.extend(find_placeholder_field_violations(text, file_path))
-            violations.extend(find_random_field_violations(text, file_path))
+    registry = load_field_registry(root_path)
+    for file_path in iter_governed_text_files(root_path):
+        checked_paths.append(str(file_path))
+        text = read_text(file_path)
+        candidates = find_governed_field_candidates(text, file_path)
+        for violation in find_placeholder_suffix_violations(candidates):
+            violation["violation_level"] = "blocking_violation"
+            violations.append(violation)
+        for violation in find_random_suffix_violations(candidates):
+            violation["violation_level"] = "blocking_violation"
+            violations.append(violation)
+        for violation in find_unregistered_governed_fields(candidates, registry):
+            violation["violation_level"] = "blocking_violation"
+            violations.append(violation)
 
     field_registry_path = root_path / "docs" / "field_registry.md"
     if field_registry_path.exists():
         field_registry_text = read_text(field_registry_path)
         registry_rows = _parse_field_registry_rows(field_registry_text)
+        seen_field_names: set[str] = set()
         for row in registry_rows:
             field_name = row["field_name"].strip()
-            if field_name.endswith("_placeholder"):
-                if row["allowed_in_claims"].strip().lower() == "true":
-                    violations.append(
-                        {
-                            "path": str(field_registry_path),
-                            "field_name": field_name,
-                            "reason": "placeholder_field_allowed_in_claims",
-                        }
-                    )
-                if row["replacement_required"].strip().lower() != "true":
-                    violations.append(
-                        {
-                            "path": str(field_registry_path),
-                            "field_name": field_name,
-                            "reason": "placeholder_field_missing_replacement_requirement",
-                        }
-                    )
+            if field_name in seen_field_names:
+                violations.append(
+                    {
+                        "path": str(field_registry_path),
+                        "field_name": field_name,
+                        "reason": "duplicate_field_registry_entry",
+                        "violation_level": "blocking_violation",
+                    }
+                )
+            seen_field_names.add(field_name)
+            for row_violation in validate_field_registry_row(row):
+                row_violation["path"] = str(field_registry_path)
+                row_violation["violation_level"] = "blocking_violation"
+                violations.append(row_violation)
             if field_name.endswith("_random") and not check_random_field_has_seed_or_digest(
                 field_name,
                 field_registry_text,
@@ -111,6 +118,7 @@ def run_audit(root: str | Path) -> dict[str, Any]:
                         "path": str(field_registry_path),
                         "field_name": field_name,
                         "reason": "random_field_missing_seed_or_digest_trace",
+                        "violation_level": "blocking_violation",
                     }
                 )
 

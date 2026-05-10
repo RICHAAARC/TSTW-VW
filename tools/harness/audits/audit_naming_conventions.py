@@ -1,6 +1,5 @@
 """
-文件用途：执行正式命名治理审计。
-File purpose: Audit governed naming conventions for the protocol_skeleton stage.
+鏂囦欢鐢ㄩ€旓細鎵ц姝ｅ紡鍛藉悕娌荤悊瀹¤銆?File purpose: Audit governed naming conventions for the protocol_skeleton stage.
 Module type: General module
 """
 
@@ -25,18 +24,112 @@ from tools.harness.lib.file_scanner import (
 from tools.harness.lib.json_report import build_report, exit_with_report
 from tools.harness.lib.naming_rules import (
     contains_encoded_or_escaped_name_fragment,
+    find_forbidden_weak_stage_names,
     find_forbidden_method_variant,
+    find_forbidden_version_like_names,
     has_forbidden_stage_suffix,
     is_allowed_formal_directory_name,
     is_allowed_formal_file_name,
     is_snake_case_name,
+    validate_path_name_semantics,
 )
 
 
 PROJECT_STAGE_PATTERN = re.compile(
-    r"(?im)['\"]?project_stage['\"]?\s*:\s*['\"]?(stage_0|stage_1)['\"]?"
+    r"(?im)['\"]?project_stage['\"]?\s*:\s*['\"]?(stage[0-9]+(?:[_-]?[0-9]+)?|stage_[0-9]+|stage-[0-9]+|protocol_skeleton|synthetic_tubelet_sync_probe|real_video_vae_latent_probe)['\"]?"
+)
+WEAK_PROJECT_STAGE_PATTERN = re.compile(
+    r"(?im)['\"]?project_stage['\"]?\s*:\s*['\"]?(stage[0-9]+|stage_[0-9]+|stage-[0-9]+)['\"]?"
 )
 CONFIG_KEY_PATTERN = re.compile(r"['\"]?([A-Za-z][A-Za-z0-9_]*)['\"]?\s*:")
+GOVERNED_TEXT_ROOTS = [
+    "AGENTS.md",
+    "README.md",
+    ".codex",
+    "configs",
+    "docs",
+    "main",
+    "tests",
+    "tools",
+]
+
+
+def _suggest_replacement(value: str) -> str | None:
+    lowered = value.lower()
+    if re.search(r"stage[_-]?2\b|stage2|stage-2|stage_2", lowered):
+        return "real_video_vae_latent_probe"
+    if re.search(r"stage[_-]?1\b|stage1|stage-1|stage_1", lowered):
+        return "synthetic_tubelet_sync_probe"
+    if re.search(r"stage[_-]?0\b|stage0|stage-0|stage_0", lowered):
+        return "protocol_skeleton"
+    if re.search(r"_v[0-9]+\b|_p[0-9]+\b", lowered):
+        return "use semantic mechanism name"
+    return None
+
+
+def _line_number_for_value(text: str, value: str) -> int | None:
+    for index, line in enumerate(text.splitlines(), start=1):
+        if value in line:
+            return index
+    return None
+
+
+def _scan_text_weak_names(file_path: Path, text: str, violations: list[dict[str, Any]]) -> None:
+    def _is_allowed_reference_line(line_number: int | None) -> bool:
+        if line_number is None:
+            return False
+        line_text = text.splitlines()[line_number - 1].lower()
+        normalized_path = str(file_path).replace('\\', '/')
+        allow_tokens = (
+            'forbidden',
+            'blocked',
+            'reject',
+            'allow',
+            'weak naming',
+            'forbidden_weak_name_patterns',
+            '禁止',
+            '阻断',
+            '示例',
+            'assert',
+        )
+        if any(token in line_text for token in allow_tokens):
+            return True
+        if normalized_path.startswith(str(ROOT / 'tests').replace('\\', '/')):
+            return True
+        if normalized_path.endswith('configs/project/project_contract.json'):
+            return True
+        if normalized_path.endswith('tools/harness/audits/audit_naming_conventions.py'):
+            return True
+        if normalized_path.endswith('tools/harness/lib/naming_rules.py'):
+            return True
+        return False
+
+    for value in find_forbidden_weak_stage_names(text):
+        line_number = _line_number_for_value(text, value)
+        if _is_allowed_reference_line(line_number):
+            continue
+        violations.append(
+            {
+                "path": str(file_path),
+                "line": line_number,
+                "reason": "forbidden_weak_stage_name_in_text",
+                "value": value,
+                "suggested_replacement": _suggest_replacement(value),
+            }
+        )
+    for value in find_forbidden_version_like_names(text):
+        line_number = _line_number_for_value(text, value)
+        if _is_allowed_reference_line(line_number):
+            continue
+        violations.append(
+            {
+                "path": str(file_path),
+                "line": line_number,
+                "reason": "forbidden_version_like_name_in_text",
+                "value": value,
+                "suggested_replacement": _suggest_replacement(value),
+            }
+        )
 STALE_YAML_CONFIG_REFERENCE_PARTS = (
     ("configs/project/", "project_contract", ".yaml"),
     ("configs/protocol/", "protocol_skeleton", ".yaml"),
@@ -63,6 +156,8 @@ def _check_path_name_rules(path: Path, violations: list[dict[str, Any]]) -> None
             }
         )
         return
+
+    violations.extend(validate_path_name_semantics(path))
 
     if path.is_dir():
         if not is_allowed_formal_directory_name(path.name):
@@ -156,51 +251,34 @@ def run_audit(root: str | Path) -> dict[str, Any]:
     violations: list[dict[str, Any]] = []
     checked_paths: list[str] = []
 
-    governed_files = [
-        root_path / "AGENTS.md",
-        root_path / "README.md",
-        root_path / ".gitignore",
-        root_path / "pyproject.toml",
-    ]
-    governed_directories = [
-        root_path / ".codex",
-        root_path / "configs",
-        root_path / "docs",
-        root_path / "main",
-        root_path / "tools",
-        root_path / "tests",
-    ]
-
-    for governed_file in governed_files:
-        if not governed_file.exists() or should_skip_path(governed_file):
+    for relative_root in GOVERNED_TEXT_ROOTS:
+        candidate = root_path / relative_root
+        if not candidate.exists():
             continue
-        checked_paths.append(str(governed_file))
-        _check_path_name_rules(governed_file, violations)
-        _scan_for_stale_yaml_references(
-            governed_file,
-            read_text(governed_file),
-            violations,
-        )
-
-    for governed_directory in governed_directories:
-        if not governed_directory.exists():
+        if candidate.is_file():
+            if should_skip_path(candidate):
+                continue
+            checked_paths.append(str(candidate))
+            _check_path_name_rules(candidate, violations)
+            text = read_text(candidate)
+            _scan_for_stale_yaml_references(candidate, text, violations)
+            _scan_text_weak_names(candidate, text, violations)
             continue
-
-        if not should_skip_path(governed_directory):
-            _check_path_name_rules(governed_directory, violations)
-
-        for path in governed_directory.rglob("*"):
+        if should_skip_path(candidate):
+            continue
+        _check_path_name_rules(candidate, violations)
+        for path in candidate.rglob("*"):
             if should_skip_path(path):
                 continue
             _check_path_name_rules(path, violations)
-            if path.is_file():
-                checked_paths.append(str(path))
-                if path.suffix.lower() not in BINARY_SUFFIXES:
-                    _scan_for_stale_yaml_references(
-                        path,
-                        read_text(path),
-                        violations,
-                    )
+            if not path.is_file():
+                continue
+            checked_paths.append(str(path))
+            if path.suffix.lower() in BINARY_SUFFIXES:
+                continue
+            text = read_text(path)
+            _scan_for_stale_yaml_references(path, text, violations)
+            _scan_text_weak_names(path, text, violations)
 
     for config_file in _iter_governed_config_files(root_path):
         text = read_text(config_file)
@@ -213,14 +291,31 @@ def run_audit(root: str | Path) -> dict[str, Any]:
                 }
             )
 
-        for match in PROJECT_STAGE_PATTERN.finditer(text):
+        for match in WEAK_PROJECT_STAGE_PATTERN.finditer(text):
+            stage_value = match.group(1)
             violations.append(
                 {
                     "path": str(config_file),
                     "reason": "forbidden_project_stage_name",
-                    "value": match.group(1),
+                    "value": stage_value,
                 }
             )
+        
+        for match in PROJECT_STAGE_PATTERN.finditer(text):
+            stage_value = match.group(1)
+            normalized_path = str(config_file).replace('\\', '/')
+            if stage_value == 'protocol_skeleton' and '/configs/project/' not in normalized_path:
+                continue
+            if stage_value not in {'protocol_skeleton', 'synthetic_tubelet_sync_probe', 'real_video_vae_latent_probe'}:
+                continue
+            if stage_value == 'protocol_skeleton':
+                violations.append(
+                    {
+                        "path": str(config_file),
+                        "reason": "forbidden_project_stage_name",
+                        "value": stage_value,
+                    }
+                )
 
         for key_name in CONFIG_KEY_PATTERN.findall(text):
             if not is_snake_case_name(key_name):

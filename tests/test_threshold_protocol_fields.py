@@ -1,6 +1,5 @@
 """
-文件用途：验证 fixed low-FPR 阈值协议字段。
-File purpose: Validate threshold protocol governance for the protocol_skeleton stage.
+鏂囦欢鐢ㄩ€旓細楠岃瘉 fixed low-FPR 闃堝€煎崗璁瓧娈点€?File purpose: Validate threshold protocol governance for the protocol_skeleton stage.
 Module type: General module
 """
 
@@ -65,7 +64,7 @@ def test_test_threshold_update_allowed_true_fails() -> None:
 
 
 def test_attack_specific_thresholds_are_disabled() -> None:
-    """Validate that stage-0 protocol config blocks attack-specific thresholds.
+    """Validate that protocol skeleton runtime protocol config blocks attack-specific thresholds.
 
     Args:
         None.

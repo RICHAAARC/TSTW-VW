@@ -1,5 +1,5 @@
 """
-文件用途：提供项目契约与阈值协议配置的校验逻辑。
+鏂囦欢鐢ㄩ€旓細鎻愪緵椤圭洰濂戠害涓庨槇鍊煎崗璁厤缃殑鏍￠獙閫昏緫銆?
 File purpose: Provide reusable validators for the project contract and threshold protocol skeleton.
 Module type: General module
 """
@@ -743,7 +743,7 @@ def validate_protocol_artifact_schema_data(data: dict[str, Any]) -> list[dict[st
 
 
 def validate_ablation_placeholder_data(data: dict[str, Any]) -> list[dict[str, str]]:
-    """Validate the governed stage-0 ablation placeholder config.
+    """Validate the governed protocol skeleton runtime ablation placeholder config.
 
     Args:
         data: Parsed ablation placeholder config data.
@@ -817,7 +817,7 @@ def validate_ablation_placeholder_data(data: dict[str, Any]) -> list[dict[str, s
 
 
 def validate_attack_placeholder_data(data: dict[str, Any]) -> list[dict[str, str]]:
-    """Validate the governed stage-0 attack placeholder config.
+    """Validate the governed protocol skeleton runtime attack placeholder config.
 
     Args:
         data: Parsed attack placeholder config data.

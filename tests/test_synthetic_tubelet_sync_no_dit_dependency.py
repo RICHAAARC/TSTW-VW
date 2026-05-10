@@ -1,6 +1,5 @@
 """
-文件用途：验证 stage-one runtime 不依赖真实视频生成模型栈。
-File purpose: Validate that the stage-one runtime has no real video model dependency.
+鏂囦欢鐢ㄩ€旓細楠岃瘉 stage-one runtime 涓嶄緷璧栫湡瀹炶棰戠敓鎴愭ā鍨嬫爤銆?File purpose: Validate that the stage-one runtime has no real video model dependency.
 Module type: General module
 """
 
@@ -33,7 +32,7 @@ def _parse_python_file(file_path: Path) -> ast.AST:
     return ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
 
 
-def test_stage1_has_no_real_dit_flow_vae_runtime_dependency() -> None:
+def test_synthetic_tubelet_sync_has_no_real_dit_flow_vae_runtime_dependency() -> None:
     """Validate that `main/` does not import or call real model backends.
 
     Args:

@@ -1,6 +1,6 @@
 """
-文件用途：执行阶段 0 与阶段 1 入口 support config 骨架审计。
-File purpose: Audit the governed stage-0 support configs and the reserved stage-1 entry configs.
+鏂囦欢鐢ㄩ€旓細鎵ц闃舵 0 涓庨樁娈?1 鍏ュ彛 support config 楠ㄦ灦瀹¤銆?
+File purpose: Audit the governed protocol skeleton runtime support configs and the reserved synthetic_tubelet_sync_probe entry configs.
 Module type: General module
 """
 
@@ -28,7 +28,7 @@ from tools.harness.validate_project_contract import (
 
 
 def run_audit(root: str | Path) -> dict[str, Any]:
-    """Run the stage-0 support config audit.
+    """Run the protocol skeleton runtime support config audit.
 
     Args:
         root: Repository root path.
@@ -156,7 +156,7 @@ def run_audit(root: str | Path) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Run the stage-0 support config audit as a CLI.
+    """Run the protocol skeleton runtime support config audit as a CLI.
 
     Args:
         argv: Optional CLI argument list.

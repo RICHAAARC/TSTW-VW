@@ -1,6 +1,5 @@
 """
-文件用途：提供阶段 0 的随机 latent backend 骨架。
-File purpose: Provide the random latent backend scaffold for stage 0.
+鏂囦欢鐢ㄩ€旓細鎻愪緵闃舵 0 鐨勯殢鏈?latent backend 楠ㄦ灦銆?File purpose: Provide the random latent backend scaffold for stage 0.
 Module type: General module
 """
 
@@ -17,9 +16,8 @@ from main.methods.temporal_tubelet_watermark.interfaces import LatentBackend
 
 
 class SyntheticLatentBackendRandom(LatentBackend):
-    """功能：构建可复现的随机 latent 样本骨架。
-
-    Reproducible random latent backend for the stage-0 scaffold.
+    """鍔熻兘锛氭瀯寤哄彲澶嶇幇鐨勯殢鏈?latent 鏍锋湰楠ㄦ灦銆?
+    Reproducible random latent backend for the protocol skeleton runtime scaffold.
 
     Args:
         latent_shape: Declared latent shape.
@@ -42,8 +40,7 @@ class SyntheticLatentBackendRandom(LatentBackend):
         self._base_seed_random = base_seed_random
 
     def build_sample(self, sample_id: str, split: str, sample_role: str) -> LatentSample:
-        """功能：构建随机 latent 样本元数据。
-
+        """鍔熻兘锛氭瀯寤洪殢鏈?latent 鏍锋湰鍏冩暟鎹€?
         Build reproducible random latent sample metadata.
 
         Args:

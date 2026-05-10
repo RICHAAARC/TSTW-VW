@@ -43,7 +43,7 @@ KEY_REPORT_FIELDS = (
 )
 
 
-def run_stage1_profile(
+def run_synthetic_tubelet_sync_profile(
     profile: str,
     output_root: str | Path | None = None,
     samples_per_role: int | None = None,
@@ -71,7 +71,7 @@ def run_stage1_profile(
 
 def _build_default_output_root(profile: str) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return ROOT / "outputs" / "runs" / f"stage1_{profile}_{timestamp}"
+    return ROOT / "outputs" / "runs" / f"synthetic_tubelet_sync_{profile}_{timestamp}"
 
 
 def _print_report_gate_summary(output_root: Path) -> None:
@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--output-root", default=None)
     parser.add_argument("--samples-per-role", type=int, default=None)
     args = parser.parse_args(argv)
-    run_stage1_profile(
+    run_synthetic_tubelet_sync_profile(
         args.profile,
         output_root=args.output_root,
         samples_per_role=args.samples_per_role,

@@ -72,13 +72,13 @@ python tools/harness/run_all_audits.py
 - 所有 `*_random` 字段必须满足 seed 或 digest 追踪条件。
 - 所有 `*_placeholder` 字段不得进入 supported claim。
 
-## Stage-0 Artifact Freeze
+## Protocol Skeleton Artifact Freeze
 
 - 当前阶段只冻结 records、thresholds、manifest 与 tables 的 schema 和相对输出布局。
 - 当前阶段实现的是 placeholder / random 驱动的 `RecordWriter`、`ThresholdCalibrator`、`ProtocolRunner` 与 `TableBuilder` scaffold，而不是真实算法或真实模型流程。
 - 当前阶段不在仓库中 check in 正式实验产物。
 
-## Stage-0 Support Freeze
+## Protocol Skeleton Support Freeze
 
 - 当前阶段冻结 attack placeholder config、ablation shared-protocol config、claim 边界与 artifact rebuild 约束。
 - 当前阶段允许保留 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb` 作为受治理的 transition-preparation 入口，但仍不得创建额外 notebook 或 `minimal_release/` 目录。

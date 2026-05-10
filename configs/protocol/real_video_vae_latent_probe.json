@@ -53,6 +53,6 @@
     "real_video_attack_breakdown.csv",
     "quality_table.csv",
     "temporal_consistency_table.csv",
-    "stage2_governance_summary.csv"
+    "real_video_vae_latent_governance_summary.csv"
   ]
 }

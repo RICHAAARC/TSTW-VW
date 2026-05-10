@@ -8,117 +8,54 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.harness.audits.audit_placeholder_random_fields import run_audit
 from tools.harness.lib.field_rules import (
     find_placeholder_field_violations,
     find_random_field_violations,
 )
 
 
-def test_placeholder_suffix_valid_example_passes() -> None:
-    """Validate that governed placeholder fields pass the helper rule.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
-    text = 'latent_backend_placeholder: "synthetic_gaussian_latent_placeholder"\n'
-    assert find_placeholder_field_violations(text, "memory") == []
+def test_reject_seed_payload_and_random_payload() -> None:
+    assert find_random_field_violations("seed: 1\n", "memory")
+    assert find_random_field_violations("payload: '01'\n", "memory")
+    assert find_random_field_violations("random_payload: '01'\n", "memory")
 
 
-def test_placeholder_semantics_without_suffix_fail() -> None:
-    """Validate that placeholder semantics without the suffix are rejected.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
-    text = 'latent_backend: "synthetic_placeholder"\n'
-    violations = find_placeholder_field_violations(text, "memory")
-    assert violations
-    assert violations[0]["reason"] == "placeholder_value_on_ungoverned_field"
+def test_reject_placeholder_weak_fields() -> None:
+    assert find_placeholder_field_violations("placeholder_backend: x\n", "memory")
+    assert find_placeholder_field_violations("method_placeholder_flag: true\n", "memory")
+    assert find_placeholder_field_violations("dummy_metric: 1\n", "memory")
 
 
-def test_placeholder_identifier_values_on_semantic_fields_pass() -> None:
-    """Validate that semantic identifier fields may reference placeholder names.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
-    text = (
-        'method_variant: "empty_watermark_method_placeholder"\n'
-        'fusion_rule: "constant_zero_fusion_placeholder"\n'
-        'method_status: "placeholder"\n'
-    )
-    assert find_placeholder_field_violations(text, "memory") == []
-
-
-def test_random_field_with_digest_trace_passes() -> None:
-    """Validate that governed random fields pass when digest trace exists.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
-    text = (
-        'payload_bits_random: "1010"\n'
-        'payload_bits_digest_random: "digest-123"\n'
-        'latent_seed_random: 123\n'
+def test_accept_random_suffix_with_trace() -> None:
+    text = "\n".join(
+        [
+            "latent_generation_seed_random: 1",
+            "payload_bits_random: 1010",
+            "payload_bits_digest_random: digest",
+            "random_score_digest_random: digest",
+        ]
     )
     assert find_random_field_violations(text, "memory") == []
 
 
-def test_seed_as_formal_random_field_fails() -> None:
-    """Validate that plain `seed` is rejected as a governed random field.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
-    text = "seed: 123\n"
-    violations = find_random_field_violations(text, "memory")
-    assert violations
-    assert violations[0]["reason"] == "random_field_missing_governed_suffix"
-
-
-def test_placeholder_field_allowed_in_claims_fails(tmp_path: Path) -> None:
-    """Validate that placeholder fields cannot be marked claim-safe.
-
-    Args:
-        tmp_path: Temporary repository root.
-
-    Returns:
-        None.
-    """
-    docs_root = tmp_path / "docs"
-    docs_root.mkdir(parents=True)
-    (docs_root / "field_registry.md").write_text(
-        "\n".join(
-            [
-                "| field_name | category | required_suffix | allowed_in_records | allowed_in_claims | replacement_required | description |",
-                "| --- | --- | --- | --- | --- | --- | --- |",
-                "| latent_backend_placeholder | placeholder | _placeholder | true | true | true | bad row |",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
+def test_accept_placeholder_suffix_fields() -> None:
+    text = "\n".join(
+        [
+            "latent_backend_placeholder: x",
+            "quality_metric_placeholder: y",
+        ]
     )
-    (tmp_path / "configs").mkdir(parents=True)
+    assert find_placeholder_field_violations(text, "memory") == []
 
-    report = run_audit(tmp_path)
-    assert report["decision"] == "fail"
-    assert any(
-        violation["reason"] == "placeholder_field_allowed_in_claims"
-        for violation in report["violations"]
+
+def test_accept_registered_semantic_fields() -> None:
+    text = "\n".join(
+        [
+            "method_variant: tubelet_sync",
+            "attack_name: local_clip",
+            "target_fpr: 0.001",
+        ]
     )
+    assert find_placeholder_field_violations(text, "memory") == []
+    assert find_random_field_violations(text, "memory") == []
+

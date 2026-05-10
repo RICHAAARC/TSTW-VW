@@ -1,29 +1,26 @@
 # Placeholder And Random Governance
 
+## Scope
+
+- 本规则适用于 `configs`、`docs`、`main`、`tests`、`tools`、`.codex`、`AGENTS.md`、`README.md`。
+- Python 源码中的 record dict key、manifest dict key、测试 fixture key 必须遵守 suffix 规则。
+- Markdown 中 JSON / YAML / Python 示例代码块必须遵守 suffix 规则。
+
 ## Placeholder Rules
 
-- 占位实现、占位后端、占位指标、占位方法、占位路径、占位 baseline 的字段名必须以 `_placeholder` 结尾。
-- 当前阶段允许 placeholder 配置存在，但必须显式登记到 `docs/field_registry.md`。
-- `*_placeholder` 字段不得进入 supported claim。
+- 占位字段必须以 `_placeholder` 结尾。
+- 所有 placeholder 字段必须登记到 `docs/field_registry.md`。
+- 所有 placeholder 字段必须 `allowed_in_claims=false`。
+- 所有 placeholder 字段应设置 `replacement_required=true`。
 
 ## Random Trace Rules
 
-- 随机生成且需要后续复现、替换、追踪或清理的字段名必须以 `_random` 或 `_digest_random` 结尾。
-- 所有 `*_random` 字段必须具有 seed 或 digest 追踪条件。
-- `*_digest_random` 可作为自包含 digest 追踪字段。
+- 随机追踪字段必须以 `_random` 或 `_digest_random` 结尾。
+- 所有 random 字段必须登记到 `docs/field_registry.md`。
+- `*_random` 必须具备 seed 或 digest 追踪语义。
+- 所有 random 字段必须 `allowed_in_claims=false`。
 
-## Blocked Examples
+## Registration Rule
 
-- `seed`
-- `payload`
-- `random_payload`
-- `placeholder_method`
-- `method_placeholder_flag`
-- `backend_random_flag`
-
-## Audit Surface
-
-- 配置文件。
-- JSON 片段。
-- Markdown 示例代码块。
-- 字段登记表。
+- 未登记字段不得进入正式 `records`、`thresholds`、`manifest`、`tables`、`reports`。
+- 未登记临时字段不得作为 governed field 使用。

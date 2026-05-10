@@ -1,6 +1,6 @@
 """
-文件用途：验证阶段 0 tables 可由 records 重建。
-File purpose: Validate that stage-0 tables are rebuildable from records.
+鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 0 tables 鍙敱 records 閲嶅缓銆?
+File purpose: Validate that protocol skeleton runtime tables are rebuildable from records.
 Module type: General module
 """
 

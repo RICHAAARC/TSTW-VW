@@ -1,6 +1,6 @@
 """
-文件用途：根据 event records 生成阶段 0 统计指标。
-File purpose: Build stage-0 metrics from governed event records.
+鏂囦欢鐢ㄩ€旓細鏍规嵁 event records 鐢熸垚闃舵 0 缁熻鎸囨爣銆?
+File purpose: Build protocol skeleton runtime metrics from governed event records.
 Module type: General module
 """
 
@@ -117,7 +117,7 @@ def build_main_metrics_rows(
     event_score_records: list[dict[str, Any]],
     threshold_records: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """功能：构建主指标表行。
+    """鍔熻兘锛氭瀯寤轰富鎸囨爣琛ㄨ銆?
 
     Build rows for the governed main metrics table.
 
@@ -188,7 +188,7 @@ def build_ablation_table_rows(
     event_score_records: list[dict[str, Any]],
     threshold_records: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """功能：构建消融表行。
+    """鍔熻兘锛氭瀯寤烘秷铻嶈〃琛屻€?
 
     Build rows for the governed ablation table.
 
@@ -254,7 +254,7 @@ def build_local_clip_curve_rows(
     event_score_records: list[dict[str, Any]],
     threshold_records: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """功能：构建 local clip curve 表行。
+    """鍔熻兘锛氭瀯寤?local clip curve 琛ㄨ銆?
 
     Build rows for the governed local-clip curve table.
 
@@ -322,7 +322,7 @@ def build_temporal_attack_curve_rows(
     event_score_records: list[dict[str, Any]],
     threshold_records: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """功能：构建 temporal attack curve 表行。
+    """鍔熻兘锛氭瀯寤?temporal attack curve 琛ㄨ銆?
 
     Build rows for the governed temporal-attack curve table.
 
@@ -398,7 +398,7 @@ def build_tubelet_length_ablation_rows(
     event_score_records: list[dict[str, Any]],
     threshold_records: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """功能：构建 tubelet length ablation 表行。
+    """鍔熻兘锛氭瀯寤?tubelet length ablation 琛ㄨ銆?
 
     Build rows for the governed tubelet-length ablation table.
 

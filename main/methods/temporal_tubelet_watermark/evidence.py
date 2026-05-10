@@ -31,7 +31,7 @@ from main.methods.temporal_tubelet_watermark.tubelet_partition import (
 
 
 class EmptyEvidenceExtractorPlaceholder(EvidenceExtractor):
-    """功能：返回全空 evidence 分支的 placeholder extractor。
+    """鍔熻兘锛氳繑鍥炲叏绌?evidence 鍒嗘敮鐨?placeholder extractor銆?
 
     Placeholder extractor that returns explicit null evidence fields.
 
@@ -51,9 +51,9 @@ class EmptyEvidenceExtractorPlaceholder(EvidenceExtractor):
 
 
 class RandomEvidenceExtractorRandom(EvidenceExtractor):
-    """功能：生成可复现的随机 evidence 分数。
+    """鍔熻兘锛氱敓鎴愬彲澶嶇幇鐨勯殢鏈?evidence 鍒嗘暟銆?
 
-    Reproducible random evidence extractor for the stage-0 scaffold.
+    Reproducible random evidence extractor for the protocol skeleton runtime scaffold.
 
     Args:
         enabled_evidence: Evidence enablement mapping.
@@ -109,7 +109,7 @@ class RandomEvidenceExtractorRandom(EvidenceExtractor):
 
 
 class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
-    """功能：基于真实 tubelet / sync 机制提取 stage-one evidence 分数。
+    """鍔熻兘锛氬熀浜庣湡瀹?tubelet / sync 鏈哄埗鎻愬彇 stage-one evidence 鍒嗘暟銆?
 
     Stage-one evidence extractor driven by tubelet projections and synchronization search.
 

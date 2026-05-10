@@ -1,6 +1,5 @@
 """
-文件用途：提供阶段 0 的 identity attack placeholder。
-File purpose: Provide the stage-0 identity attack placeholder.
+鏂囦欢鐢ㄩ€旓細鎻愪緵闃舵 0 鐨?identity attack placeholder銆?File purpose: Provide the protocol skeleton runtime identity attack placeholder.
 Module type: General module
 """
 
@@ -12,8 +11,7 @@ from main.core.schema import LatentSample
 
 
 class IdentityAttackPlaceholder:
-    """功能：返回不修改样本的 identity attack。
-
+    """鍔熻兘锛氳繑鍥炰笉淇敼鏍锋湰鐨?identity attack銆?
     Identity attack placeholder that leaves samples unchanged.
 
     Args:
@@ -33,8 +31,7 @@ class IdentityAttackPlaceholder:
         self.attack_params = attack_params
 
     def apply(self, sample: LatentSample) -> LatentSample:
-        """功能：返回原样本，表示不施加攻击。
-
+        """鍔熻兘锛氳繑鍥炲師鏍锋湰锛岃〃绀轰笉鏂藉姞鏀诲嚮銆?
         Return the input sample unchanged.
 
         Args:

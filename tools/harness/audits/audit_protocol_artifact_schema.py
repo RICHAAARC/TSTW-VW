@@ -1,6 +1,5 @@
 """
-文件用途：执行阶段 0 protocol artifact schema 骨架审计。
-File purpose: Audit the governed stage-0 protocol artifact schema skeleton.
+鏂囦欢鐢ㄩ€旓細鎵ц闃舵 0 protocol artifact schema 楠ㄦ灦瀹¤銆?File purpose: Audit the governed protocol skeleton runtime protocol artifact schema skeleton.
 Module type: General module
 """
 

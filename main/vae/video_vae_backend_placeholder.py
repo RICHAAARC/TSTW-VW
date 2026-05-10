@@ -1,6 +1,5 @@
 """
-文件用途：提供阶段 2 tensor-runtime VAE backend 实现。
-File purpose: Provide the tensor-runtime VAE backend implementation for the stage-two scaffold.
+鏂囦欢鐢ㄩ€旓細鎻愪緵闃舵 2 tensor-runtime VAE backend 瀹炵幇銆?File purpose: Provide the tensor-runtime VAE backend implementation for the stage-two scaffold.
 Module type: Semi-general module
 """
 
@@ -12,8 +11,7 @@ from main.vae.vae_backend import VAEBackend
 
 
 class VideoVAETensorRuntimeBackend(VAEBackend):
-    """功能：提供恒等式 stage2 VAE backend。
-
+    """鍔熻兘锛氭彁渚涙亽绛夊紡 real_video_vae_latent_probe VAE backend銆?
     Identity-style tensor-runtime VAE backend for the governed stage-two scaffold.
 
     Args:

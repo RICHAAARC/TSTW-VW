@@ -16,7 +16,7 @@ import zlib
 from main.analysis.failure_case_exporter import export_failure_case_gallery
 from main.core.records import RecordWriter
 from main.protocol.evaluator import build_ablation_table_rows, build_main_metrics_rows
-from main.protocol.stage2_paths import Stage2OutputPaths, build_stage2_output_paths
+from main.protocol.real_video_vae_latent_paths import RealVideoVaeLatentOutputPaths, build_real_video_vae_latent_output_paths
 
 
 REAL_VIDEO_ATTACK_BREAKDOWN_COLUMNS = [
@@ -64,7 +64,7 @@ TEMPORAL_CONSISTENCY_COLUMNS = [
     "temporal_failure_count",
     "threshold_id",
 ]
-STAGE2_GOVERNANCE_SUMMARY_COLUMNS = [
+REAL_VIDEO_VAE_LATENT_GOVERNANCE_SUMMARY_COLUMNS = [
     "run_id",
     "construction_phase",
     "method_variants_summary",
@@ -81,7 +81,7 @@ STAGE2_GOVERNANCE_SUMMARY_COLUMNS = [
     "records_to_tables",
     "records_to_report",
     "records_to_failure_gallery",
-    "stage2_decision",
+    "real_video_vae_latent_decision",
     "blocking_reasons",
     "next_allowed_stage",
 ]
@@ -94,7 +94,7 @@ TPR_BAR_COLOR = (22, 163, 74)
 GRID_COLOR = (203, 213, 225)
 
 
-class Stage2ArtifactBuilder:
+class RealVideoVaeLatentArtifactBuilder:
     """功能：构建阶段 2 scaffold 产物。
 
     Builder for the stage-two scaffold artifacts.
@@ -128,7 +128,7 @@ class Stage2ArtifactBuilder:
             raise TypeError("event_score_records must be a list")
         if not isinstance(threshold_records, list):
             raise TypeError("threshold_records must be a list")
-        output_paths = build_stage2_output_paths(output_root)
+        output_paths = build_real_video_vae_latent_output_paths(output_root)
 
         main_rows = build_main_metrics_rows(event_score_records, threshold_records)
         ablation_rows = build_ablation_table_rows(event_score_records, threshold_records)
@@ -138,7 +138,7 @@ class Stage2ArtifactBuilder:
         )
         quality_rows = build_quality_table_rows(event_score_records)
         temporal_rows = build_temporal_consistency_rows(event_score_records)
-        governance_summary_rows = build_stage2_governance_summary_rows(
+        governance_summary_rows = build_real_video_vae_latent_governance_summary_rows(
             event_score_records,
             threshold_records,
             attack_breakdown_rows,
@@ -196,8 +196,8 @@ class Stage2ArtifactBuilder:
             temporal_rows,
         )
         self._write_csv(
-            output_paths.stage2_governance_summary_path,
-            STAGE2_GOVERNANCE_SUMMARY_COLUMNS,
+            output_paths.real_video_vae_latent_governance_summary_path,
+            REAL_VIDEO_VAE_LATENT_GOVERNANCE_SUMMARY_COLUMNS,
             governance_summary_rows,
         )
         self._write_tradeoff_figure(
@@ -207,7 +207,7 @@ class Stage2ArtifactBuilder:
         )
         output_paths.report_path.parent.mkdir(parents=True, exist_ok=True)
         output_paths.report_path.write_text(
-            build_stage2_report_text(
+            build_real_video_vae_latent_report_text(
                 governance_summary_rows[0],
             ),
             encoding="utf-8",
@@ -219,7 +219,7 @@ class Stage2ArtifactBuilder:
             "real_video_attack_breakdown_path": output_paths.real_video_attack_breakdown_path,
             "quality_table_path": output_paths.quality_table_path,
             "temporal_consistency_table_path": output_paths.temporal_consistency_table_path,
-            "stage2_governance_summary_path": output_paths.stage2_governance_summary_path,
+            "real_video_vae_latent_governance_summary_path": output_paths.real_video_vae_latent_governance_summary_path,
             "quality_robustness_tradeoff_path": output_paths.quality_robustness_tradeoff_path,
             "report_path": output_paths.report_path,
             "failure_case_gallery_path": output_paths.failure_case_gallery_path,
@@ -258,7 +258,7 @@ class Stage2ArtifactBuilder:
 
     def _write_tradeoff_figure(
         self,
-        output_paths: Stage2OutputPaths,
+        output_paths: RealVideoVaeLatentOutputPaths,
         attack_breakdown_rows: list[dict[str, Any]],
         quality_rows: list[dict[str, Any]],
     ) -> None:
@@ -495,7 +495,7 @@ def build_temporal_consistency_rows(
     return rows
 
 
-def build_stage2_report_text(governance_summary_row: dict[str, Any]) -> str:
+def build_real_video_vae_latent_report_text(governance_summary_row: dict[str, Any]) -> str:
     return "\n".join(
         [
             "# VAE Latent Probe Report",
@@ -526,14 +526,14 @@ def build_stage2_report_text(governance_summary_row: dict[str, Any]) -> str:
             f"- records_to_failure_gallery: {_bool_to_report_value(governance_summary_row['records_to_failure_gallery'])}",
             "",
             "## Decision",
-            f"- Stage2Decision: {governance_summary_row['stage2_decision']}",
+            f"- RealVideoVaeLatentDecision: {governance_summary_row['real_video_vae_latent_decision']}",
             f"- BlockingReasons: {governance_summary_row['blocking_reasons']}",
             f"- NextAllowedStage: {governance_summary_row['next_allowed_stage']}",
         ]
     ) + "\n"
 
 
-def build_stage2_governance_summary_rows(
+def build_real_video_vae_latent_governance_summary_rows(
     event_score_records: list[dict[str, Any]],
     threshold_records: list[dict[str, Any]],
     attack_breakdown_rows: list[dict[str, Any]],
@@ -568,10 +568,10 @@ def build_stage2_governance_summary_rows(
         structural_failures.append("records_to_failure_gallery_unavailable")
 
     if structural_failures:
-        stage2_decision = "FAIL"
+        real_video_vae_latent_decision = "FAIL"
         blocking_reasons = structural_failures
     else:
-        stage2_decision = "INCONCLUSIVE"
+        real_video_vae_latent_decision = "INCONCLUSIVE"
         blocking_reasons = [
             "video_vae_backend_placeholder",
             "real_video_runtime_not_enabled",
@@ -616,7 +616,7 @@ def build_stage2_governance_summary_rows(
             "records_to_tables": records_to_tables,
             "records_to_report": records_to_report,
             "records_to_failure_gallery": records_to_failure_gallery,
-            "stage2_decision": stage2_decision,
+            "real_video_vae_latent_decision": real_video_vae_latent_decision,
             "blocking_reasons": "; ".join(blocking_reasons),
             "next_allowed_stage": "remain_in_real_video_vae_latent_probe",
         }

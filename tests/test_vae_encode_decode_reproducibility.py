@@ -1,6 +1,5 @@
 """
-文件用途：验证阶段 2 VAE encode/decode 元数据与 digest 稳定性。
-File purpose: Validate metadata and digest stability for the stage-two VAE path.
+鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 2 VAE encode/decode 鍏冩暟鎹笌 digest 绋冲畾鎬с€?File purpose: Validate metadata and digest stability for the stage-two VAE path.
 Module type: General module
 """
 
@@ -11,7 +10,7 @@ from pathlib import Path
 from main.backends.real_video_vae_latent import RealVideoVAELatentBackend
 
 
-def test_stage2_vae_placeholder_metadata_and_digest_are_stable(tmp_path: Path) -> None:
+def test_real_video_vae_latent_vae_placeholder_metadata_and_digest_are_stable(tmp_path: Path) -> None:
     """Validate stage-two VAE metadata and encoded digests remain stable.
 
     Args:

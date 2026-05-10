@@ -21,7 +21,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from main.analysis.quality_metrics import build_quality_metrics_payload
-from main.analysis.stage2_artifacts import Stage2ArtifactBuilder
+from main.analysis.real_video_vae_latent_artifacts import RealVideoVaeLatentArtifactBuilder
 from main.analysis.temporal_metrics import build_temporal_metrics_payload
 from main.attacks.real_video_attack_registry import build_real_video_attack_registry
 from main.backends.real_video_vae_latent import (
@@ -37,7 +37,7 @@ from main.methods.temporal_tubelet_watermark.method_placeholder import build_met
 from main.protocol.calibrator import ThresholdCalibrator
 from main.protocol.event_builder import EventPlanEntry
 from main.protocol.split_builder import build_split_plan
-from main.protocol.stage2_paths import Stage2OutputPaths, build_stage2_output_paths
+from main.protocol.real_video_vae_latent_paths import RealVideoVaeLatentOutputPaths, build_real_video_vae_latent_output_paths
 from main.vae.vae_registry import resolve_vae_backend
 from main.video.dataset_manifest import load_dataset_manifest, summarize_dataset_manifest
 from main.video.video_artifact import copy_latent_artifact, materialize_video_artifact_from_latent
@@ -47,7 +47,7 @@ SUPPORTED_RUNTIME_PROFILES = ("tiny", "smoke", "proof", "formal")
 
 
 @dataclass(frozen=True)
-class Stage2RunResult:
+class RealVideoVaeLatentRunResult:
     """功能：定义阶段 2 运行结果载体。
 
     Stage-two run result payload.
@@ -70,7 +70,7 @@ class Stage2RunResult:
     run_manifest: dict[str, Any]
 
 
-class Stage2Runner:
+class RealVideoVaeLatentRunner:
     """功能：执行阶段 2 占位协议闭环。
 
     Execute the placeholder stage-two governed protocol loop.
@@ -86,7 +86,7 @@ class Stage2Runner:
         self._repository_root = Path(repository_root)
         if not self._repository_root.exists():
             raise FileNotFoundError(self._repository_root)
-        self._artifact_builder = Stage2ArtifactBuilder()
+        self._artifact_builder = RealVideoVaeLatentArtifactBuilder()
         self._threshold_calibrator = ThresholdCalibrator()
 
     def run(
@@ -102,7 +102,7 @@ class Stage2Runner:
         ablation_config_path: str | Path | None = None,
         dataset_manifest_path: str | Path | None = None,
         runtime_config_path: str | Path | None = None,
-    ) -> Stage2RunResult:
+    ) -> RealVideoVaeLatentRunResult:
         """功能：运行阶段 2 占位协议并写出 records、tables 与 manifests。
 
         Run the placeholder stage-two protocol and persist its governed artifacts.
@@ -121,7 +121,7 @@ class Stage2Runner:
             runtime_config_path: Optional Colab runtime-config override path.
 
         Returns:
-            A `Stage2RunResult` instance.
+            A `RealVideoVaeLatentRunResult` instance.
         """
         if run_mode not in {"smoke", "formal"}:
             raise ValueError("run_mode must be either smoke or formal")
@@ -205,7 +205,7 @@ class Stage2Runner:
             threshold_records,
             output_root_path,
         )
-        output_paths = build_stage2_output_paths(output_root_path)
+        output_paths = build_real_video_vae_latent_output_paths(output_root_path)
         runtime_config_payload = dict(runtime_config_overrides)
         runtime_config_payload.update(
             {
@@ -220,7 +220,7 @@ class Stage2Runner:
                 "method_variants": [method_config["method_variant"] for method_config in runtime_method_configs],
             }
         )
-        self._write_json(output_paths.colab_stage2_runtime_config_path, runtime_config_payload)
+        self._write_json(output_paths.colab_real_video_vae_latent_runtime_config_path, runtime_config_payload)
         runtime_config_digest = compute_object_digest(runtime_config_payload)
         runtime_manifest = {
             "run_id": run_id,
@@ -272,7 +272,7 @@ class Stage2Runner:
         }
         self._write_json(output_paths.run_manifest_path, run_manifest)
         del artifact_paths
-        return Stage2RunResult(
+        return RealVideoVaeLatentRunResult(
             run_id=run_id,
             output_root=output_root_path,
             event_score_records=event_score_records,
@@ -363,7 +363,7 @@ class Stage2Runner:
         embedded_sample_cache: dict[tuple[str, str, str, str], Any] = {}
         video_cache: dict[tuple[str, str], dict[str, Any]] = {}
         latent_copy_cache: dict[tuple[str, str], dict[str, str]] = {}
-        output_paths = build_stage2_output_paths(output_root)
+        output_paths = build_real_video_vae_latent_output_paths(output_root)
         for event_plan_entry in event_plan:
             if event_plan_entry.split not in allowed_splits:
                 continue
@@ -809,7 +809,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--dataset-manifest", default=None)
     parser.add_argument("--runtime-config", default=None)
     args = parser.parse_args(argv)
-    Stage2Runner(ROOT).run(
+    RealVideoVaeLatentRunner(ROOT).run(
         output_root=args.run_root,
         run_mode=args.run_mode,
         samples_per_role=args.samples_per_role,

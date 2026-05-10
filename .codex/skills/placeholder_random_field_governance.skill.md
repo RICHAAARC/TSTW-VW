@@ -8,7 +8,7 @@ Freeze suffix-based governance for placeholder fields and random trace fields ac
 
 ## Scope
 
-Applies to governed fields in configuration files, JSON fragments, Markdown code blocks, field registries, and auditable examples.
+Applies to Python source code, test fixtures, Markdown examples, and JSON configs.
 
 ## Required Inputs
 
@@ -44,9 +44,15 @@ Applies to governed fields in configuration files, JSON fragments, Markdown code
 ## Required Tests
 
 - Accept `latent_backend_placeholder`.
-- Reject placeholder semantics without the governed suffix.
-- Accept tracked random fields when seed or digest semantics exist.
-- Reject placeholder fields that are marked as allowed in claims.
+- Reject `seed`.
+- Reject `payload`.
+- Reject `random_payload`.
+- Reject `placeholder_backend`.
+- Reject `method_placeholder_flag`.
+- Accept `latent_generation_seed_random`.
+- Accept `payload_bits_digest_random`.
+- Accept `latent_backend_placeholder`.
+- Reject unregistered governed fields.
 
 ## Required Audit Hooks
 

@@ -1,6 +1,5 @@
 """
-文件用途：验证阶段 2 scaffold 质量指标负载。
-File purpose: Validate quality-metrics payloads for the stage-two scaffold.
+鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 2 scaffold 璐ㄩ噺鎸囨爣璐熻浇銆?File purpose: Validate quality-metrics payloads for the stage-two scaffold.
 Module type: General module
 """
 
@@ -13,7 +12,7 @@ from main.backends.real_video_vae_latent import RealVideoVAELatentBackend
 from main.video.video_artifact import materialize_video_artifact_from_latent
 
 
-def test_stage2_quality_metrics_payload_is_materialized(tmp_path: Path) -> None:
+def test_real_video_vae_latent_quality_metrics_payload_is_materialized(tmp_path: Path) -> None:
     """Validate that stage-two quality metrics produce governed payload fields.
 
     Args:
