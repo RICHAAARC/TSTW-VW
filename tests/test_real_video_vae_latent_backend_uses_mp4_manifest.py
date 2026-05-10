@@ -1,5 +1,6 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 2 VAE encode/decode 鍏冩暟鎹笌 digest 绋冲畾鎬с€?File purpose: Validate metadata and digest stability for the stage-two VAE path.
+文件用途：验证阶段 2 backend 会使用 manifest 中的 mp4 样本构建 source artifact。
+File purpose: Validate that stage-two backend uses manifest mp4 samples for source artifacts.
 Module type: General module
 """
 
@@ -13,11 +14,12 @@ import numpy as np
 import pytest
 
 from main.backends.real_video_vae_latent import RealVideoVAELatentBackend
-from main.video.video_io import write_video_mp4
+from main.video.video_io import probe_video_metadata, write_video_mp4
 
 
-def test_real_video_vae_latent_vae_placeholder_metadata_and_digest_are_stable(tmp_path: Path) -> None:
-    """Validate stage-two VAE metadata and encoded digests remain stable.
+@pytest.mark.unit
+def test_real_video_vae_latent_backend_reads_mp4_from_manifest(tmp_path: Path) -> None:
+    """Validate backend resolves mp4 input from local manifest mapping.
 
     Args:
         tmp_path: Temporary output root.
@@ -29,17 +31,13 @@ def test_real_video_vae_latent_vae_placeholder_metadata_and_digest_are_stable(tm
         pytest.skip("imageio_ffmpeg is unavailable")
 
     dataset_root = tmp_path / "datasets" / "real_video_probe"
-    dataset_root.mkdir(parents=True, exist_ok=True)
     source_root = dataset_root / "source"
     source_root.mkdir(parents=True, exist_ok=True)
+
     source_frames = np.random.default_rng(20260510).random((6, 10, 12, 3), dtype=np.float32)
-    write_video_mp4(
-        source_frames,
-        source_root / "rvp_000001.mp4",
-        fps=8,
-        codec="libx264",
-        crf=20,
-    )
+    source_path = source_root / "rvp_000001.mp4"
+    write_video_mp4(source_frames, source_path, fps=8, codec="libx264", crf=20)
+
     manifest_path = dataset_root / "dataset_manifest.json"
     manifest_path.write_text(
         json.dumps(
@@ -50,12 +48,12 @@ def test_real_video_vae_latent_vae_placeholder_metadata_and_digest_are_stable(tm
                     {
                         "video_source_id": "rvp_000001",
                         "relpath": "source/rvp_000001.mp4",
-                        "split": "test",
+                        "split": "calibration",
                     },
                     {
                         "video_source_id": "rvp_000101",
                         "relpath": "source/rvp_000001.mp4",
-                        "split": "calibration",
+                        "split": "test",
                     },
                 ],
             },
@@ -66,9 +64,8 @@ def test_real_video_vae_latent_vae_placeholder_metadata_and_digest_are_stable(tm
         encoding="utf-8",
     )
 
-    output_root = tmp_path / "outputs" / "runs" / "stage2_vae_repro"
     backend = RealVideoVAELatentBackend(
-        latent_shape=(8, 2, 8, 8),
+        latent_shape=(8, 4, 8, 8),
         runtime_profile="tiny",
         dataset_manifest_path=manifest_path,
         local_dataset_root=dataset_root,
@@ -76,11 +73,21 @@ def test_real_video_vae_latent_vae_placeholder_metadata_and_digest_are_stable(tm
         target_resolution=(8, 8),
         allow_mock_vae_backend=True,
     )
+    output_root = tmp_path / "outputs" / "runs" / "real_video_backend_mp4_manifest"
     backend.set_output_root(output_root)
-    first_sample = backend.build_sample("rvp_vae_same", "test", "clean_negative")
-    second_sample = backend.build_sample("rvp_vae_same", "test", "clean_negative")
 
-    assert first_sample.latent_tensor_digest_random == second_sample.latent_tensor_digest_random
-    assert first_sample.mechanism_trace["vae_config_digest"] == second_sample.mechanism_trace["vae_config_digest"]
-    assert first_sample.mechanism_trace["vae_backend_name"] == "video_vae_tensor_runtime"
-    assert first_sample.mechanism_trace["video_runtime_status"] == "real_mp4_runtime"
+    sample = backend.build_sample("rvp_calibration_clean_negative_000001", "calibration", "clean_negative")
+
+    mechanism_trace = sample.mechanism_trace
+    assert mechanism_trace is not None
+    assert mechanism_trace["video_source_id"] == "rvp_000001"
+    assert mechanism_trace["video_source_relpath"].endswith(".mp4")
+    assert mechanism_trace["encoded_latent_relpath"].endswith(".npy")
+    assert mechanism_trace["video_runtime_status"] == "real_mp4_runtime"
+
+    source_video_path = output_root / mechanism_trace["video_source_relpath"]
+    assert source_video_path.exists()
+    metadata = probe_video_metadata(source_video_path)
+    assert metadata["height"] == 8
+    assert metadata["width"] == 8
+    assert metadata["channels"] == 3

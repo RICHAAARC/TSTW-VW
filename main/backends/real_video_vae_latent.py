@@ -7,31 +7,39 @@ Module type: Semi-general module
 from __future__ import annotations
 
 from array import array
-import math
+import importlib.util
 from pathlib import Path
+import random
 from typing import Any
 
-from main.backends.synthetic_video_latent import (
-    DEFAULT_LATENT_GENERATION_SEED,
-    DEFAULT_LATENT_SHAPE,
-    DEFAULT_RUNTIME_PROFILE,
-    SyntheticVideoLatentBackend,
-)
 from main.core.digest import compute_file_digest, compute_object_digest
 from main.core.schema import LatentSample, ensure_supported_sample_role, ensure_supported_split
 from main.core.tensor_artifact import read_float_tensor_npy, write_float_tensor_npy
 from main.methods.temporal_tubelet_watermark.interfaces import LatentBackend
+from main.vae.vae_registry import resolve_vae_backend
+from main.video.dataset_manifest import load_dataset_manifest, resolve_manifest_samples
+from main.video.frame_preprocess import standardize_video_frames
+from main.video.video_io import write_video_mp4
 
 
 PROJECT_STAGE = "synthetic_tubelet_sync_probe"
 TARGET_CONSTRUCTION_PHASE = "real_video_vae_latent_probe"
 LATENT_BACKEND_NAME = "real_video_vae_latent"
-LATENT_BACKEND_STATUS = "video_vae_tensor_scaffold_runtime"
+LATENT_BACKEND_STATUS = "real_video_vae_formal_runtime"
+LATENT_BACKEND_STATUS_SCAFFOLD = "video_vae_tensor_scaffold_runtime"
 DEFAULT_VIDEO_FPS = 8
 DEFAULT_VAE_BACKEND_NAME = "video_vae_tensor_runtime"
 DEFAULT_VAE_BACKEND_VERSION = "framewise_tensor_runtime"
 DEFAULT_VAE_ENCODE_MODE = "framewise"
 DEFAULT_VAE_DECODE_MODE = "framewise"
+DEFAULT_RUNTIME_PROFILE = "smoke"
+DEFAULT_LATENT_GENERATION_SEED = 20260510
+DEFAULT_LATENT_SHAPE = {
+    "frames": 16,
+    "channels": 4,
+    "height": 16,
+    "width": 16,
+}
 
 
 def _normalize_latent_shape(
@@ -126,6 +134,14 @@ class RealVideoVAELatentBackend(LatentBackend):
         vae_backend_version: str = DEFAULT_VAE_BACKEND_VERSION,
         vae_encode_mode: str = DEFAULT_VAE_ENCODE_MODE,
         vae_decode_mode: str = DEFAULT_VAE_DECODE_MODE,
+        target_frame_count: int | None = None,
+        target_resolution: tuple[int, int] | list[int] | None = None,
+        frame_sampling_policy: str = "deterministic_uniform",
+        local_dataset_root: str | Path | None = None,
+        dataset_manifest_path: str | Path | None = None,
+        vae_model_local_path: str | Path | None = None,
+        allow_mock_vae_backend: bool = True,
+        latent_downsample_factor: int = 8,
     ) -> None:
         normalized_latent_shape = _normalize_latent_shape(latent_shape)
         if not isinstance(latent_generation_seed, int):
@@ -142,6 +158,19 @@ class RealVideoVAELatentBackend(LatentBackend):
             raise ValueError("vae_encode_mode must be a non-empty string")
         if not isinstance(vae_decode_mode, str) or not vae_decode_mode:
             raise ValueError("vae_decode_mode must be a non-empty string")
+        if not isinstance(frame_sampling_policy, str) or not frame_sampling_policy:
+            raise ValueError("frame_sampling_policy must be a non-empty string")
+        if target_resolution is not None:
+            if (
+                not isinstance(target_resolution, (tuple, list))
+                or len(target_resolution) != 2
+                or any(not isinstance(v, int) or v < 1 for v in target_resolution)
+            ):
+                raise ValueError("target_resolution must be a pair of positive integers")
+        if target_frame_count is not None and (
+            not isinstance(target_frame_count, int) or target_frame_count < 1
+        ):
+            raise ValueError("target_frame_count must be a positive integer")
 
         self._runtime_profile = runtime_profile
         self._video_fps = video_fps
@@ -149,10 +178,43 @@ class RealVideoVAELatentBackend(LatentBackend):
         self._vae_backend_version = vae_backend_version
         self._vae_encode_mode = vae_encode_mode
         self._vae_decode_mode = vae_decode_mode
-        self._synthetic_backend = SyntheticVideoLatentBackend(
-            latent_shape=normalized_latent_shape,
-            latent_generation_seed=latent_generation_seed,
-        )
+        self._latent_shape = normalized_latent_shape
+        self._latent_generation_seed = latent_generation_seed
+        self._target_frame_count = int(target_frame_count or normalized_latent_shape[0])
+        if target_resolution is None:
+            self._target_resolution = (int(normalized_latent_shape[2]), int(normalized_latent_shape[3]))
+        else:
+            self._target_resolution = (int(target_resolution[0]), int(target_resolution[1]))
+        self._frame_sampling_policy = frame_sampling_policy
+        self._mp4_runtime_available = importlib.util.find_spec("imageio_ffmpeg") is not None
+        self._local_dataset_root = None if local_dataset_root is None else Path(local_dataset_root)
+        self._dataset_manifest_path = None if dataset_manifest_path is None else Path(dataset_manifest_path)
+        self._resolved_samples_by_split: dict[str, list[Any]] = {}
+        if self._dataset_manifest_path is not None and self._local_dataset_root is not None:
+            manifest_payload = load_dataset_manifest(self._dataset_manifest_path)
+            resolved_samples = resolve_manifest_samples(
+                manifest_payload,
+                self._local_dataset_root,
+                formal_mode=self._runtime_profile == "formal",
+            )
+            for resolved_sample in resolved_samples:
+                self._resolved_samples_by_split.setdefault(resolved_sample.split, []).append(
+                    resolved_sample
+                )
+
+        vae_config = {
+            "runtime_profile": runtime_profile,
+            "vae_backend_name": vae_backend_name,
+            "vae_backend_version": vae_backend_version,
+            "vae_encode_mode": vae_encode_mode,
+            "vae_decode_mode": vae_decode_mode,
+            "allow_mock_vae_backend": bool(allow_mock_vae_backend),
+            "latent_downsample_factor": int(latent_downsample_factor),
+        }
+        if vae_model_local_path is not None:
+            vae_config["vae_model_local_path"] = str(vae_model_local_path)
+        self._vae_backend = resolve_vae_backend(vae_config)
+        self._vae_metadata = self._vae_backend.backend_metadata()
         self._output_root: Path | None = None
         self._sample_cache: dict[tuple[str, str, str], LatentSample] = {}
         self._vae_config_digest = compute_object_digest(
@@ -165,6 +227,12 @@ class RealVideoVAELatentBackend(LatentBackend):
                 "vae_backend_version": vae_backend_version,
                 "vae_encode_mode": vae_encode_mode,
                 "vae_decode_mode": vae_decode_mode,
+                "target_frame_count": self._target_frame_count,
+                "target_resolution": list(self._target_resolution),
+                "frame_sampling_policy": self._frame_sampling_policy,
+                "dataset_manifest_path": None if self._dataset_manifest_path is None else str(self._dataset_manifest_path),
+                "local_dataset_root": None if self._local_dataset_root is None else str(self._local_dataset_root),
+                "vae_model_local_path": None if vae_model_local_path is None else str(vae_model_local_path),
             }
         )
 
@@ -183,7 +251,6 @@ class RealVideoVAELatentBackend(LatentBackend):
         if resolved_output_root != self._output_root:
             self._sample_cache.clear()
         self._output_root = resolved_output_root
-        self._synthetic_backend.set_output_root(resolved_output_root)
 
     def build_sample(self, sample_id: str, split: str, sample_role: str) -> LatentSample:
         """功能：构建阶段 2 source sample。
@@ -214,34 +281,55 @@ class RealVideoVAELatentBackend(LatentBackend):
         ):
             return cached_sample
 
-        source_sample = self._synthetic_backend.build_sample(sample_id, split, sample_role)
         source_video_relpath = (
-            Path("artifacts") / "videos" / "source" / split / sample_role / f"{sample_id}.npy"
+            Path("artifacts")
+            / "videos"
+            / "source"
+            / split
+            / sample_role
+            / f"{sample_id}.{self._select_source_container_extension()}"
         )
         source_video_path = self._output_root / source_video_relpath
-        source_video_digest = self._materialize_source_video(source_sample, source_video_path)
+        source_video_metadata, source_video_id = self._materialize_source_video(
+            sample_id,
+            split,
+            source_video_path,
+        )
 
         encoded_latent_relpath = (
             Path("artifacts") / "latents" / "encoded" / split / sample_role / f"{sample_id}.npy"
         )
         encoded_latent_path = self._output_root / encoded_latent_relpath
-        encoded_latent_digest = self._materialize_encoded_latent(
-            source_sample,
+        encoded_latent_digest, encoded_latent_shape = self._materialize_encoded_latent(
+            source_video_metadata,
             encoded_latent_path,
         )
 
-        frames, _, height, width = source_sample.latent_shape
+        frames, channels, height, width = encoded_latent_shape
+        latent_backend_status = (
+            LATENT_BACKEND_STATUS if self._runtime_profile == "formal" else LATENT_BACKEND_STATUS_SCAFFOLD
+        )
+        latent_generation_seed_random = self._derive_runtime_seed(sample_id, split)
         mechanism_trace = {
             "construction_phase": TARGET_CONSTRUCTION_PHASE,
             "latent_backend_name": LATENT_BACKEND_NAME,
-            "video_source_id": sample_id,
+            "latent_backend_status": latent_backend_status,
+            "video_runtime_status": (
+                "real_mp4_runtime"
+                if source_video_metadata["container"] == "mp4"
+                else "tensor_video_fallback_runtime"
+            ),
+            "video_source_id": source_video_id,
             "video_source_relpath": source_video_relpath.as_posix(),
-            "video_source_digest": source_video_digest,
+            "video_source_digest": source_video_metadata["video_digest"],
             "video_frame_count": frames,
             "video_fps": self._video_fps,
-            "video_resolution": [height, width],
+            "video_resolution": [source_video_metadata["height"], source_video_metadata["width"]],
+            "video_container": source_video_metadata["container"],
+            "video_codec": source_video_metadata["codec"],
             "vae_backend_name": self._vae_backend_name,
             "vae_backend_version": self._vae_backend_version,
+            "vae_model_digest": self._vae_metadata.get("vae_model_digest"),
             "vae_config_digest": self._vae_config_digest,
             "vae_encode_mode": self._vae_encode_mode,
             "vae_decode_mode": self._vae_decode_mode,
@@ -270,57 +358,199 @@ class RealVideoVAELatentBackend(LatentBackend):
             sample_id=sample_id,
             split=split,
             sample_role=sample_role,
-            latent_shape=source_sample.latent_shape,
+            latent_shape=(frames, channels, height, width),
             latent_tensor_digest_random=encoded_latent_digest,
-            latent_generation_seed_random=source_sample.latent_generation_seed_random,
+            latent_generation_seed_random=latent_generation_seed_random,
             latent_backend_name=LATENT_BACKEND_NAME,
-            latent_backend_status=LATENT_BACKEND_STATUS,
+            latent_backend_status=latent_backend_status,
             latent_artifact_relpath=encoded_latent_relpath.as_posix(),
             latent_artifact_path=str(encoded_latent_path),
             latent_artifact_digest=encoded_latent_digest,
-            run_root_path=source_sample.run_root_path,
+            run_root_path=str(self._output_root),
             mechanism_trace=mechanism_trace,
-            applied_attack_params=source_sample.applied_attack_params,
+            applied_attack_params=None,
         )
         self._sample_cache[cache_key] = stage_two_sample
         return stage_two_sample
 
     def _materialize_source_video(
         self,
-        source_sample: LatentSample,
+        sample_id: str,
+        split: str,
         source_video_path: Path,
-    ) -> str:
+    ) -> tuple[dict[str, Any], str]:
         if source_video_path.exists():
-            return compute_file_digest(source_video_path)
+            return {
+                "video_relpath": str(source_video_path.relative_to(self._output_root)).replace("\\", "/"),
+                "video_digest": compute_file_digest(source_video_path),
+                "frame_count": self._target_frame_count,
+                "fps": self._video_fps,
+                "height": self._target_resolution[0],
+                "width": self._target_resolution[1],
+                "codec": "libx264" if source_video_path.suffix.lower() == ".mp4" else "tensor_npy",
+                "container": "mp4" if source_video_path.suffix.lower() == ".mp4" else "npy",
+                "pixel_format": "yuv420p" if source_video_path.suffix.lower() == ".mp4" else "float32_nchw",
+            }, sample_id
 
-        tensor_artifact = read_float_tensor_npy(source_sample.latent_artifact_path)
-        frames, channels, height, width = tensor_artifact.shape
-        spatial_size = height * width
-        frame_size = channels * spatial_size
-        video_values = array("f")
-        for frame_index in range(frames):
-            frame_offset = frame_index * frame_size
-            for target_channel in range(3):
-                source_channel = target_channel % channels
-                channel_offset = frame_offset + source_channel * spatial_size
-                for spatial_index in range(spatial_size):
-                    latent_value = float(tensor_artifact.values[channel_offset + spatial_index])
-                    video_values.append((math.tanh(latent_value) + 1.0) / 2.0)
+        resolved_sample = self._resolve_dataset_sample(sample_id, split)
+        if resolved_sample is None:
+            source_video_id = sample_id
+            video_frames = self._build_fallback_video_frames(sample_id, split)
+        else:
+            source_video_id = resolved_sample.video_source_id
+            from main.video.video_io import read_video_frames
 
-        write_float_tensor_npy(source_video_path, (frames, 3, height, width), video_values)
-        return compute_file_digest(source_video_path)
+            loaded_video = read_video_frames(resolved_sample.resolved_path)
+            video_frames = loaded_video.frames
+
+        standardized_frames = standardize_video_frames(
+            video_frames,
+            target_frame_count=self._target_frame_count,
+            target_fps=self._video_fps,
+            target_resolution=self._target_resolution,
+            frame_sampling_policy=self._frame_sampling_policy,
+        )
+        if source_video_path.suffix.lower() == ".mp4":
+            source_video_metadata = write_video_mp4(
+                standardized_frames,
+                source_video_path,
+                fps=self._video_fps,
+                codec="libx264",
+                crf=18,
+            )
+            source_video_metadata["video_relpath"] = str(
+                source_video_path.relative_to(self._output_root)
+            ).replace("\\", "/")
+            return source_video_metadata, source_video_id
+
+        tensor_frames = standardized_frames.transpose(0, 3, 1, 2)
+        write_float_tensor_npy(
+            source_video_path,
+            (
+                int(tensor_frames.shape[0]),
+                int(tensor_frames.shape[1]),
+                int(tensor_frames.shape[2]),
+                int(tensor_frames.shape[3]),
+            ),
+            array("f", tensor_frames.reshape(-1).tolist()),
+        )
+        return {
+            "video_relpath": str(source_video_path.relative_to(self._output_root)).replace("\\", "/"),
+            "video_digest": compute_file_digest(source_video_path),
+            "frame_count": int(tensor_frames.shape[0]),
+            "fps": int(self._video_fps),
+            "height": int(tensor_frames.shape[2]),
+            "width": int(tensor_frames.shape[3]),
+            "codec": "tensor_npy",
+            "container": "npy",
+            "pixel_format": "float32_nchw",
+        }, source_video_id
 
     def _materialize_encoded_latent(
         self,
-        source_sample: LatentSample,
+        source_video_metadata: dict[str, Any],
         encoded_latent_path: Path,
-    ) -> str:
+    ) -> tuple[str, tuple[int, int, int, int]]:
         if encoded_latent_path.exists():
-            return compute_file_digest(encoded_latent_path)
+            cached_artifact = read_float_tensor_npy(encoded_latent_path)
+            return compute_file_digest(encoded_latent_path), (
+                int(cached_artifact.shape[0]),
+                int(cached_artifact.shape[1]),
+                int(cached_artifact.shape[2]),
+                int(cached_artifact.shape[3]),
+            )
+
+        from main.video.video_io import read_video_frames
+
+        source_video_path = self._output_root / source_video_metadata["video_relpath"]
+        if str(source_video_metadata.get("container")) == "npy":
+            tensor_artifact = read_float_tensor_npy(source_video_path)
+            import numpy as np
+
+            standardized_video = np.asarray(tensor_artifact.values, dtype=np.float32).reshape(
+                tensor_artifact.shape
+            ).transpose(0, 2, 3, 1)
+        else:
+            standardized_video = read_video_frames(source_video_path).frames
+        encoded_latent = self._vae_backend.encode_video(standardized_video)
+        normalized_latent = self._normalize_encoded_latent(encoded_latent)
 
         encoded_latent_path.parent.mkdir(parents=True, exist_ok=True)
-        encoded_latent_path.write_bytes(Path(source_sample.latent_artifact_path).read_bytes())
-        return compute_file_digest(encoded_latent_path)
+        write_float_tensor_npy(
+            encoded_latent_path,
+            (
+                int(normalized_latent.shape[0]),
+                int(normalized_latent.shape[1]),
+                int(normalized_latent.shape[2]),
+                int(normalized_latent.shape[3]),
+            ),
+            array("f", normalized_latent.astype("float32").reshape(-1).tolist()),
+        )
+        return compute_file_digest(encoded_latent_path), (
+            int(normalized_latent.shape[0]),
+            int(normalized_latent.shape[1]),
+            int(normalized_latent.shape[2]),
+            int(normalized_latent.shape[3]),
+        )
+
+    def _resolve_dataset_sample(self, sample_id: str, split: str) -> Any | None:
+        split_samples = self._resolved_samples_by_split.get(split, [])
+        if not split_samples:
+            return None
+        stable_index = self._derive_runtime_seed(sample_id, split) % len(split_samples)
+        return split_samples[stable_index]
+
+    def _select_source_container_extension(self) -> str:
+        if self._mp4_runtime_available:
+            return "mp4"
+        if self._runtime_profile == "formal":
+            # 中文注释：formal 模式要求真实 mp4 运行时，不允许回退为 tensor artifact。
+            raise RuntimeError("formal runtime requires mp4 support via imageio_ffmpeg")
+        return "npy"
+
+    def _derive_runtime_seed(self, sample_id: str, split: str) -> int:
+        seed_digest = compute_object_digest(
+            {
+                "sample_id": sample_id,
+                "split": split,
+                "latent_generation_seed": self._latent_generation_seed,
+            }
+        )
+        return int(seed_digest[:12], 16)
+
+    def _build_fallback_video_frames(self, sample_id: str, split: str) -> Any:
+        runtime_seed = self._derive_runtime_seed(sample_id, split)
+        generator = random.Random(runtime_seed)
+        frame_count = self._target_frame_count
+        height, width = self._target_resolution
+        import numpy as np
+
+        frames = np.zeros((frame_count, height, width, 3), dtype=np.float32)
+        for frame_index in range(frame_count):
+            for row_index in range(height):
+                for col_index in range(width):
+                    base_value = (
+                        (frame_index + 1) * 0.01
+                        + (row_index + 1) * 0.001
+                        + (col_index + 1) * 0.0001
+                    )
+                    noise = generator.random() * 0.02
+                    value = min(1.0, max(0.0, base_value + noise))
+                    frames[frame_index, row_index, col_index, 0] = value
+                    frames[frame_index, row_index, col_index, 1] = min(1.0, value * 0.9 + 0.03)
+                    frames[frame_index, row_index, col_index, 2] = min(1.0, value * 0.8 + 0.05)
+        return frames
+
+    def _normalize_encoded_latent(self, encoded_latent: Any) -> Any:
+        import numpy as np
+
+        if not isinstance(encoded_latent, np.ndarray):
+            raise TypeError("encoded latent must be a numpy ndarray")
+        if encoded_latent.ndim != 4:
+            raise ValueError("encoded latent must have four dimensions")
+        if encoded_latent.shape[-1] == 3:
+            return np.transpose(encoded_latent.astype(np.float32), (0, 3, 1, 2))
+        return encoded_latent.astype(np.float32)
 
 
 RealVideoVAELatentPlaceholder = RealVideoVAELatentBackend
@@ -361,4 +591,14 @@ def build_real_video_vae_latent_backend_from_support_config(
         vae_decode_mode=str(
             support_config.get("vae_decode_mode", DEFAULT_VAE_DECODE_MODE)
         ),
+        target_frame_count=support_config.get("target_frame_count"),
+        target_resolution=support_config.get("target_resolution"),
+        frame_sampling_policy=str(
+            support_config.get("frame_sampling_policy", "deterministic_uniform")
+        ),
+        local_dataset_root=support_config.get("local_dataset_root"),
+        dataset_manifest_path=support_config.get("dataset_manifest_path"),
+        vae_model_local_path=support_config.get("vae_model_local_path"),
+        allow_mock_vae_backend=bool(support_config.get("allow_mock_vae_backend", True)),
+        latent_downsample_factor=int(support_config.get("latent_downsample_factor", 8)),
     )

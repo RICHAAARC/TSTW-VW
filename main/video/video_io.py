@@ -114,6 +114,7 @@ def write_video_mp4(
     destination_path.parent.mkdir(parents=True, exist_ok=True)
     writer = imageio.get_writer(
         str(destination_path),
+        format="FFMPEG",
         fps=fps,
         codec=codec,
         ffmpeg_params=["-crf", str(int(crf)), "-pix_fmt", "yuv420p"],

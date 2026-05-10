@@ -162,6 +162,15 @@ class RealVideoVaeLatentRunner:
         dataset_manifest = load_dataset_manifest(dataset_manifest_file)
         runtime_config_overrides = self._load_runtime_config(runtime_config_path)
         dataset_summary = summarize_dataset_manifest(dataset_manifest)
+        backend_config["dataset_manifest_path"] = str(dataset_manifest_file)
+        if "local_dataset_root" in runtime_config_overrides:
+            backend_config["local_dataset_root"] = runtime_config_overrides["local_dataset_root"]
+        if "frame_sampling_policy" in dataset_manifest:
+            backend_config["frame_sampling_policy"] = dataset_manifest["frame_sampling_policy"]
+        if "default_frame_count" in dataset_manifest:
+            backend_config["target_frame_count"] = int(dataset_manifest["default_frame_count"])
+        if "default_resolution" in dataset_manifest:
+            backend_config["target_resolution"] = dataset_manifest["default_resolution"]
         vae_backend = resolve_vae_backend(backend_config)
         vae_metadata = vae_backend.backend_metadata()
         latent_backend = build_real_video_vae_latent_backend_from_support_config(backend_config)
