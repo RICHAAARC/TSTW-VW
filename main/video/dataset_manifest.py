@@ -7,8 +7,31 @@ Module type: General module
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+
+@dataclass(frozen=True)
+class ResolvedVideoSample:
+    """功能：表示解析后的本地视频样本。
+
+    Resolved local video sample record.
+
+    Args:
+        video_source_id: Stable video source identifier.
+        split: Governed split name.
+        relpath: Relative manifest path.
+        resolved_path: Resolved local absolute path.
+
+    Returns:
+        None.
+    """
+
+    video_source_id: str
+    split: str
+    relpath: str
+    resolved_path: Path
 
 
 def load_dataset_manifest(path: str | Path) -> dict[str, Any]:
@@ -71,3 +94,85 @@ def summarize_dataset_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         "sample_count": len(samples),
         "split_counts": split_counts,
     }
+
+
+def resolve_manifest_samples(
+    manifest: dict[str, Any],
+    local_dataset_root: str | Path,
+    formal_mode: bool = True,
+) -> list[ResolvedVideoSample]:
+    """功能：解析并校验 manifest 样本的本地视频路径。
+
+    Resolve and validate local video paths from dataset manifest.
+
+    Args:
+        manifest: Parsed dataset manifest payload.
+        local_dataset_root: Local dataset root directory.
+        formal_mode: Whether to enforce strict file existence checks.
+
+    Returns:
+        A list of resolved samples.
+    """
+    if not isinstance(manifest, dict):
+        raise TypeError("manifest must be a dictionary")
+    dataset_root = Path(local_dataset_root)
+    if not dataset_root.exists():
+        raise FileNotFoundError(dataset_root)
+
+    samples = manifest.get("samples")
+    if not isinstance(samples, list) or not samples:
+        raise ValueError("manifest samples must be a non-empty list")
+
+    seen_video_source_ids: set[str] = set()
+    split_by_video_source_id: dict[str, str] = {}
+    resolved_samples: list[ResolvedVideoSample] = []
+
+    for sample in samples:
+        if not isinstance(sample, dict):
+            raise ValueError("manifest samples must be dictionaries")
+        video_source_id = str(sample.get("video_source_id", "")).strip()
+        split = str(sample.get("split", "")).strip()
+        relpath = str(sample.get("relpath", "")).strip()
+        if not video_source_id:
+            raise ValueError("video_source_id must be a non-empty string")
+        if not split:
+            raise ValueError("split must be a non-empty string")
+        if not relpath:
+            raise ValueError("relpath must be a non-empty string")
+        if Path(relpath).is_absolute():
+            raise ValueError("manifest relpath entries must be relative paths")
+        if not relpath.lower().endswith((".mp4", ".mov", ".avi", ".mkv")):
+            raise ValueError("manifest relpath must use a supported video extension")
+
+        existing_split = split_by_video_source_id.get(video_source_id)
+        if existing_split is not None and existing_split != split:
+            raise ValueError("video_source_id cannot appear across multiple splits")
+        split_by_video_source_id[video_source_id] = split
+        seen_video_source_ids.add(video_source_id)
+
+        resolved_path = (dataset_root / relpath).resolve()
+        try:
+            resolved_path.relative_to(dataset_root.resolve())
+        except ValueError as error:
+            raise ValueError("resolved sample path escapes local_dataset_root") from error
+
+        if formal_mode and not resolved_path.exists():
+            raise FileNotFoundError(resolved_path)
+
+        resolved_samples.append(
+            ResolvedVideoSample(
+                video_source_id=video_source_id,
+                split=split,
+                relpath=relpath,
+                resolved_path=resolved_path,
+            )
+        )
+
+    split_names = {sample.split for sample in resolved_samples}
+    if "calibration" not in split_names or "test" not in split_names:
+        raise ValueError("manifest must include both calibration and test splits")
+
+    if len(seen_video_source_ids) != len(resolved_samples):
+        raise ValueError("video_source_id values must be unique")
+
+    return resolved_samples
