@@ -56,6 +56,12 @@ def test_real_video_vae_latent_event_records_include_quality_and_temporal_payloa
         assert event_score_record["mechanism_trace"]["construction_phase"] == "real_video_vae_latent_probe"
         assert event_score_record["mechanism_trace"]["encoded_latent_digest"]
         assert event_score_record["mechanism_trace"]["video_source_digest"]
+        assert event_score_record["mechanism_trace"]["decoded_video_relpath"].endswith(".npy")
+        assert event_score_record["mechanism_trace"]["reencoded_latent_relpath"].endswith(".npy")
+        assert (
+            event_score_record["input_artifact_trace"]["artifact_digest"]
+            == event_score_record["mechanism_trace"]["reencoded_latent_digest"]
+        )
         assert not Path(event_score_record["mechanism_trace"]["video_source_relpath"]).is_absolute()
     assert all(
         threshold_record["threshold_id"].endswith(":real_video_vae_latent_probe")
