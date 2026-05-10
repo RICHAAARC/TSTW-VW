@@ -30,5 +30,10 @@ def test_stage2_formal_blocks_placeholder_runtime(tmp_path: Path) -> None:
     assert checks_payload["status"] is False
     assert checks_payload["RealVideoVaeLatentDecision"] in {"INCONCLUSIVE", "FAIL"}
     blocking_reasons = set(checks_payload["BlockingReasons"])
-    assert "video_vae_backend_placeholder" in blocking_reasons or "real_video_runtime_not_enabled" in blocking_reasons
+    assert blocking_reasons
     assert checks_payload["NextAllowedStage"] == "remain_in_real_video_vae_latent_probe"
+    formal_checks = checks_payload["formal_checks"]
+    assert formal_checks is not None
+    assert formal_checks["no_placeholder_run_manifest"] is False
+    assert formal_checks["random_fields_governed"] is False
+    assert formal_checks["next_allowed_stage_valid"] is False

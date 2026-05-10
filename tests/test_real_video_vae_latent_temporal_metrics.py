@@ -48,6 +48,7 @@ def test_real_video_vae_latent_temporal_metrics_payload_is_materialized(tmp_path
         "flicker_score",
         "motion_consistency_score",
         "disabled_temporal_metrics",
+        "temporal_metrics_runtime",
     }
     assert payload["motion_consistency_score"] is None
     assert "motion_consistency" in payload["disabled_temporal_metrics"]

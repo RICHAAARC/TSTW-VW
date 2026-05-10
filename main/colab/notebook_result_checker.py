@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from main.core.digest import compute_file_digest
 from main.core.records import RecordWriter
 from main.protocol.real_video_vae_latent_paths import build_real_video_vae_latent_output_paths
 
@@ -39,6 +40,8 @@ def check_real_video_vae_latent_outputs(
     event_score_records = record_writer.read_event_score_records()
     threshold_records = record_writer.read_threshold_records()
     report_fields = _parse_report_fields(output_paths.report_path.read_text(encoding="utf-8"))
+    artifact_manifest = _read_json_payload(output_paths.artifact_manifest_path, default=[])
+    run_manifest = _read_json_payload(output_paths.run_manifest_path, default={})
     required_paths = {
         "event_scores": output_paths.event_scores_path.exists(),
         "thresholds": output_paths.thresholds_path.exists(),
@@ -75,8 +78,12 @@ def check_real_video_vae_latent_outputs(
     # formal 模式额外检查
     formal_checks = _perform_formal_checks(
         event_score_records,
+        artifact_manifest,
+        run_manifest,
+        Path(run_root),
         require_formal_pass_criteria,
         real_video_vae_latent_decision,
+        next_allowed_stage,
     )
     
     if require_formal_pass_criteria and run_mode == "formal":
@@ -98,8 +105,12 @@ def check_real_video_vae_latent_outputs(
 
 def _perform_formal_checks(
     event_score_records: list[dict[str, Any]],
+    artifact_manifest: list[dict[str, Any]],
+    run_manifest: dict[str, Any],
+    run_root: Path,
     require_formal_pass_criteria: bool,
     real_video_vae_latent_decision: str,
+    next_allowed_stage: str,
 ) -> dict[str, Any]:
     """功能：执行 formal 模式特定的检查。
 
@@ -120,12 +131,26 @@ def _perform_formal_checks(
         "has_real_quality_metrics": False,
         "has_real_temporal_metrics": False,
         "no_placeholder_containers": False,
+        "has_mp4_artifacts": False,
+        "compression_outputs_are_mp4": False,
+        "reencoded_latents_recorded": False,
+        "no_placeholder_run_manifest": False,
+        "random_fields_governed": False,
         "decision_is_pass": real_video_vae_latent_decision == "PASS",
+        "next_allowed_stage_valid": next_allowed_stage == "trajectory_statistic_probe",
         "details": {},
     }
     
     if not event_score_records:
         return checks
+
+    artifact_manifest_entries = [
+        artifact_entry
+        for artifact_entry in artifact_manifest
+        if isinstance(artifact_entry, dict)
+    ]
+    run_manifest_placeholder_fields = run_manifest.get("placeholder_fields", [])
+    run_manifest_random_fields = run_manifest.get("random_fields", [])
     
     # 检查真实视频运行时
     checks["has_real_video_runtime"] = all(
@@ -173,6 +198,46 @@ def _perform_formal_checks(
         record.get("mechanism_trace", {}).get("video_container") != "tensor_npy"
         for record in event_score_records
     )
+    checks["details"]["video_container"] = [
+        record.get("mechanism_trace", {}).get("video_container")
+        for record in event_score_records[:1]
+    ]
+
+    # 检查 artifact manifest 中存在真实 mp4 artifact
+    checks["has_mp4_artifacts"] = any(
+        str(artifact_entry.get("relpath", "")).endswith(".mp4")
+        for artifact_entry in artifact_manifest_entries
+        if artifact_entry.get("artifact_kind") in {"source_video", "decoded_video", "attacked_video"}
+    )
+    checks["details"]["artifact_manifest_kinds"] = [
+        artifact_entry.get("artifact_kind")
+        for artifact_entry in artifact_manifest_entries[:6]
+    ]
+
+    # 检查压缩攻击输出为 mp4
+    compression_records = [
+        record for record in event_score_records
+        if record.get("attack_name") in {"h264_compression", "h265_compression"}
+    ]
+    checks["compression_outputs_are_mp4"] = bool(compression_records) and all(
+        str(record.get("mechanism_trace", {}).get("attacked_video_relpath", "")).endswith(".mp4")
+        for record in compression_records
+    )
+    checks["details"]["compression_attack_names"] = [
+        record.get("attack_name") for record in compression_records[:4]
+    ]
+
+    # 检查 re-encoded latent 文件存在且 digest 可校验
+    checks["reencoded_latents_recorded"] = all(
+        _validate_reencoded_latent_record(record, run_root)
+        for record in event_score_records
+    )
+
+    # 检查 run manifest 中没有 formal blocker 字段
+    checks["no_placeholder_run_manifest"] = "video_vae_backend_placeholder" not in run_manifest_placeholder_fields
+    checks["random_fields_governed"] = "latent_tensor_digest_random" not in run_manifest_random_fields
+    checks["details"]["run_manifest_placeholder_fields"] = run_manifest_placeholder_fields
+    checks["details"]["run_manifest_random_fields"] = run_manifest_random_fields
     
     # 综合判断
     checks["status"] = (
@@ -181,12 +246,38 @@ def _perform_formal_checks(
         and checks["has_real_quality_metrics"]
         and checks["has_real_temporal_metrics"]
         and checks["no_placeholder_containers"]
+        and checks["has_mp4_artifacts"]
+        and checks["compression_outputs_are_mp4"]
+        and checks["reencoded_latents_recorded"]
+        and checks["no_placeholder_run_manifest"]
+        and checks["random_fields_governed"]
+        and checks["next_allowed_stage_valid"]
     )
     
     if require_formal_pass_criteria:
         checks["status"] = checks["status"] and checks["decision_is_pass"]
     
     return checks
+
+
+def _read_json_payload(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return default
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _validate_reencoded_latent_record(record: dict[str, Any], run_root: Path) -> bool:
+    mechanism_trace = record.get("mechanism_trace", {})
+    relpath = mechanism_trace.get("reencoded_latent_relpath")
+    expected_digest = mechanism_trace.get("reencoded_latent_digest")
+    if not isinstance(relpath, str) or not relpath.endswith(".npy"):
+        return False
+    if not isinstance(expected_digest, str) or not expected_digest:
+        return False
+    artifact_path = run_root / relpath
+    if not artifact_path.exists():
+        return False
+    return compute_file_digest(artifact_path) == expected_digest
 
 
 def _parse_report_fields(report_text: str) -> dict[str, str]:

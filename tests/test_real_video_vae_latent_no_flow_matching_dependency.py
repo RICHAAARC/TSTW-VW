@@ -25,10 +25,18 @@ def test_real_video_vae_latent_scaffold_has_no_flow_matching_dependency() -> Non
     ]
     forbidden_fragments = [
         "flow_matching_backend",
-        "trajectory_statistic",
         "dit_sampling",
     ]
     for file_path in stage_two_files:
         text = file_path.read_text(encoding="utf-8").lower()
         for forbidden_fragment in forbidden_fragments:
             assert forbidden_fragment not in text
+    for file_path in stage_two_files:
+        text = file_path.read_text(encoding="utf-8")
+        forbidden_imports = [
+            "from main.analysis.trajectory_statistic",
+            "import trajectory_statistic",
+            "flow_matching_trajectory",
+        ]
+        for forbidden_import in forbidden_imports:
+            assert forbidden_import not in text

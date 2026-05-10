@@ -85,6 +85,7 @@ def test_real_video_vae_latent_notebook_exists_and_uses_governed_entrypoints() -
     assert "drive_result_summary" in notebook_text
     assert "result_registry_entry" in notebook_text
     assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
+    assert "dataset_manifest_path=local_dataset_manifest_path" in notebook_text
     assert "tar" in notebook_text and "--zstd" in notebook_text
     assert "tables/" not in notebook_text
     assert "thresholds/" not in notebook_text

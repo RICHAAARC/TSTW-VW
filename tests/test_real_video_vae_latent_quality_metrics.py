@@ -52,6 +52,7 @@ def test_real_video_vae_latent_quality_metrics_payload_is_materialized(tmp_path:
         "clip_similarity_score",
         "disabled_quality_metrics",
         "quality_failure_reason",
+        "quality_metrics_runtime",
     }
     assert payload["vae_reconstruction_psnr"] is not None
     assert payload["vae_reconstruction_ssim"] is not None
