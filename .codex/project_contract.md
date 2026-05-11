@@ -104,6 +104,12 @@
 - Placeholder fields cannot appear in supported claims.
 - New governed fields must be registered in `docs/field_registry.md`.
 
+### Text Encoding Governance
+
+- Checked-in governed text files under `AGENTS.md`, `README.md`, `.gitignore`, `pyproject.toml`, `sitecustomize.py`, `.codex/`, `configs/`, `docs/`, `experiments/`, `main/`, `paper_workflow/`, `scripts/`, `tests/`, and `tools/` must use `UTF-8`.
+- Runtime code, harness code, scripts, and tests must explicitly pass `encoding="utf-8"` when repository text I/O APIs support an explicit text encoding.
+- Introducing non-`UTF-8` checked-in text files, or relying on local code-page defaults that can reintroduce mojibake, is a blocking violation.
+
 ## Current-Stage Prohibitions
 
 1. Do not implement real watermark embedding or detection algorithms.

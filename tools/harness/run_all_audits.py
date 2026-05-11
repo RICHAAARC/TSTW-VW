@@ -24,6 +24,7 @@ from tools.harness.lib.json_report import write_report
 AUDIT_MODULE_NAMES = [
     "tools.harness.audits.audit_naming_conventions",
     "tools.harness.audits.audit_file_organization_contract",
+    "tools.harness.audits.audit_utf8_encoding_contract",
     "tools.harness.audits.audit_main_no_colab_dependency",
     "tools.harness.audits.audit_main_no_stage_specific_runner",
     "tools.harness.audits.audit_release_no_placeholder_core",

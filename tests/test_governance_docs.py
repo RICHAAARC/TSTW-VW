@@ -39,6 +39,13 @@ def test_field_registry_declares_single_registration_table() -> None:
     assert "docs/field_registry.md" in text
 
 
+def test_project_contract_mentions_utf8_encoding_governance() -> None:
+    text = _read(".codex/project_contract.md").lower()
+    assert "text encoding governance" in text
+    assert "utf-8" in text
+    assert "mojibake" in text
+
+
 def test_file_organization_contract_mentions_release_boundaries() -> None:
     text = _read("docs/file_organization.md")
     assert "experiments/" in text
@@ -55,6 +62,12 @@ def test_harness_engineering_mentions_file_organization_gate() -> None:
     assert "paper_workflow/colab_utils/" in text
     assert "audit_reports/" in text
     assert "release/" in text
+
+
+def test_harness_engineering_mentions_utf8_encoding_gate() -> None:
+    text = _read("docs/harness_engineering.md").lower()
+    assert "audit_utf8_encoding_contract.py" in text
+    assert "utf-8" in text
 
 
 def test_repository_intake_skill_mentions_file_organization_directories() -> None:

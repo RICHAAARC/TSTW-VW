@@ -5,10 +5,11 @@
 ## Scope
 
 - `tools/harness/lib/` 提供标准库实现的扫描、命名规则、字段规则与 JSON 报告能力。
-- `tools/harness/audits/` 提供命名、字段、项目契约、support config、阈值协议、notebook bypass、file organization、main 边界与 skill 存在性审计。
-- `tools/harness/inspect_repository.py` 提供 governed repository intake，并报告 `configs/`、`docs/`、`tools/`、`tests/`、`main/`、`paper_workflow/`、`scripts/`、`experiments/`、`audit_reports/`、`.codex/`、`examples/`、`release/` 与 `outputs/` 状态。
+- `tools/harness/audits/` 提供命名、字段、项目契约、support config、阈值协议、notebook bypass、file organization、UTF-8 编码、main 边界与 skill 存在性审计。
+- `tools/harness/inspect_repository.py` 提供 governed repository intake，并报告 `configs/`、`docs/`、`tools/`、`tests/`、`main/`、`paper_workflow/`、`scripts/`、`experiments/`、`audit_reports/`、`.codex/`、`examples/`、`release/` 的状态，同时将 `outputs/` 归类为 ephemeral runtime root。
 - `docs/file_organization.md` 冻结目录边界：`main/` 为核心方法包，`experiments/` 为阶段性 runner，`scripts/` 为命令行辅助工具，`paper_workflow/` 为 Colab / Notebook workflow。
 - `tools/harness/audits/audit_file_organization_contract.py` 阻断旧 `main/colab/`、阶段性 runner 反留在 `main/`、顶层 placeholder scaffold 配置，以及过早创建 `minimal_release/` / `release/` 根目录。
+- `tools/harness/audits/audit_utf8_encoding_contract.py` 阻断 governed roots 中的非 `UTF-8` 文本文件，避免再次出现乱码或本地代码页写入污染。
 - `tools/harness/run_all_audits.py` 统一汇总审计，并将摘要写入 `audit_reports/harness_audit_summary.json`。
 - `tests/` 提供 pytest 最小闭环，验证命名、字段治理、协议契约、目录边界与汇总审计。
 
@@ -24,6 +25,7 @@
 
 - Harness 脚本仅依赖 Python 标准库。
 - `audit_reports/` 仅作为运行时审计输出目录，不属于正式论文 `outputs/`。
+- 受治理文本文件默认使用 `UTF-8`；仓库文本读写应显式声明 `encoding="utf-8"`，避免依赖本地默认代码页。
 - 当前阶段允许 synthetic / placeholder 驱动的最小 mechanism runtime，但这些实现不应继续占据 `main/` 的最终发布边界。
 - 当前阶段不创建 `minimal_release/`，也不允许将 `paper_workflow/` 变成唯一 formal 入口。
 
