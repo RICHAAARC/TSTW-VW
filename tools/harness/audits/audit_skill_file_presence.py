@@ -43,6 +43,30 @@ REQUIRED_SECTIONS = [
     "## Required Tests",
     "## Required Audit Hooks",
 ]
+REQUIRED_SKILL_CONTENT = {
+    "repository_intake.skill.md": [
+        "docs/file_organization.md",
+        "`scripts`",
+        "`experiments`",
+        "`audit_reports`",
+        "`.codex`",
+        "`examples`",
+        "`release`",
+    ],
+    "stage_progression_guard.skill.md": [
+        "allowed semantic stage names",
+        "`synthetic_tubelet_sync_probe`",
+        "`real_video_vae_latent_probe`",
+    ],
+    "minimal_release.skill.md": [
+        "`minimal_release/`",
+        "`release/`",
+    ],
+    "notebook_entrypoint.skill.md": [
+        "`paper_workflow/colab_utils/`",
+        "`scripts/`",
+    ],
+}
 
 
 def run_audit(root: str | Path) -> dict[str, Any]:
@@ -71,6 +95,7 @@ def run_audit(root: str | Path) -> dict[str, Any]:
             )
             continue
         text = read_text(skill_path)
+        normalized_text = text.lower()
         for required_section in REQUIRED_SECTIONS:
             if required_section not in text:
                 violations.append(
@@ -80,6 +105,16 @@ def run_audit(root: str | Path) -> dict[str, Any]:
                         "value": required_section,
                     }
                 )
+        for required_content in REQUIRED_SKILL_CONTENT.get(file_name, []):
+            if required_content.lower() in normalized_text:
+                continue
+            violations.append(
+                {
+                    "path": str(skill_path),
+                    "reason": "missing_required_skill_content",
+                    "value": required_content,
+                }
+            )
 
     decision = "fail" if violations else "pass"
     return build_report(

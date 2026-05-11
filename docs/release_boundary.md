@@ -1,6 +1,6 @@
 # Release Boundary
 
-本文档冻结 `protocol_skeleton` 阶段对 future `minimal_release_extraction` 的边界约束。
+本文档冻结 `protocol_skeleton` 阶段对 future `minimal_release_extraction` 的边界约束，并与 `docs/file_organization.md` 中关于 `release/`、`docs/builds/` 与 governance harness 的边界保持一致。
 
 ## Ordered Stages
 
@@ -15,6 +15,7 @@
 ## Current-Stage Prohibitions
 
 - 当前阶段不得创建 `minimal_release/` 目录。
+- 当前阶段不得创建 `release/` 目录或 release extraction 产物目录。
 - 当前阶段不得创建 release manifest 或 release demo artifacts。
 - 当前阶段不得把 bootstrap docs 误当作 release assets。
 

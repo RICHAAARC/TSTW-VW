@@ -15,11 +15,14 @@ Applies to repository intake, structure inspection, stage identification, and st
 - Repository root path.
 - Current visible directory structure.
 - Existing stage contract from `.codex/project_contract.md`.
+- Directory boundary contract from `docs/file_organization.md`.
 
 ## Required Outputs
 
 - Intake summary with repository mode.
-- Directory status for `configs`, `docs`, `tools`, `tests`, `main`, `paper_workflow`, and `outputs`.
+- Directory status for `configs`, `docs`, `tools`, `tests`, `main`, `paper_workflow`, `scripts`, `experiments`, `audit_reports`, `.codex`, `examples`, and `release`.
+- Explicit confirmation that `docs/file_organization.md` remains the directory-boundary source of truth.
+- Explicit classification that `outputs/` is an ephemeral runtime root rather than a governed directory-boundary root.
 - Explicit confirmation of current governed stage.
 
 ## Blocking Rules
@@ -27,6 +30,8 @@ Applies to repository intake, structure inspection, stage identification, and st
 - Modifications must not start before repository intake is completed.
 - If the repository is still an `empty_repository_bootstrap`, only skills, harness, configs, docs, and tests may be created.
 - Stage assumptions without repository inspection are blocking violations.
+- Directory boundary checks that omit governed roots from `docs/file_organization.md` are blocking violations.
+- Repository intake must not promote `outputs/` to a governed top-level directory boundary.
 
 ## Allowed Changes
 

@@ -14,6 +14,7 @@ Applies to stage naming, stage configuration, stage-related docs, and progressio
 
 - Current `project_stage`.
 - Proposed target stage.
+- Allowed semantic stage names from `.codex/project_contract.md`.
 - Stage ordering from `.codex/project_contract.md`.
 
 ## Required Outputs
@@ -24,9 +25,10 @@ Applies to stage naming, stage configuration, stage-related docs, and progressio
 
 ## Blocking Rules
 
-- `protocol_skeleton` cannot be skipped.
+- `protocol_skeleton` cannot be skipped when progression starts from bootstrap.
 - Progression directly to `synthetic_tubelet_sync_probe` or higher before satisfying bootstrap gates is blocked.
-- `protocol_skeleton`, `synthetic_tubelet_sync_probe`, `*_v1`, and `*_p0` style stage identifiers are blocked as formal stage names.
+- Stage-number or version-like identifiers such as `stage1`, `stage_1`, `stage-1`, `*_v1`, and `*_p0` are blocked as formal stage identifiers.
+- Formal stage references must use the allowed semantic stage names from `.codex/project_contract.md`, including `protocol_skeleton`, `synthetic_tubelet_sync_probe`, and `real_video_vae_latent_probe`.
 
 ## Allowed Changes
 
@@ -42,11 +44,12 @@ Applies to stage naming, stage configuration, stage-related docs, and progressio
 
 ## Required Tests
 
-- Reject `protocol_skeleton` as a formal `project_stage`.
-- Reject version-like stage names.
-- Accept `protocol_skeleton` as the active stage.
+- Reject stage-number and version-like stage names.
+- Accept governed semantic stage names declared in `.codex/project_contract.md`.
+- Block stage advancement when harness gates are incomplete.
 
 ## Required Audit Hooks
 
 - `audit_naming_conventions.py`
 - `audit_protocol_skeleton_contract.py`
+- `audit_skill_file_presence.py`

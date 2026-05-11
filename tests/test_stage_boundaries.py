@@ -14,8 +14,8 @@ from tools.harness.validate_project_contract import load_json_config
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_minimal_release_directory_is_absent_in_protocol_skeleton() -> None:
-    """Validate that the bootstrap stage has not created a release directory.
+def test_release_directories_are_absent_in_bootstrap_repository() -> None:
+    """Validate that the bootstrap stage has not created release directories.
 
     Args:
         None.
@@ -24,6 +24,7 @@ def test_minimal_release_directory_is_absent_in_protocol_skeleton() -> None:
         None.
     """
     assert not (ROOT / "minimal_release").exists()
+    assert not (ROOT / "release").exists()
 
 
 def test_release_boundary_doc_places_release_stage_last() -> None:
@@ -36,6 +37,7 @@ def test_release_boundary_doc_places_release_stage_last() -> None:
         None.
     """
     text = (ROOT / "docs" / "release_boundary.md").read_text(encoding="utf-8")
+    assert "release/" in text
     assert "minimal_release_extraction" in text
     assert text.rfind("minimal_release_extraction") > text.rfind("full_paper_protocol")
 

@@ -22,8 +22,12 @@ EXPECTED_DIRECTORIES = [
     "paper_workflow",
     "scripts",
     "experiments",
-    "outputs",
+    "audit_reports",
+    ".codex",
+    "examples",
+    "release",
 ]
+DIRECTORY_BOUNDARY_CONTRACT_RELATIVE_PATH = "docs/file_organization.md"
 REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS = {
     "real_video_vae_latent_protocol_config": "configs/protocol/real_video_vae_latent_probe.json",
     "real_video_vae_latent_backend_config": "configs/backend/real_video_vae_latent.json",
@@ -135,6 +139,23 @@ def _inspect_next_stage_readiness(root_path: Path, project_stage: str | None) ->
     }
 
 
+def _build_directory_boundary_contract_status(root_path: Path) -> dict[str, Any]:
+    """Build the governed directory-boundary contract status payload.
+
+    Args:
+        root_path: Repository root path.
+
+    Returns:
+        A normalized status payload for `docs/file_organization.md`.
+    """
+    contract_path = root_path / DIRECTORY_BOUNDARY_CONTRACT_RELATIVE_PATH
+    return {
+        "exists": contract_path.exists(),
+        "path": str(contract_path),
+        "source_of_truth": DIRECTORY_BOUNDARY_CONTRACT_RELATIVE_PATH,
+    }
+
+
 def inspect_repository(root: str | Path) -> dict[str, Any]:
     """Inspect repository structure and classify bootstrap status.
 
@@ -167,9 +188,14 @@ def inspect_repository(root: str | Path) -> dict[str, Any]:
     repository_mode = (
         "empty_repository_bootstrap" if present_count == 0 else "governed_repository"
     )
+    directory_boundary_contract = _build_directory_boundary_contract_status(root_path)
     return {
         "repository_mode": repository_mode,
         "directory_status": directory_status,
+        "directory_boundary_contract": directory_boundary_contract,
+        "directory_boundary_source_of_truth_confirmed": directory_boundary_contract[
+            "exists"
+        ],
         "project_stage": project_stage,
         "next_stage_readiness": _inspect_next_stage_readiness(root_path, project_stage),
     }

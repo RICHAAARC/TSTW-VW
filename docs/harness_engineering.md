@@ -6,8 +6,9 @@
 
 - `tools/harness/lib/` 提供标准库实现的扫描、命名规则、字段规则与 JSON 报告能力。
 - `tools/harness/audits/` 提供命名、字段、项目契约、support config、阈值协议、notebook bypass、file organization、main 边界与 skill 存在性审计。
-- `tools/harness/inspect_repository.py` 提供 governed repository intake，并报告 `configs/`、`docs/`、`tools/`、`tests/`、`main/`、`paper_workflow/`、`scripts/`、`experiments/` 与 `outputs/` 状态。
+- `tools/harness/inspect_repository.py` 提供 governed repository intake，并报告 `configs/`、`docs/`、`tools/`、`tests/`、`main/`、`paper_workflow/`、`scripts/`、`experiments/`、`audit_reports/`、`.codex/`、`examples/`、`release/` 与 `outputs/` 状态。
 - `docs/file_organization.md` 冻结目录边界：`main/` 为核心方法包，`experiments/` 为阶段性 runner，`scripts/` 为命令行辅助工具，`paper_workflow/` 为 Colab / Notebook workflow。
+- `tools/harness/audits/audit_file_organization_contract.py` 阻断旧 `main/colab/`、阶段性 runner 反留在 `main/`、顶层 placeholder scaffold 配置，以及过早创建 `minimal_release/` / `release/` 根目录。
 - `tools/harness/run_all_audits.py` 统一汇总审计，并将摘要写入 `audit_reports/harness_audit_summary.json`。
 - `tests/` 提供 pytest 最小闭环，验证命名、字段治理、协议契约、目录边界与汇总审计。
 

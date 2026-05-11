@@ -44,6 +44,8 @@ REQUIRED_PATHS = {
 
 FORBIDDEN_PATHS = {
     "main_colab_root": "main/colab",
+    "minimal_release_root": "minimal_release",
+    "release_root": "release",
     "stage_two_runner_in_main": "main/protocol/real_video_vae_latent_runner.py",
     "stage_two_artifact_builder_in_main": "main/analysis/real_video_vae_latent_artifacts.py",
     "stage_two_paths_in_main": "main/protocol/real_video_vae_latent_paths.py",

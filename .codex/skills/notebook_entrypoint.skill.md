@@ -8,7 +8,7 @@ Ensure future notebooks remain entrypoints only and do not become the sole imple
 
 ## Scope
 
-Applies to future `.ipynb` files, notebook execution entrypoints, and notebook audit rules.
+Applies to future `.ipynb` files, notebook execution entrypoints, `paper_workflow/colab_utils/` wrappers, `scripts/` notebook-adjacent helpers, and notebook audit rules.
 
 ## Required Inputs
 
@@ -33,6 +33,7 @@ Applies to future `.ipynb` files, notebook execution entrypoints, and notebook a
 - Add notebook governance documentation.
 - Add notebook audit scripts.
 - Add or update the governed stage-two Colab notebook entrypoint.
+- Move notebook-only wrappers into `paper_workflow/colab_utils/` and reusable check or package logic into `scripts/`.
 - Add tests that confirm the governed notebook contract and output-bypass audit.
 
 ## Forbidden Changes
@@ -40,6 +41,7 @@ Applies to future `.ipynb` files, notebook execution entrypoints, and notebook a
 - Creating additional `paper_workflow` notebooks before an explicit stage-transition decision.
 - Writing formal output paths directly from notebook cells.
 - Encoding protocol-only logic inside notebook code cells.
+- Placing notebook-only wrappers under `main/`.
 
 ## Required Tests
 
