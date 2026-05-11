@@ -39,8 +39,15 @@ REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS = {
     "real_video_vae_latent_artifact_builder_module": "experiments/real_video_vae_latent_probe/artifact_builder.py",
     "real_video_vae_latent_result_checker_module": "scripts/check_results/real_video_vae_latent_output_checker.py",
     "real_video_vae_latent_drive_packager_module": "scripts/package_results/drive_packager.py",
+    "real_video_vae_latent_notebook_utils_root": "paper_workflow/notebook_utils",
+    "real_video_vae_latent_notebook_drive_packager": (
+        "paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_drive_packager.py"
+    ),
+    "real_video_vae_latent_notebook_result_checker": (
+        "paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_result_checker.py"
+    ),
     "real_video_vae_latent_colab_notebook": (
-        "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb"
+        "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb"
     ),
 }
 STAGE_ONE_REQUIRED_PATHS = {

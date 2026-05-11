@@ -64,7 +64,18 @@ REQUIRED_SKILL_CONTENT = {
     ],
     "notebook_entrypoint.skill.md": [
         "`paper_workflow/colab_utils/`",
+        "`paper_workflow/notebook_utils/`",
+        "Stage2_Real_Video_VAE_Latent_Probe.ipynb",
+        "audit_notebook_naming_contract.py",
         "`scripts/`",
+    ],
+    "repository_intake.skill.md": [
+        "`outputs/` is an ephemeral runtime root",
+        "paper_workflow/notebook_utils/",
+    ],
+    "naming_governance.skill.md": [
+        "Stage2_Real_Video_VAE_Latent_Probe.ipynb",
+        "paper_workflow/notebook_utils/",
     ],
 }
 

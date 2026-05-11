@@ -180,7 +180,7 @@ def test_real_video_tar_zst_packager_notebook_contract() -> None:
     notebook_path = (
         Path(__file__).resolve().parents[1]
         / "paper_workflow"
-        / "Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb"
+        / "Stage2_Real_Video_VAE_Latent_Probe.ipynb"
     )
     assert notebook_path.exists()
     notebook_text = notebook_path.read_text(encoding="utf-8")

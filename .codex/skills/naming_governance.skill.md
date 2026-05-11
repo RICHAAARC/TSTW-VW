@@ -4,11 +4,11 @@ naming_governance
 
 ## Purpose
 
-Freeze formal naming rules for files, directories, modules, configuration fields, JSON fields, and method variants.
+Freeze formal naming rules for files, directories, modules, configuration fields, JSON fields, method variants, and the governed `paper_workflow/` notebook surfaces.
 
 ## Scope
 
-Applies to file names, test file names, module names, config keys, JSON keys, Python dict keys, comment example fields, and Markdown code blocks.
+Applies to file names, test file names, module names, config keys, JSON keys, Python dict keys, comment example fields, Markdown code blocks, governed notebook file names, and `paper_workflow/notebook_utils/` helper names.
 
 ## Required Inputs
 
@@ -25,6 +25,9 @@ Applies to file names, test file names, module names, config keys, JSON keys, Py
 ## Blocking Rules
 
 - Formal names must use `snake_case`.
+- `paper_workflow/` root notebooks are the only file-name exception and must use `Stage<index>_<Purpose>.ipynb`.
+- `paper_workflow/notebook_utils/` stage-specific helper modules are the only Python-module exception and must use `stage<index>_<purpose>.py`.
+- `paper_workflow/colab_utils/` shared helpers must stay generic `snake_case` and must not use stage-prefixed names.
 - `method_variant` must use mechanism semantics.
 - `full`, `default`, `new`, `old`, `best`, and `final_method` are blocked as formal `method_variant` values.
 - Weak semantic names matching patterns `stage[0-9]+`, `stage_[0-9]+`, `stage-[0-9]+` (any digit), `*_v[0-9]+`, `*_p[0-9]+` (any digit), `test_stage[0-9]+_*`, and `run_stage[0-9]+_*` are blocked as weak semantic names.
@@ -33,7 +36,7 @@ Applies to file names, test file names, module names, config keys, JSON keys, Py
 
 - Add naming governance documentation.
 - Add harness rules for naming inspection.
-- Update tests that validate snake_case and blocked variants.
+- Update tests that validate snake_case, the governed notebook exception, and blocked variants.
 
 ## Forbidden Changes
 
@@ -51,6 +54,9 @@ Applies to file names, test file names, module names, config keys, JSON keys, Py
 - Accept `main/protocol/real_video_vae_latent_runner.py`.
 - Accept `tests/test_real_video_vae_latent_records_schema.py`.
 - Accept `tools/harness/run_synthetic_tubelet_sync_profile.py`.
+- Accept `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb`.
+- Accept `paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_result_checker.py`.
+- Reject `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb`.
 
 ## Required Audit Hooks
 

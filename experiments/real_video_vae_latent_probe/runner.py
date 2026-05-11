@@ -255,7 +255,7 @@ class RealVideoVaeLatentRunner:
             "notebook_entrypoint_present": (
                 self._repository_root
                 / "paper_workflow"
-                / "Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb"
+                / "Stage2_Real_Video_VAE_Latent_Probe.ipynb"
             ).exists(),
             "dataset_summary": dataset_summary,
             "vae_metadata": vae_metadata,

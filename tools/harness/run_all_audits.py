@@ -29,6 +29,7 @@ AUDIT_MODULE_NAMES = [
     "tools.harness.audits.audit_main_no_stage_specific_runner",
     "tools.harness.audits.audit_release_no_placeholder_core",
     "tools.harness.audits.audit_notebook_import_boundaries",
+    "tools.harness.audits.audit_notebook_naming_contract",
     "tools.harness.audits.audit_placeholder_random_fields",
     "tools.harness.audits.audit_protocol_skeleton_contract",
     "tools.harness.audits.audit_protocol_artifact_schema",

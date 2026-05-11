@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-NOTEBOOK_PATH = ROOT / "paper_workflow" / "Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb"
+NOTEBOOK_PATH = ROOT / "paper_workflow" / "Stage2_Real_Video_VAE_Latent_Probe.ipynb"
 REQUIRED_CELL_TITLES = [
     "00_runtime_mode_and_user_config",
     "01_mount_google_drive",

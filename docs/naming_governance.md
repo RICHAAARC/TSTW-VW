@@ -3,6 +3,9 @@
 ## Governance Surface
 
 - 正式 文件名、目录名、Python 模块名、测试 文件名、配置 文件名必须使用 `snake_case`。
+- `paper_workflow/` 根下受治理的 Colab notebook 是唯一文件名例外：采用 `Stage<数字>_<用途>.ipynb`，并使用带下划线分段的 PascalCase。
+- `paper_workflow/notebook_utils/` 下的 notebook-specific 或 stage-specific helper 是唯一 Python 模块名例外：采用 `stage<数字>_<用途>.py`。
+- `paper_workflow/colab_utils/` 下的共享 helper 仍必须使用通用 `snake_case`，且不得把单一阶段语义写进文件名。
 - 配置键、JSON key、Python dict key、测试 fixture key、Markdown 代码块中的 key 都属于治理面。
 - 文档标题、注释、docstring、示例字段名中的弱阶段命名也属于治理面。
 
@@ -18,6 +21,8 @@
 - `schema_version`
 - `compatibility_version`
 - `legacy_stage_id`
+- `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb`
+- `paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_result_checker.py`
 - 外部技术版本表达，例如 Python / CUDA / 依赖版本号。
 
 ## Historical Docs Exemption

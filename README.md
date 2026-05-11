@@ -60,6 +60,8 @@ python tools/harness/run_all_audits.py
 ## Naming Rules
 
 - 文件名、目录名、Python 模块名、配置字段名、JSON 字段名统一使用 `snake_case`。
+- `paper_workflow/` 根下受治理的 notebook 例外，使用 `Stage<数字>_<用途>.ipynb`，例如 `Stage2_Real_Video_VAE_Latent_Probe.ipynb`。
+- `paper_workflow/notebook_utils/` 下的单 notebook / 单阶段 helper 使用 `stage<数字>_<用途>.py`；`paper_workflow/colab_utils/` 继续保留共享 helper 的通用 `snake_case`。
 - `project_stage` 必须使用语义阶段名，例如 `protocol_skeleton`。
 - `method_variant` 必须使用机制语义命名。
 - 禁止使用 `*_v1`、`*_v2`、`*_p0`、`*_p1` 作为正式文件名、方法名、配置名或产物名。
@@ -81,7 +83,7 @@ python tools/harness/run_all_audits.py
 ## Protocol Skeleton Support Freeze
 
 - 当前阶段冻结 attack placeholder config、ablation shared-protocol config、claim 边界与 artifact rebuild 约束。
-- 当前阶段允许保留 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb` 作为受治理的 transition-preparation 入口，但仍不得创建额外 notebook 或 `minimal_release/` 目录。
+- 当前阶段允许保留 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb` 作为受治理的 transition-preparation 入口，但仍不得创建额外 notebook 或 `minimal_release/` 目录。
 - 当前阶段只允许为后续阶段声明边界，不允许提前创建 release artifacts。
 
 ## Next-Stage Gate

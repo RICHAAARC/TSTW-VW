@@ -8,10 +8,10 @@
 
 - `project_stage`: `synthetic_tubelet_sync_probe`
 - `target_construction_phase`: `real_video_vae_latent_probe`
-- 当前阶段的文件组织边界以 `docs/file_organization.md` 为准：`main/` 仅保留核心方法、核心协议、核心评估与 CLI 能力；阶段性 runner 位于 `experiments/`；Colab / Notebook session 工具位于 `paper_workflow/colab_utils/` 或 `scripts/`。
+- 当前阶段的文件组织边界以 `docs/file_organization.md` 为准：`main/` 仅保留核心方法、核心协议、核心评估与 CLI 能力；阶段性 runner 位于 `experiments/`；跨 notebook 共享的 Colab / Notebook session 工具位于 `paper_workflow/colab_utils/` 或 `scripts/`；单 notebook 或单阶段专用 helper 位于 `paper_workflow/notebook_utils/`。
 - 当前阶段允许在既有 protocol core 上运行 synthetic video latent、temporal attack matrix 与 `frame_prc` / `tubelet_only` / `tubelet_sync` 三个正式 method variant。
 - 当前阶段允许实现 synthetic / placeholder 驱动的最小 mechanism runtime，用于冻结 records、thresholds、manifest、table rebuild 与机制追踪口径。
-- 当前阶段允许保留单一 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb` 作为 stage-two transition-preparation 的远程 GPU entrypoint，但其职责仅限于环境准备、配置写入、模块调用、结果检查与结果打包。
+- 当前阶段允许保留单一 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb` 作为 stage-two transition-preparation 的远程 GPU entrypoint，但其职责仅限于环境准备、配置写入、模块调用、结果检查与结果打包。
 - 当前阶段不得进入真实 watermark 算法实现、真实 DiT / Flow Matching / VAE 接入、真实视频生成流程。
 
 ## Ordered Semantic Stages
@@ -81,7 +81,7 @@
 
 1. Runtime protocol contracts may exist in `main/core/`, `main/protocol/`, and `main/analysis/`; they define split semantics, record schema, threshold calibration, manifests, and rebuildable tables.
 2. Stage-specific runners, experiment artifact builders, and synthetic probe contracts do not belong to `protocol_core`; they must live in `experiments/` and consume `main/` through one-way imports only.
-3. Colab / Notebook session wrappers, runtime preflight, Drive packagers, and notebook result checkers do not belong to `main/`; they must live in `paper_workflow/colab_utils/` or `scripts/`.
+3. Colab / Notebook session wrappers, runtime preflight, reusable Drive packagers, and shared notebook checkers do not belong to `main/`; shared helpers must live in `paper_workflow/colab_utils/` or `scripts/`, while notebook-specific or stage-specific helper wrappers must live in `paper_workflow/notebook_utils/`.
 4. Outer governance gates may exist only in `tools/harness/`, `.codex/`, `tests/`, and governed docs; they include naming governance, stage progression guards, notebook bypass audits, file-organization audits, and skill-file audits.
 5. `main/` must not import `tools/harness`, `tests`, `paper_workflow`, or `experiments`, and future Codex changes must not move audit logic into runtime protocol code.
 6. Governance gates are not part of `method_core`, and future `minimal_release_extraction` must exclude governance harnesses, build-time docs, and audit reports.
@@ -92,6 +92,8 @@
 ### Naming Governance
 
 - All formal names must use `snake_case`.
+- Governed Colab notebook entrypoints under `paper_workflow/` are the only file-name exception: they must use `Stage<index>_<Purpose>.ipynb` with PascalCase segments, for example `Stage2_Real_Video_VAE_Latent_Probe.ipynb`, and must not append `_Colab`, `_Notebook`, or `Run_` prefixes.
+- Notebook-specific or stage-specific helper modules under `paper_workflow/notebook_utils/` must use `stage<index>_<purpose>.py`, for example `stage2_real_video_vae_latent_probe_result_checker.py`; shared helpers under `paper_workflow/colab_utils/` remain generic `snake_case` modules and must not bind a single stage or notebook by file name.
 - Global weak naming patterns (regex-based) such as `stage[0-9]+` (stage0, stage1, stage999), `stage_[0-9]+`, `stage-[0-9]+`, `*_v[0-9]+` (*_v1, *_v999), `*_p[0-9]+` (*_p0, *_p999), `test_stage[0-9]+_*`, and `run_stage[0-9]+_*` are blocking violations that apply to any present and future version number.
 - Future Codex changes must not introduce weak semantic names for formal files, fields, configs, reports, or method variants.
 - `method_variant` must use mechanism semantics; `full`, `default`, `new`, `old`, `best`, and `final_method` are blocking violations.

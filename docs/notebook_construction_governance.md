@@ -18,6 +18,16 @@
 
 本文档适用于本项目后续所有 notebook，包括但不限于数据下载、数据预处理、模型运行、实验执行、结果检查、结果合并、结果归档、报告生成与 release 打包类 notebook。任何 notebook 均不得在标题、目录、路径或代码中将本治理契约固定为某一具体阶段的构建说明。
 
+此外，Colab workflow 的 notebook 与 helper 命名必须满足以下附加约束：
+
+```text
+1. `paper_workflow/` 根下的正式 notebook 采用带下划线分段的 PascalCase 命名：Stage<数字>_<用途>.ipynb。
+2. notebook 名称只表达“阶段_用途”，不得附加 `_Colab`、`_Notebook`、`Run_` 等执行环境后缀或前缀。
+3. 供多个 notebook 或多个 Colab workflow 共享的 helper 位于 `paper_workflow/colab_utils/`，继续使用通用 `snake_case`，例如 `runtime_check.py`、`drive_packager.py`。
+4. 仅服务某个 notebook 或某个阶段的 helper 位于 `paper_workflow/notebook_utils/`，并采用 `stage<数字>_<用途>.py`，例如 `stage2_real_video_vae_latent_probe_result_checker.py`。
+5. `paper_workflow/colab_utils/` 不得长期绑定某个单一阶段或单一 notebook 的专用 wrapper。
+```
+
 全局核心约束如下：
 
 ```text
@@ -30,6 +40,8 @@ Artifact Handoff：跨 notebook 传递的事实只能来自已落盘、已校验
 ```
 
 本文档明确替代旧规则中“模型长期保存到 Google Drive Models”的设计。当前规则为：**所有模型相关文件均为 session-only；Google Drive 不作为模型权重仓库；Google Drive 只保存模型下载与加载的 session manifest，而不保存模型权重文件本体。**
+
+当前阶段受治理的单一远程 GPU notebook 入口命名为：`paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb`。
 
 ---
 
