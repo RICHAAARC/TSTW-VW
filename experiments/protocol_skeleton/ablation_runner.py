@@ -13,11 +13,13 @@ from pathlib import Path
 from typing import Any
 
 from experiments.protocol_skeleton.backend_random import SyntheticLatentBackendRandom
+from experiments.protocol_skeleton.runtime_configs import (
+    load_protocol_skeleton_runtime_configs,
+)
 from main.analysis.table_builder import TableBuilder
 from main.attacks.attack_registry import build_attack_registry
 from main.core.manifest import ManifestBuilder
 from main.core.records import RecordWriter
-from main.core.registry import load_stage_zero_runtime_configs
 from main.core.schema import validate_event_score_record, validate_threshold_record
 from main.protocol.detector_runner import MethodVariantRuntimeProfile, ProtocolRunner
 from main.protocol.event_builder import build_event_plan
@@ -68,7 +70,9 @@ class AblationRunner:
         self._repository_root = Path(repository_root)
         if not self._repository_root.exists():
             raise FileNotFoundError(self._repository_root)
-        self._runtime_configs = load_stage_zero_runtime_configs(self._repository_root)
+        self._runtime_configs = load_protocol_skeleton_runtime_configs(
+            self._repository_root
+        )
         self._table_builder = TableBuilder()
         self._manifest_builder = ManifestBuilder()
 

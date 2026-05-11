@@ -12,6 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from experiments.synthetic_tubelet_sync_probe.runtime_configs import (
+    load_synthetic_tubelet_sync_probe_runtime_configs,
+)
 from main.analysis.table_builder import TableBuilder
 from main.attacks.attack_registry import build_attack_registry
 from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
@@ -21,7 +24,6 @@ from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
 )
 from main.core.manifest import ManifestBuilder
 from main.core.records import RecordWriter
-from main.core.registry import load_active_runtime_configs
 from main.core.schema import (
     validate_event_score_record,
     validate_threshold_record,
@@ -72,7 +74,9 @@ class AblationRunner:
         self._repository_root = Path(repository_root)
         if not self._repository_root.exists():
             raise FileNotFoundError(self._repository_root)
-        self._runtime_configs = load_active_runtime_configs(self._repository_root)
+        self._runtime_configs = load_synthetic_tubelet_sync_probe_runtime_configs(
+            self._repository_root
+        )
         self._table_builder = TableBuilder()
         self._manifest_builder = ManifestBuilder()
 
