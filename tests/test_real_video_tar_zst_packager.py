@@ -180,13 +180,13 @@ def test_real_video_tar_zst_packager_notebook_contract() -> None:
     notebook_path = (
         Path(__file__).resolve().parents[1]
         / "paper_workflow"
-        / "Stage2_Real_Video_VAE_Latent_Probe.ipynb"
+        / "run_real_video_vae_latent_probe.ipynb"
     )
     assert notebook_path.exists()
     notebook_text = notebook_path.read_text(encoding="utf-8")
 
-    assert "from scripts.package_results.tar_zst_packager import pack_run_to_tar_zst" in notebook_text
-    assert "pack_run_to_tar_zst(" in notebook_text
-    assert "drive_archive_path = tar_pack[" in notebook_text
-    assert "compat_pack_root = run_root" in notebook_text
+    assert "from scripts.package_results.package_real_video_vae_latent_tar_zst import package_real_video_vae_latent_tar_zst" in notebook_text
+    assert "package_real_video_vae_latent_tar_zst(" in notebook_text
+    assert "drive_archive_path = tar_pack['archive_path']" in notebook_text
+    assert "compat_pack_root = RUN_ROOT" in notebook_text
     assert '"archive_path": str(drive_archive_path)' in notebook_text or "'archive_path': str(drive_archive_path)" in notebook_text

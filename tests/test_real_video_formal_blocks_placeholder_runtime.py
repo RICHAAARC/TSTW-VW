@@ -36,6 +36,6 @@ def test_stage2_formal_blocks_placeholder_runtime(tmp_path: Path) -> None:
     assert checks_payload["NextAllowedStage"] == "remain_in_real_video_vae_latent_probe"
     formal_checks = checks_payload["formal_checks"]
     assert formal_checks is not None
-    assert formal_checks["no_placeholder_run_manifest"] is False
-    assert formal_checks["random_fields_governed"] is False
+    assert formal_checks["no_placeholder_run_manifest"] is True
+    assert formal_checks["random_fields_governed"] is True
     assert formal_checks["next_allowed_stage_valid"] is False

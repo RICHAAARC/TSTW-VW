@@ -25,8 +25,8 @@ Applies to file names, test file names, module names, config keys, JSON keys, Py
 ## Blocking Rules
 
 - Formal names must use `snake_case`.
-- `paper_workflow/` root notebooks are the only file-name exception and must use `Stage<index>_<Purpose>.ipynb`.
-- `paper_workflow/notebook_utils/` stage-specific helper modules are the only Python-module exception and must use `stage<index>_<purpose>.py`.
+- `paper_workflow/` root notebooks must also use `snake_case` semantic names; the current governed workflow names are `build_processed_real_video_dataset.ipynb` and `run_real_video_vae_latent_probe.ipynb`.
+- `paper_workflow/notebook_utils/` helper modules must use stage-free `snake_case` and must not encode weak stage identifiers.
 - `paper_workflow/colab_utils/` shared helpers must stay generic `snake_case` and must not use stage-prefixed names.
 - `method_variant` must use mechanism semantics.
 - `full`, `default`, `new`, `old`, `best`, and `final_method` are blocked as formal `method_variant` values.
@@ -54,9 +54,9 @@ Applies to file names, test file names, module names, config keys, JSON keys, Py
 - Accept `main/protocol/real_video_vae_latent_runner.py`.
 - Accept `tests/test_real_video_vae_latent_records_schema.py`.
 - Accept `tools/harness/run_synthetic_tubelet_sync_profile.py`.
-- Accept `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb`.
-- Accept `paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_result_checker.py`.
-- Reject `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb`.
+- Accept `paper_workflow/build_processed_real_video_dataset.ipynb`.
+- Accept `paper_workflow/run_real_video_vae_latent_probe.ipynb`.
+- Reject `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb`.
 
 ## Required Audit Hooks
 

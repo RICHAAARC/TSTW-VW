@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-NOTEBOOK_PATH = ROOT / "paper_workflow" / "Stage2_Real_Video_VAE_Latent_Probe.ipynb"
+NOTEBOOK_PATH = ROOT / "paper_workflow" / "run_real_video_vae_latent_probe.ipynb"
 
 
 def _load_notebook_text() -> str:
@@ -29,8 +29,8 @@ def _load_notebook_text() -> str:
     return "\n".join(text_parts)
 
 
-def test_stage2_formal_notebook_gate_is_strict() -> None:
-    """Validate the notebook enforces strict formal checks.
+def test_real_video_formal_notebook_gate_is_strict() -> None:
+    """Validate the run notebook enforces strict formal checks.
 
     Args:
         None.
@@ -41,12 +41,12 @@ def test_stage2_formal_notebook_gate_is_strict() -> None:
     notebook_text = _load_notebook_text()
     assert "REQUIRE_FORMAL_PASS = True" in notebook_text
     assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
-    assert "if not formal_checks['status']:" in notebook_text
-    assert "raise RuntimeError(formal_checks)" in notebook_text
+    assert "if not formal_validation_summary['status']:" in notebook_text
+    assert "raise RuntimeError(formal_validation_summary)" in notebook_text
 
 
-def test_stage2_formal_notebook_avoids_direct_tables_threshold_writes() -> None:
-    """Validate notebook does not directly write formal tables or thresholds files.
+def test_real_video_formal_notebook_avoids_raw_dataset_handling_and_direct_writes() -> None:
+    """Validate notebook B avoids raw-dataset handling and direct formal output writes.
 
     Args:
         None.
@@ -56,9 +56,9 @@ def test_stage2_formal_notebook_avoids_direct_tables_threshold_writes() -> None:
     """
     notebook_text = _load_notebook_text().lower()
     forbidden_patterns = [
-        "tables/main_tpr_fpr_table.csv",
-        "tables/quality_table.csv",
-        "thresholds/thresholds.json",
+        "scripts.prepare_datasets.build_processed_real_video_dataset",
+        "raw_dataset_download_manifest.json",
+        "extract_raw_dataset_archive",
         "to_csv('tables/",
         "to_csv(\"tables/",
         "json.dump(",

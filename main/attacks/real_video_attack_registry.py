@@ -190,7 +190,7 @@ class VideoTensorAttackPlaceholder:
 def build_real_video_attack_registry(
     attack_config: dict[str, Any],
     *,
-    runtime_kind: str = "tensor_scaffold",
+    runtime_kind: str = "real_video",
 ) -> list[Any]:
     """功能：根据配置构建阶段 2 attack registry。
 

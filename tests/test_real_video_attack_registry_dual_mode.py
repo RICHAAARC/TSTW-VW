@@ -58,11 +58,11 @@ def test_build_attack_registry_unsupported_runtime_kind() -> None:
 
 @pytest.mark.smoke
 def test_build_attack_registry_default_runtime_kind() -> None:
-    """验证默认 runtime_kind 为 tensor_scaffold。"""
+    """验证默认 runtime_kind 为 real_video。"""
     config = {"attacks": [{"attack_name": "no_attack", "attack_params": {}}]}
     registry = build_real_video_attack_registry(config)
-    # 默认应该使用 tensor_scaffold
     assert len(registry) > 0
+    assert any(hasattr(attack, "apply_video") or hasattr(attack, "apply_frames") or hasattr(attack, "apply") for attack in registry)
 
 
 @pytest.mark.smoke

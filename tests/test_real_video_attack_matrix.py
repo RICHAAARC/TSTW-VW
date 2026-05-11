@@ -26,7 +26,10 @@ def test_real_video_attack_matrix_materializes_all_attacks(tmp_path: Path) -> No
     attack_config = load_json_config(
         repository_root / "configs" / "attacks" / "real_video_attack_matrix.json"
     )
-    attack_registry = build_real_video_attack_registry(attack_config)
+    attack_registry = build_real_video_attack_registry(
+        attack_config,
+        runtime_kind="tensor_scaffold",
+    )
     backend = RealVideoVAELatentBackend(latent_shape=(8, 2, 8, 8), runtime_profile="tiny")
     output_root = tmp_path / "outputs" / "runs" / "stage2_attack_matrix"
     backend.set_output_root(output_root)

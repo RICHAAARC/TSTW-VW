@@ -66,10 +66,14 @@ def test_governed_repository_reports_active_stage_status() -> None:
     next_stage_readiness = report["next_stage_readiness"]
     assert next_stage_readiness["target_construction_phase"] == "real_video_vae_latent_probe"
     assert next_stage_readiness["all_required_paths_present"] is True
-    assert next_stage_readiness["present_required_path_count"] == 14
-    assert next_stage_readiness["required_path_count"] == 14
-    assert next_stage_readiness["required_paths"]["real_video_vae_latent_colab_notebook"]["exists"] is True
+    assert next_stage_readiness["present_required_path_count"] == 18
+    assert next_stage_readiness["required_path_count"] == 18
+    assert next_stage_readiness["required_paths"]["real_video_vae_latent_processed_dataset_notebook"]["exists"] is True
+    assert next_stage_readiness["required_paths"]["real_video_vae_latent_probe_notebook"]["exists"] is True
     assert next_stage_readiness["required_paths"]["real_video_vae_latent_notebook_utils_root"]["exists"] is True
     assert (
         next_stage_readiness["required_paths"]["real_video_vae_latent_runner_module"]["exists"] is True
+    )
+    assert (
+        next_stage_readiness["required_paths"]["real_video_vae_latent_named_tar_packager_module"]["exists"] is True
     )

@@ -53,7 +53,8 @@ def test_file_organization_contract_mentions_release_boundaries() -> None:
     assert "paper_workflow/" in text
     assert "main/colab/" in text
     assert "paper_workflow/notebook_utils/" in text
-    assert "Stage2_Real_Video_VAE_Latent_Probe.ipynb" in text
+    assert "build_processed_real_video_dataset.ipynb" in text
+    assert "run_real_video_vae_latent_probe.ipynb" in text
 
 
 def test_harness_engineering_mentions_file_organization_gate() -> None:
@@ -87,7 +88,8 @@ def test_repository_intake_skill_mentions_file_organization_directories() -> Non
 
 def test_notebook_governance_mentions_notebook_naming_contract() -> None:
     text = _read("docs/notebook_construction_governance.md")
-    assert "Stage2_Real_Video_VAE_Latent_Probe.ipynb" in text
+    assert "build_processed_real_video_dataset.ipynb" in text
+    assert "run_real_video_vae_latent_probe.ipynb" in text
     assert "paper_workflow/notebook_utils/" in text
     assert "_Colab" in text
 
@@ -95,21 +97,24 @@ def test_notebook_governance_mentions_notebook_naming_contract() -> None:
 def test_project_contract_mentions_notebook_naming_governance() -> None:
     text = _read(".codex/project_contract.md")
     assert "paper_workflow/notebook_utils/" in text
-    assert "Stage2_Real_Video_VAE_Latent_Probe.ipynb" in text
+    assert "build_processed_real_video_dataset.ipynb" in text
+    assert "run_real_video_vae_latent_probe.ipynb" in text
     assert "_Colab" in text
 
 
 def test_naming_governance_mentions_notebook_exception() -> None:
     text = _read("docs/naming_governance.md")
     assert "paper_workflow/" in text
-    assert "Stage2_Real_Video_VAE_Latent_Probe.ipynb" in text
+    assert "build_processed_real_video_dataset.ipynb" in text
+    assert "run_real_video_vae_latent_probe.ipynb" in text
     assert "paper_workflow/notebook_utils/" in text
 
 
 def test_notebook_entrypoint_skill_mentions_notebook_utils() -> None:
     text = _read(".codex/skills/notebook_entrypoint.skill.md")
     assert "`paper_workflow/notebook_utils/`" in text
-    assert "Stage2_Real_Video_VAE_Latent_Probe.ipynb" in text
+    assert "build_processed_real_video_dataset.ipynb" in text
+    assert "run_real_video_vae_latent_probe.ipynb" in text
 
 
 def test_release_boundary_mentions_file_organization_contract() -> None:

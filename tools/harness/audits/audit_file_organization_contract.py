@@ -25,7 +25,8 @@ REQUIRED_PATHS = {
     "protocol_skeleton_root": "experiments/protocol_skeleton",
     "paper_workflow_colab_utils": "paper_workflow/colab_utils",
     "paper_workflow_notebook_utils": "paper_workflow/notebook_utils",
-    "stage_two_notebook_entrypoint": "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb",
+    "processed_dataset_notebook_entrypoint": "paper_workflow/build_processed_real_video_dataset.ipynb",
+    "real_video_probe_notebook_entrypoint": "paper_workflow/run_real_video_vae_latent_probe.ipynb",
     "main_cli_root": "main/cli",
     "main_identity_attack": "main/attacks/identity_attack.py",
     "main_video_vae_tensor_runtime": "main/vae/video_vae_tensor_runtime.py",
@@ -33,6 +34,11 @@ REQUIRED_PATHS = {
     "stage_two_runner": "experiments/real_video_vae_latent_probe/runner.py",
     "stage_two_artifact_builder": "experiments/real_video_vae_latent_probe/artifact_builder.py",
     "stage_two_output_layout": "experiments/real_video_vae_latent_probe/output_layout.py",
+    "processed_dataset_builder_script": "scripts/prepare_datasets/build_processed_real_video_dataset.py",
+    "session_model_prepare_script": "scripts/prepare_models/prepare_session_autoencoder_kl.py",
+    "stage_two_named_output_checker": "scripts/check_results/check_real_video_vae_latent_outputs.py",
+    "stage_two_named_packager": "scripts/package_results/package_real_video_vae_latent_outputs.py",
+    "stage_two_named_tar_packager": "scripts/package_results/package_real_video_vae_latent_tar_zst.py",
     "protocol_skeleton_identity_attack_config": "experiments/protocol_skeleton/configs/attacks/identity_attack_placeholder.json",
     "protocol_skeleton_ablation_config": "experiments/protocol_skeleton/configs/ablation/ablation_placeholder.json",
     "protocol_skeleton_protocol_config": "experiments/protocol_skeleton/configs/protocol/protocol_skeleton.json",
@@ -42,12 +48,6 @@ REQUIRED_PATHS = {
     "stage_two_output_checker": "scripts/check_results/real_video_vae_latent_output_checker.py",
     "stage_two_tar_packager": "scripts/package_results/tar_zst_packager.py",
     "colab_runtime_check": "paper_workflow/colab_utils/runtime_check.py",
-    "stage_two_notebook_drive_packager": (
-        "paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_drive_packager.py"
-    ),
-    "stage_two_notebook_result_checker": (
-        "paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_result_checker.py"
-    ),
 }
 
 FORBIDDEN_PATHS = {
@@ -57,9 +57,10 @@ FORBIDDEN_PATHS = {
     "stage_two_runner_in_main": "main/protocol/real_video_vae_latent_runner.py",
     "stage_two_artifact_builder_in_main": "main/analysis/real_video_vae_latent_artifacts.py",
     "stage_two_paths_in_main": "main/protocol/real_video_vae_latent_paths.py",
-    "legacy_stage_two_notebook_entrypoint": "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb",
-    "legacy_stage_two_drive_packager_wrapper": "paper_workflow/colab_utils/drive_packager.py",
-    "legacy_stage_two_notebook_result_checker_wrapper": "paper_workflow/colab_utils/notebook_result_checker.py",
+    "legacy_stage_two_notebook_entrypoint": "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb",
+    "legacy_stage_two_colab_notebook_entrypoint": "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb",
+    "legacy_stage_two_drive_packager_wrapper": "paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_drive_packager.py",
+    "legacy_stage_two_notebook_result_checker_wrapper": "paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_result_checker.py",
     "stage_one_ablation_runner_in_main": "main/protocol/ablation_runner.py",
     "synthetic_backend_in_main": "main/backends/synthetic_video_latent.py",
     "random_backend_in_main": "main/backends/synthetic_latent_backend_random.py",

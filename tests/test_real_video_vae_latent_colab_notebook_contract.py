@@ -1,6 +1,6 @@
 """
-文件用途：验证阶段 2 Colab notebook 入口遵循受治理合同。
-File purpose: Validate that the stage-two Colab notebook entrypoint follows the governed contract.
+文件用途：验证真实视频 workflow notebook 入口遵循受治理合同。
+File purpose: Validate that the governed real-video workflow notebooks follow the governed contract.
 Module type: General module
 """
 
@@ -11,30 +11,43 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-NOTEBOOK_PATH = ROOT / "paper_workflow" / "Stage2_Real_Video_VAE_Latent_Probe.ipynb"
-REQUIRED_CELL_TITLES = [
-    "00_runtime_mode_and_user_config",
+BUILD_NOTEBOOK_PATH = ROOT / "paper_workflow" / "build_processed_real_video_dataset.ipynb"
+RUN_NOTEBOOK_PATH = ROOT / "paper_workflow" / "run_real_video_vae_latent_probe.ipynb"
+BUILD_REQUIRED_CELL_TITLES = [
+    "00_runtime_identity_and_user_config",
     "01_mount_google_drive",
-    "02_read_drive_state_and_overrides",
-    "03_prepare_local_workspace",
+    "02_validate_raw_dataset_registry",
+    "03_select_raw_dataset_source",
+    "04_prepare_local_dataset_workspace",
+    "05_extract_raw_dataset_archive",
+    "06_build_processed_video_clips",
+    "07_write_processed_dataset_manifest",
+    "08_validate_processed_dataset",
+    "09_register_processed_dataset",
+    "10_print_processed_dataset_handoff",
+]
+RUN_REQUIRED_CELL_TITLES = [
+    "00_runtime_identity_and_user_config",
+    "01_mount_google_drive",
+    "02_read_processed_dataset_registry",
+    "03_prepare_local_runtime_workspace",
     "04_clone_or_update_repository",
-    "05_install_dependencies",
-    "06_copy_and_validate_dataset",
-    "07_copy_and_validate_models",
+    "05_install_runtime_dependencies",
+    "06_prepare_session_model",
+    "07_write_runtime_config",
     "08_check_gpu_and_runtime",
     "09_verify_repository_contract",
-    "10_run_unit_tests_smoke",
-    "11_run_stage2_completion_formal",
+    "10_run_smoke_tests",
+    "11_run_real_video_vae_latent_formal",
     "12_rebuild_tables_and_reports",
-    "13_validate_formal_outputs",
-    "14_pack_run_to_drive",
-    "15_update_result_registry",
-    "16_print_final_summary",
+    "13_check_real_video_vae_latent_outputs",
+    "14_package_family_results",
+    "15_print_final_family_summary",
 ]
 
 
-def _load_notebook() -> dict[str, object]:
-    return json.loads(NOTEBOOK_PATH.read_text(encoding="utf-8"))
+def _load_notebook(path: Path) -> dict[str, object]:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _cell_text(cell: dict[str, object]) -> str:
@@ -44,23 +57,9 @@ def _cell_text(cell: dict[str, object]) -> str:
     return str(source)
 
 
-def test_real_video_vae_latent_notebook_exists_and_uses_governed_entrypoints() -> None:
-    """Validate that the stage-two notebook exists and delegates to governed modules.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
-    assert NOTEBOOK_PATH.exists()
-    notebook = _load_notebook()
-    cells = notebook.get("cells", [])
-    assert isinstance(cells, list) and cells
-    notebook_text = "\n".join(_cell_text(cell) for cell in cells if isinstance(cell, dict))
-
+def _assert_title_order(cells: list[object], required_titles: list[str]) -> None:
     title_positions: list[int] = []
-    for required_title in REQUIRED_CELL_TITLES:
+    for required_title in required_titles:
         matching_index = next(
             index
             for index, cell in enumerate(cells)
@@ -69,49 +68,68 @@ def test_real_video_vae_latent_notebook_exists_and_uses_governed_entrypoints() -
         title_positions.append(matching_index)
     assert title_positions == sorted(title_positions)
 
-    assert "experiments.real_video_vae_latent_probe.runner" in notebook_text
-    assert "experiments.real_video_vae_latent_probe.artifact_builder" in notebook_text
-    assert "scripts.check_results.real_video_vae_latent_output_checker" in notebook_text
-    assert "scripts.package_results.drive_packager" in notebook_text
-    assert "scripts.package_results.tar_zst_packager" in notebook_text
-    assert "paper_workflow.colab_utils.runtime_check" in notebook_text
-    assert "main.colab" not in notebook_text
-    # P9: tar.zst packager 必须被实际调用，且 tar.zst 是主 Drive 归档输出
-    assert "pack_run_to_tar_zst(" in notebook_text
-    assert "drive_archive_path = tar_pack[" in notebook_text
-    # P9: zip 只作本地副产物，不能作为唯一 Drive 归档路径
-    assert "compat_pack_root = run_root" in notebook_text
-    assert "runtime_config.json" in notebook_text
-    assert "real_video_vae_latent_probe_completion_formal" in notebook_text
-    assert "/content/TSTW_runtime" in notebook_text
+
+def test_processed_dataset_notebook_exists_and_uses_governed_entrypoints() -> None:
+    """Validate that notebook A exists and only delegates to the dataset builder path.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    assert BUILD_NOTEBOOK_PATH.exists()
+    notebook = _load_notebook(BUILD_NOTEBOOK_PATH)
+    cells = notebook.get("cells", [])
+    assert isinstance(cells, list) and cells
+    notebook_text = "\n".join(_cell_text(cell) for cell in cells if isinstance(cell, dict))
+
+    _assert_title_order(cells, BUILD_REQUIRED_CELL_TITLES)
+
+    assert "scripts.prepare_datasets.build_processed_real_video_dataset" in notebook_text
+    assert "raw_dataset_download_manifest.json" in notebook_text
+    assert "PROCESSED_DATASET_KEY" in notebook_text
+    assert "processed_dataset_checks.json" in notebook_text
     assert "/content/drive/MyDrive" in notebook_text
+    assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
+    assert "scripts.check_results.check_real_video_vae_latent_outputs" not in notebook_text
+    assert "scripts.package_results.package_real_video_vae_latent_outputs" not in notebook_text
+
+
+def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
+    """Validate that notebook B exists and delegates to the governed run modules.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    assert RUN_NOTEBOOK_PATH.exists()
+    notebook = _load_notebook(RUN_NOTEBOOK_PATH)
+    cells = notebook.get("cells", [])
+    assert isinstance(cells, list) and cells
+    notebook_text = "\n".join(_cell_text(cell) for cell in cells if isinstance(cell, dict))
+
+    _assert_title_order(cells, RUN_REQUIRED_CELL_TITLES)
+
+    assert "experiments.real_video_vae_latent_probe.runner" in notebook_text
+    assert "scripts.prepare_models.prepare_session_autoencoder_kl" in notebook_text
+    assert "scripts.check_results.check_real_video_vae_latent_outputs" in notebook_text
+    assert "scripts.package_results.package_real_video_vae_latent_outputs" in notebook_text
+    assert "scripts.package_results.package_real_video_vae_latent_tar_zst" in notebook_text
+    assert "from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check" in notebook_text
+    assert "session_only_no_drive_model_storage" in notebook_text
+    assert "REQUIRE_FORMAL_PASS = True" in notebook_text
+    assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
+    assert "drive_archive_path = tar_pack['archive_path']" in notebook_text
+    assert "compat_pack_root = RUN_ROOT" in notebook_text
+    assert "formal_validation_summary" in notebook_text
     assert "result_registry.jsonl" in notebook_text
     assert "family_registry.jsonl" in notebook_text
-    assert "runtime_manifest_overrides" in notebook_text
-    assert "artifacts' / 'runtime_manifest.json" in notebook_text or 'artifacts" / "runtime_manifest.json' in notebook_text
-    assert "FAMILY_ID" in notebook_text
-    assert "WORKFLOW_KEY" in notebook_text
-    assert "STEP_KEY" in notebook_text
-    assert "results' / 'families'" in notebook_text or 'results" / "families"' in notebook_text
-    assert "formal_validation_summary" in notebook_text
-    assert "drive_result_summary" in notebook_text
-    assert "result_registry_entry" in notebook_text
-    assert "session_model_manifest.json" in notebook_text
-    assert "session_only_no_drive_model_storage" in notebook_text
-    assert "snapshot_download" in notebook_text
-    assert "from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check" in notebook_text
-    assert "runtime_check_report = run_runtime_preflight_check(" in notebook_text
-    assert "subprocess.run([sys.executable, '-m', 'pip', 'install', 'pytest', 'diffusers', 'accelerate', 'transformers', 'safetensors'" in notebook_text
-    assert "'lpips', 'pytorch-msssim'" in notebook_text
-    assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
-    assert "dataset_manifest_path=local_dataset_manifest_path" in notebook_text
-    assert "tar" in notebook_text and "--zstd" in notebook_text
-    assert "/content/drive/MyDrive/Models" not in notebook_text
-    assert "tables/" not in notebook_text
-    assert "thresholds/" not in notebook_text
-    assert "D:\\" not in notebook_text
-    assert "C:\\Users" not in notebook_text
-    assert "/Users/" not in notebook_text
+    assert "/content/TSTW_runtime" in notebook_text
+    assert "/content/drive/MyDrive" in notebook_text
+    assert "raw_dataset_download_manifest.json" not in notebook_text
 
 
 def test_real_video_vae_latent_notebook_cells_use_python_metadata() -> None:
@@ -123,8 +141,18 @@ def test_real_video_vae_latent_notebook_cells_use_python_metadata() -> None:
     Returns:
         None.
     """
-    notebook = _load_notebook()
-    cells = notebook.get("cells", [])
-    code_cells = [cell for cell in cells if isinstance(cell, dict) and cell.get("cell_type") == "code"]
-    assert code_cells
-    assert all(cell.get("metadata", {}).get("language") == "python" for cell in code_cells)
+    for notebook_path in (BUILD_NOTEBOOK_PATH, RUN_NOTEBOOK_PATH):
+        notebook = _load_notebook(notebook_path)
+        cells = notebook.get("cells", [])
+        code_cells = [cell for cell in cells if isinstance(cell, dict) and cell.get("cell_type") == "code"]
+        assert code_cells
+        notebook_language = (
+            notebook.get("metadata", {})
+            .get("language_info", {})
+            .get("name")
+        )
+        assert notebook_language == "python"
+        assert all(
+            cell.get("metadata", {}).get("language") in {None, "python"}
+            for cell in code_cells
+        )

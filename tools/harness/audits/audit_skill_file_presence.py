@@ -65,7 +65,8 @@ REQUIRED_SKILL_CONTENT = {
     "notebook_entrypoint.skill.md": [
         "`paper_workflow/colab_utils/`",
         "`paper_workflow/notebook_utils/`",
-        "Stage2_Real_Video_VAE_Latent_Probe.ipynb",
+        "build_processed_real_video_dataset.ipynb",
+        "run_real_video_vae_latent_probe.ipynb",
         "audit_notebook_naming_contract.py",
         "`scripts/`",
     ],
@@ -74,7 +75,8 @@ REQUIRED_SKILL_CONTENT = {
         "paper_workflow/notebook_utils/",
     ],
     "naming_governance.skill.md": [
-        "Stage2_Real_Video_VAE_Latent_Probe.ipynb",
+        "build_processed_real_video_dataset.ipynb",
+        "run_real_video_vae_latent_probe.ipynb",
         "paper_workflow/notebook_utils/",
     ],
 }

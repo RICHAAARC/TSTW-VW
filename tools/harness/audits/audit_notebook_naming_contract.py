@@ -19,28 +19,29 @@ if str(ROOT) not in sys.path:
 from tools.harness.lib.json_report import build_report, exit_with_report
 
 
-NOTEBOOK_FILE_PATTERN = re.compile(r"^Stage[0-9]+(?:_[A-Z][A-Za-z0-9]*)+\.ipynb$")
-NOTEBOOK_UTIL_FILE_PATTERN = re.compile(r"^stage[0-9]+(?:_[a-z0-9]+)+\.py$")
-COLAB_UTIL_FILE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.py$")
+NOTEBOOK_FILE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.ipynb$")
+HELPER_FILE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.py$")
 FORBIDDEN_NOTEBOOK_NAME_PATTERNS = (
     re.compile(r"_Colab\.ipynb$"),
     re.compile(r"_Notebook\.ipynb$"),
     re.compile(r"^Run_"),
+    re.compile(r"stage[0-9]+|stage_[0-9]+|stage-[0-9]+", re.IGNORECASE),
 )
 REQUIRED_PATHS = {
-    "stage_two_notebook_entrypoint": "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb",
+    "processed_dataset_notebook_entrypoint": "paper_workflow/build_processed_real_video_dataset.ipynb",
+    "real_video_probe_notebook_entrypoint": "paper_workflow/run_real_video_vae_latent_probe.ipynb",
     "paper_workflow_notebook_utils": "paper_workflow/notebook_utils",
-    "stage_two_notebook_drive_packager": (
-        "paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_drive_packager.py"
-    ),
-    "stage_two_notebook_result_checker": (
-        "paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_result_checker.py"
-    ),
+    "paper_workflow_colab_utils": "paper_workflow/colab_utils",
 }
 FORBIDDEN_PATHS = {
-    "legacy_stage_two_notebook_entrypoint": "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb",
-    "legacy_stage_two_drive_packager_wrapper": "paper_workflow/colab_utils/drive_packager.py",
-    "legacy_stage_two_notebook_result_checker_wrapper": "paper_workflow/colab_utils/notebook_result_checker.py",
+    "legacy_stage_two_notebook_entrypoint": "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb",
+    "legacy_stage_two_colab_notebook_entrypoint": "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb",
+    "legacy_stage_two_drive_packager_wrapper": "paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_drive_packager.py",
+    "legacy_stage_two_notebook_result_checker_wrapper": "paper_workflow/notebook_utils/stage2_real_video_vae_latent_probe_result_checker.py",
+}
+ALLOWED_ROOT_NOTEBOOKS = {
+    "build_processed_real_video_dataset.ipynb",
+    "run_real_video_vae_latent_probe.ipynb",
 }
 
 
@@ -87,7 +88,15 @@ def _scan_root_notebooks(
             violations.append(
                 {
                     "path": str(notebook_path),
-                    "reason": "notebook_file_name_not_stage_purpose_pascal_case",
+                    "reason": "notebook_file_name_not_snake_case_semantic_name",
+                    "value": notebook_path.name,
+                }
+            )
+        if notebook_path.name not in ALLOWED_ROOT_NOTEBOOKS:
+            violations.append(
+                {
+                    "path": str(notebook_path),
+                    "reason": "unexpected_governed_root_notebook",
                     "value": notebook_path.name,
                 }
             )
@@ -95,20 +104,22 @@ def _scan_root_notebooks(
             violations.append(
                 {
                     "path": str(notebook_path),
-                    "reason": "notebook_file_name_uses_forbidden_legacy_suffix",
+                    "reason": "notebook_file_name_uses_forbidden_legacy_or_stage_token",
                     "value": notebook_path.name,
                 }
             )
 
 
-def _scan_notebook_utils(
-    notebook_utils_root: Path,
+def _scan_helper_root(
+    helper_root: Path,
     violations: list[dict[str, Any]],
     checked_paths: list[str],
+    *,
+    helper_scope: str,
 ) -> None:
-    if not notebook_utils_root.exists():
+    if not helper_root.exists():
         return
-    for path in sorted(notebook_utils_root.iterdir()):
+    for path in sorted(helper_root.iterdir()):
         checked_paths.append(str(path))
         if path.is_dir():
             if path.name == "__pycache__":
@@ -116,48 +127,25 @@ def _scan_notebook_utils(
             violations.append(
                 {
                     "path": str(path),
-                    "reason": "notebook_utils_must_not_contain_nested_directories",
+                    "reason": f"{helper_scope}_must_not_contain_nested_directories",
                 }
             )
             continue
         if path.name == "__init__.py":
             continue
-        if path.suffix != ".py" or NOTEBOOK_UTIL_FILE_PATTERN.fullmatch(path.name) is None:
+        if path.suffix != ".py" or HELPER_FILE_PATTERN.fullmatch(path.name) is None:
             violations.append(
                 {
                     "path": str(path),
-                    "reason": "notebook_utils_file_name_not_stage_purpose_snake_case",
+                    "reason": f"{helper_scope}_file_name_not_generic_snake_case",
                     "value": path.name,
                 }
             )
-
-
-def _scan_colab_utils(
-    colab_utils_root: Path,
-    violations: list[dict[str, Any]],
-    checked_paths: list[str],
-) -> None:
-    if not colab_utils_root.exists():
-        return
-    for path in sorted(colab_utils_root.iterdir()):
-        checked_paths.append(str(path))
-        if path.is_dir():
-            if path.name == "__pycache__":
-                continue
+        if re.search(r"stage[0-9]+|stage_[0-9]+|stage-[0-9]+", path.name, re.IGNORECASE):
             violations.append(
                 {
                     "path": str(path),
-                    "reason": "colab_utils_must_not_contain_nested_directories",
-                }
-            )
-            continue
-        if path.name == "__init__.py":
-            continue
-        if path.suffix != ".py" or COLAB_UTIL_FILE_PATTERN.fullmatch(path.name) is None:
-            violations.append(
-                {
-                    "path": str(path),
-                    "reason": "colab_utils_file_name_not_generic_snake_case",
+                    "reason": f"{helper_scope}_file_name_uses_forbidden_stage_token",
                     "value": path.name,
                 }
             )
@@ -184,8 +172,18 @@ def run_audit(root: str | Path) -> dict[str, Any]:
     if paper_workflow_root.exists():
         checked_paths.append(str(paper_workflow_root))
         _scan_root_notebooks(paper_workflow_root, violations, checked_paths)
-    _scan_notebook_utils(notebook_utils_root, violations, checked_paths)
-    _scan_colab_utils(colab_utils_root, violations, checked_paths)
+    _scan_helper_root(
+        notebook_utils_root,
+        violations,
+        checked_paths,
+        helper_scope="notebook_utils",
+    )
+    _scan_helper_root(
+        colab_utils_root,
+        violations,
+        checked_paths,
+        helper_scope="colab_utils",
+    )
 
     decision = "fail" if violations else "pass"
     return build_report(

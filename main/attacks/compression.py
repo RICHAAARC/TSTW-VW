@@ -6,12 +6,14 @@ Module type: General module
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from main.attacks.video_attack_interfaces import VideoAttackBase
 from main.core.digest import compute_file_digest
+from main.video.video_io import probe_video_metadata
 
 
 class CompressionAttackBase(VideoAttackBase):
@@ -39,6 +41,18 @@ class CompressionAttackBase(VideoAttackBase):
         if self.attack_name == "h265_compression":
             return "libx265"
         raise ValueError(f"unknown attack_name: {self.attack_name}")
+
+    def _resolve_ffmpeg_binary(self) -> str:
+        ffmpeg_binary = shutil.which("ffmpeg")
+        if ffmpeg_binary:
+            return ffmpeg_binary
+        try:
+            import imageio_ffmpeg
+        except ImportError as exc:
+            raise RuntimeError(
+                "ffmpeg not found; install ffmpeg or imageio_ffmpeg to use compression attacks"
+            ) from exc
+        return imageio_ffmpeg.get_ffmpeg_exe()
 
     def apply_video(
         self,
@@ -74,10 +88,11 @@ class CompressionAttackBase(VideoAttackBase):
         codec = self.get_ffmpeg_codec()
         crf = int(self.attack_params.get("crf", 28))
         preset = self.attack_params.get("preset", "medium")
+        ffmpeg_binary = self._resolve_ffmpeg_binary()
 
         # 构建 ffmpeg 命令
         ffmpeg_cmd = [
-            "ffmpeg",
+            ffmpeg_binary,
             "-y",  # 覆盖输出文件
             "-i",
             str(input_path),
@@ -102,8 +117,6 @@ class CompressionAttackBase(VideoAttackBase):
             if result.returncode != 0:
                 error_msg = result.stderr or "ffmpeg command failed"
                 raise RuntimeError(f"ffmpeg compression failed: {error_msg}")
-        except FileNotFoundError:
-            raise RuntimeError("ffmpeg not found; install ffmpeg to use compression attacks")
         except subprocess.TimeoutExpired:
             raise RuntimeError("ffmpeg compression timeout (>300s)")
 
@@ -113,48 +126,16 @@ class CompressionAttackBase(VideoAttackBase):
         input_digest = compute_file_digest(input_path)
         output_digest = compute_file_digest(output_path)
 
-        # 探测输出视频元数据
-        probe_cmd = [
-            "ffprobe",
-            "-v",
-            "error",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=width,height,nb_frames,r_frame_rate",
-            "-of",
-            "csv=p=0",
-            str(output_path),
-        ]
-
-        probe_result = None
         try:
-            probe_result = subprocess.run(
-                probe_cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
+            output_metadata = probe_video_metadata(output_path)
+            output_width = int(output_metadata["width"])
+            output_height = int(output_metadata["height"])
+            output_frame_count = int(output_metadata["frame_count"])
+            output_fps = int(output_metadata["fps"])
         except Exception:
-            pass
-
-        output_width, output_height, output_frame_count = 0, 0, 0
-        if probe_result and probe_result.returncode == 0:
-            try:
-                probe_line = probe_result.stdout.strip().split("\n")[0]
-                parts = probe_line.split(",")
-                if len(parts) >= 3:
-                    output_width = int(parts[0])
-                    output_height = int(parts[1])
-                    output_frame_count = int(parts[2])
-            except (ValueError, IndexError):
-                pass
-
-        # 若探测失败，使用默认值或输入值
-        if output_height == 0 or output_width == 0:
             output_height, output_width = resolution if resolution else (256, 256)
-        if output_frame_count == 0:
-            output_frame_count = 32  # 默认
+            output_frame_count = 32
+            output_fps = int(fps)
 
         return {
             "attack_name": self.attack_name,
@@ -165,7 +146,7 @@ class CompressionAttackBase(VideoAttackBase):
             "codec": codec,
             "container": "mp4",
             "frame_count": output_frame_count,
-            "fps": fps,
+            "fps": output_fps,
             "height": output_height,
             "width": output_width,
             "pixel_format": "yuv420p",

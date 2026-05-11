@@ -437,17 +437,16 @@ family_registry_utils.py
 其中，`notebook_utils/` 可以包含：
 
 ```text
-stage2_real_video_vae_latent_probe_drive_packager.py
-stage2_real_video_vae_latent_probe_result_checker.py
+real_video_vae_latent_notebook_helper.py
 ```
 
 命名与归属规则如下：
 
 ```text
-1. `paper_workflow/` 根下的 governed notebook 使用 Stage<数字>_<用途>.ipynb，例如 Stage2_Real_Video_VAE_Latent_Probe.ipynb。
-2. notebook-specific 或 stage-specific helper 必须位于 `paper_workflow/notebook_utils/`，并使用 stage<数字>_<用途>.py。
+1. `paper_workflow/` 根下的 governed notebook 使用 stage-free `snake_case` 语义命名，当前固定为 `build_processed_real_video_dataset.ipynb` 与 `run_real_video_vae_latent_probe.ipynb`。
+2. notebook-specific helper 若存在，必须位于 `paper_workflow/notebook_utils/`，并使用 stage-free `snake_case`。
 3. 仅有跨 notebook 共享价值的 helper 才能留在 `paper_workflow/colab_utils/`，并保持通用 snake_case 命名。
-4. 不得把单一 notebook 的兼容 wrapper 伪装成 `colab_utils/` 下的共享工具。
+4. 不得把单一 notebook 的兼容 wrapper 伪装成 `colab_utils/` 下的共享工具，也不得在 `paper_workflow/` 路径中保留任何数字阶段缩写形式的弱编号文件名。
 ```
 
 ### （三）禁止内容
@@ -503,18 +502,17 @@ scripts/：面向仓库操作、数据准备、模型准备、结果检查、结
 ```text
 scripts/
 ├── prepare_datasets/
-│   ├── prepare_davis2017.py
-│   ├── prepare_ucf101.py
-│   └── build_real_video_manifest.py
+│   └── build_processed_real_video_dataset.py
 ├── prepare_models/
-│   └── fetch_model_cache.py
-├── run_reproduction/
-│   ├── run_paper_main.py
-│   └── run_paper_mechanism.py
-├── check_outputs/
-│   └── check_run_outputs.py
+│   └── prepare_session_autoencoder_kl.py
+├── check_results/
+│   ├── real_video_vae_latent_output_checker.py
+│   └── check_real_video_vae_latent_outputs.py
 └── package_results/
-    └── package_run_outputs.py
+  ├── drive_packager.py
+  ├── tar_zst_packager.py
+  ├── package_real_video_vae_latent_outputs.py
+  └── package_real_video_vae_latent_tar_zst.py
 ```
 
 ### （三）脚本约束

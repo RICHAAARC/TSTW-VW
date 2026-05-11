@@ -21,11 +21,12 @@
 此外，Colab workflow 的 notebook 与 helper 命名必须满足以下附加约束：
 
 ```text
-1. `paper_workflow/` 根下的正式 notebook 采用带下划线分段的 PascalCase 命名：Stage<数字>_<用途>.ipynb。
-2. notebook 名称只表达“阶段_用途”，不得附加 `_Colab`、`_Notebook`、`Run_` 等执行环境后缀或前缀。
-3. 供多个 notebook 或多个 Colab workflow 共享的 helper 位于 `paper_workflow/colab_utils/`，继续使用通用 `snake_case`，例如 `runtime_check.py`、`drive_packager.py`。
-4. 仅服务某个 notebook 或某个阶段的 helper 位于 `paper_workflow/notebook_utils/`，并采用 `stage<数字>_<用途>.py`，例如 `stage2_real_video_vae_latent_probe_result_checker.py`。
-5. `paper_workflow/colab_utils/` 不得长期绑定某个单一阶段或单一 notebook 的专用 wrapper。
+1. `paper_workflow/` 根下的正式 notebook 必须使用 `snake_case` 机制语义命名。
+2. 当前受治理的 notebook workflow 固定为 `build_processed_real_video_dataset.ipynb` 与 `run_real_video_vae_latent_probe.ipynb`。
+3. notebook 名称不得附加 `_Colab`、`_Notebook`、`Run_` 等执行环境后缀或前缀，也不得写入任何数字阶段缩写形式的弱阶段编号。
+4. 供多个 notebook 或多个 Colab workflow 共享的 helper 位于 `paper_workflow/colab_utils/`，继续使用通用 `snake_case`，例如 `runtime_check.py`、`drive_packager.py`。
+5. 若存在 notebook-specific helper，则位于 `paper_workflow/notebook_utils/`，并同样使用 stage-free `snake_case`。
+6. `paper_workflow/colab_utils/` 与 `paper_workflow/notebook_utils/` 都不得长期绑定弱阶段编号 wrapper。
 ```
 
 全局核心约束如下：
@@ -41,7 +42,7 @@ Artifact Handoff：跨 notebook 传递的事实只能来自已落盘、已校验
 
 本文档明确替代旧规则中“模型长期保存到 Google Drive Models”的设计。当前规则为：**所有模型相关文件均为 session-only；Google Drive 不作为模型权重仓库；Google Drive 只保存模型下载与加载的 session manifest，而不保存模型权重文件本体。**
 
-当前阶段受治理的单一远程 GPU notebook 入口命名为：`paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb`。
+当前阶段受治理的 notebook workflow 入口命名为：`paper_workflow/build_processed_real_video_dataset.ipynb` 与 `paper_workflow/run_real_video_vae_latent_probe.ipynb`。
 
 ---
 

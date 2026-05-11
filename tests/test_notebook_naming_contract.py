@@ -17,19 +17,13 @@ def _write_text(path: Path, text: str = "\n") -> None:
 
 
 def _create_governed_notebook_layout(root: Path) -> None:
-    _write_text(root / "paper_workflow" / "Stage2_Real_Video_VAE_Latent_Probe.ipynb", "{}\n")
+    _write_text(root / "paper_workflow" / "build_processed_real_video_dataset.ipynb", "{}\n")
+    _write_text(root / "paper_workflow" / "run_real_video_vae_latent_probe.ipynb", "{}\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "runtime_check.py", "pass\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "tar_zst_packager.py", "pass\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "__init__.py", "\"\"\"pkg\"\"\"\n")
     _write_text(root / "paper_workflow" / "notebook_utils" / "__init__.py", "\"\"\"pkg\"\"\"\n")
-    _write_text(
-        root / "paper_workflow" / "notebook_utils" / "stage2_real_video_vae_latent_probe_drive_packager.py",
-        "pass\n",
-    )
-    _write_text(
-        root / "paper_workflow" / "notebook_utils" / "stage2_real_video_vae_latent_probe_result_checker.py",
-        "pass\n",
-    )
+    _write_text(root / "paper_workflow" / "notebook_utils" / "real_video_vae_latent_helper.py", "pass\n")
 
 
 def test_notebook_naming_audit_accepts_governed_layout(tmp_path: Path) -> None:
@@ -49,8 +43,8 @@ def test_notebook_naming_audit_accepts_governed_layout(tmp_path: Path) -> None:
     assert report["violations"] == []
 
 
-def test_notebook_naming_audit_rejects_legacy_colab_suffix(tmp_path: Path) -> None:
-    """Validate the audit rejects the legacy `_Colab` notebook suffix.
+def test_notebook_naming_audit_rejects_legacy_stage_notebook(tmp_path: Path) -> None:
+    """Validate the audit rejects the legacy Stage2 notebook entrypoint.
 
     Args:
         tmp_path: Temporary repository root.
@@ -59,7 +53,7 @@ def test_notebook_naming_audit_rejects_legacy_colab_suffix(tmp_path: Path) -> No
         None.
     """
     _create_governed_notebook_layout(tmp_path)
-    _write_text(tmp_path / "paper_workflow" / "Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb")
+    _write_text(tmp_path / "paper_workflow" / "Stage2_Real_Video_VAE_Latent_Probe.ipynb")
 
     report = run_audit(tmp_path)
 
@@ -70,8 +64,8 @@ def test_notebook_naming_audit_rejects_legacy_colab_suffix(tmp_path: Path) -> No
     )
 
 
-def test_notebook_naming_audit_rejects_generic_helper_in_notebook_utils(tmp_path: Path) -> None:
-    """Validate the audit rejects non-stage helper names under notebook_utils.
+def test_notebook_naming_audit_rejects_stage_token_helper_in_notebook_utils(tmp_path: Path) -> None:
+    """Validate the audit rejects weak-stage helper names under notebook_utils.
 
     Args:
         tmp_path: Temporary repository root.
@@ -80,13 +74,37 @@ def test_notebook_naming_audit_rejects_generic_helper_in_notebook_utils(tmp_path
         None.
     """
     _create_governed_notebook_layout(tmp_path)
-    _write_text(tmp_path / "paper_workflow" / "notebook_utils" / "result_checker.py", "pass\n")
+    _write_text(
+        tmp_path / "paper_workflow" / "notebook_utils" / "stage2_real_video_vae_latent_probe_result_checker.py",
+        "pass\n",
+    )
 
     report = run_audit(tmp_path)
 
     assert report["decision"] == "fail"
     assert any(
-        violation["reason"] == "notebook_utils_file_name_not_stage_purpose_snake_case"
+        violation["reason"] == "notebook_utils_file_name_uses_forbidden_stage_token"
+        for violation in report["violations"]
+    )
+
+
+def test_notebook_naming_audit_rejects_unexpected_root_notebook(tmp_path: Path) -> None:
+    """Validate the audit rejects extra root notebooks beyond the governed pair.
+
+    Args:
+        tmp_path: Temporary repository root.
+
+    Returns:
+        None.
+    """
+    _create_governed_notebook_layout(tmp_path)
+    _write_text(tmp_path / "paper_workflow" / "extra_workflow.ipynb", "{}\n")
+
+    report = run_audit(tmp_path)
+
+    assert report["decision"] == "fail"
+    assert any(
+        violation["reason"] == "unexpected_governed_root_notebook"
         for violation in report["violations"]
     )
 
