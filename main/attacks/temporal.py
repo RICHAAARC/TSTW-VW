@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細澹版槑闃舵 1 temporal attack matrix 鐨勫彈娌荤悊鏀诲嚮鍚嶇О涓庨粯璁ゅ弬鏁般€?
+文件用途：声明阶段 1 temporal attack matrix 的受治理攻击名称与默认参数。
 File purpose: Declare governed attack names and support defaults for the synthetic_tubelet_sync_probe temporal attack matrix.
 Module type: Semi-general module
 """
@@ -31,7 +31,7 @@ SUPPORTED_TEMPORAL_ATTACK_NAMES = (
 
 
 def build_temporal_attack_matrix_support_defaults() -> dict[str, object]:
-    """鍔熻兘锛氳繑鍥為樁娈?1 temporal attack matrix 鐨勫喕缁撻粯璁ゅ€笺€?
+    """功能：返回阶段 1 temporal attack matrix 的冻结默认值。
 
     Build the governed default payload for the synthetic_tubelet_sync_probe temporal attack matrix.
 
@@ -81,7 +81,7 @@ def build_temporal_attack_matrix_support_defaults() -> dict[str, object]:
 
 
 class TemporalAttackPlaceholder:
-    """鍔熻兘锛氭彁渚涢樁娈?1 temporal attack 鐨勫彲杩愯鍗犱綅鎺ュ彛銆?
+    """功能：提供阶段 1 temporal attack 的可运行占位接口。
 
     Runnable placeholder attack interface for the synthetic_tubelet_sync_probe temporal attack matrix.
 
@@ -103,7 +103,7 @@ class TemporalAttackPlaceholder:
         self._artifact_cache: dict[tuple[str, str], LatentSample] = {}
 
     def apply(self, sample: LatentSample) -> LatentSample:
-        """鍔熻兘锛氬 latent sample 搴旂敤鐪熷疄 tensor-based temporal attack銆?
+        """功能：对 latent sample 应用真实 tensor-based temporal attack。
 
         Apply the tensor-based temporal attack to a latent sample.
 
@@ -317,8 +317,8 @@ class TemporalAttackPlaceholder:
             crop_start = crop_start_candidates[
                 sample.latent_generation_seed_random % len(crop_start_candidates)
             ]
-            # 涓枃娉ㄩ噴锛歵iny / smoke profile 涓?frame_count 鍙兘灏忎簬 crop_start 鍊欓€夛紝
-            # 姝ゅ蹇呴』 clamp 鑷?frame_count-1 骞朵繚璇佽嚦灏戝墿浣?1 甯э紝閬垮厤 attacked tensor 褰㈢姸涓洪浂銆?
+            # 中文注释：tiny / smoke profile 中，frame_count 可能小于 crop_start 候选，
+            # 此处必须 clamp 到 frame_count-1 并保证至少剩余 1 帧，避免 attacked tensor 形状为零。
             crop_start = max(0, min(int(crop_start), int(frame_count) - 1))
             crop_length = max(
                 1,
@@ -374,8 +374,8 @@ class TemporalAttackPlaceholder:
                 ]
             else:
                 clip_length = int(self.attack_params["clip_length"])
-            # 涓枃娉ㄩ噴锛歵iny / smoke profile 涓?frame_count 鍙兘灏忎簬鍙楁不鐞?clip_length 闆嗗悎锛?
-            # 姝ゅ蹇呴』 clamp 鑷?frame_count锛岄伩鍏?attacked tensor 褰㈢姸涓庡疄闄?frames 涓嶄竴鑷淬€?
+            # 中文注释：tiny / smoke profile 中，frame_count 可能小于受治理 clip_length 集合，
+            # 此处必须 clamp 到 frame_count，避免 attacked tensor 形状与实际 frames 不一致。
             clip_length = max(1, min(int(clip_length), int(frame_count)))
             max_start = max(0, frame_count - int(clip_length))
             clip_start_candidates = list(range(0, max_start + 1, 4)) or [0]

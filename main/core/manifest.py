@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細鏋勫缓闃舵 0 run manifest銆?
+文件用途：构建阶段 0 run manifest。
 File purpose: Build the governed protocol skeleton runtime run manifest.
 Module type: General module
 """
@@ -14,7 +14,7 @@ from main.core.schema import CONSTRUCTION_PHASE, PROTOCOL_NAME, validate_run_man
 
 
 class ManifestBuilder:
-    """鍔熻兘锛氭瀯寤洪樁娈?0 run manifest 鎽樿銆?
+    """功能：构建阶段 0 run manifest 摘要。
 
     Builder for governed protocol skeleton runtime run manifests.
 
@@ -36,7 +36,7 @@ class ManifestBuilder:
         threshold_records: list[dict],
         output_paths: ProtocolOutputPaths,
     ) -> dict[str, object]:
-        """鍔熻兘锛氱敓鎴愬彈娌荤悊鐨?run manifest銆?
+        """功能：生成受治理的 run manifest。
 
         Build the governed run manifest for a completed protocol skeleton runtime run.
 

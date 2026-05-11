@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細鏋勫缓闃舵 0 鐨?split plan銆?File purpose: Build the governed split plan for stage 0.
+文件用途：构建阶段 0 的 split plan。File purpose: Build the governed split plan for stage 0.
 Module type: General module
 """
 
@@ -13,7 +13,7 @@ from main.core.schema import SAMPLE_ROLE_ORDER, SPLIT_ORDER, ensure_supported_sa
 
 @dataclass(frozen=True)
 class SplitPlanEntry:
-    """鍔熻兘锛氬畾涔夐樁娈?0 split plan 鏉＄洰銆?
+    """功能：定义阶段 0 split plan 条目。
     Protocol Skeleton split plan entry.
 
     Args:
@@ -31,7 +31,7 @@ class SplitPlanEntry:
 
 
 def build_sample_id(split: str, sample_role: str, sample_index: int) -> str:
-    """鍔熻兘锛氭牴鎹?split銆乺ole 涓庣储寮曟瀯寤烘牱鏈爣璇嗐€?
+    """功能：根据 split、role 与索引构建样本标识。
     Build a stable protocol skeleton runtime sample identifier.
 
     Args:
@@ -55,7 +55,7 @@ def _resolve_sample_count(
     sample_role: str,
     split_role_sample_counts: dict[str, dict[str, int]] | None,
 ) -> int:
-    """鍔熻兘锛氳В鏋愬崟涓?split-role 瀵瑰簲鐨勬牱鏈暟銆?
+    """功能：解析单个 split-role 对应的样本数。
     Resolve the governed sample count for a split-role pair.
 
     Args:
@@ -88,7 +88,7 @@ def build_split_plan(
     samples_per_role: int = 2,
     split_role_sample_counts: dict[str, dict[str, int]] | None = None,
 ) -> list[SplitPlanEntry]:
-    """鍔熻兘锛氭瀯寤洪樁娈?0 鐨勫叡浜?split plan銆?
+    """功能：构建阶段 0 的共享 split plan。
     Build the shared protocol skeleton runtime split plan.
 
     Args:

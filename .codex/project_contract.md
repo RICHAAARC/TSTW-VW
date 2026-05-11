@@ -2,16 +2,16 @@
 
 ## Long-Term Goal
 
-鏈」鐩殑闀挎湡鐩爣鏄€愰樁娈垫瀯寤轰竴涓潰鍚?DiT / Flow Matching 瑙嗛鐢熸垚妯″瀷鐨勬椂绌哄悓姝ヨ建杩规按鍗扮爺绌舵鏋讹紝骞朵互缁熶竴 records銆乼hresholds銆乼ables銆乵anifest 鍗忚鏀拺鍚庣画鏈哄埗楠岃瘉涓庤鏂囧疄楠屻€?
+本项目的长期目标是逐阶段构建一个面向 DiT / Flow Matching 视频生成模型的时空同步轨迹水印研究框架，并以统一 records、thresholds、tables、manifest 协议支撑后续机制验证与论文实验。
 
 ## Current Stage
 
 - `project_stage`: `synthetic_tubelet_sync_probe`
 - `target_construction_phase`: `real_video_vae_latent_probe`
-- 褰撳墠闃舵鍏佽鍦ㄦ棦鏈?protocol core 涓婅繍琛?synthetic video latent銆乼emporal attack matrix 涓?`frame_prc` / `tubelet_only` / `tubelet_sync` 涓変釜姝ｅ紡 method variant銆?
-- 褰撳墠闃舵鍏佽瀹炵幇 synthetic / placeholder 椹卞姩鐨勬渶灏?mechanism runtime锛岀敤浜庡喕缁?records銆乼hresholds銆乵anifest銆乼able rebuild 涓庢満鍒惰拷韪彛寰勩€?
-- 褰撳墠闃舵鍏佽淇濈暀鍗曚竴 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb` 浣滀负 stage-two transition-preparation 鐨勮繙绋?GPU entrypoint锛屼絾鍏惰亴璐ｄ粎闄愪簬鐜鍑嗗銆侀厤缃啓鍏ャ€佹ā鍧楄皟鐢ㄣ€佺粨鏋滄鏌ヤ笌缁撴灉鎵撳寘銆?
-- 褰撳墠闃舵涓嶅緱杩涘叆鐪熷疄 watermark 绠楁硶瀹炵幇銆佺湡瀹?DiT / Flow Matching / VAE 鎺ュ叆銆佺湡瀹炶棰戠敓鎴愭祦绋嬨€?
+- 当前阶段允许在既有 protocol core 上运行 synthetic video latent、temporal attack matrix 与 `frame_prc` / `tubelet_only` / `tubelet_sync` 三个正式 method variant。
+- 当前阶段允许实现 synthetic / placeholder 驱动的最小 mechanism runtime，用于冻结 records、thresholds、manifest、table rebuild 与机制追踪口径。
+- 当前阶段允许保留单一 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb` 作为 stage-two transition-preparation 的远程 GPU entrypoint，但其职责仅限于环境准备、配置写入、模块调用、结果检查与结果打包。
+- 当前阶段不得进入真实 watermark 算法实现、真实 DiT / Flow Matching / VAE 接入、真实视频生成流程。
 
 ## Ordered Semantic Stages
 

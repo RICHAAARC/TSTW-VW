@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 1 synthetic tubelet sync 鍏ュ彛 method config 濂戠害銆?
+文件用途：验证阶段 1 synthetic tubelet sync 入口 method config 契约。
 File purpose: Validate the reserved method-config contract for the synthetic_tubelet_sync_probe synthetic tubelet sync entry.
 Module type: General module
 """

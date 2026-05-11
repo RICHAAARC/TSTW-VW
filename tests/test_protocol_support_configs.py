@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 0 support config 楠ㄦ灦閰嶇疆銆?
+文件用途：验证阶段 0 support config 骨架配置。
 File purpose: Validate the governed protocol skeleton runtime support config skeletons.
 Module type: General module
 """

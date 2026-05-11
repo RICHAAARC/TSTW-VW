@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉 stage-one runtime 涓嶄緷璧栫湡瀹炶棰戠敓鎴愭ā鍨嬫爤銆?File purpose: Validate that the stage-one runtime has no real video model dependency.
+文件用途：验证 stage-one runtime 不依赖真实视频生成模型栈。File purpose: Validate that the stage-one runtime has no real video model dependency.
 Module type: General module
 """
 

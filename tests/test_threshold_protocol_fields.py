@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉 fixed low-FPR 闃堝€煎崗璁瓧娈点€?File purpose: Validate threshold protocol governance for the protocol_skeleton stage.
+文件用途：验证 fixed low-FPR 阈值协议字段。File purpose: Validate threshold protocol governance for the protocol_skeleton stage.
 Module type: General module
 """
 

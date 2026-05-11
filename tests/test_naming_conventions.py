@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉鍛藉悕娌荤悊瑙勫垯涓庡懡鍚嶅璁¤涓恒€?File purpose: Validate naming governance helper functions and the naming audit behavior.
+文件用途：验证命名治理规则与命名审计行为。File purpose: Validate naming governance helper functions and the naming audit behavior.
 Module type: General module
 """
 

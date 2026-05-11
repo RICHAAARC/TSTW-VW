@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細鏋勫缓闃舵 0 鐨?event plan銆?
+文件用途：构建阶段 0 的 event plan。
 File purpose: Build the governed event plan for stage 0.
 Module type: General module
 """
@@ -17,7 +17,7 @@ from main.protocol.split_builder import SplitPlanEntry
 
 @dataclass(frozen=True)
 class EventPlanEntry:
-    """鍔熻兘锛氬畾涔夐樁娈?0 event plan 鏉＄洰銆?
+    """功能：定义阶段 0 event plan 条目。
 
     Protocol Skeleton event plan entry.
 
@@ -47,7 +47,7 @@ def build_event_plan(
     split_plan: list[SplitPlanEntry],
     attack_registry: list[IdentityAttackPlaceholder | TemporalAttackPlaceholder],
 ) -> list[EventPlanEntry]:
-    """鍔熻兘锛氭牴鎹?split plan 鍜?attack registry 鏋勫缓 event plan銆?
+    """功能：根据 split plan 和 attack registry 构建 event plan。
 
     Build the shared event plan for stage 0.
 

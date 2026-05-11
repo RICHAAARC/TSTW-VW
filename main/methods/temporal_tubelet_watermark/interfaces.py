@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細瀹氫箟闃舵 0 鏂规硶楠ㄦ灦鎺ュ彛銆?File purpose: Define protocol skeleton runtime scaffold interfaces for latent backends, evidence extractors, and methods.
+文件用途：定义阶段 0 方法骨架接口。File purpose: Define protocol skeleton runtime scaffold interfaces for latent backends, evidence extractors, and methods.
 Module type: General module
 """
 
@@ -12,7 +12,7 @@ from main.core.schema import DetectionResult, LatentSample
 
 
 class LatentBackend(ABC):
-    """鍔熻兘锛氬畾涔?latent backend 鐨勭粺涓€鎺ュ彛銆?
+    """功能：定义 latent backend 的统一接口。
     Abstract interface for protocol skeleton runtime latent backends.
 
     Args:
@@ -28,7 +28,7 @@ class LatentBackend(ABC):
 
 
 class EvidenceExtractor(ABC):
-    """鍔熻兘锛氬畾涔?evidence extractor 鐨勭粺涓€鎺ュ彛銆?
+    """功能：定义 evidence extractor 的统一接口。
     Abstract interface for protocol skeleton runtime evidence extractors.
 
     Args:
@@ -44,7 +44,7 @@ class EvidenceExtractor(ABC):
 
 
 class WatermarkMethod(ABC):
-    """鍔熻兘锛氬畾涔夐樁娈?0 watermark method 鐨勭粺涓€鎺ュ彛銆?
+    """功能：定义阶段 0 watermark method 的统一接口。
     Abstract interface for protocol skeleton runtime watermark methods.
 
     Args:

@@ -66,7 +66,7 @@ DEFAULT_LATENT_GENERATION_SEED = 20260507
 
 
 def build_synthetic_video_latent_support_defaults() -> dict[str, object]:
-    """鍔熻兘锛氳繑鍥為樁娈?1 synthetic latent backend 鐨勫喕缁撻粯璁ゅ€笺€?
+    """功能：返回阶段 1 synthetic latent backend 的冻结默认值。
 
     Build the governed default payload for the synthetic_tubelet_sync_probe synthetic latent backend.
 
@@ -94,7 +94,7 @@ def build_synthetic_video_latent_support_defaults() -> dict[str, object]:
 def _normalize_latent_shape(
     latent_shape: dict[str, int] | tuple[int, int, int, int],
 ) -> tuple[int, int, int, int]:
-    """鍔熻兘锛氭爣鍑嗗寲骞舵牎楠?latent shape 閰嶇疆銆?
+    """功能：标准化并校验 latent shape 配置。
 
     Normalize and validate the governed latent shape payload.
 
@@ -127,7 +127,7 @@ def _normalize_latent_shape(
 
 
 class SyntheticVideoLatentPlaceholder(LatentBackend):
-    """鍔熻兘锛氭彁渚?synthetic video latent 鐨?tensor artifact backend 鍏煎绫诲悕銆?
+    """功能：提供 synthetic video latent 的 tensor artifact backend 兼容类名。
 
     Compatibility class name for the governed synthetic video latent backend.
 
@@ -163,7 +163,7 @@ class SyntheticVideoLatentPlaceholder(LatentBackend):
         self._sample_cache: dict[tuple[str, str, str], LatentSample] = {}
 
     def set_output_root(self, output_root: str | Path) -> None:
-        """鍔熻兘锛氳缃綋鍓?run 鐨?artifact 杈撳嚭鏍圭洰褰曘€?
+        """功能：设置当前 run 的 artifact 输出根目录。
 
         Set the artifact output root for the current run.
 
@@ -179,7 +179,7 @@ class SyntheticVideoLatentPlaceholder(LatentBackend):
         self._output_root = resolved_output_root
 
     def build_sample(self, sample_id: str, split: str, sample_role: str) -> LatentSample:
-        """鍔熻兘锛氭瀯寤?deterministic synthetic video latent tensor artifact銆?
+        """功能：构建 deterministic synthetic video latent tensor artifact。
 
         Build a deterministic synthetic video latent tensor artifact.
 
@@ -318,7 +318,7 @@ SyntheticVideoLatentBackend = SyntheticVideoLatentPlaceholder
 def build_synthetic_video_latent_backend_from_support_config(
     support_config: dict[str, Any],
 ) -> SyntheticVideoLatentBackend:
-    """鍔熻兘锛氭牴鎹?support config 鏋勫缓 synthetic video latent backend銆?
+    """功能：根据 support config 构建 synthetic video latent backend。
 
     Build a synthetic video latent backend from the reserved support config.
 

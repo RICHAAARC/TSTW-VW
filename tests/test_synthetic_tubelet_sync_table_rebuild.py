@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉 stage-one 琛ㄦ牸銆佹洸绾夸笌鎶ュ憡鍙敱 records 閲嶅缓銆?
+文件用途：验证 stage-one 表格、曲线与报告可由 records 重建。
 File purpose: Validate that stage-one tables, curves, and report are rebuildable from records.
 Module type: General module
 """
@@ -100,8 +100,8 @@ def test_synthetic_tubelet_sync_rebuild_restores_required_outputs(tmp_path: Path
     assert {int(row["tubelet_length"]) for row in tubelet_rows} == {1, 4}
 
     report_text = record_writer.output_paths.report_path.read_text(encoding="utf-8")
-    # 涓枃娉ㄩ噴锛歵iny profile 浠呰瘉鏄庡畬鏁撮棴鐜彲鐢熸垚 report锛涙満鍒?check 瀛楁鍦?tiny 涓?
-    # 鍥?local_clip / tubelet_length 闆嗗悎琚鍓€屾敞瀹氫负 false锛屾晠鍙柇瑷€瀛楁瀛樺湪銆?
+    # 中文注释：tiny profile 仅证明完整闭环可生成 report；机制 check 字段在 tiny 中
+    # 因 local_clip / tubelet_length 集合被裁剪而注定为 false，故只断言字段存在。
     assert "- closure_target_pass:" in report_text
     assert "- validation_target_fpr_pass:" in report_text
     assert "- strict_target_fpr_pass:" in report_text

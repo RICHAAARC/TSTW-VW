@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細鎵ц姝ｅ紡鍛藉悕娌荤悊瀹¤銆?File purpose: Audit governed naming conventions for the protocol_skeleton stage.
+文件用途：执行正式命名治理审计。File purpose: Audit governed naming conventions for the protocol_skeleton stage.
 Module type: General module
 """
 

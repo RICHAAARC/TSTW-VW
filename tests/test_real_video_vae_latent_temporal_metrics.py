@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 2 scaffold 鏃跺簭鎸囨爣璐熻浇銆?File purpose: Validate temporal-metrics payloads for the stage-two scaffold.
+文件用途：验证阶段 2 scaffold 时序指标负载。File purpose: Validate temporal-metrics payloads for the stage-two scaffold.
 Module type: General module
 """
 

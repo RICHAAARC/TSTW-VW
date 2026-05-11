@@ -1,6 +1,6 @@
 """
-鏂囦欢鐢ㄩ€旓細鎻愪緵闃舵 0 records銆乼hresholds 涓?manifest 鐨勮鍐欒兘鍔涖€?
-File purpose: Provide record, threshold, and manifest IO for the protocol skeleton runtime runtime skeleton.
+文件用途：提供阶段 0 records、thresholds 与 manifest 的读写能力。
+File purpose: Provide record, threshold, and manifest IO for the protocol skeleton runtime.
 Module type: General module
 """
 
@@ -20,7 +20,7 @@ from main.core.schema import (
 
 @dataclass(frozen=True)
 class ProtocolOutputPaths:
-    """鍔熻兘锛氬畾涔夊綋鍓?formal stage 杩愯浜х墿鐨勫浐瀹氳緭鍑鸿矾寰勩€?
+    """功能：定义当前 formal stage 运行产物的固定输出路径。
 
     Output layout for the active formal stage.
 
@@ -54,7 +54,7 @@ class ProtocolOutputPaths:
     report_path: Path
 
     def table_paths(self) -> list[Path]:
-        """鍔熻兘锛氳繑鍥炲彈娌荤悊 CSV 浜х墿璺緞鍒楄〃銆?
+        """功能：返回受治理 CSV 产物路径列表。
 
         Return the governed CSV artifact paths.
 
@@ -73,7 +73,7 @@ class ProtocolOutputPaths:
         ]
 
     def figure_paths(self) -> list[Path]:
-        """鍔熻兘锛氳繑鍥炲彈娌荤悊 figure 浜х墿璺緞鍒楄〃銆?
+        """功能：返回受治理 figure 产物路径列表。
 
         Return the governed figure artifact paths.
 
@@ -87,7 +87,7 @@ class ProtocolOutputPaths:
 
 
 def build_output_paths(output_root: str | Path) -> ProtocolOutputPaths:
-    """鍔熻兘锛氭牴鎹?run root 鏋勫缓褰撳墠 formal stage 鐨勫浐瀹氳緭鍑哄竷灞€銆?
+    """功能：根据 run root 构建当前 formal stage 的固定输出布局。
 
     Build the governed output layout for an active-stage run root.
 
@@ -114,7 +114,7 @@ def build_output_paths(output_root: str | Path) -> ProtocolOutputPaths:
 
 
 class RecordWriter:
-    """鍔熻兘锛氱粺涓€鍐欏叆闃舵 0 鐨?records銆乼hresholds 涓?manifest銆?
+    """功能：统一写入阶段 0 的 records、thresholds 与 manifest。
 
     Unified writer for protocol skeleton runtime records, thresholds, and manifest artifacts.
 
@@ -129,7 +129,7 @@ class RecordWriter:
         self.output_paths = build_output_paths(output_root)
 
     def write_event_score_records(self, event_score_records: list[dict[str, Any]]) -> None:
-        """鍔熻兘锛氬啓鍏?event-level score records銆?
+        """功能：写入 event-level score records。
 
         Write the governed event-level score records.
 
@@ -148,7 +148,7 @@ class RecordWriter:
                 handle.write(json.dumps(event_score_record, ensure_ascii=False) + "\n")
 
     def write_threshold_records(self, threshold_records: list[dict[str, Any]]) -> None:
-        """鍔熻兘锛氬啓鍏?threshold records銆?
+        """功能：写入 threshold records。
 
         Write the governed threshold records.
 
@@ -169,7 +169,7 @@ class RecordWriter:
         )
 
     def write_run_manifest(self, run_manifest_record: dict[str, Any]) -> None:
-        """鍔熻兘锛氬啓鍏?run manifest銆?
+        """功能：写入 run manifest。
 
         Write the governed run manifest.
 
@@ -187,7 +187,7 @@ class RecordWriter:
         )
 
     def read_event_score_records(self) -> list[dict[str, Any]]:
-        """鍔熻兘锛氳鍙?event-level score records銆?
+        """功能：读取 event-level score records。
 
         Read governed event-level score records.
 
@@ -207,7 +207,7 @@ class RecordWriter:
         return records
 
     def read_threshold_records(self) -> list[dict[str, Any]]:
-        """鍔熻兘锛氳鍙?threshold records銆?
+        """功能：读取 threshold records。
 
         Read governed threshold records.
 
@@ -222,7 +222,7 @@ class RecordWriter:
         return json.loads(self.output_paths.thresholds_path.read_text(encoding="utf-8"))
 
     def read_run_manifest(self) -> dict[str, Any]:
-        """鍔熻兘锛氳鍙?run manifest銆?
+        """功能：读取 run manifest。
 
         Read the governed run manifest.
 

@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細澹版槑闃舵 1 synthetic tubelet sync 鍙樹綋鐨勫彈娌荤悊閰嶇疆濂戠害銆?
+文件用途：声明阶段 1 synthetic tubelet sync 变体的受治理配置契约。
 File purpose: Declare governed method-variant defaults for the synthetic_tubelet_sync_probe synthetic tubelet sync entry contract.
 Module type: Semi-general module
 """
@@ -19,7 +19,7 @@ SUPPORTED_METHOD_VARIANTS = (
 
 
 def build_reserved_method_support_matrix() -> dict[str, dict[str, object]]:
-    """鍔熻兘锛氳繑鍥為樁娈?1 涓変釜姝ｅ紡 variant 鐨勫喕缁撻粯璁ら厤缃€?
+    """功能：返回阶段 1 三个正式 variant 的冻结默认配置。
 
     Build the frozen support config matrix for the synthetic_tubelet_sync_probe formal method variants.
 

@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 2 VAE encode/decode 鍏冩暟鎹笌 digest 绋冲畾鎬с€?File purpose: Validate metadata and digest stability for the stage-two VAE path.
+文件用途：验证阶段 2 VAE encode/decode 元数据与 digest 稳定性。File purpose: Validate metadata and digest stability for the stage-two VAE path.
 Module type: General module
 """
 

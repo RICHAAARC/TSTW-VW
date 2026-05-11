@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 0 threshold calibration 涓嶅彂鐢?test leakage銆?
+文件用途：验证阶段 0 threshold calibration 不发生 test leakage。
 File purpose: Validate that protocol skeleton runtime threshold calibration does not leak test data.
 Module type: General module
 """

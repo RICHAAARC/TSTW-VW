@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉 stage-one event record 涓殑 mechanism_trace 涓庢寮忔満鍒跺瓧娈佃涔夈€?
+文件用途：验证 stage-one event record 中的 mechanism_trace 与正式机制字段语义。
 File purpose: Validate stage-one event records for mechanism-trace and formal mechanism fields.
 Module type: General module
 """

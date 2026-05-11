@@ -1,6 +1,6 @@
 # Field Registry
 
-Registry constraint: `docs/field_registry.md` 鏄?governed field 鐨勫敮涓€鐧昏琛ㄣ€傛柊澧?governed field 蹇呴』鍏堢櫥璁帮紝鍐嶈繘鍏?`configs/**`銆乺ecords銆乼hresholds銆乵anifest銆乼ables銆乺eports銆丳ython dict key銆佹祴璇?fixture 涓?Markdown 浠ｇ爜鍧楃ず渚嬨€傛湭鐧昏瀛楁瑙嗕负闃绘柇杩濊銆?
+Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记表。新增 governed field 必须先登记，再进入 `configs/**`、records、thresholds、manifest、tables、reports、Python dict key、测试 fixture 与 Markdown 代码块示例。未登记字段视为阻断违规。
 
 | field_name | category | required_suffix | allowed_in_records | allowed_in_claims | replacement_required | description |
 | --- | --- | --- | --- | --- | --- | --- |

@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 2 scaffold 璐ㄩ噺鎸囨爣璐熻浇銆?File purpose: Validate quality-metrics payloads for the stage-two scaffold.
+文件用途：验证阶段 2 scaffold 质量指标负载。File purpose: Validate quality-metrics payloads for the stage-two scaffold.
 Module type: General module
 """
 

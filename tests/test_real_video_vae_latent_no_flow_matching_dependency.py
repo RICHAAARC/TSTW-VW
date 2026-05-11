@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 2 scaffold 涓嶄緷璧?Flow Matching銆丏iT hook 鎴?trajectory 瀹炵幇銆?File purpose: Validate that the stage-two scaffold does not depend on Flow Matching, DiT hooks, or trajectory implementations.
+文件用途：验证阶段 2 scaffold 不依赖 Flow Matching、DiT hook 或 trajectory 实现。File purpose: Validate that the stage-two scaffold does not depend on Flow Matching, DiT hooks, or trajectory implementations.
 Module type: General module
 """
 

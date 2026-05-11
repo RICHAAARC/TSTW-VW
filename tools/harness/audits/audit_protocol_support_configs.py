@@ -1,5 +1,5 @@
 """
-鏂囦欢鐢ㄩ€旓細鎵ц闃舵 0 涓庨樁娈?1 鍏ュ彛 support config 楠ㄦ灦瀹¤銆?
+文件用途：执行阶段 0 与阶段 1 入口 support config 骨架审计。
 File purpose: Audit the governed protocol skeleton runtime support configs and the reserved synthetic_tubelet_sync_probe entry configs.
 Module type: General module
 """
