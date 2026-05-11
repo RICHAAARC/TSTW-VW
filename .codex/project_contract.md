@@ -8,6 +8,7 @@
 
 - `project_stage`: `synthetic_tubelet_sync_probe`
 - `target_construction_phase`: `real_video_vae_latent_probe`
+- 当前阶段的文件组织边界以 `docs/file_organization.md` 为准：`main/` 仅保留核心方法、核心协议、核心评估与 CLI 能力；阶段性 runner 位于 `experiments/`；Colab / Notebook session 工具位于 `paper_workflow/colab_utils/` 或 `scripts/`。
 - 当前阶段允许在既有 protocol core 上运行 synthetic video latent、temporal attack matrix 与 `frame_prc` / `tubelet_only` / `tubelet_sync` 三个正式 method variant。
 - 当前阶段允许实现 synthetic / placeholder 驱动的最小 mechanism runtime，用于冻结 records、thresholds、manifest、table rebuild 与机制追踪口径。
 - 当前阶段允许保留单一 `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb` 作为 stage-two transition-preparation 的远程 GPU entrypoint，但其职责仅限于环境准备、配置写入、模块调用、结果检查与结果打包。
@@ -79,10 +80,12 @@
 ## Core Boundary / Gate Layering
 
 1. Runtime protocol contracts may exist in `main/core/`, `main/protocol/`, and `main/analysis/`; they define split semantics, record schema, threshold calibration, manifests, and rebuildable tables.
-2. Outer governance gates may exist only in `tools/harness/`, `.codex/`, `tests/`, and governed docs; they include naming governance, stage progression guards, notebook bypass audits, and skill-file audits.
-3. `main/` must not import `tools/harness` or `tests`, and future Codex changes must not move audit logic into runtime protocol code.
-4. Governance gates are not part of `method_core`, and future `minimal_release_extraction` must exclude governance harnesses, build-time docs, and audit reports.
-5. `protocol_core` must stay method-family agnostic and must not hard-code a specific method factory or a specific latent backend implementation.
+2. Stage-specific runners, experiment artifact builders, and synthetic probe contracts do not belong to `protocol_core`; they must live in `experiments/` and consume `main/` through one-way imports only.
+3. Colab / Notebook session wrappers, runtime preflight, Drive packagers, and notebook result checkers do not belong to `main/`; they must live in `paper_workflow/colab_utils/` or `scripts/`.
+4. Outer governance gates may exist only in `tools/harness/`, `.codex/`, `tests/`, and governed docs; they include naming governance, stage progression guards, notebook bypass audits, file-organization audits, and skill-file audits.
+5. `main/` must not import `tools/harness`, `tests`, `paper_workflow`, or `experiments`, and future Codex changes must not move audit logic into runtime protocol code.
+6. Governance gates are not part of `method_core`, and future `minimal_release_extraction` must exclude governance harnesses, build-time docs, and audit reports.
+7. `protocol_core` must stay method-family agnostic and must not hard-code a specific method factory or a specific latent backend implementation.
 
 ## Blocking Governance Rules
 

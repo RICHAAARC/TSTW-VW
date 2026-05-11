@@ -416,13 +416,14 @@ def build_tubelet_length_ablation_rows(
         variant_records = [
             record for record in curve_records if record["method_variant"] == method_variant
         ]
-        tubelet_length = int(
-            next(
-                record["mechanism_trace"]["tubelet_length"]
-                for record in variant_records
-                if record["mechanism_trace"].get("tubelet_length") is not None
-            )
-        )
+        tubelet_length_candidates = [
+            record["mechanism_trace"]["tubelet_length"]
+            for record in variant_records
+            if record["mechanism_trace"].get("tubelet_length") is not None
+        ]
+        if not tubelet_length_candidates:
+            continue
+        tubelet_length = int(tubelet_length_candidates[0])
         for attack_name in sorted({record["attack_name"] for record in variant_records}):
             attack_records = [
                 record for record in variant_records if record["attack_name"] == attack_name

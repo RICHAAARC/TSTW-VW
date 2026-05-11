@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from main.protocol.real_video_vae_latent_runner import RealVideoVaeLatentRunner
+from experiments.real_video_vae_latent_probe.runner import RealVideoVaeLatentRunner
 
 
 ROOT = Path(__file__).resolve().parents[1]

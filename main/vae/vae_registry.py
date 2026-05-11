@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from main.vae.diffusers_autoencoder_kl_framewise import DiffusersAutoencoderKLFramewiseBackend
-from main.vae.video_vae_backend_placeholder import VideoVAETensorRuntimeBackend
+from main.vae.video_vae_tensor_runtime import VideoVAETensorRuntimeBackend
 
 
 PLACEHOLDER_VAE_BACKEND_NAMES = {

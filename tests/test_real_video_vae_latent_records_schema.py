@@ -13,7 +13,7 @@ import pytest
 
 from main.core.digest import compute_object_digest
 from main.core.records import RecordWriter
-from main.protocol.real_video_vae_latent_runner import RealVideoVaeLatentRunner
+from experiments.real_video_vae_latent_probe.runner import RealVideoVaeLatentRunner
 from tests.real_video_vae_latent_test_support import run_real_video_vae_latent_tiny
 
 
@@ -38,10 +38,10 @@ def test_real_video_vae_latent_event_records_include_quality_and_temporal_payloa
         (output_root / "artifacts" / "run_manifest.json").read_text(encoding="utf-8")
     )
     runtime_manifest = json.loads(
-        (output_root / "artifacts" / "colab_runtime_manifest.json").read_text(encoding="utf-8")
+        (output_root / "artifacts" / "runtime_manifest.json").read_text(encoding="utf-8")
     )
     runtime_config = json.loads(
-        (output_root / "artifacts" / "colab_real_video_vae_latent_runtime_config.json").read_text(encoding="utf-8")
+        (output_root / "artifacts" / "runtime_config.json").read_text(encoding="utf-8")
     )
 
     assert event_score_records
@@ -82,7 +82,7 @@ def test_real_video_vae_latent_runtime_manifest_tracks_runtime_config_and_notebo
         None.
     """
     output_root = tmp_path / "outputs" / "runs" / "real_video_vae_latent_probe_runtime_config"
-    runtime_config_path = tmp_path / "colab_runtime_config.json"
+    runtime_config_path = tmp_path / "runtime_config.json"
     runtime_config_payload = {
         "git_commit": "colab-test-commit",
         "drive_results_dir": "/content/drive/MyDrive/tstw_stage2/results",
@@ -102,12 +102,12 @@ def test_real_video_vae_latent_runtime_manifest_tracks_runtime_config_and_notebo
     )
 
     merged_runtime_config = json.loads(
-        (output_root / "artifacts" / "colab_real_video_vae_latent_runtime_config.json").read_text(
+        (output_root / "artifacts" / "runtime_config.json").read_text(
             encoding="utf-8"
         )
     )
     runtime_manifest = json.loads(
-        (output_root / "artifacts" / "colab_runtime_manifest.json").read_text(
+        (output_root / "artifacts" / "runtime_manifest.json").read_text(
             encoding="utf-8"
         )
     )

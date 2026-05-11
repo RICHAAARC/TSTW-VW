@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from main.backends.synthetic_video_latent import SyntheticVideoLatentPlaceholder
+from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
+    SyntheticVideoLatentPlaceholder,
+)
 from main.core.tensor_artifact import read_float_tensor_npy
 from main.methods.temporal_tubelet_watermark.codebook import build_codebook_config, build_tubelet_codebook
 from main.methods.temporal_tubelet_watermark.embedding import (

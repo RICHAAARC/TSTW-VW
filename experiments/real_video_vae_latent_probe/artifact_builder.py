@@ -16,7 +16,10 @@ import zlib
 from main.analysis.failure_case_exporter import export_failure_case_gallery
 from main.core.records import RecordWriter
 from main.protocol.evaluator import build_ablation_table_rows, build_main_metrics_rows
-from main.protocol.real_video_vae_latent_paths import RealVideoVaeLatentOutputPaths, build_real_video_vae_latent_output_paths
+from experiments.real_video_vae_latent_probe.output_layout import (
+    RealVideoVaeLatentOutputPaths,
+    build_real_video_vae_latent_output_paths,
+)
 
 
 REAL_VIDEO_ATTACK_BREAKDOWN_COLUMNS = [

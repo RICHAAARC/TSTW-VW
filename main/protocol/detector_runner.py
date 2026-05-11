@@ -11,14 +11,13 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
-from main.backends.synthetic_latent_backend_random import SyntheticLatentBackendRandom
 from main.core.schema import (
     NEGATIVE_SAMPLE_ROLES,
     SAMPLE_ROLES,
     build_input_artifact_trace,
     validate_event_score_record,
 )
-from main.methods.temporal_tubelet_watermark.method_placeholder import build_method_from_config
+from main.methods.temporal_tubelet_watermark.method import build_method_from_config
 from main.protocol.calibrator import ThresholdCalibrator
 from main.protocol.event_builder import EventPlanEntry
 
@@ -114,15 +113,15 @@ class ProtocolRunner:
         Returns:
             None.
         """
-        resolved_latent_backend = (
-            SyntheticLatentBackendRandom() if latent_backend is None else latent_backend
-        )
+        resolved_latent_backend = latent_backend
         resolved_method_factory = (
             build_method_from_config if method_factory is None else method_factory
         )
         resolved_threshold_calibrator = (
             ThresholdCalibrator() if threshold_calibrator is None else threshold_calibrator
         )
+        if resolved_latent_backend is None:
+            raise TypeError("latent_backend must be provided explicitly")
         if not hasattr(resolved_latent_backend, "build_sample") or not callable(
             resolved_latent_backend.build_sample
         ):

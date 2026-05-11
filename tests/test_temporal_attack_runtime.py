@@ -10,7 +10,9 @@ import os
 from pathlib import Path
 
 from main.attacks.attack_registry import build_attack_registry
-from main.backends.synthetic_video_latent import SyntheticVideoLatentPlaceholder
+from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
+    SyntheticVideoLatentPlaceholder,
+)
 from main.core.registry import load_json_config
 
 
@@ -27,7 +29,12 @@ def test_temporal_attack_registry_builds_all_governed_attacks() -> None:
         None.
     """
     attack_config = load_json_config(
-        ROOT / "configs" / "attacks" / "temporal_attack_matrix.json"
+        ROOT
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "attacks"
+        / "temporal_attack_matrix.json"
     )
     attack_registry = build_attack_registry(attack_config)
 
@@ -57,7 +64,14 @@ def test_temporal_attacks_transform_placeholder_sample_metadata() -> None:
         "attacked_positive",
     )
     attack_registry = build_attack_registry(
-        load_json_config(ROOT / "configs" / "attacks" / "temporal_attack_matrix.json")
+        load_json_config(
+            ROOT
+            / "experiments"
+            / "synthetic_tubelet_sync_probe"
+            / "configs"
+            / "attacks"
+            / "temporal_attack_matrix.json"
+        )
     )
     attacked_samples = {attack.attack_name: attack.apply(sample) for attack in attack_registry}
 
@@ -114,7 +128,14 @@ def test_temporal_attack_reuses_existing_artifact(tmp_path: Path) -> None:
         "attacked_positive",
     )
     temporal_crop = build_attack_registry(
-        load_json_config(ROOT / "configs" / "attacks" / "temporal_attack_matrix.json")
+        load_json_config(
+            ROOT
+            / "experiments"
+            / "synthetic_tubelet_sync_probe"
+            / "configs"
+            / "attacks"
+            / "temporal_attack_matrix.json"
+        )
     )[1]
 
     first_attacked_sample = temporal_crop.apply(sample)

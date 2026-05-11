@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from experiments.synthetic_tubelet_sync_probe.ablation_runner import AblationRunner
 from main.core.records import RecordWriter
 from main.core.schema import (
     EVIDENCE_SCORE_NAMES,
@@ -18,7 +19,6 @@ from main.core.schema import (
     validate_run_manifest_record,
     validate_threshold_record,
 )
-from main.protocol.ablation_runner import AblationRunner
 from main.protocol.split_builder import build_split_plan
 
 

@@ -1,5 +1,5 @@
 """
-File purpose: Provide legacy placeholder/random methods and the synthetic tubelet-sync method runtime.
+File purpose: Provide the governed temporal_tubelet_watermark method runtime and legacy scaffold variants.
 Module type: General module
 """
 

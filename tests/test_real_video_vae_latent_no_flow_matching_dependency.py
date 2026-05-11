@@ -19,8 +19,8 @@ def test_real_video_vae_latent_scaffold_has_no_flow_matching_dependency() -> Non
     """
     repository_root = Path(__file__).resolve().parents[1]
     stage_two_files = [
-        repository_root / "main" / "protocol" / "real_video_vae_latent_runner.py",
-        repository_root / "main" / "analysis" / "real_video_vae_latent_artifacts.py",
+        repository_root / "experiments" / "real_video_vae_latent_probe" / "runner.py",
+        repository_root / "experiments" / "real_video_vae_latent_probe" / "artifact_builder.py",
         repository_root / "main" / "backends" / "real_video_vae_latent.py",
     ]
     forbidden_fragments = [

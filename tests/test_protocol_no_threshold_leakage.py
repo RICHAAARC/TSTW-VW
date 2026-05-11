@@ -11,9 +11,12 @@ from pathlib import Path
 
 import pytest
 
+from experiments.protocol_skeleton.ablation_runner import AblationRunner as StageZeroAblationRunner
+from experiments.synthetic_tubelet_sync_probe.ablation_runner import (
+    AblationRunner as SyntheticTubeletSyncAblationRunner,
+)
 from main.core.digest import compute_object_digest
 from main.core.records import RecordWriter
-from main.protocol.ablation_runner import AblationRunner
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,7 +56,11 @@ def test_threshold_source_digest_uses_only_calibration_negatives(tmp_path: Path)
         None.
     """
     output_root = tmp_path / "outputs" / "runs" / "protocol_skeleton_run"
-    AblationRunner(ROOT).run(output_root, samples_per_role=2, runtime_profile_override="tiny")
+    StageZeroAblationRunner(ROOT).run(
+        output_root,
+        samples_per_role=2,
+        runtime_profile_override="tiny",
+    )
     record_writer = RecordWriter(output_root)
     event_score_records = record_writer.read_event_score_records()
     threshold_records = record_writer.read_threshold_records()
@@ -120,14 +127,23 @@ def test_threshold_guard_bands_are_config_declared_and_calibration_only(tmp_path
         None.
     """
     output_root = tmp_path / "outputs" / "runs" / "protocol_guard_band_run"
-    AblationRunner(ROOT).run(output_root, samples_per_role=2, runtime_profile_override="tiny")
+    SyntheticTubeletSyncAblationRunner(ROOT).run(
+        output_root,
+        samples_per_role=2,
+        runtime_profile_override="tiny",
+    )
     record_writer = RecordWriter(output_root)
     event_score_records = record_writer.read_event_score_records()
     threshold_records = record_writer.read_threshold_records()
     protocol_config = json.loads(
-        (ROOT / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json").read_text(
-            encoding="utf-8"
-        )
+        (
+            ROOT
+            / "experiments"
+            / "synthetic_tubelet_sync_probe"
+            / "configs"
+            / "protocol"
+            / "synthetic_tubelet_sync_probe.json"
+        ).read_text(encoding="utf-8")
     )
     threshold_protocol = protocol_config["threshold_protocol"]
     runtime_profile = "tiny"

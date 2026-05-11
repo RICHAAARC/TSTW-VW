@@ -28,8 +28,8 @@ def test_reject_forbidden_weak_text_names() -> None:
 
 
 def test_accept_semantic_names() -> None:
-    assert validate_path_name_semantics(Path("main/protocol/real_video_vae_latent_runner.py")) == []
-    assert validate_path_name_semantics(Path("main/analysis/real_video_vae_latent_artifacts.py")) == []
+    assert validate_path_name_semantics(Path("experiments/real_video_vae_latent_probe/runner.py")) == []
+    assert validate_path_name_semantics(Path("experiments/real_video_vae_latent_probe/artifact_builder.py")) == []
     assert validate_path_name_semantics(Path("tests/test_real_video_vae_latent_records_schema.py")) == []
     assert validate_path_name_semantics(Path("tools/harness/run_synthetic_tubelet_sync_profile.py")) == []
 

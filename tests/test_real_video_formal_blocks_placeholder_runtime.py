@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from main.colab.notebook_result_checker import check_real_video_vae_latent_outputs
+from scripts.check_results.real_video_vae_latent_output_checker import (
+    check_real_video_vae_latent_outputs,
+)
 from tests.real_video_vae_latent_test_support import run_real_video_vae_latent_tiny
 
 

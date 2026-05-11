@@ -14,7 +14,7 @@ from typing import Any
 
 from main.analysis.table_builder import TableBuilder
 from main.attacks.attack_registry import build_attack_registry
-from main.backends.synthetic_video_latent import (
+from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
     LATENT_BACKEND_NAME as SYNTHETIC_VIDEO_LATENT_BACKEND_NAME,
     SUPPORTED_RUNTIME_PROFILES,
     build_synthetic_video_latent_backend_from_support_config,

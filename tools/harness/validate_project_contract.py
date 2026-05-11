@@ -15,7 +15,7 @@ from main.attacks.temporal import (
     ATTACK_MATRIX_NAME as TEMPORAL_ATTACK_MATRIX_NAME,
     SUPPORTED_TEMPORAL_ATTACK_NAMES,
 )
-from main.backends.synthetic_video_latent import (
+from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
     DEFAULT_LATENT_GENERATION_SEED,
     DEFAULT_LATENT_SHAPE,
     DEFAULT_RUNTIME_PROFILE,
@@ -26,7 +26,7 @@ from main.backends.synthetic_video_latent import (
     LATENT_DISTRIBUTION as SYNTHETIC_VIDEO_LATENT_DISTRIBUTION,
     LATENT_STORAGE as SYNTHETIC_VIDEO_LATENT_STORAGE,
 )
-from main.methods.temporal_tubelet_watermark.synthetic_tubelet_sync_contract import (
+from experiments.synthetic_tubelet_sync_probe.synthetic_tubelet_sync_contract import (
     METHOD_FAMILY as SYNTHETIC_TUBELET_SYNC_METHOD_FAMILY,
     METHOD_STATUS as SYNTHETIC_TUBELET_SYNC_METHOD_STATUS,
     SUPPORTED_METHOD_VARIANTS as SYNTHETIC_TUBELET_SYNC_METHOD_VARIANTS,
@@ -1434,20 +1434,41 @@ def main(argv: list[str] | None = None) -> None:
     arguments = argv or sys.argv
     root = Path(arguments[1]) if len(arguments) > 1 else ROOT
     project_contract_path = root / "configs" / "project" / "project_contract.json"
-    protocol_path = root / "configs" / "protocol" / "protocol_skeleton.json"
+    protocol_path = (
+        root / "experiments" / "protocol_skeleton" / "configs" / "protocol" / "protocol_skeleton.json"
+    )
     protocol_artifact_schema_path = (
         root / "configs" / "schema" / "protocol_artifact_schema.json"
     )
-    ablation_path = root / "configs" / "ablation" / "ablation_placeholder.json"
-    attack_path = root / "configs" / "attacks" / "identity_attack_placeholder.json"
+    ablation_path = (
+        root / "experiments" / "protocol_skeleton" / "configs" / "ablation" / "ablation_placeholder.json"
+    )
+    attack_path = (
+        root / "experiments" / "protocol_skeleton" / "configs" / "attacks" / "identity_attack_placeholder.json"
+    )
     stage_one_protocol_path = (
-        root / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+        root
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "protocol"
+        / "synthetic_tubelet_sync_probe.json"
     )
     temporal_attack_matrix_path = (
-        root / "configs" / "attacks" / "temporal_attack_matrix.json"
+        root
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "attacks"
+        / "temporal_attack_matrix.json"
     )
     stage_one_ablation_path = (
-        root / "configs" / "ablation" / "synthetic_tubelet_sync_ablation.json"
+        root
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "ablation"
+        / "synthetic_tubelet_sync_ablation.json"
     )
     stage_one_method_paths = [
         root / "configs" / "method" / "frame_prc.json",

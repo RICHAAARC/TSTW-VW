@@ -71,7 +71,12 @@ def load_stage_zero_config_bundle(repository_root: str | Path) -> StageZeroConfi
     """
     root_path = Path(repository_root)
     ablation_config_path = (
-        root_path / "configs" / "ablation" / "protocol_skeleton_methods.json"
+        root_path
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "ablation"
+        / "protocol_skeleton_methods.json"
     )
     ablation_config = load_json_config(ablation_config_path)
     method_variants = ablation_config.get("method_variants", [])
@@ -83,18 +88,35 @@ def load_stage_zero_config_bundle(repository_root: str | Path) -> StageZeroConfi
         if not isinstance(method_variant, str) or not method_variant:
             raise ValueError("method_variant entries must be non-empty strings")
         method_config_paths[method_variant] = (
-            root_path / "configs" / "method" / f"{method_variant}.json"
+            root_path
+            / "experiments"
+            / "protocol_skeleton"
+            / "configs"
+            / "method"
+            / f"{method_variant}.json"
         )
 
     return StageZeroConfigBundle(
         project_contract_path=root_path / "configs" / "project" / "project_contract.json",
-        protocol_config_path=root_path / "configs" / "protocol" / "protocol_skeleton.json",
+        protocol_config_path=(
+            root_path
+            / "experiments"
+            / "protocol_skeleton"
+            / "configs"
+            / "protocol"
+            / "protocol_skeleton.json"
+        ),
         artifact_schema_path=(
             root_path / "configs" / "schema" / "protocol_artifact_schema.json"
         ),
         ablation_config_path=ablation_config_path,
         attack_config_path=(
-            root_path / "configs" / "attacks" / "identity_attack_placeholder.json"
+            root_path
+            / "experiments"
+            / "protocol_skeleton"
+            / "configs"
+            / "attacks"
+            / "identity_attack_placeholder.json"
         ),
         method_config_paths=method_config_paths,
     )
@@ -129,13 +151,14 @@ def load_stage_zero_runtime_configs(repository_root: str | Path) -> dict[str, An
 def _build_method_config_paths(
     root_path: Path,
     method_variants: list[str],
+    method_root: Path | None = None,
 ) -> dict[str, Path]:
     method_config_paths: dict[str, Path] = {}
     for method_variant in method_variants:
         if not isinstance(method_variant, str) or not method_variant:
             raise ValueError("method_variant entries must be non-empty strings")
         method_config_paths[method_variant] = (
-            root_path / "configs" / "method" / f"{method_variant}.json"
+            (method_root or (root_path / "configs" / "method")) / f"{method_variant}.json"
         )
     return method_config_paths
 
@@ -162,7 +185,12 @@ def load_active_runtime_config_bundle(repository_root: str | Path) -> StageZeroC
         raise ValueError(f"unsupported active construction_phase: {construction_phase}")
 
     ablation_config_path = (
-        root_path / "configs" / "ablation" / "synthetic_tubelet_sync_ablation.json"
+        root_path
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "ablation"
+        / "synthetic_tubelet_sync_ablation.json"
     )
     ablation_config = load_json_config(ablation_config_path)
     method_variants = ablation_config.get("method_variants", [])
@@ -172,14 +200,24 @@ def load_active_runtime_config_bundle(repository_root: str | Path) -> StageZeroC
     return StageZeroConfigBundle(
         project_contract_path=project_contract_path,
         protocol_config_path=(
-            root_path / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+            root_path
+            / "experiments"
+            / "synthetic_tubelet_sync_probe"
+            / "configs"
+            / "protocol"
+            / "synthetic_tubelet_sync_probe.json"
         ),
         artifact_schema_path=(
             root_path / "configs" / "schema" / "protocol_artifact_schema.json"
         ),
         ablation_config_path=ablation_config_path,
         attack_config_path=(
-            root_path / "configs" / "attacks" / "temporal_attack_matrix.json"
+            root_path
+            / "experiments"
+            / "synthetic_tubelet_sync_probe"
+            / "configs"
+            / "attacks"
+            / "temporal_attack_matrix.json"
         ),
         method_config_paths=_build_method_config_paths(root_path, method_variants),
     )

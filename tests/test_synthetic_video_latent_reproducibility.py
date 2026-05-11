@@ -9,7 +9,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from main.backends.synthetic_video_latent import SyntheticVideoLatentPlaceholder
+from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
+    SyntheticVideoLatentPlaceholder,
+)
 
 
 def test_synthetic_video_latent_backend_writes_reproducible_tensor_artifact(

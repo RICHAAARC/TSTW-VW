@@ -10,11 +10,11 @@ from typing import Any
 
 import pytest
 
-from main.attacks.identity_attack_placeholder import IdentityAttackPlaceholder
 from main.core.registry import load_json_config
 from main.core.schema import DetectionResult, LatentSample
 from main.protocol.detector_runner import ProtocolRunner
 from main.protocol.event_builder import EventPlanEntry
+from main.attacks.identity_attack import IdentityAttack
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,7 +79,7 @@ class FakeWatermarkMethod:
 
 
 def _build_minimal_event_plan() -> list[EventPlanEntry]:
-    attack_object = IdentityAttackPlaceholder(
+    attack_object = IdentityAttack(
         attack_name="identity_attack_placeholder",
         attack_params={},
     )
@@ -132,8 +132,8 @@ def _build_minimal_event_plan() -> list[EventPlanEntry]:
     ]
 
 
-def test_protocol_runner_default_constructor_runs_stage0_slice() -> None:
-    """Validate that the default ProtocolRunner still runs the protocol skeleton runtime slice.
+def test_protocol_runner_with_explicit_backend_runs_protocol_skeleton_slice() -> None:
+    """Validate that ProtocolRunner runs the protocol skeleton slice with explicit backend injection.
 
     Args:
         None.
@@ -141,12 +141,22 @@ def test_protocol_runner_default_constructor_runs_stage0_slice() -> None:
     Returns:
         None.
     """
-    runner = ProtocolRunner()
+    runner = ProtocolRunner(latent_backend=FakeLatentBackend())
     method_config = load_json_config(
-        ROOT / "configs" / "method" / "random_score_detector_random.json"
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "method"
+        / "random_score_detector_random.json"
     )
     protocol_config = load_json_config(
-        ROOT / "configs" / "protocol" / "protocol_skeleton.json"
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "protocol"
+        / "protocol_skeleton.json"
     )
 
     event_score_records, threshold_record = runner.run_method_variant(
@@ -171,10 +181,20 @@ def test_protocol_runner_supports_fake_backend() -> None:
     """
     runner = ProtocolRunner(latent_backend=FakeLatentBackend())
     method_config = load_json_config(
-        ROOT / "configs" / "method" / "random_score_detector_random.json"
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "method"
+        / "random_score_detector_random.json"
     )
     protocol_config = load_json_config(
-        ROOT / "configs" / "protocol" / "protocol_skeleton.json"
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "protocol"
+        / "protocol_skeleton.json"
     )
 
     event_score_records, _ = runner.run_method_variant(
@@ -224,7 +244,12 @@ def test_protocol_runner_supports_fake_method_factory_and_dynamic_method_family(
         "fusion_rule": "constant_zero_fusion_placeholder",
     }
     protocol_config = load_json_config(
-        ROOT / "configs" / "protocol" / "protocol_skeleton.json"
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "protocol"
+        / "protocol_skeleton.json"
     )
 
     event_score_records, threshold_record = runner.run_method_variant(
@@ -283,7 +308,12 @@ def test_protocol_runner_rejects_missing_or_empty_method_family(
         method_factory=lambda _: FakeWatermarkMethod(),
     )
     protocol_config = load_json_config(
-        ROOT / "configs" / "protocol" / "protocol_skeleton.json"
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "protocol"
+        / "protocol_skeleton.json"
     )
 
     with pytest.raises(ValueError, match="method_family"):

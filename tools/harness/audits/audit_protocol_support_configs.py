@@ -37,16 +37,45 @@ def run_audit(root: str | Path) -> dict[str, Any]:
         A normalized support config audit report.
     """
     root_path = Path(root)
-    ablation_path = root_path / "configs" / "ablation" / "ablation_placeholder.json"
-    attack_path = root_path / "configs" / "attacks" / "identity_attack_placeholder.json"
+    ablation_path = (
+        root_path
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "ablation"
+        / "ablation_placeholder.json"
+    )
+    attack_path = (
+        root_path
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "attacks"
+        / "identity_attack_placeholder.json"
+    )
     stage_one_protocol_path = (
-        root_path / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+        root_path
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "protocol"
+        / "synthetic_tubelet_sync_probe.json"
     )
     temporal_attack_path = (
-        root_path / "configs" / "attacks" / "temporal_attack_matrix.json"
+        root_path
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "attacks"
+        / "temporal_attack_matrix.json"
     )
     stage_one_ablation_path = (
-        root_path / "configs" / "ablation" / "synthetic_tubelet_sync_ablation.json"
+        root_path
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "ablation"
+        / "synthetic_tubelet_sync_ablation.json"
     )
     stage_one_method_paths = [
         root_path / "configs" / "method" / "frame_prc.json",

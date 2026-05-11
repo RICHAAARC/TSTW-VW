@@ -37,3 +37,19 @@ def test_field_registry_declares_single_registration_table() -> None:
     text = _read("docs/field_registry.md")
     assert "Registry constraint" in text
     assert "docs/field_registry.md" in text
+
+
+def test_file_organization_contract_mentions_release_boundaries() -> None:
+    text = _read("docs/file_organization.md")
+    assert "experiments/" in text
+    assert "scripts/" in text
+    assert "paper_workflow/" in text
+    assert "main/colab/" in text
+
+
+def test_harness_engineering_mentions_file_organization_gate() -> None:
+    text = _read("docs/harness_engineering.md")
+    assert "docs/file_organization.md" in text
+    assert "experiments/" in text
+    assert "scripts/" in text
+    assert "paper_workflow/colab_utils/" in text

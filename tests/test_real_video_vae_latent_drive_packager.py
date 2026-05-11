@@ -12,7 +12,7 @@ import zipfile
 
 import pytest
 
-from main.colab.drive_packager import pack_real_video_vae_latent_run
+from scripts.package_results.drive_packager import pack_real_video_vae_latent_run
 from tests.real_video_vae_latent_test_support import run_real_video_vae_latent_tiny
 
 

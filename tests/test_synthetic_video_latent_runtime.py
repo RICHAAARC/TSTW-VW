@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from main.backends.synthetic_video_latent import (
+from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
     LATENT_BACKEND_NAME,
     SyntheticVideoLatentPlaceholder,
     build_synthetic_video_latent_backend_from_support_config,
@@ -29,7 +29,12 @@ def test_synthetic_video_latent_backend_builds_reproducible_sample() -> None:
         None.
     """
     support_config = load_json_config(
-        ROOT / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+        ROOT
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "protocol"
+        / "synthetic_tubelet_sync_probe.json"
     )
     backend = build_synthetic_video_latent_backend_from_support_config(support_config)
 
@@ -115,7 +120,12 @@ def test_synthetic_video_latent_backend_supports_proof_runtime_profile() -> None
         None.
     """
     support_config = load_json_config(
-        ROOT / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+        ROOT
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "protocol"
+        / "synthetic_tubelet_sync_probe.json"
     )
     support_config["runtime_profile"] = "proof"
     backend = build_synthetic_video_latent_backend_from_support_config(support_config)

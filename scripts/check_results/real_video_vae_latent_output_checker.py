@@ -13,7 +13,9 @@ from typing import Any
 
 from main.core.digest import compute_file_digest
 from main.core.records import RecordWriter
-from main.protocol.real_video_vae_latent_paths import build_real_video_vae_latent_output_paths
+from experiments.real_video_vae_latent_probe.output_layout import (
+    build_real_video_vae_latent_output_paths,
+)
 
 
 def check_real_video_vae_latent_outputs(
@@ -51,7 +53,7 @@ def check_real_video_vae_latent_outputs(
         "temporal_consistency_table": output_paths.temporal_consistency_table_path.exists(),
         "real_video_vae_latent_governance_summary": output_paths.real_video_vae_latent_governance_summary_path.exists(),
         "report": output_paths.report_path.exists(),
-        "colab_runtime_manifest": output_paths.colab_runtime_manifest_path.exists(),
+        "runtime_manifest": output_paths.runtime_manifest_path.exists(),
         "artifact_manifest": output_paths.artifact_manifest_path.exists(),
     }
     real_video_vae_latent_decision = report_fields.get("RealVideoVaeLatentDecision", "INCONCLUSIVE")

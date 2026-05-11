@@ -9,8 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from main.attacks.temporal import TemporalAttackPlaceholder
-from main.backends.synthetic_video_latent import SyntheticVideoLatentPlaceholder
-from main.methods.temporal_tubelet_watermark.method_placeholder import build_method_from_config
+from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
+    SyntheticVideoLatentPlaceholder,
+)
+from main.methods.temporal_tubelet_watermark.method import build_method_from_config
 from main.methods.temporal_tubelet_watermark.synchronization import search_best_offset
 
 

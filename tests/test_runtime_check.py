@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-import main.colab.runtime_check as runtime_check
+import paper_workflow.colab_utils.runtime_check as runtime_check
 
 
 class _FakeCuda:

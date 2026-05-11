@@ -12,7 +12,9 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from main.protocol.real_video_vae_latent_paths import build_real_video_vae_latent_output_paths
+from experiments.real_video_vae_latent_probe.output_layout import (
+    build_real_video_vae_latent_output_paths,
+)
 
 
 def _supports_tar_zstd() -> bool:
@@ -90,8 +92,8 @@ def pack_run_to_tar_zst(
         include_relpaths.remove("artifacts")
         include_relpaths.append("artifacts/run_manifest.json")
         include_relpaths.append("artifacts/artifact_manifest.json")
-        include_relpaths.append("artifacts/colab_runtime_manifest.json")
-        include_relpaths.append("artifacts/colab_real_video_vae_latent_runtime_config.json")
+        include_relpaths.append("artifacts/runtime_manifest.json")
+        include_relpaths.append("artifacts/runtime_config.json")
 
     tar_inputs: list[str] = []
     for relative_path in include_relpaths:

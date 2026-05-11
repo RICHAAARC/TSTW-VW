@@ -8,9 +8,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from main.protocol.output_layout import BaseRunOutputPaths, build_base_run_output_paths
+
 
 @dataclass(frozen=True)
-class RealVideoVaeLatentOutputPaths:
+class RealVideoVaeLatentOutputPaths(BaseRunOutputPaths):
     """Output layout for the real-video VAE-latent scaffold runtime.
 
     Args:
@@ -19,8 +21,8 @@ class RealVideoVaeLatentOutputPaths:
         thresholds_path: Threshold JSON path.
         run_manifest_path: Run manifest JSON path.
         artifact_manifest_path: Artifact manifest JSON path.
-        colab_runtime_manifest_path: Runtime manifest JSON path.
-        colab_real_video_vae_latent_runtime_config_path: Runtime-config JSON path.
+        runtime_manifest_path: Runtime manifest JSON path.
+        runtime_config_path: Runtime-config JSON path.
         main_tpr_fpr_table_path: Main metrics table path.
         ablation_table_path: Ablation table path.
         real_video_attack_breakdown_path: Attack-breakdown table path.
@@ -34,14 +36,6 @@ class RealVideoVaeLatentOutputPaths:
     Returns:
         None.
     """
-
-    root_path: Path
-    event_scores_path: Path
-    thresholds_path: Path
-    run_manifest_path: Path
-    artifact_manifest_path: Path
-    colab_runtime_manifest_path: Path
-    colab_real_video_vae_latent_runtime_config_path: Path
     main_tpr_fpr_table_path: Path
     ablation_table_path: Path
     real_video_attack_breakdown_path: Path
@@ -76,18 +70,15 @@ def build_real_video_vae_latent_output_paths(output_root: str | Path) -> RealVid
         A `RealVideoVaeLatentOutputPaths` instance.
     """
     output_root_path = Path(output_root)
+    base_paths = build_base_run_output_paths(output_root_path)
     return RealVideoVaeLatentOutputPaths(
-        root_path=output_root_path,
-        event_scores_path=output_root_path / "records" / "event_scores.jsonl",
-        thresholds_path=output_root_path / "thresholds" / "thresholds.json",
-        run_manifest_path=output_root_path / "artifacts" / "run_manifest.json",
-        artifact_manifest_path=output_root_path / "artifacts" / "artifact_manifest.json",
-        colab_runtime_manifest_path=(
-            output_root_path / "artifacts" / "colab_runtime_manifest.json"
-        ),
-        colab_real_video_vae_latent_runtime_config_path=(
-            output_root_path / "artifacts" / "colab_real_video_vae_latent_runtime_config.json"
-        ),
+        root_path=base_paths.root_path,
+        event_scores_path=base_paths.event_scores_path,
+        thresholds_path=base_paths.thresholds_path,
+        run_manifest_path=base_paths.run_manifest_path,
+        artifact_manifest_path=base_paths.artifact_manifest_path,
+        runtime_manifest_path=base_paths.runtime_manifest_path,
+        runtime_config_path=base_paths.runtime_config_path,
         main_tpr_fpr_table_path=output_root_path / "tables" / "main_tpr_fpr_table.csv",
         ablation_table_path=output_root_path / "tables" / "ablation_table.csv",
         real_video_attack_breakdown_path=(

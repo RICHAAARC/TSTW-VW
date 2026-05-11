@@ -12,7 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from main.analysis.real_video_vae_latent_artifacts import RealVideoVaeLatentArtifactBuilder
+from experiments.real_video_vae_latent_probe.artifact_builder import (
+    RealVideoVaeLatentArtifactBuilder,
+)
 from tests.real_video_vae_latent_test_support import run_real_video_vae_latent_tiny
 
 

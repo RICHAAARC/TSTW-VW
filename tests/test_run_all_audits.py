@@ -11,6 +11,11 @@ from tools.harness.run_all_audits import AUDIT_MODULE_NAMES
 
 def test_run_all_audits_includes_required_modules() -> None:
     assert "tools.harness.audits.audit_naming_conventions" in AUDIT_MODULE_NAMES
+    assert "tools.harness.audits.audit_file_organization_contract" in AUDIT_MODULE_NAMES
+    assert "tools.harness.audits.audit_main_no_colab_dependency" in AUDIT_MODULE_NAMES
+    assert "tools.harness.audits.audit_main_no_stage_specific_runner" in AUDIT_MODULE_NAMES
+    assert "tools.harness.audits.audit_release_no_placeholder_core" in AUDIT_MODULE_NAMES
+    assert "tools.harness.audits.audit_notebook_import_boundaries" in AUDIT_MODULE_NAMES
     assert "tools.harness.audits.audit_placeholder_random_fields" in AUDIT_MODULE_NAMES
 
 

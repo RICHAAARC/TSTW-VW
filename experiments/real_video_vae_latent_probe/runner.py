@@ -23,8 +23,14 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from experiments.real_video_vae_latent_probe.artifact_builder import (
+    RealVideoVaeLatentArtifactBuilder,
+)
+from experiments.real_video_vae_latent_probe.output_layout import (
+    RealVideoVaeLatentOutputPaths,
+    build_real_video_vae_latent_output_paths,
+)
 from main.analysis.quality_metrics import build_quality_metrics_payload
-from main.analysis.real_video_vae_latent_artifacts import RealVideoVaeLatentArtifactBuilder
 from main.analysis.temporal_metrics import build_temporal_metrics_payload
 from main.attacks.real_video_attack_registry import build_real_video_attack_registry
 from main.backends.real_video_vae_latent import (
@@ -37,11 +43,10 @@ from main.core.records import RecordWriter
 from main.core.registry import load_json_config
 from main.core.schema import LatentSample, NEGATIVE_SAMPLE_ROLES, SAMPLE_ROLES, build_input_artifact_trace, validate_event_score_record
 from main.core.tensor_artifact import read_float_tensor_npy, write_float_tensor_npy
-from main.methods.temporal_tubelet_watermark.method_placeholder import build_method_from_config
+from main.methods.temporal_tubelet_watermark.method import build_method_from_config
 from main.protocol.calibrator import ThresholdCalibrator
 from main.protocol.event_builder import EventPlanEntry
 from main.protocol.split_builder import build_split_plan
-from main.protocol.real_video_vae_latent_paths import RealVideoVaeLatentOutputPaths, build_real_video_vae_latent_output_paths
 from main.vae.vae_registry import resolve_vae_backend
 from main.video.dataset_manifest import load_dataset_manifest, summarize_dataset_manifest
 from main.video.video_artifact import copy_latent_artifact
@@ -122,7 +127,7 @@ class RealVideoVaeLatentRunner:
             attack_matrix_path: Optional attack config path.
             ablation_config_path: Optional ablation config path.
             dataset_manifest_path: Optional dataset manifest path.
-            runtime_config_path: Optional Colab runtime-config override path.
+            runtime_config_path: Optional runtime-config override path.
 
         Returns:
             A `RealVideoVaeLatentRunResult` instance.
@@ -237,7 +242,7 @@ class RealVideoVaeLatentRunner:
                 "method_variants": [method_config["method_variant"] for method_config in runtime_method_configs],
             }
         )
-        self._write_json(output_paths.colab_real_video_vae_latent_runtime_config_path, runtime_config_payload)
+        self._write_json(output_paths.runtime_config_path, runtime_config_payload)
         runtime_config_digest = compute_object_digest(runtime_config_payload)
         runtime_manifest = {
             "run_id": run_id,
@@ -255,15 +260,17 @@ class RealVideoVaeLatentRunner:
             "dataset_summary": dataset_summary,
             "vae_metadata": vae_metadata,
         }
-        runtime_manifest_overrides = runtime_config_overrides.get(
-            "colab_runtime_manifest_overrides"
-        )
+        runtime_manifest_overrides = runtime_config_overrides.get("runtime_manifest_overrides")
+        if runtime_manifest_overrides is None:
+            runtime_manifest_overrides = runtime_config_overrides.get(
+                "colab_runtime_manifest_overrides"
+            )
         if isinstance(runtime_manifest_overrides, dict):
             runtime_manifest.update(runtime_manifest_overrides)
         git_commit = runtime_config_overrides.get("git_commit")
         if isinstance(git_commit, str) and git_commit:
             runtime_manifest["git_commit"] = git_commit
-        self._write_json(output_paths.colab_runtime_manifest_path, runtime_manifest)
+        self._write_json(output_paths.runtime_manifest_path, runtime_manifest)
         artifact_manifest = self._build_artifact_manifest(event_score_records)
         self._write_json(output_paths.artifact_manifest_path, artifact_manifest)
         run_manifest = {

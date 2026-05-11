@@ -31,7 +31,14 @@ def test_ablation_placeholder_config_passes() -> None:
     Returns:
         None.
     """
-    data = load_json_config(ROOT / "configs" / "ablation" / "ablation_placeholder.json")
+    data = load_json_config(
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "ablation"
+        / "ablation_placeholder.json"
+    )
     assert validate_ablation_placeholder_data(data) == []
 
 
@@ -44,7 +51,14 @@ def test_ablation_placeholder_requires_shared_attack_matrix() -> None:
     Returns:
         None.
     """
-    data = load_json_config(ROOT / "configs" / "ablation" / "ablation_placeholder.json")
+    data = load_json_config(
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "ablation"
+        / "ablation_placeholder.json"
+    )
     broken = deepcopy(data)
     broken["shared_attack_matrix_required"] = False
     violations = validate_ablation_placeholder_data(broken)
@@ -64,7 +78,12 @@ def test_attack_placeholder_config_passes() -> None:
         None.
     """
     data = load_json_config(
-        ROOT / "configs" / "attacks" / "identity_attack_placeholder.json"
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "attacks"
+        / "identity_attack_placeholder.json"
     )
     assert validate_attack_placeholder_data(data) == []
 
@@ -79,7 +98,12 @@ def test_attack_placeholder_requires_identity_attack_name() -> None:
         None.
     """
     data = load_json_config(
-        ROOT / "configs" / "attacks" / "identity_attack_placeholder.json"
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "attacks"
+        / "identity_attack_placeholder.json"
     )
     broken = deepcopy(data)
     broken["attack_matrix_placeholder"][0]["attack_name_placeholder"] = (
@@ -102,7 +126,12 @@ def test_synthetic_tubelet_sync_protocol_support_config_passes() -> None:
         None.
     """
     data = load_json_config(
-        ROOT / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+        ROOT
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "protocol"
+        / "synthetic_tubelet_sync_probe.json"
     )
     assert validate_synthetic_tubelet_sync_protocol_support_data(data) == []
 
@@ -117,7 +146,12 @@ def test_synthetic_tubelet_sync_protocol_support_requires_mechanism_trace() -> N
         None.
     """
     data = load_json_config(
-        ROOT / "configs" / "protocol" / "synthetic_tubelet_sync_probe.json"
+        ROOT
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "protocol"
+        / "synthetic_tubelet_sync_probe.json"
     )
     broken = deepcopy(data)
     broken["mechanism_trace_required"] = False
@@ -138,7 +172,12 @@ def test_temporal_attack_matrix_support_config_passes() -> None:
         None.
     """
     data = load_json_config(
-        ROOT / "configs" / "attacks" / "temporal_attack_matrix.json"
+        ROOT
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "attacks"
+        / "temporal_attack_matrix.json"
     )
     assert validate_temporal_attack_matrix_support_data(data) == []
 
@@ -153,7 +192,12 @@ def test_temporal_attack_matrix_requires_governed_attack_order() -> None:
         None.
     """
     data = load_json_config(
-        ROOT / "configs" / "attacks" / "temporal_attack_matrix.json"
+        ROOT
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "attacks"
+        / "temporal_attack_matrix.json"
     )
     broken = deepcopy(data)
     broken["attacks"] = broken["attacks"][:-1]
@@ -174,7 +218,12 @@ def test_synthetic_tubelet_sync_ablation_support_config_passes() -> None:
         None.
     """
     data = load_json_config(
-        ROOT / "configs" / "ablation" / "synthetic_tubelet_sync_ablation.json"
+        ROOT
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "ablation"
+        / "synthetic_tubelet_sync_ablation.json"
     )
     assert validate_synthetic_tubelet_sync_ablation_support_data(data) == []
 
@@ -189,7 +238,12 @@ def test_synthetic_tubelet_sync_ablation_requires_shared_attack_matrix_name() ->
         None.
     """
     data = load_json_config(
-        ROOT / "configs" / "ablation" / "synthetic_tubelet_sync_ablation.json"
+        ROOT
+        / "experiments"
+        / "synthetic_tubelet_sync_probe"
+        / "configs"
+        / "ablation"
+        / "synthetic_tubelet_sync_ablation.json"
     )
     broken = deepcopy(data)
     broken["shared_attack_matrix_name"] = "identity_attack_placeholder"

@@ -8,13 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from main.attacks.identity_attack_placeholder import IdentityAttackPlaceholder
+from main.attacks.identity_attack import IdentityAttack
 from main.attacks.temporal import TemporalAttackPlaceholder
 
 
 def build_attack_registry(
     attack_config: dict[str, Any],
-) -> list[IdentityAttackPlaceholder | TemporalAttackPlaceholder]:
+) -> list[IdentityAttack | TemporalAttackPlaceholder]:
     """功能：构建阶段 0 攻击实例列表。
 
     Build the protocol skeleton runtime attack instance list.
@@ -33,12 +33,12 @@ def build_attack_registry(
         if not isinstance(attack_entries, list) or not attack_entries:
             raise ValueError("attack_matrix_placeholder must be a non-empty list")
 
-        attack_registry: list[IdentityAttackPlaceholder | TemporalAttackPlaceholder] = []
+        attack_registry: list[IdentityAttack | TemporalAttackPlaceholder] = []
         for attack_entry in attack_entries:
             if not isinstance(attack_entry, dict):
                 raise ValueError("attack entries must be dictionaries")
             attack_registry.append(
-                IdentityAttackPlaceholder(
+                IdentityAttack(
                     attack_name=attack_entry["attack_name_placeholder"],
                     attack_params=attack_entry["attack_params_placeholder"],
                 )

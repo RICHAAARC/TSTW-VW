@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from main.attacks.identity_attack_placeholder import IdentityAttackPlaceholder
+from main.attacks.identity_attack import IdentityAttack
 from main.attacks.temporal import TemporalAttackPlaceholder
 from main.core.digest import compute_object_digest
 from main.protocol.split_builder import SplitPlanEntry
@@ -40,12 +40,12 @@ class EventPlanEntry:
     sample_role: str
     attack_name: str
     attack_params: dict[str, Any]
-    attack_object: IdentityAttackPlaceholder | TemporalAttackPlaceholder
+    attack_object: IdentityAttack | TemporalAttackPlaceholder
 
 
 def build_event_plan(
     split_plan: list[SplitPlanEntry],
-    attack_registry: list[IdentityAttackPlaceholder | TemporalAttackPlaceholder],
+    attack_registry: list[IdentityAttack | TemporalAttackPlaceholder],
 ) -> list[EventPlanEntry]:
     """功能：根据 split plan 和 attack registry 构建 event plan。
 
@@ -94,13 +94,13 @@ def build_event_plan(
 
 
 def _expand_attack_cases(
-    attack_object: IdentityAttackPlaceholder | TemporalAttackPlaceholder,
+    attack_object: IdentityAttack | TemporalAttackPlaceholder,
 ) -> list[
     tuple[
         str,
         str,
         dict[str, Any],
-        IdentityAttackPlaceholder | TemporalAttackPlaceholder,
+        IdentityAttack | TemporalAttackPlaceholder,
     ]
 ]:
     if (

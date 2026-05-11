@@ -10,7 +10,9 @@ from pathlib import Path
 import pytest
 
 from main.attacks.temporal import TemporalAttackPlaceholder
-from main.backends.synthetic_video_latent import SyntheticVideoLatentPlaceholder
+from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
+    SyntheticVideoLatentPlaceholder,
+)
 from main.core.tensor_artifact import read_float_tensor_npy
 from main.methods.temporal_tubelet_watermark.codebook import (
     build_codebook_config,
@@ -20,7 +22,7 @@ from main.methods.temporal_tubelet_watermark.embedding import (
     build_partition_config_from_method_config,
 )
 from main.methods.temporal_tubelet_watermark.fusion import sync_rescue_fusion
-from main.methods.temporal_tubelet_watermark.method_placeholder import build_method_from_config
+from main.methods.temporal_tubelet_watermark.method import build_method_from_config
 from main.methods.temporal_tubelet_watermark.tubelet_partition import (
     build_tubelet_descriptors,
     dot_tubelet_direction,

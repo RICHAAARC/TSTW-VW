@@ -9,7 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 
-from main.methods.temporal_tubelet_watermark.synthetic_tubelet_sync_contract import (
+from experiments.synthetic_tubelet_sync_probe.synthetic_tubelet_sync_contract import (
     SUPPORTED_METHOD_VARIANTS,
     build_reserved_method_support_matrix,
 )

@@ -20,6 +20,8 @@ EXPECTED_DIRECTORIES = [
     "tests",
     "main",
     "paper_workflow",
+    "scripts",
+    "experiments",
     "outputs",
 ]
 REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS = {
@@ -29,24 +31,24 @@ REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS = {
     "real_video_vae_latent_ablation_config": "configs/ablation/real_video_vae_latent_ablation.json",
     "real_video_vae_latent_backend_module": "main/backends/real_video_vae_latent.py",
     "real_video_vae_latent_vae_registry_module": "main/vae/vae_registry.py",
-    "real_video_vae_latent_runner_module": "main/protocol/real_video_vae_latent_runner.py",
-    "real_video_vae_latent_artifact_builder_module": "main/analysis/real_video_vae_latent_artifacts.py",
-    "real_video_vae_latent_result_checker_module": "main/colab/notebook_result_checker.py",
-    "real_video_vae_latent_drive_packager_module": "main/colab/drive_packager.py",
+    "real_video_vae_latent_runner_module": "experiments/real_video_vae_latent_probe/runner.py",
+    "real_video_vae_latent_artifact_builder_module": "experiments/real_video_vae_latent_probe/artifact_builder.py",
+    "real_video_vae_latent_result_checker_module": "scripts/check_results/real_video_vae_latent_output_checker.py",
+    "real_video_vae_latent_drive_packager_module": "scripts/package_results/drive_packager.py",
     "real_video_vae_latent_colab_notebook": (
         "paper_workflow/Stage2_Real_Video_VAE_Latent_Probe_Colab.ipynb"
     ),
 }
 STAGE_ONE_REQUIRED_PATHS = {
-    "protocol_support_config": "configs/protocol/synthetic_tubelet_sync_probe.json",
-    "temporal_attack_matrix_config": "configs/attacks/temporal_attack_matrix.json",
-    "ablation_support_config": "configs/ablation/synthetic_tubelet_sync_ablation.json",
+    "protocol_support_config": "experiments/synthetic_tubelet_sync_probe/configs/protocol/synthetic_tubelet_sync_probe.json",
+    "temporal_attack_matrix_config": "experiments/synthetic_tubelet_sync_probe/configs/attacks/temporal_attack_matrix.json",
+    "ablation_support_config": "experiments/synthetic_tubelet_sync_probe/configs/ablation/synthetic_tubelet_sync_ablation.json",
     "frame_prc_method_config": "configs/method/frame_prc.json",
     "tubelet_only_method_config": "configs/method/tubelet_only.json",
     "tubelet_sync_method_config": "configs/method/tubelet_sync.json",
-    "synthetic_video_latent_module": "main/backends/synthetic_video_latent.py",
+    "synthetic_video_latent_module": "experiments/synthetic_tubelet_sync_probe/synthetic_video_latent.py",
     "temporal_attack_module": "main/attacks/temporal.py",
-    "synthetic_tubelet_sync_contract_module": "main/methods/temporal_tubelet_watermark/synthetic_tubelet_sync_contract.py",
+    "synthetic_tubelet_sync_contract_module": "experiments/synthetic_tubelet_sync_probe/synthetic_tubelet_sync_contract.py",
 }
 
 

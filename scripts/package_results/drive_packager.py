@@ -12,8 +12,12 @@ from pathlib import Path
 from typing import Any
 import zipfile
 
-from main.colab.notebook_result_checker import check_real_video_vae_latent_outputs
-from main.protocol.real_video_vae_latent_paths import build_real_video_vae_latent_output_paths
+from experiments.real_video_vae_latent_probe.output_layout import (
+    build_real_video_vae_latent_output_paths,
+)
+from scripts.check_results.real_video_vae_latent_output_checker import (
+    check_real_video_vae_latent_outputs,
+)
 
 
 def pack_real_video_vae_latent_run(
@@ -55,7 +59,7 @@ def pack_real_video_vae_latent_run(
     output_paths = build_real_video_vae_latent_output_paths(run_root_path)
     checks_payload = check_real_video_vae_latent_outputs(run_root_path)
     run_manifest = json.loads(output_paths.run_manifest_path.read_text(encoding="utf-8"))
-    runtime_manifest = json.loads(output_paths.colab_runtime_manifest_path.read_text(encoding="utf-8"))
+    runtime_manifest = json.loads(output_paths.runtime_manifest_path.read_text(encoding="utf-8"))
     run_id = str(run_manifest["run_id"])
     zip_path = output_dir / f"{run_id}.zip"
     summary_path = output_dir / f"{run_id}_summary.json"
@@ -78,8 +82,8 @@ def pack_real_video_vae_latent_run(
             for manifest_path in (
                 output_paths.run_manifest_path,
                 output_paths.artifact_manifest_path,
-                output_paths.colab_runtime_manifest_path,
-                output_paths.colab_real_video_vae_latent_runtime_config_path,
+                output_paths.runtime_manifest_path,
+                output_paths.runtime_config_path,
             ):
                 if manifest_path.exists():
                     archive.write(manifest_path, arcname=_build_archive_name(run_root_path, manifest_path))

@@ -32,7 +32,14 @@ def run_audit(root: str | Path) -> dict[str, Any]:
         A normalized threshold protocol audit report.
     """
     root_path = Path(root)
-    protocol_path = root_path / "configs" / "protocol" / "protocol_skeleton.json"
+    protocol_path = (
+        root_path
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "protocol"
+        / "protocol_skeleton.json"
+    )
     checked_paths = [str(protocol_path)]
     violations: list[dict[str, Any]] = []
 

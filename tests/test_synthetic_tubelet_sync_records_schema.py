@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from experiments.synthetic_tubelet_sync_probe.ablation_runner import AblationRunner
 from main.core.records import RecordWriter
-from main.protocol.ablation_runner import AblationRunner
 
 
 ROOT = Path(__file__).resolve().parents[1]

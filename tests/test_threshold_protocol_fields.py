@@ -26,7 +26,14 @@ def test_calibration_split_and_negative_roles_pass() -> None:
     Returns:
         None.
     """
-    data = load_json_config(ROOT / "configs" / "protocol" / "protocol_skeleton.json")
+    data = load_json_config(
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "protocol"
+        / "protocol_skeleton.json"
+    )
     assert validate_protocol_config_data(data) == []
 
 
@@ -39,7 +46,14 @@ def test_required_calibration_negative_roles_present() -> None:
     Returns:
         None.
     """
-    data = load_json_config(ROOT / "configs" / "protocol" / "protocol_skeleton.json")
+    data = load_json_config(
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "protocol"
+        / "protocol_skeleton.json"
+    )
     roles = set(data["threshold_protocol"]["calibration_negative_roles"])
     assert {"clean_negative", "attacked_negative"}.issubset(roles)
 
@@ -53,7 +67,14 @@ def test_test_threshold_update_allowed_true_fails() -> None:
     Returns:
         None.
     """
-    data = load_json_config(ROOT / "configs" / "protocol" / "protocol_skeleton.json")
+    data = load_json_config(
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "protocol"
+        / "protocol_skeleton.json"
+    )
     broken = deepcopy(data)
     broken["threshold_protocol"]["test_threshold_update_allowed"] = True
     violations = validate_protocol_config_data(broken)
@@ -72,7 +93,14 @@ def test_attack_specific_thresholds_are_disabled() -> None:
     Returns:
         None.
     """
-    data = load_json_config(ROOT / "configs" / "protocol" / "protocol_skeleton.json")
+    data = load_json_config(
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "protocol"
+        / "protocol_skeleton.json"
+    )
     broken = deepcopy(data)
     broken["threshold_protocol"]["allow_attack_specific_threshold"] = True
     violations = validate_protocol_config_data(broken)
