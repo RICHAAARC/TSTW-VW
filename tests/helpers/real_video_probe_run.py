@@ -14,10 +14,10 @@ from experiments.real_video_vae_latent_probe.runner import RealVideoVaeLatentRun
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run_real_video_vae_latent_tiny(tmp_path: Path) -> Path:
-    """功能：执行最小阶段 2 smoke 运行并返回输出目录。
+def run_real_video_vae_latent_debug(tmp_path: Path) -> Path:
+    """功能：执行极小 real-video debug profile 并返回输出目录。
 
-    Run the minimal stage-two smoke flow and return its output root.
+    Run the extremely small real-video debug profile and return its output root.
 
     Args:
         tmp_path: Temporary root path.
@@ -25,11 +25,10 @@ def run_real_video_vae_latent_tiny(tmp_path: Path) -> Path:
     Returns:
         The stage-two run root path.
     """
-    output_root = tmp_path / "outputs" / "runs" / "real_video_vae_latent_probe_scaffold"
+    output_root = tmp_path / "outputs" / "runs" / "real_video_vae_latent_probe_debug"
     RealVideoVaeLatentRunner(ROOT).run(
         output_root=output_root,
         run_mode="smoke",
-        samples_per_role=1,
-        runtime_profile_override="tiny",
+        runtime_profile_override="debug_real_video",
     )
     return output_root

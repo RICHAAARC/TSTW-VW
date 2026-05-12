@@ -9,7 +9,13 @@
     "tubelet_only",
     "tubelet_sync"
   ],
+  "method_variants_by_profile": {
+    "debug_real_video": [
+      "frame_prc"
+    ]
+  },
   "tubelet_length_sweep_variant": "tubelet_only",
+  "tubelet_length_sweep_debug_real_video": [],
   "tubelet_length_sweep_tiny": [1, 4],
   "tubelet_length_sweep_smoke": [1, 4],
   "tubelet_length_sweep_proof": [1, 2, 4, 8, 16],

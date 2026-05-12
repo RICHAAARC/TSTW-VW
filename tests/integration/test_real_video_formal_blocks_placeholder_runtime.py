@@ -15,7 +15,7 @@ from pathlib import Path
 from scripts.check_results.real_video_vae_latent_output_checker import (
     check_real_video_vae_latent_outputs,
 )
-from tests.helpers.real_video_probe_run import run_real_video_vae_latent_tiny
+from tests.helpers.real_video_probe_run import run_real_video_vae_latent_debug
 
 
 def test_real_video_formal_blocks_placeholder_runtime(tmp_path: Path) -> None:
@@ -27,7 +27,7 @@ def test_real_video_formal_blocks_placeholder_runtime(tmp_path: Path) -> None:
     Returns:
         None.
     """
-    output_root = run_real_video_vae_latent_tiny(tmp_path)
+    output_root = run_real_video_vae_latent_debug(tmp_path)
     checks_payload = check_real_video_vae_latent_outputs(
         output_root,
         run_mode="formal",

@@ -17,7 +17,7 @@ from scripts.check_results.real_video_vae_latent_output_checker import (
     check_real_video_vae_latent_outputs,
 )
 from scripts.package_results.tar_zst_packager import pack_run_to_tar_zst
-from tests.helpers.real_video_probe_run import run_real_video_vae_latent_tiny
+from tests.helpers.real_video_probe_run import run_real_video_vae_latent_debug
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.smoke]
@@ -31,7 +31,7 @@ def test_real_video_tar_zst_packager_outputs_archive_and_checks(tmp_path: Path) 
     if "--zstd" not in help_text:
         pytest.skip("tar --zstd is unavailable")
 
-    output_root = run_real_video_vae_latent_tiny(tmp_path)
+    output_root = run_real_video_vae_latent_debug(tmp_path)
     checks_payload = check_real_video_vae_latent_outputs(output_root, run_mode="smoke")
     packaged_paths = pack_run_to_tar_zst(
         run_root=output_root,

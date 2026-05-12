@@ -23,6 +23,12 @@
     "height": 16,
     "width": 16
   },
+  "debug_real_video_latent_shape": {
+    "frames": 4,
+    "channels": 4,
+    "height": 4,
+    "width": 4
+  },
   "tiny_latent_shape": {
     "frames": 8,
     "channels": 2,
@@ -42,6 +48,8 @@
   "formal_vae_encode_mode": "framewise_deterministic_mode",
   "vae_decode_mode": "framewise",
   "formal_vae_decode_mode": "framewise_decode",
+  "debug_real_video_target_frame_count": 4,
+  "debug_real_video_target_resolution": [16, 16],
   "batch_size_frames": 8,
   "latent_downsample_factor": 8,
   "allow_mock_vae_backend": true,

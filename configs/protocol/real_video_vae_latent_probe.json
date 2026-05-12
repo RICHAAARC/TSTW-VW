@@ -11,11 +11,27 @@
     "watermarked_positive",
     "attacked_positive"
   ],
+  "sample_roles_by_profile": {
+    "debug_real_video": [
+      "clean_negative",
+      "attacked_negative"
+    ]
+  },
   "splits": [
     "dev",
     "calibration",
     "test"
   ],
+  "splits_by_profile": {
+    "debug_real_video": [
+      "dev",
+      "calibration",
+      "test"
+    ]
+  },
+  "samples_per_role_by_profile": {
+    "debug_real_video": 1
+  },
   "required_method_variants": [
     "frame_prc",
     "tubelet_only",
@@ -27,6 +43,7 @@
     "validation_target_fpr_by_profile": {
       "tiny": 1.0,
       "smoke": 0.25,
+      "debug_real_video": 1.0,
       "proof": 0.5,
       "formal": 0.001
     },

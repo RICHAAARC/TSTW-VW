@@ -17,7 +17,7 @@ pytestmark = pytest.mark.integration
 from experiments.real_video_vae_latent_probe.artifact_builder import (
     RealVideoVaeLatentArtifactBuilder,
 )
-from tests.helpers.real_video_probe_run import run_real_video_vae_latent_tiny
+from tests.helpers.real_video_probe_run import run_real_video_vae_latent_debug
 
 
 @pytest.mark.smoke
@@ -30,7 +30,7 @@ def test_real_video_vae_latent_tables_and_report_rebuild_from_records(tmp_path: 
     Returns:
         None.
     """
-    output_root = run_real_video_vae_latent_tiny(tmp_path)
+    output_root = run_real_video_vae_latent_debug(tmp_path)
     for relative_path in ("tables", "figures", "reports", "failure_case_gallery"):
         shutil.rmtree(output_root / relative_path)
     rebuilt_paths = RealVideoVaeLatentArtifactBuilder().rebuild_artifacts(output_root)

@@ -16,7 +16,7 @@ pytestmark = pytest.mark.integration
 from main.core.digest import compute_object_digest
 from main.core.records import RecordWriter
 from experiments.real_video_vae_latent_probe.runner import RealVideoVaeLatentRunner
-from tests.helpers.real_video_probe_run import run_real_video_vae_latent_tiny
+from tests.helpers.real_video_probe_run import run_real_video_vae_latent_debug
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,7 +32,7 @@ def test_real_video_vae_latent_event_records_include_quality_and_temporal_payloa
     Returns:
         None.
     """
-    output_root = run_real_video_vae_latent_tiny(tmp_path)
+    output_root = run_real_video_vae_latent_debug(tmp_path)
     record_writer = RecordWriter(output_root)
     event_score_records = record_writer.read_event_score_records()
     threshold_records = record_writer.read_threshold_records()
@@ -103,8 +103,7 @@ def test_real_video_vae_latent_runtime_manifest_tracks_runtime_config_and_notebo
     RealVideoVaeLatentRunner(ROOT).run(
         output_root=output_root,
         run_mode="smoke",
-        samples_per_role=1,
-        runtime_profile_override="tiny",
+        runtime_profile_override="debug_real_video",
         runtime_config_path=runtime_config_path,
     )
 

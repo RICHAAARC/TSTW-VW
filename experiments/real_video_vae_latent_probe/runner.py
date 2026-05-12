@@ -59,7 +59,13 @@ from main.video.video_io import probe_video_metadata, read_video_frames, write_v
 from main.video.video_artifact import copy_latent_artifact
 
 
-SUPPORTED_RUNTIME_PROFILES = ("tiny", "smoke", "proof", "formal")
+SUPPORTED_RUNTIME_PROFILES = (
+    "tiny",
+    "smoke",
+    "debug_real_video",
+    "proof",
+    "formal",
+)
 REAL_VIDEO_TEMPORAL_ATTACK_NAMES = {
     "no_attack",
     "temporal_crop",
@@ -152,10 +158,6 @@ class RealVideoVaeLatentRunner:
         runtime_profile = runtime_profile_override or ("formal" if run_mode == "formal" else DEFAULT_RUNTIME_PROFILE)
         if runtime_profile not in SUPPORTED_RUNTIME_PROFILES:
             raise ValueError("unsupported runtime_profile")
-        resolved_samples_per_role = 1 if samples_per_role is None and runtime_profile in {"tiny", "smoke"} else 2 if samples_per_role is None else int(samples_per_role)
-        if resolved_samples_per_role < 1:
-            raise ValueError("samples_per_role must be a positive integer")
-
         protocol_config_file = self._resolve_config_path(
             protocol_config_path,
             self._repository_root / "configs" / "protocol" / "real_video_vae_latent_probe.json",
@@ -187,8 +189,28 @@ class RealVideoVaeLatentRunner:
                 dataset_manifest_path,
                 self._repository_root / "configs" / "data" / "real_video_probe_manifest.json",
             )
-
         protocol_config = load_json_config(protocol_config_file)
+        resolved_samples_per_role = self._resolve_samples_per_role(
+            samples_per_role,
+            protocol_config,
+            runtime_profile,
+        )
+        runtime_splits = set(
+            self._resolve_profile_string_list(
+                protocol_config.get("splits_by_profile"),
+                runtime_profile,
+                protocol_config.get("splits", ["dev", "calibration", "test"]),
+                "splits_by_profile",
+            )
+        )
+        runtime_sample_roles = set(
+            self._resolve_profile_string_list(
+                protocol_config.get("sample_roles_by_profile"),
+                runtime_profile,
+                protocol_config.get("sample_roles", list(SAMPLE_ROLES)),
+                "sample_roles_by_profile",
+            )
+        )
         backend_config = self._resolve_backend_config(runtime_profile, load_json_config(backend_config_file))
         attack_config = load_json_config(attack_matrix_file)
         ablation_config = load_json_config(ablation_config_file)
@@ -204,9 +226,9 @@ class RealVideoVaeLatentRunner:
             backend_config["vae_model_local_path"] = runtime_config_overrides["vae_model_local_path"]
         if "frame_sampling_policy" in dataset_manifest:
             backend_config["frame_sampling_policy"] = dataset_manifest["frame_sampling_policy"]
-        if "default_frame_count" in dataset_manifest:
+        if "default_frame_count" in dataset_manifest and "target_frame_count" not in backend_config:
             backend_config["target_frame_count"] = int(dataset_manifest["default_frame_count"])
-        if "default_resolution" in dataset_manifest:
+        if "default_resolution" in dataset_manifest and "target_resolution" not in backend_config:
             backend_config["target_resolution"] = dataset_manifest["default_resolution"]
         vae_backend = resolve_vae_backend(backend_config)
         vae_metadata = vae_backend.backend_metadata()
@@ -221,6 +243,11 @@ class RealVideoVaeLatentRunner:
             runtime_kind=(
                 "real_video" if self._video_mp4_runtime_available() else "tensor_scaffold"
             ),
+        )
+        attack_registry = self._filter_attack_registry(
+            attack_registry,
+            attack_config,
+            runtime_profile,
         )
         event_plan = self._build_event_plan(split_plan, attack_registry)
         method_config_paths = self._build_method_config_paths(ablation_config)
@@ -243,6 +270,8 @@ class RealVideoVaeLatentRunner:
                 event_plan=event_plan,
                 method_config=method_config,
                 protocol_config=protocol_config,
+                runtime_splits=runtime_splits,
+                runtime_sample_roles=runtime_sample_roles,
                 latent_backend=latent_backend,
                 vae_runtime_backend=vae_backend,
                 vae_metadata=vae_metadata,
@@ -349,12 +378,31 @@ class RealVideoVaeLatentRunner:
         event_plan: list[EventPlanEntry],
         method_config: dict[str, Any],
         protocol_config: dict[str, Any],
+        runtime_splits: set[str],
+        runtime_sample_roles: set[str],
         latent_backend: RealVideoVAELatentBackend,
         vae_runtime_backend: Any,
         vae_metadata: dict[str, Any],
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         method = build_method_from_config(method_config)
         target_fpr = float(protocol_config["threshold_protocol"]["target_fpr_placeholder"])
+        calibration_split = str(
+            protocol_config["threshold_protocol"].get("calibration_split", "calibration")
+        )
+        test_split = str(protocol_config["threshold_protocol"].get("test_split", "test"))
+        calibration_negative_roles = set(
+            protocol_config["threshold_protocol"].get(
+                "calibration_negative_roles",
+                list(NEGATIVE_SAMPLE_ROLES),
+            )
+        )
+        allowed_calibration_roles = runtime_sample_roles & calibration_negative_roles
+        if not runtime_sample_roles:
+            raise ValueError("runtime_sample_roles must contain at least one sample role")
+        if not allowed_calibration_roles:
+            raise ValueError(
+                "runtime_sample_roles must include at least one calibration negative role"
+            )
         dev_records = self._run_event_subset(
             run_id,
             output_root,
@@ -362,8 +410,8 @@ class RealVideoVaeLatentRunner:
             method,
             method_config,
             target_fpr,
-            {"dev"},
-            SAMPLE_ROLES,
+            runtime_splits & {"dev"},
+            runtime_sample_roles,
             None,
             latent_backend,
             vae_runtime_backend,
@@ -376,8 +424,8 @@ class RealVideoVaeLatentRunner:
             method,
             method_config,
             target_fpr,
-            {"calibration"},
-            NEGATIVE_SAMPLE_ROLES,
+            runtime_splits & {calibration_split},
+            allowed_calibration_roles,
             None,
             latent_backend,
             vae_runtime_backend,
@@ -401,8 +449,8 @@ class RealVideoVaeLatentRunner:
             method,
             method_config,
             target_fpr,
-            {"test"},
-            SAMPLE_ROLES,
+            runtime_splits & {test_split},
+            runtime_sample_roles,
             threshold_record,
             latent_backend,
             vae_runtime_backend,
@@ -1202,12 +1250,71 @@ class RealVideoVaeLatentRunner:
             raise TypeError("runtime_config must be a dictionary")
         return runtime_config
 
+    def _resolve_samples_per_role(
+        self,
+        samples_per_role: int | None,
+        protocol_config: dict[str, Any],
+        runtime_profile: str,
+    ) -> int:
+        if samples_per_role is None:
+            profile_samples = protocol_config.get("samples_per_role_by_profile", {})
+            resolved_samples_per_role = profile_samples.get(
+                runtime_profile,
+                1 if runtime_profile in {"tiny", "smoke", "debug_real_video"} else 2,
+            )
+        else:
+            resolved_samples_per_role = samples_per_role
+        if not isinstance(resolved_samples_per_role, int) or resolved_samples_per_role < 1:
+            raise ValueError("samples_per_role must be a positive integer")
+        return int(resolved_samples_per_role)
+
+    def _resolve_profile_string_list(
+        self,
+        profile_values: Any,
+        runtime_profile: str,
+        default_values: Any,
+        field_name: str,
+    ) -> list[str]:
+        resolved_values = default_values
+        if isinstance(profile_values, dict):
+            resolved_values = profile_values.get(runtime_profile, default_values)
+        if not isinstance(resolved_values, list) or not resolved_values:
+            raise ValueError(f"{field_name} must resolve to a non-empty list")
+        normalized_values = [str(value) for value in resolved_values]
+        if any(not value for value in normalized_values):
+            raise ValueError(f"{field_name} contains an empty value")
+        return normalized_values
+
+    def _filter_attack_registry(
+        self,
+        attack_registry: list[Any],
+        attack_config: dict[str, Any],
+        runtime_profile: str,
+    ) -> list[Any]:
+        allowed_attack_names = set(
+            self._resolve_profile_string_list(
+                attack_config.get("attack_names_by_profile"),
+                runtime_profile,
+                [str(getattr(attack_object, "attack_name", "")) for attack_object in attack_registry],
+                "attack_names_by_profile",
+            )
+        )
+        filtered_attack_registry = [
+            attack_object
+            for attack_object in attack_registry
+            if getattr(attack_object, "attack_name", None) in allowed_attack_names
+        ]
+        if not filtered_attack_registry:
+            raise ValueError("runtime_profile attack filter removed all attacks")
+        return filtered_attack_registry
+
     def _resolve_backend_config(self, runtime_profile: str, backend_config: dict[str, Any]) -> dict[str, Any]:
         resolved_backend_config = copy.deepcopy(backend_config)
         resolved_backend_config["runtime_profile"] = runtime_profile
         profile_key = {
             "tiny": "tiny_latent_shape",
             "smoke": "latent_shape",
+            "debug_real_video": "debug_real_video_latent_shape",
             "proof": "proof_latent_shape",
             "formal": "formal_latent_shape",
         }[runtime_profile]
@@ -1223,6 +1330,8 @@ class RealVideoVaeLatentRunner:
             "vae_encode_mode",
             "vae_decode_mode",
             "allow_mock_vae_backend",
+            "target_frame_count",
+            "target_resolution",
         )
         for field_name in profile_override_fields:
             runtime_field_name = f"{runtime_profile}_{field_name}"
@@ -1251,9 +1360,15 @@ class RealVideoVaeLatentRunner:
             method_variant: load_json_config(config_path)
             for method_variant, config_path in method_config_paths.items()
         }
+        configured_method_variants = ablation_config.get("method_variants_by_profile", {}).get(
+            runtime_profile,
+            ablation_config["method_variants"],
+        )
+        if not isinstance(configured_method_variants, list) or not configured_method_variants:
+            raise ValueError("ablation method_variants_by_profile must resolve to a non-empty list")
         runtime_method_configs = [
             dict(method_configs[method_variant])
-            for method_variant in ablation_config["method_variants"]
+            for method_variant in configured_method_variants
         ]
         sweep_variant = ablation_config.get("tubelet_length_sweep_variant")
         sweep_lengths = list(ablation_config.get(f"tubelet_length_sweep_{runtime_profile}", []))

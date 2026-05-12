@@ -15,7 +15,7 @@ import pytest
 pytestmark = pytest.mark.integration
 
 from scripts.package_results.drive_packager import pack_real_video_vae_latent_run
-from tests.helpers.real_video_probe_run import run_real_video_vae_latent_tiny
+from tests.helpers.real_video_probe_run import run_real_video_vae_latent_debug
 
 
 @pytest.mark.smoke
@@ -28,7 +28,7 @@ def test_real_video_vae_latent_drive_packager_emits_archive_and_summaries(tmp_pa
     Returns:
         None.
     """
-    output_root = run_real_video_vae_latent_tiny(tmp_path)
+    output_root = run_real_video_vae_latent_debug(tmp_path)
     packaged_paths = pack_real_video_vae_latent_run(
         run_root=output_root,
         drive_output_dir=tmp_path / "packed_runs",
