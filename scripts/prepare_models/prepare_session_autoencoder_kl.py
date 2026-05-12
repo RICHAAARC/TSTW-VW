@@ -8,7 +8,17 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import shutil
 from typing import Any
+
+
+def _clear_directory(directory_path: Path) -> None:
+    """Remove existing session-model contents before copying a local source tree."""
+    for child_path in directory_path.iterdir():
+        if child_path.is_dir():
+            shutil.rmtree(child_path)
+            continue
+        child_path.unlink()
 
 
 def prepare_session_autoencoder_kl(
@@ -34,8 +44,21 @@ def prepare_session_autoencoder_kl(
 
     source_path = Path(model_id)
     if source_path.exists():
-        resolved_model_path = source_path.resolve()
-        source_kind = "local_path"
+        resolved_source_path = source_path.resolve()
+        resolved_destination_root = destination_root.resolve()
+        if resolved_source_path.is_file():
+            raise ValueError("model_id local_path must be a directory")
+        if resolved_source_path != resolved_destination_root:
+            _clear_directory(destination_root)
+            shutil.copytree(
+                resolved_source_path,
+                destination_root,
+                dirs_exist_ok=True,
+            )
+            source_kind = "local_path_copied_to_session"
+        else:
+            source_kind = "local_path_session_root"
+        resolved_model_path = resolved_destination_root
     else:
         from huggingface_hub import snapshot_download
 

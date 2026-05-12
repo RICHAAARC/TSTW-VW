@@ -1,6 +1,6 @@
 """
-文件用途：构建阶段 2 占位 real-video attack registry。
-File purpose: Build the placeholder real-video attack registry for the stage-two scaffold.
+文件用途：构建阶段 2 real-video attack registry。
+File purpose: Build the governed real-video attack registry for stage-two runtimes.
 Module type: Semi-general module
 """
 
@@ -194,7 +194,7 @@ def build_real_video_attack_registry(
 ) -> list[Any]:
     """功能：根据配置构建阶段 2 attack registry。
 
-    Build the stage-two attack registry from a parsed config.
+    Build the governed stage-two attack registry from a parsed config.
 
     Args:
         attack_config: Parsed attack config.

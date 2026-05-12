@@ -34,6 +34,28 @@ class VideoFrames:
     fps: int
 
 
+def _convert_frame_to_uint8(frame: np.ndarray) -> np.ndarray:
+    """功能：将单帧标准化为适合 ffmpeg 写出的 uint8 RGB 数据。
+
+    Normalize a single frame into uint8 RGB data for ffmpeg output.
+
+    Args:
+        frame: One frame in `[H, W, 3]`.
+
+    Returns:
+        A contiguous uint8 RGB frame.
+    """
+    frame_array = np.asarray(frame)
+    if frame_array.ndim != 3 or frame_array.shape[2] != 3:
+        raise ValueError("each frame must have shape [H, W, 3]")
+    if frame_array.dtype == np.uint8:
+        return np.ascontiguousarray(frame_array)
+
+    normalized_frame = np.asarray(frame_array, dtype=np.float32)
+    np.clip(normalized_frame, 0.0, 1.0, out=normalized_frame)
+    return np.ascontiguousarray(np.rint(normalized_frame * 255.0).astype(np.uint8))
+
+
 def read_video_frames(video_path: str | Path) -> VideoFrames:
     """功能：读取真实视频并输出标准 float32 RGB 张量。
 
@@ -107,30 +129,42 @@ def write_video_mp4(
     if not isinstance(fps, int) or fps < 1:
         raise ValueError("fps must be a positive integer")
 
-    normalized_frames = np.clip(frames.astype(np.float32), 0.0, 1.0)
-    frame_u8 = np.round(normalized_frames * 255.0).astype(np.uint8)
+    first_frame_u8 = _convert_frame_to_uint8(frames[0])
 
     destination_path = Path(output_path)
     destination_path.parent.mkdir(parents=True, exist_ok=True)
-    writer = imageio.get_writer(
-        str(destination_path),
-        format="FFMPEG",
-        fps=fps,
-        codec=codec,
-        macro_block_size=1,
-        ffmpeg_params=["-crf", str(int(crf)), "-pix_fmt", "yuv420p"],
-    )
-    for frame in frame_u8:
-        writer.append_data(frame)
-    writer.close()
+    writer = None
+    try:
+        writer = imageio.get_writer(
+            str(destination_path),
+            format="FFMPEG",
+            fps=fps,
+            codec=codec,
+            macro_block_size=1,
+            ffmpeg_params=["-crf", str(int(crf)), "-movflags", "+faststart"],
+        )
+        writer.append_data(first_frame_u8)
+        for frame_index in range(1, int(frames.shape[0])):
+            writer.append_data(_convert_frame_to_uint8(frames[frame_index]))
+    except Exception:
+        if writer is not None:
+            try:
+                writer.close()
+            except Exception:
+                pass
+        if destination_path.exists():
+            destination_path.unlink(missing_ok=True)
+        raise
+    else:
+        writer.close()
 
     return {
         "video_relpath": destination_path.as_posix(),
         "video_digest": compute_file_digest(destination_path),
-        "frame_count": int(frame_u8.shape[0]),
+        "frame_count": int(frames.shape[0]),
         "fps": int(fps),
-        "height": int(frame_u8.shape[1]),
-        "width": int(frame_u8.shape[2]),
+        "height": int(first_frame_u8.shape[0]),
+        "width": int(first_frame_u8.shape[1]),
         "codec": codec,
         "container": "mp4",
         "pixel_format": "yuv420p",

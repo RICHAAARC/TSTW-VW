@@ -1,5 +1,6 @@
 {
   "project_stage": "synthetic_tubelet_sync_probe",
+  "construction_phase": "real_video_vae_latent_probe",
   "target_construction_phase": "real_video_vae_latent_probe",
   "latent_backend_name": "real_video_vae_latent",
   "latent_backend_status": "video_vae_tensor_scaffold_runtime",

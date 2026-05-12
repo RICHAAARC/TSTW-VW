@@ -1,6 +1,6 @@
 """
 文件用途：提供阶段 2 real-video VAE latent probe 的受治理 backend。
-File purpose: Provide the governed backend for the stage-two real-video VAE latent probe.
+File purpose: Provide the governed backend for the stage-two real-video VAE latent probe runtime.
 Module type: Semi-general module
 """
 
@@ -78,9 +78,9 @@ def _normalize_latent_shape(
 
 
 def build_real_video_vae_latent_support_defaults() -> dict[str, object]:
-    """功能：返回阶段 2 scaffold backend 的冻结默认值。
+    """功能：返回阶段 2 runtime backend 的冻结默认值。
 
-    Build the governed default payload for the stage-two scaffold backend.
+    Build the governed default payload for the stage-two runtime backend.
 
     Args:
         None.
@@ -108,7 +108,7 @@ class RealVideoVAELatentBackend(LatentBackend):
     """功能：构建阶段 2 source video 与 encoded latent artifact。
 
     Build source-video and encoded-latent artifacts for the stage-two real-video
-    VAE latent probe scaffold.
+    VAE latent probe runtime.
 
     Args:
         latent_shape: Governed latent shape shared with the synthetic latent runtime.
@@ -255,7 +255,7 @@ class RealVideoVAELatentBackend(LatentBackend):
     def build_sample(self, sample_id: str, split: str, sample_role: str) -> LatentSample:
         """功能：构建阶段 2 source sample。
 
-        Build the source sample for the stage-two scaffold.
+        Build the source sample for the governed stage-two runtime.
 
         Args:
             sample_id: Stable sample identifier.
@@ -263,7 +263,7 @@ class RealVideoVAELatentBackend(LatentBackend):
             sample_role: Governed sample role name.
 
         Returns:
-            A `LatentSample` instance carrying stage-two scaffold artifacts.
+            A `LatentSample` instance carrying stage-two runtime artifacts.
         """
         if self._output_root is None:
             raise ValueError("output_root must be set before build_sample")
@@ -394,6 +394,10 @@ class RealVideoVAELatentBackend(LatentBackend):
 
         resolved_sample = self._resolve_dataset_sample(sample_id, split)
         if resolved_sample is None:
+            if self._runtime_profile == "formal":
+                raise RuntimeError(
+                    "formal runtime requires a resolved dataset sample; fallback video generation is disabled"
+                )
             source_video_id = sample_id
             video_frames = self._build_fallback_video_frames(sample_id, split)
         else:
@@ -559,9 +563,9 @@ RealVideoVAELatentPlaceholder = RealVideoVAELatentBackend
 def build_real_video_vae_latent_backend_from_support_config(
     support_config: dict[str, Any],
 ) -> RealVideoVAELatentBackend:
-    """功能：根据 support config 构建阶段 2 scaffold backend。
+    """功能：根据 support config 构建阶段 2 runtime backend。
 
-    Build the stage-two scaffold backend from a governed support config.
+    Build the stage-two runtime backend from a governed support config.
 
     Args:
         support_config: Parsed backend support config.

@@ -1,6 +1,6 @@
 """
-文件用途：运行阶段 2 real-video VAE latent probe 的受治理占位闭环。
-File purpose: Run the governed placeholder stage-two real-video VAE latent probe.
+文件用途：运行阶段 2 real-video VAE latent probe 的受治理 runtime 闭环。
+File purpose: Run the governed stage-two real-video VAE latent probe runtime.
 Module type: General module
 """
 
@@ -53,6 +53,7 @@ from main.protocol.calibrator import ThresholdCalibrator
 from main.protocol.event_builder import EventPlanEntry
 from main.protocol.split_builder import build_split_plan
 from main.vae.vae_registry import resolve_vae_backend
+from main.video.dataset_localizer import resolve_runtime_dataset_manifest_path
 from main.video.dataset_manifest import load_dataset_manifest, summarize_dataset_manifest
 from main.video.video_io import probe_video_metadata, read_video_frames, write_video_mp4
 from main.video.video_artifact import copy_latent_artifact
@@ -93,9 +94,9 @@ class RealVideoVaeLatentRunResult:
 
 
 class RealVideoVaeLatentRunner:
-    """功能：执行阶段 2 占位协议闭环。
+    """功能：执行阶段 2 受治理协议闭环。
 
-    Execute the placeholder stage-two governed protocol loop.
+    Execute the governed stage-two protocol loop.
 
     Args:
         repository_root: Repository root path.
@@ -126,9 +127,9 @@ class RealVideoVaeLatentRunner:
         dataset_manifest_path: str | Path | None = None,
         runtime_config_path: str | Path | None = None,
     ) -> RealVideoVaeLatentRunResult:
-        """功能：运行阶段 2 占位协议并写出 records、tables 与 manifests。
+        """功能：运行阶段 2 受治理协议并写出 records、tables 与 manifests。
 
-        Run the placeholder stage-two protocol and persist its governed artifacts.
+        Run the governed stage-two protocol and persist its artifacts.
 
         Args:
             output_root: Run root path.
@@ -173,17 +174,25 @@ class RealVideoVaeLatentRunner:
             ablation_config_path,
             self._repository_root / "configs" / "ablation" / "real_video_vae_latent_ablation.json",
         )
-        dataset_manifest_file = self._resolve_config_path(
-            dataset_manifest_path,
-            self._repository_root / "configs" / "data" / "real_video_probe_manifest.json",
-        )
+        runtime_config_overrides = self._load_runtime_config(runtime_config_path)
+        if dataset_manifest_path is None and any(
+            key in runtime_config_overrides
+            for key in ("local_dataset_root", "dataset_manifest_path")
+        ):
+            dataset_manifest_file = resolve_runtime_dataset_manifest_path(
+                runtime_config_overrides
+            )
+        else:
+            dataset_manifest_file = self._resolve_config_path(
+                dataset_manifest_path,
+                self._repository_root / "configs" / "data" / "real_video_probe_manifest.json",
+            )
 
         protocol_config = load_json_config(protocol_config_file)
         backend_config = self._resolve_backend_config(runtime_profile, load_json_config(backend_config_file))
         attack_config = load_json_config(attack_matrix_file)
         ablation_config = load_json_config(ablation_config_file)
         dataset_manifest = load_dataset_manifest(dataset_manifest_file)
-        runtime_config_overrides = self._load_runtime_config(runtime_config_path)
         self._runtime_config_overrides = dict(runtime_config_overrides)
         dataset_summary = summarize_dataset_manifest(dataset_manifest)
         backend_config["dataset_manifest_path"] = str(dataset_manifest_file)
@@ -258,7 +267,8 @@ class RealVideoVaeLatentRunner:
                 "backend_config": str(backend_config_file.relative_to(self._repository_root)).replace("\\", "/"),
                 "attack_matrix_config": str(attack_matrix_file.relative_to(self._repository_root)).replace("\\", "/"),
                 "ablation_config": str(ablation_config_file.relative_to(self._repository_root)).replace("\\", "/"),
-                "dataset_manifest": str(dataset_manifest_file.relative_to(self._repository_root)).replace("\\", "/"),
+                "dataset_manifest": str(dataset_manifest_file),
+                "dataset_manifest_path": str(dataset_manifest_file),
                 "target_fpr": protocol_config["threshold_protocol"]["target_fpr_placeholder"],
                 "method_variants": [method_config["method_variant"] for method_config in runtime_method_configs],
             }
@@ -1259,7 +1269,7 @@ class RealVideoVaeLatentRunner:
                 derived_method_config["tubelet_length"] = int(tubelet_length)
                 runtime_method_configs.append(derived_method_config)
         for runtime_method_config in runtime_method_configs:
-            runtime_method_config["method_status"] = "formal_real_video_vae_probe_scaffold"
+            runtime_method_config["method_status"] = "formal_real_video_vae_probe_runtime"
             runtime_method_config["target_construction_phase"] = "real_video_vae_latent_probe"
         if method_variants is None:
             return runtime_method_configs
@@ -1312,7 +1322,7 @@ class RealVideoVaeLatentRunner:
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        description="Run the governed placeholder stage-two real-video VAE latent probe.",
+        description="Run the governed stage-two real-video VAE latent probe runtime.",
     )
     parser.add_argument("--run-mode", choices=("smoke", "formal"), default="smoke")
     parser.add_argument("--run-root", required=True)

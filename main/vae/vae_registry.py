@@ -1,6 +1,6 @@
 """
-文件用途：提供阶段 2 tensor-runtime VAE backend registry。
-File purpose: Provide the tensor-runtime VAE backend registry for the stage-two scaffold.
+文件用途：提供阶段 2 VAE backend registry。
+File purpose: Provide the governed stage-two VAE backend registry for scaffold and formal runtimes.
 Module type: General module
 """
 
@@ -19,9 +19,9 @@ PLACEHOLDER_VAE_BACKEND_NAMES = {
 
 
 def resolve_vae_backend(config: dict[str, Any]) -> Any:
-    """功能：根据配置解析阶段 2 tensor-runtime VAE backend。
+    """功能：根据配置解析阶段 2 VAE backend。
 
-    Resolve the tensor-runtime stage-two VAE backend from configuration.
+    Resolve the governed stage-two VAE backend from configuration.
 
     Args:
         config: Parsed backend configuration payload.

@@ -76,6 +76,7 @@ def prepare_probe_runtime_workspace(
     return {
         "processed_dataset_root": str(processed_dataset_path),
         "local_dataset_root": str(local_dataset_path),
+        "local_dataset_manifest_path": str(local_dataset_path / "dataset_manifest.json"),
         "family_root": str(family_root_path),
         "run_root": str(run_root_path),
         "local_dataset_ready": local_dataset_path.exists(),
@@ -109,6 +110,7 @@ def write_probe_runtime_config(
     local_dataset_root: str | Path,
     processed_dataset_root: str | Path,
     vae_model_local_path: str | Path,
+    dataset_manifest_path: str | Path | None,
     require_formal_pass_criteria: bool,
     quality_metrics_mode: str = "real_video_frame_metrics",
     temporal_metrics_mode: str = "real_video_frame_metrics",
@@ -121,6 +123,11 @@ def write_probe_runtime_config(
         "processed_dataset_key": processed_dataset_key,
         "local_dataset_root": str(Path(local_dataset_root)),
         "processed_dataset_root": str(Path(processed_dataset_root)),
+        "dataset_manifest_path": str(
+            Path(dataset_manifest_path)
+            if dataset_manifest_path is not None
+            else Path(local_dataset_root) / "dataset_manifest.json"
+        ),
         "vae_model_local_path": str(Path(vae_model_local_path)),
         "local_vae_model_root": str(Path(vae_model_local_path)),
         "quality_metrics_mode": quality_metrics_mode,

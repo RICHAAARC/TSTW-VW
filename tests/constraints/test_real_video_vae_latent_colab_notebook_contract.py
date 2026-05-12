@@ -162,6 +162,9 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "probe_workflow.rebuild_probe_tables_and_reports" in notebook_text
     assert "probe_workflow.check_probe_outputs" in notebook_text
     assert "probe_workflow.package_probe_family_results" in notebook_text
+    assert "PROCESSED_DATASET_MANIFEST" in notebook_text
+    assert "dataset_manifest_path=PROCESSED_DATASET_MANIFEST" in notebook_text
+    assert "dataset_manifest=PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "repo_env['PYTHONPATH']" in notebook_text
     assert "env=repo_env" in notebook_text
     assert "cwd=REPO_ROOT" in notebook_text
@@ -180,6 +183,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "scripts.package_results.package_real_video_vae_latent_tar_zst" in workflow_text
     assert "from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check" in workflow_text
     assert "session_only_no_drive_model_storage" in workflow_text
+    assert "dataset_manifest_path" in workflow_text
     assert "REQUIRE_FORMAL_PASS = True" in notebook_text
     assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
     assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text

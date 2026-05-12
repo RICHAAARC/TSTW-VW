@@ -1,5 +1,6 @@
 {
   "project_stage": "synthetic_tubelet_sync_probe",
+  "construction_phase": "real_video_vae_latent_probe",
   "target_construction_phase": "real_video_vae_latent_probe",
   "attack_matrix_name": "real_video_attack_smoke_matrix",
   "attacks": [
