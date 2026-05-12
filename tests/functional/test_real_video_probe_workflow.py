@@ -6,7 +6,9 @@ Module type: General module
 
 from __future__ import annotations
 
+import os
 import json
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -117,11 +119,16 @@ def test_run_probe_runner_forwards_dataset_manifest_to_runner(
     """
     captured_call: dict[str, object] = {}
 
-    def _fake_subprocess_run(command: list[str], check: bool) -> None:
-        captured_call["command"] = list(command)
-        captured_call["check"] = check
+    class _FakeProcess:
+        def __init__(self, command: list[str], **kwargs: object) -> None:
+            captured_call["command"] = list(command)
+            captured_call["kwargs"] = kwargs
+            self.stdout = StringIO("runner ok\n")
 
-    monkeypatch.setattr(workflow_module.subprocess, "run", _fake_subprocess_run)
+        def wait(self) -> int:
+            return 0
+
+    monkeypatch.setattr(workflow_module.subprocess, "Popen", _FakeProcess)
     dataset_manifest_path = tmp_path / "dataset_manifest.json"
     dataset_manifest_path.write_text("{}\n", encoding="utf-8")
 
@@ -135,6 +142,53 @@ def test_run_probe_runner_forwards_dataset_manifest_to_runner(
     )
 
     command = captured_call["command"]
-    assert captured_call["check"] is True
+    kwargs = captured_call["kwargs"]
+    repository_root = Path(workflow_module.__file__).resolve().parents[2]
     assert "--dataset-manifest" in command
     assert str(dataset_manifest_path) in command
+    assert kwargs["cwd"] == repository_root
+    assert kwargs["stdout"] == workflow_module.subprocess.PIPE
+    assert kwargs["stderr"] == workflow_module.subprocess.STDOUT
+    assert kwargs["text"] is True
+    assert kwargs["encoding"] == "utf-8"
+    assert kwargs["errors"] == "replace"
+    assert kwargs["env"]["PYTHONPATH"].split(os.pathsep)[0] == str(repository_root)
+
+
+@pytest.mark.unit
+def test_run_probe_runner_surfaces_runner_output_on_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate notebook runner failures expose the child-process output.
+
+    Args:
+        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+
+    class _FailingProcess:
+        def __init__(self, command: list[str], **kwargs: object) -> None:
+            del command, kwargs
+            self.stdout = StringIO("traceback line\nroot cause detail\n")
+
+        def wait(self) -> int:
+            return 1
+
+    monkeypatch.setattr(workflow_module.subprocess, "Popen", _FailingProcess)
+
+    with pytest.raises(RuntimeError, match="root cause detail") as exc_info:
+        run_probe_runner(
+            run_root=tmp_path / "run_root",
+            run_mode="formal",
+            runtime_profile="formal",
+            runtime_config_path=tmp_path / "runtime_config.json",
+            python_executable="python",
+        )
+
+    assert "run_probe_runner failed while executing the governed runner" in str(
+        exc_info.value
+    )

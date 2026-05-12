@@ -6,6 +6,7 @@ Module type: Notebook workflow helper
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -181,6 +182,7 @@ def run_probe_runner(
     python_executable: str = sys.executable,
 ) -> None:
     """Run the governed probe runner module."""
+    repository_root = Path(__file__).resolve().parents[2]
     runner_command = [
         python_executable,
         "-m",
@@ -206,7 +208,42 @@ def run_probe_runner(
         runner_command.extend(["--dataset-manifest", str(dataset_manifest)])
     if samples_per_role is not None:
         runner_command.extend(["--samples-per-role", str(int(samples_per_role))])
-    subprocess.run(runner_command, check=True)
+    runner_env = dict(os.environ)
+    existing_pythonpath = runner_env.get("PYTHONPATH")
+    repository_root_text = str(repository_root)
+    if existing_pythonpath:
+        pythonpath_entries = existing_pythonpath.split(os.pathsep)
+        if repository_root_text not in pythonpath_entries:
+            runner_env["PYTHONPATH"] = os.pathsep.join(
+                [repository_root_text, *pythonpath_entries]
+            )
+    else:
+        runner_env["PYTHONPATH"] = repository_root_text
+
+    process = subprocess.Popen(
+        runner_command,
+        cwd=repository_root,
+        env=runner_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    combined_output_lines: list[str] = []
+    if process.stdout is not None:
+        for output_line in process.stdout:
+            print(output_line, end="")
+            combined_output_lines.append(output_line)
+    return_code = process.wait()
+    if return_code != 0:
+        combined_output = "".join(combined_output_lines).strip()
+        raise RuntimeError(
+            "run_probe_runner failed while executing the governed runner.\n"
+            f"command: {subprocess.list2cmdline(runner_command)}\n"
+            f"cwd: {repository_root}\n"
+            f"runner_output:\n{combined_output or '<no runner output>'}"
+        )
 
 
 def rebuild_probe_tables_and_reports(
