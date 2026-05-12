@@ -130,6 +130,8 @@ step05_release
 
 需要注意：`STEP_KEY` 是 workflow 编排键，不是项目阶段定义。它不能替代算法阶段、论文实验 protocol 或方法机制定义。
 
+对于受治理的 notebook 入口，面向 cell 编排的 step key 应保存在对应 markdown step cell 的 `metadata.step_key` 字段中；可读标题只保留自然语言，例如 `## 01 Mount Google Drive`。不得把 ``(`01_mount_google_drive`)`` 这类 slug 直接拼接进标题文本，也不得依赖标题文本反向推断正式 step 顺序。这里的 `metadata.step_key` 只服务 notebook contract 与 cell 顺序校验，不等同于运行配置、registry entry 或结果包中的运行时 `STEP_KEY` 字段。
+
 ### （五）`SHARD_ID`
 
 `SHARD_ID` 用于并行任务分片。任何 shard notebook 只能读取 shard plan 中分配给自己的输入，并将结果写入对应 shard 包。
@@ -648,6 +650,8 @@ Markdown 与参数说明必须满足以下约束：
 5. 如果某个 cell 包含用户可配置参数，紧邻该 cell 的 markdown 必须说明每个关键参数的意义、允许值或推荐格式、需要用户修改的条件，以及错误配置可能影响的边界。
 6. 参数配置 cell 必须区分“必须修改”“通常保持默认”“仅调试使用”三类参数；不得让用户通过阅读代码猜测配置方式。
 7. markdown 只解释 workflow 编排意图和参数，不承载正式 records、thresholds、tables、figures、reports、checker 或 packager 的实现逻辑。
+8. 受治理 workflow 的每个步骤 markdown cell 必须在 `cell.metadata.step_key` 中写入稳定的 `snake_case` 编排键；notebook contract 读取 metadata，而不是要求标题文本暴露 slug。
+9. `cell.metadata.step_key` 仅用于 notebook 内部步骤识别；如果运行配置、family 打包或 registry 更新仍需要运行时 step key，必须在代码 cell 中单独显式声明，不得默认复用 markdown 标题。
 ```
 
 ---

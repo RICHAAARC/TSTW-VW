@@ -29,7 +29,7 @@ RUN_WORKFLOW_PATH = (
     / "notebook_utils"
     / "real_video_vae_latent_probe_workflow.py"
 )
-BUILD_REQUIRED_CELL_TITLES = [
+BUILD_REQUIRED_STEP_KEYS = [
     "00_runtime_identity_and_user_config",
     "01_mount_google_drive",
     "02_validate_raw_dataset_registry",
@@ -42,7 +42,7 @@ BUILD_REQUIRED_CELL_TITLES = [
     "09_register_processed_dataset",
     "10_print_processed_dataset_handoff",
 ]
-RUN_REQUIRED_CELL_TITLES = [
+RUN_REQUIRED_STEP_KEYS = [
     "00_runtime_identity_and_user_config",
     "01_mount_google_drive",
     "02_read_processed_dataset_registry",
@@ -73,16 +73,32 @@ def _cell_text(cell: dict[str, object]) -> str:
     return str(source)
 
 
-def _assert_title_order(cells: list[object], required_titles: list[str]) -> None:
-    title_positions: list[int] = []
-    for required_title in required_titles:
-        matching_index = next(
-            index
-            for index, cell in enumerate(cells)
-            if isinstance(cell, dict) and required_title in _cell_text(cell)
-        )
-        title_positions.append(matching_index)
-    assert title_positions == sorted(title_positions)
+def _cell_metadata(cell: dict[str, object]) -> dict[str, object]:
+    metadata = cell.get("metadata", {})
+    if isinstance(metadata, dict):
+        return metadata
+    return {}
+
+
+def _cell_step_key(cell: dict[str, object]) -> str | None:
+    step_key = _cell_metadata(cell).get("step_key")
+    if isinstance(step_key, str):
+        return step_key
+    return None
+
+
+def _assert_step_key_order(cells: list[object], required_step_keys: list[str]) -> None:
+    observed_step_keys = [
+        _cell_step_key(cell)
+        for cell in cells
+        if isinstance(cell, dict) and _cell_step_key(cell) is not None
+    ]
+    assert observed_step_keys == required_step_keys
+    assert all(
+        isinstance(cell, dict) and cell.get("cell_type") == "markdown"
+        for cell in cells
+        if isinstance(cell, dict) and _cell_step_key(cell) is not None
+    )
 
 
 def test_processed_dataset_notebook_exists_and_uses_governed_entrypoints() -> None:
@@ -102,13 +118,11 @@ def test_processed_dataset_notebook_exists_and_uses_governed_entrypoints() -> No
     assert BUILD_WORKFLOW_PATH.exists()
     workflow_text = BUILD_WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    _assert_title_order(cells, BUILD_REQUIRED_CELL_TITLES)
+    _assert_step_key_order(cells, BUILD_REQUIRED_STEP_KEYS)
 
     assert "# Build Processed Real Video Dataset" in notebook_text
-    assert (
-        "00 Runtime Identity And User Config "
-        "(`00_runtime_identity_and_user_config`)"
-    ) in notebook_text
+    assert "## 00 Runtime Identity And User Config" in notebook_text
+    assert "(`00_runtime_identity_and_user_config`)" not in notebook_text
     assert "### 00_runtime_identity_and_user_config" not in notebook_text
     assert (
         "paper_workflow.notebook_utils import "
@@ -143,13 +157,11 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert RUN_WORKFLOW_PATH.exists()
     workflow_text = RUN_WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    _assert_title_order(cells, RUN_REQUIRED_CELL_TITLES)
+    _assert_step_key_order(cells, RUN_REQUIRED_STEP_KEYS)
 
     assert "# Run Real Video VAE Latent Probe" in notebook_text
-    assert (
-        "00 Runtime Identity And User Config "
-        "(`00_runtime_identity_and_user_config`)"
-    ) in notebook_text
+    assert "## 00 Runtime Identity And User Config" in notebook_text
+    assert "(`00_runtime_identity_and_user_config`)" not in notebook_text
     assert "### 00_runtime_identity_and_user_config" not in notebook_text
     assert (
         "paper_workflow.notebook_utils import "

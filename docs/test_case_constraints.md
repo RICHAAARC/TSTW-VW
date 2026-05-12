@@ -923,7 +923,7 @@ P8：删除旧根目录平铺测试文件。
 5. 约束测试默认执行且无重型 I/O；
 6. functional 测试中 quick 与 integration 已区分；
 7. integration、smoke、formal、slow 默认排除；
-8. notebook contract 测试不执行 notebook；
+8. notebook contract 测试不执行 notebook；允许直接读取 raw notebook JSON，并可基于 markdown cell 的 `metadata.step_key` 验证 governed step 顺序；不得强制要求标题文本暴露 step key slug；
 9. formal gate 测试不放松阻断规则；
 10. runner-backed 测试统一放入 integration；
 11. 重型 fixture 使用 session 级缓存；
