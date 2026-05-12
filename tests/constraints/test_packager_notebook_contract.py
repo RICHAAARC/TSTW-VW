@@ -18,11 +18,23 @@ pytestmark = [pytest.mark.constraint, pytest.mark.unit]
 def test_real_video_tar_zst_packager_notebook_contract() -> None:
     """Validate that the governed notebook delegates tar.zst packaging to scripts."""
     notebook_path = ROOT / "paper_workflow" / "run_real_video_vae_latent_probe.ipynb"
+    workflow_path = (
+        ROOT
+        / "paper_workflow"
+        / "notebook_utils"
+        / "real_video_vae_latent_probe_workflow.py"
+    )
     assert notebook_path.exists()
+    assert workflow_path.exists()
     notebook_text = notebook_path.read_text(encoding="utf-8")
+    workflow_text = workflow_path.read_text(encoding="utf-8")
 
-    assert "from scripts.package_results.package_real_video_vae_latent_tar_zst import package_real_video_vae_latent_tar_zst" in notebook_text
-    assert "package_real_video_vae_latent_tar_zst(" in notebook_text
-    assert "drive_archive_path = tar_pack['archive_path']" in notebook_text
-    assert "compat_pack_root = RUN_ROOT" in notebook_text
-    assert '"archive_path": str(drive_archive_path)' in notebook_text or "'archive_path': str(drive_archive_path)" in notebook_text
+    assert "probe_workflow.package_probe_family_results(" in notebook_text
+    assert (
+        "from scripts.package_results.package_real_video_vae_latent_tar_zst import"
+        in workflow_text
+    )
+    assert "package_real_video_vae_latent_tar_zst(" in workflow_text
+    assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
+    assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
+    assert '"drive_archive_path": str(tar_pack["archive_path"])' in workflow_text or "'drive_archive_path': str(tar_pack[\"archive_path\"])" in workflow_text

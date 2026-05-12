@@ -17,6 +17,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BUILD_NOTEBOOK_PATH = ROOT / "paper_workflow" / "build_processed_real_video_dataset.ipynb"
 RUN_NOTEBOOK_PATH = ROOT / "paper_workflow" / "run_real_video_vae_latent_probe.ipynb"
+BUILD_WORKFLOW_PATH = (
+    ROOT
+    / "paper_workflow"
+    / "notebook_utils"
+    / "processed_real_video_dataset_workflow.py"
+)
+RUN_WORKFLOW_PATH = (
+    ROOT
+    / "paper_workflow"
+    / "notebook_utils"
+    / "real_video_vae_latent_probe_workflow.py"
+)
 BUILD_REQUIRED_CELL_TITLES = [
     "00_runtime_identity_and_user_config",
     "01_mount_google_drive",
@@ -87,10 +99,24 @@ def test_processed_dataset_notebook_exists_and_uses_governed_entrypoints() -> No
     cells = notebook.get("cells", [])
     assert isinstance(cells, list) and cells
     notebook_text = "\n".join(_cell_text(cell) for cell in cells if isinstance(cell, dict))
+    assert BUILD_WORKFLOW_PATH.exists()
+    workflow_text = BUILD_WORKFLOW_PATH.read_text(encoding="utf-8")
 
     _assert_title_order(cells, BUILD_REQUIRED_CELL_TITLES)
 
-    assert "scripts.prepare_datasets.build_processed_real_video_dataset" in notebook_text
+    assert "# Build Processed Real Video Dataset" in notebook_text
+    assert (
+        "00 Runtime Identity And User Config "
+        "(`00_runtime_identity_and_user_config`)"
+    ) in notebook_text
+    assert "### 00_runtime_identity_and_user_config" not in notebook_text
+    assert (
+        "paper_workflow.notebook_utils import "
+        "processed_real_video_dataset_workflow"
+    ) in notebook_text
+    assert "dataset_workflow.build_processed_dataset_handoff" in notebook_text
+    assert "scripts.prepare_datasets.build_processed_real_video_dataset" not in notebook_text
+    assert "scripts.prepare_datasets.build_processed_real_video_dataset" in workflow_text
     assert "raw_dataset_download_manifest.json" in notebook_text
     assert "PROCESSED_DATASET_KEY" in notebook_text
     assert "processed_dataset_checks.json" in notebook_text
@@ -114,20 +140,50 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     cells = notebook.get("cells", [])
     assert isinstance(cells, list) and cells
     notebook_text = "\n".join(_cell_text(cell) for cell in cells if isinstance(cell, dict))
+    assert RUN_WORKFLOW_PATH.exists()
+    workflow_text = RUN_WORKFLOW_PATH.read_text(encoding="utf-8")
 
     _assert_title_order(cells, RUN_REQUIRED_CELL_TITLES)
 
-    assert "experiments.real_video_vae_latent_probe.runner" in notebook_text
-    assert "scripts.prepare_models.prepare_session_autoencoder_kl" in notebook_text
-    assert "scripts.check_results.check_real_video_vae_latent_outputs" in notebook_text
-    assert "scripts.package_results.package_real_video_vae_latent_outputs" in notebook_text
-    assert "scripts.package_results.package_real_video_vae_latent_tar_zst" in notebook_text
-    assert "from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check" in notebook_text
-    assert "session_only_no_drive_model_storage" in notebook_text
+    assert "# Run Real Video VAE Latent Probe" in notebook_text
+    assert (
+        "00 Runtime Identity And User Config "
+        "(`00_runtime_identity_and_user_config`)"
+    ) in notebook_text
+    assert "### 00_runtime_identity_and_user_config" not in notebook_text
+    assert (
+        "paper_workflow.notebook_utils import "
+        "real_video_vae_latent_probe_workflow"
+    ) in notebook_text
+    assert "probe_workflow.prepare_probe_runtime_workspace" in notebook_text
+    assert "probe_workflow.prepare_probe_session_model" in notebook_text
+    assert "probe_workflow.write_probe_runtime_config" in notebook_text
+    assert "probe_workflow.run_probe_runner" in notebook_text
+    assert "probe_workflow.rebuild_probe_tables_and_reports" in notebook_text
+    assert "probe_workflow.check_probe_outputs" in notebook_text
+    assert "probe_workflow.package_probe_family_results" in notebook_text
+    assert "repo_env['PYTHONPATH']" in notebook_text
+    assert "env=repo_env" in notebook_text
+    assert "cwd=REPO_ROOT" in notebook_text
+    assert "huggingface_hub" in notebook_text
+    assert "diffusers" in notebook_text
+    assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
+    assert "scripts.prepare_models.prepare_session_autoencoder_kl" not in notebook_text
+    assert "scripts.check_results.check_real_video_vae_latent_outputs" not in notebook_text
+    assert "scripts.package_results.package_real_video_vae_latent_outputs" not in notebook_text
+    assert "scripts.package_results.package_real_video_vae_latent_tar_zst" not in notebook_text
+    assert "from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check" not in notebook_text
+    assert "experiments.real_video_vae_latent_probe.runner" in workflow_text
+    assert "scripts.prepare_models.prepare_session_autoencoder_kl" in workflow_text
+    assert "scripts.check_results.check_real_video_vae_latent_outputs" in workflow_text
+    assert "scripts.package_results.package_real_video_vae_latent_outputs" in workflow_text
+    assert "scripts.package_results.package_real_video_vae_latent_tar_zst" in workflow_text
+    assert "from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check" in workflow_text
+    assert "session_only_no_drive_model_storage" in workflow_text
     assert "REQUIRE_FORMAL_PASS = True" in notebook_text
     assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
-    assert "drive_archive_path = tar_pack['archive_path']" in notebook_text
-    assert "compat_pack_root = RUN_ROOT" in notebook_text
+    assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
+    assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
     assert "formal_validation_summary" in notebook_text
     assert "result_registry.jsonl" in notebook_text
     assert "family_registry.jsonl" in notebook_text
