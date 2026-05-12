@@ -103,3 +103,28 @@ def test_debug_real_video_profile_filters_protocol_scope_and_attacks() -> None:
     assert sorted(
         attack_object.attack_name for attack_object in filtered_attack_registry
     ) == ["h264_compression", "no_attack"]
+
+
+@pytest.mark.unit
+def test_runtime_splits_shrink_to_manifest_available_splits() -> None:
+    """Validate runner uses only dataset-manifest splits that actually exist.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    protocol_config = load_json_config(
+        ROOT / "configs" / "protocol" / "real_video_vae_latent_probe.json"
+    )
+    dataset_manifest = load_json_config(
+        ROOT / "configs" / "data" / "real_video_probe_manifest.json"
+    )
+
+    assert runner._resolve_runtime_splits(
+        protocol_config,
+        "formal",
+        dataset_manifest,
+    ) == ["calibration", "test"]

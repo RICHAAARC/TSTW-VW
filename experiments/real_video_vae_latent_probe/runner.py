@@ -195,12 +195,12 @@ class RealVideoVaeLatentRunner:
             protocol_config,
             runtime_profile,
         )
+        dataset_manifest = load_dataset_manifest(dataset_manifest_file)
         runtime_splits = set(
-            self._resolve_profile_string_list(
-                protocol_config.get("splits_by_profile"),
+            self._resolve_runtime_splits(
+                protocol_config,
                 runtime_profile,
-                protocol_config.get("splits", ["dev", "calibration", "test"]),
-                "splits_by_profile",
+                dataset_manifest,
             )
         )
         runtime_sample_roles = set(
@@ -214,7 +214,6 @@ class RealVideoVaeLatentRunner:
         backend_config = self._resolve_backend_config(runtime_profile, load_json_config(backend_config_file))
         attack_config = load_json_config(attack_matrix_file)
         ablation_config = load_json_config(ablation_config_file)
-        dataset_manifest = load_dataset_manifest(dataset_manifest_file)
         self._runtime_config_overrides = dict(runtime_config_overrides)
         dataset_summary = summarize_dataset_manifest(dataset_manifest)
         backend_config["dataset_manifest_path"] = str(dataset_manifest_file)
@@ -1284,6 +1283,40 @@ class RealVideoVaeLatentRunner:
         if any(not value for value in normalized_values):
             raise ValueError(f"{field_name} contains an empty value")
         return normalized_values
+
+    def _resolve_runtime_splits(
+        self,
+        protocol_config: dict[str, Any],
+        runtime_profile: str,
+        dataset_manifest: dict[str, Any],
+    ) -> list[str]:
+        configured_splits = self._resolve_profile_string_list(
+            protocol_config.get("splits_by_profile"),
+            runtime_profile,
+            protocol_config.get("splits", ["dev", "calibration", "test"]),
+            "splits_by_profile",
+        )
+        manifest_samples = dataset_manifest.get("samples", [])
+        if not isinstance(manifest_samples, list):
+            raise ValueError("dataset manifest samples must be a list")
+        manifest_splits = {
+            str(sample.get("split", "")).strip()
+            for sample in manifest_samples
+            if isinstance(sample, dict) and str(sample.get("split", "")).strip()
+        }
+        if not manifest_splits:
+            raise ValueError("dataset manifest must contain at least one split")
+
+        resolved_splits = [
+            split_name
+            for split_name in configured_splits
+            if split_name in manifest_splits
+        ]
+        if not resolved_splits:
+            raise ValueError(
+                "dataset manifest does not provide any splits required by the runtime profile"
+            )
+        return resolved_splits
 
     def _filter_attack_registry(
         self,
