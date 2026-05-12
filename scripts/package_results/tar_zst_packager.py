@@ -231,6 +231,8 @@ def pack_run_to_tar_zst(
                 tar_inputs=tar_inputs,
             )
         except subprocess.CalledProcessError as error:
+            if archive_path.exists():
+                archive_path.unlink()
             stderr_text = (error.stderr or "").strip()
             stdout_text = (error.stdout or "").strip()
             tar_failure_message = (

@@ -216,3 +216,46 @@ def test_real_video_tar_zst_packager_falls_back_when_external_tar_fails(
     assert result["archive_path"].exists()
     assert result["archive_path"].name.endswith(".tar.zst")
     assert not any(path.suffix == ".tar" for path in drive_result_dir.iterdir())
+
+
+def test_real_video_tar_zst_packager_replaces_zero_byte_archive_on_fallback(
+    tmp_path: Path,
+) -> None:
+    run_root = _make_run_root(tmp_path)
+    drive_result_dir = tmp_path / "drive_zero_byte"
+    checks_payload: dict[str, Any] = {
+        "RealVideoVaeLatentDecision": "INCONCLUSIVE",
+        "status": False,
+    }
+
+    def _create_zero_byte_archive_then_fail(*args: Any, **kwargs: Any) -> None:
+        del kwargs
+        command = args[0]
+        archive_path = Path(command[3])
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+        archive_path.write_bytes(b"")
+        raise subprocess.CalledProcessError(
+            2,
+            command,
+            stderr="tar (child): zstd: Cannot exec: No such file or directory",
+        )
+
+    with (
+        patch("scripts.package_results.tar_zst_packager._supports_tar_zstd", return_value=True),
+        patch(
+            "scripts.package_results.tar_zst_packager._load_zstandard_module",
+            return_value=_FakeZstandardModule(),
+        ),
+        patch(
+            "scripts.package_results.tar_zst_packager.subprocess.run",
+            side_effect=_create_zero_byte_archive_then_fail,
+        ),
+    ):
+        result = pack_run_to_tar_zst(
+            run_root=run_root,
+            drive_result_dir=drive_result_dir,
+            checks_payload=checks_payload,
+        )
+
+    assert result["archive_path"].exists()
+    assert result["archive_path"].stat().st_size > 0
