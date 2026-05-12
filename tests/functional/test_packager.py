@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 from typing import Any
 from unittest.mock import patch
 
@@ -17,6 +18,31 @@ from scripts.package_results.tar_zst_packager import pack_run_to_tar_zst
 
 
 pytestmark = pytest.mark.quick
+
+
+class _PassthroughCompressedWriter:
+    def __init__(self, handle: Any) -> None:
+        self._handle = handle
+
+    def __enter__(self) -> "_PassthroughCompressedWriter":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool:
+        del exc_type, exc_value, traceback
+        return False
+
+    def write(self, data: bytes) -> int:
+        return self._handle.write(data)
+
+
+class _FakeZstdCompressor:
+    def stream_writer(self, handle: Any) -> _PassthroughCompressedWriter:
+        return _PassthroughCompressedWriter(handle)
+
+
+class _FakeZstandardModule:
+    def ZstdCompressor(self) -> _FakeZstdCompressor:
+        return _FakeZstdCompressor()
 
 
 def _make_run_root(tmp_path: Path) -> Path:
@@ -144,10 +170,49 @@ def test_real_video_tar_zst_packager_raises_without_tar_zstd(tmp_path: Path) -> 
 
     with (
         patch("scripts.package_results.tar_zst_packager._supports_tar_zstd", return_value=False),
-        pytest.raises(RuntimeError, match="tar --zstd is unavailable"),
+        patch("scripts.package_results.tar_zst_packager._load_zstandard_module", return_value=None),
+        pytest.raises(RuntimeError, match="python fallback requires the zstandard package"),
     ):
         pack_run_to_tar_zst(
             run_root=run_root,
             drive_result_dir=drive_result_dir,
             checks_payload=checks_payload,
         )
+
+
+def test_real_video_tar_zst_packager_falls_back_when_external_tar_fails(
+    tmp_path: Path,
+) -> None:
+    run_root = _make_run_root(tmp_path)
+    drive_result_dir = tmp_path / "drive_fallback"
+    checks_payload: dict[str, Any] = {
+        "RealVideoVaeLatentDecision": "INCONCLUSIVE",
+        "status": False,
+    }
+
+    failing_error = subprocess.CalledProcessError(
+        2,
+        ["tar", "--zstd", "-cf", "archive.tar.zst"],
+        stderr="tar (child): zstd: Cannot exec: No such file or directory",
+    )
+
+    with (
+        patch("scripts.package_results.tar_zst_packager._supports_tar_zstd", return_value=True),
+        patch(
+            "scripts.package_results.tar_zst_packager._load_zstandard_module",
+            return_value=_FakeZstandardModule(),
+        ),
+        patch(
+            "scripts.package_results.tar_zst_packager.subprocess.run",
+            side_effect=failing_error,
+        ),
+    ):
+        result = pack_run_to_tar_zst(
+            run_root=run_root,
+            drive_result_dir=drive_result_dir,
+            checks_payload=checks_payload,
+        )
+
+    assert result["archive_path"].exists()
+    assert result["archive_path"].name.endswith(".tar.zst")
+    assert not any(path.suffix == ".tar" for path in drive_result_dir.iterdir())
