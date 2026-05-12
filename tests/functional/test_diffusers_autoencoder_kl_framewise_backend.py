@@ -6,12 +6,15 @@ Module type: General module
 
 from __future__ import annotations
 
+import types
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 pytestmark = pytest.mark.quick
+
+import main.vae.diffusers_autoencoder_kl_framewise as backend_module
 
 from main.vae.diffusers_autoencoder_kl_framewise import DiffusersAutoencoderKLFramewiseBackend
 
@@ -82,3 +85,70 @@ def test_diffusers_autoencoder_kl_framewise_backend_formal_requires_model_path()
                 "allow_mock_vae_backend": False,
             }
         )
+
+
+@pytest.mark.unit
+def test_diffusers_autoencoder_kl_framewise_backend_formal_accepts_autoencoder_root_without_model_index(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate formal mode accepts a local AutoencoderKL root without model_index.json.
+
+    Args:
+        tmp_path: Temporary model root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    model_root = tmp_path / "models" / "vae"
+    model_root.mkdir(parents=True, exist_ok=True)
+    (model_root / "config.json").write_text("{}\n", encoding="utf-8")
+    captured_loader_call: dict[str, object] = {}
+
+    class DummyModel:
+        def to(self, *, device: str, dtype: object) -> "DummyModel":
+            captured_loader_call["device"] = device
+            captured_loader_call["dtype"] = dtype
+            return self
+
+        def eval(self) -> None:
+            captured_loader_call["eval_called"] = True
+
+    class DummyAutoencoderKL:
+        @staticmethod
+        def from_pretrained(model_path: str, *, local_files_only: bool) -> DummyModel:
+            captured_loader_call["model_path"] = model_path
+            captured_loader_call["local_files_only"] = local_files_only
+            return DummyModel()
+
+    dummy_torch = types.SimpleNamespace(
+        cuda=types.SimpleNamespace(is_available=lambda: False),
+        float16="float16",
+        float32="float32",
+    )
+    dummy_diffusers = types.SimpleNamespace(AutoencoderKL=DummyAutoencoderKL)
+
+    def _fake_import_module(module_name: str) -> object:
+        if module_name == "torch":
+            return dummy_torch
+        if module_name == "diffusers":
+            return dummy_diffusers
+        raise ImportError(module_name)
+
+    monkeypatch.setattr(backend_module.importlib, "import_module", _fake_import_module)
+
+    backend = DiffusersAutoencoderKLFramewiseBackend(
+        {
+            "runtime_profile": "formal",
+            "vae_backend_name": "diffusers_autoencoder_kl_framewise",
+            "vae_model_local_path": str(model_root),
+            "allow_mock_vae_backend": False,
+        }
+    )
+
+    assert captured_loader_call["model_path"] == str(model_root)
+    assert captured_loader_call["local_files_only"] is True
+    assert captured_loader_call["device"] == "cpu"
+    assert captured_loader_call["eval_called"] is True
+    assert backend.backend_metadata()["runtime_impl"] == "diffusers_autoencoder_kl"

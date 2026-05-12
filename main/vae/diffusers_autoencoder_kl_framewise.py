@@ -76,21 +76,29 @@ class DiffusersAutoencoderKLFramewiseBackend(VAEBackend):
         else:
             self._torch = torch_module
             model_class = getattr(diffusers_module, "AutoencoderKL")
-            if self._model_root is not None and (self._model_root / "model_index.json").exists():
+            if self._model_root is not None:
                 model_loader = getattr(model_class, "from_pretrained")
-                self._vae_model = model_loader(
-                    str(self._model_root),
-                    local_files_only=True,
-                )
-                cuda_available = bool(torch_module.cuda.is_available())
-                if cuda_available and "float16" in self._vae_dtype:
-                    self._device = "cuda"
-                    self._vae_model = self._vae_model.to(device=self._device, dtype=torch_module.float16)
+                try:
+                    self._vae_model = model_loader(
+                        str(self._model_root),
+                        local_files_only=True,
+                    )
+                except Exception as exc:
+                    self._vae_model = None
+                    if required_model and not self._allow_mock_vae_backend:
+                        raise RuntimeError(
+                            "formal mode requires a valid local AutoencoderKL model"
+                        ) from exc
                 else:
-                    self._device = "cpu"
-                    self._vae_model = self._vae_model.to(device=self._device, dtype=torch_module.float32)
-                self._vae_model.eval()
-                self._runtime_impl = "diffusers_autoencoder_kl"
+                    cuda_available = bool(torch_module.cuda.is_available())
+                    if cuda_available and "float16" in self._vae_dtype:
+                        self._device = "cuda"
+                        self._vae_model = self._vae_model.to(device=self._device, dtype=torch_module.float16)
+                    else:
+                        self._device = "cpu"
+                        self._vae_model = self._vae_model.to(device=self._device, dtype=torch_module.float32)
+                    self._vae_model.eval()
+                    self._runtime_impl = "diffusers_autoencoder_kl"
             elif required_model and not self._allow_mock_vae_backend:
                 raise RuntimeError("formal mode requires a valid local AutoencoderKL model")
 
