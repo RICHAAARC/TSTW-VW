@@ -8,6 +8,7 @@
 
 - 固定后续阶段推进入口与阻断规则。
 - 固定 naming governance 与 placeholder/random field governance。
+- 固定 `docs/test_case_constraints.md` 测试用例构建约束与 pytest 分层默认口径。
 - 固定 protocol records、threshold calibration、claim audit 与 artifact rebuild 的骨架约束。
 - 提供可执行的 harness 审计脚本与 pytest 最小闭环。
 - 提供阶段 0 的 placeholder / random runtime skeleton，包括 synthetic latent backend、protocol runner、threshold calibrator、record writer、ablation runner 与 table rebuild scaffold。
@@ -37,6 +38,8 @@
 测试入口和审计入口是两个独立门禁；`run_all_audits.py` 通过不能替代 `pytest` 通过。
 这些门禁属于外层检查入口，不得成为 `main/` 的运行时依赖；`main/core/`、`main/protocol/` 与 `main/analysis/` 内部只允许保留协议运行时契约。
 
+当前默认 `pytest -q` 只执行 `constraint`、`unit` 或 `quick` 测试，并默认排除 `integration`、`smoke`、`slow` 与 `formal`。测试目录按 `tests/constraints/`、`tests/functional/`、`tests/integration/` 分层，根目录不得新增平铺 `test_*.py`。
+
 PowerShell 示例：
 
 ```powershell
@@ -61,7 +64,7 @@ python tools/harness/run_all_audits.py
 
 - 文件名、目录名、Python 模块名、配置字段名、JSON 字段名统一使用 `snake_case`。
 - `paper_workflow/` 根下受治理的 notebook 同样使用 `snake_case` 机制语义命名，当前固定为 `build_processed_real_video_dataset.ipynb` 与 `run_real_video_vae_latent_probe.ipynb`。
-- `paper_workflow/notebook_utils/` 下的单 notebook / 单阶段 helper 使用 `stage<数字>_<用途>.py`；`paper_workflow/colab_utils/` 继续保留共享 helper 的通用 `snake_case`。
+- `paper_workflow/notebook_utils/` 下的单 notebook helper 使用 stage-free `snake_case`；`paper_workflow/colab_utils/` 继续保留共享 helper 的通用 `snake_case`。
 - `project_stage` 必须使用语义阶段名，例如 `protocol_skeleton`。
 - `method_variant` 必须使用机制语义命名。
 - 禁止使用 `*_v1`、`*_v2`、`*_p0`、`*_p1` 作为正式文件名、方法名、配置名或产物名。
@@ -90,7 +93,7 @@ python tools/harness/run_all_audits.py
 
 进入 `synthetic_tubelet_sync_probe` 之前，必须同时满足：
 
-- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q -s` 全部通过，并保留可保存的测试输出。
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q -s` 默认分层测试全部通过，并保留可保存的测试输出。
 - `python tools/harness/run_all_audits.py` 全部通过，并保留可保存的审计输出。
 - 审计通过不能替代 `pytest` 通过。
 - `docs/field_registry.md` 完整登记当前字段。

@@ -1,10 +1,13 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = ["-m", "not slow and not formal and not smoke"]
+addopts = ["-m", "(constraint or unit or quick) and not integration and not smoke and not slow and not formal"]
 markers = [
-    "unit: fast unit-level tests",
-    "smoke: lightweight runtime smoke tests",
-    "slow: longer proof-profile or broad integration tests",
-    "formal: formal-profile completion evidence tests",
+    "unit: extremely fast tests with no I/O and no external dependency",
+    "constraint: static or lightweight governance tests; treated as unit-level by default",
+    "quick: lightweight functional tests that may use tiny in-memory fixtures but should finish quickly",
+    "integration: tests requiring real I/O, backend construction, runner instantiation, or artifact directories",
+    "smoke: key end-to-end path tests for CI smoke pipeline; excluded from local default unless explicitly selected",
+    "slow: tests that may exceed 30 seconds or perform broad sweeps",
+    "formal: tests dedicated to formal gate or formal-profile completion evidence",
 ]

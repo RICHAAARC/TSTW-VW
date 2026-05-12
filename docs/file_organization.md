@@ -555,54 +555,62 @@ scripts/
 
 ### （一）测试分层
 
-推荐测试结构：
+当前研究仓库的测试构建规则以 `docs/test_case_constraints.md` 为准。受治理测试结构固定为：
 
 ```text
 tests/
-├── unit/
+├── constraints/
+├── functional/
 ├── integration/
-├── reproduction/
-├── experiments/
-└── workflow/
+├── helpers/
+├── fixtures/
+└── conftest.py
 ```
 
 其中：
 
 ```text
-unit/：测试 main/ 中单个模块；
-integration/：测试 main/ 多模块闭环；
-reproduction/：测试发布版命令行复现；
-experiments/：测试 experiments/ 中的机制验证或论文协议；
-workflow/：测试 paper_workflow/ Notebook contract 或 Colab 工具。
+constraints/：命名、边界、schema、字段、文档、配置、Notebook contract、formal rule 等轻量约束测试；
+functional/：纯函数、mock backend、tiny fixture、轻量 I/O、registry、metric、packager contract 等 quick 功能测试；
+integration/：runner、run_root、records/tables/reports rebuild、真实 mp4/ffmpeg、smoke、slow 与 formal gate 测试；
+helpers/：测试共享 helper，不得以 test_ 开头；
+fixtures/：极小 checked-in fixture，不保存正式输出。
 ```
 
-### （二）发布版测试选择
+`tests/` 根目录不得直接新增 `test_*.py`。新增测试必须先判断属于 `constraints/`、`functional/` 还是 `integration/`。
+
+### （二）默认 pytest 口径
+
+默认 `pytest -q` 只执行：
+
+```text
+constraint or unit or quick
+```
+
+并默认排除：
+
+```text
+integration
+smoke
+slow
+formal
+```
+
+`pyproject.toml` 必须声明完整 marker 集合：`unit`、`constraint`、`quick`、`integration`、`smoke`、`slow`、`formal`。runner-backed、formal、smoke、broad attack matrix 和重型 artifact rebuild 测试不得通过缺省 marker 混入默认测试。
+
+### （三）发布版测试选择
 
 最终发布版默认保留：
 
 ```text
-tests/unit/
+tests/constraints/
+tests/functional/
 tests/integration/
-tests/reproduction/
 ```
 
-可选保留：
+可按 release 类型剔除内部 notebook、Drive、harness-only 约束测试，但剔除前必须保证核心方法、协议、复现 CLI 和 artifact rebuild 仍有对应发布版测试覆盖。
 
-```text
-tests/experiments/
-```
-
-默认不保留：
-
-```text
-tests/workflow/colab_*
-tests/*notebook_contract*
-tests/*drive_packager*
-```
-
-如果公开 Notebook tutorial，可以单独保留 `examples/colab/tests/` 或 `paper_workflow/tests/`，但不作为发布版默认测试。
-
-### （三）测试命名约束
+### （四）测试命名约束
 
 测试文件名必须使用机制语义，不得使用弱阶段编号。推荐示例：
 
@@ -617,11 +625,13 @@ test_quality_metrics_rebuild.py
 不推荐：
 
 ```text
-test_stage2.py
-test_p2_runner.py
+test_stage2.py  # 禁止：弱阶段编号
+test_p2_runner.py  # 禁止：弱版本后缀
 test_final.py
 test_new_method.py
 ```
+
+测试输出必须使用 `tmp_path` 或 `tmp_path_factory`，不得写入 checked-in `outputs/`、仓库根目录临时文件、Google Drive 或 `/content/drive/` 路径。
 
 ---
 

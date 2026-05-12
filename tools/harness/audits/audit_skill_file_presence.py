@@ -31,6 +31,7 @@ REQUIRED_SKILL_FILES = [
     "artifact_rebuild.skill.md",
     "claim_audit.skill.md",
     "minimal_release.skill.md",
+    "test_case_governance.skill.md",
 ]
 REQUIRED_SECTIONS = [
     "## Purpose",
@@ -78,6 +79,13 @@ REQUIRED_SKILL_CONTENT = {
         "build_processed_real_video_dataset.ipynb",
         "run_real_video_vae_latent_probe.ipynb",
         "paper_workflow/notebook_utils/",
+    ],
+    "test_case_governance.skill.md": [
+        "docs/test_case_constraints.md",
+        "tests/constraints/",
+        "tests/functional/",
+        "tests/integration/",
+        "audit_test_case_constraints.py",
     ],
 }
 

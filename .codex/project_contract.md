@@ -77,6 +77,17 @@
 6. Tables, figures, and reports must remain rebuildable from governed records and manifests.
 7. Protocol skeleton runtime outputs must follow the governed `records/`, `thresholds/`, `artifacts/`, and `tables/` layout.
 
+## Test Case Construction Governance
+
+1. Test construction, migration, splitting, merging, markers, fixtures, and runtime-cost classification must follow `docs/test_case_constraints.md`.
+2. The governed test directory structure is `tests/constraints/`, `tests/functional/`, `tests/integration/`, with support code in `tests/helpers/` and tiny checked-in fixtures in `tests/fixtures/`.
+3. `pytest -q` must default to `constraint`, `unit`, or `quick` tests and must exclude `integration`, `smoke`, `slow`, and `formal` tests unless explicitly selected.
+4. Root-level `tests/test_*.py` files are forbidden; every test file must first be classified by validation target and runtime cost.
+5. Constraint tests must stay static or lightweight and must not instantiate runners, call `ffmpeg`, write mp4 files, or load VAE/model resources.
+6. Functional tests may use tiny fixtures, mock backends, and lightweight temporary I/O; runner-backed, artifact-rebuild, formal, and broad matrix paths belong in `tests/integration/`.
+7. Integration tests must carry the `integration` marker; key end-to-end paths also carry `smoke`, formal gate paths carry `formal`, and broad or long paths carry `slow`.
+8. Test outputs must use `tmp_path` or `tmp_path_factory`; checked-in formal experiment outputs under `outputs/` remain forbidden.
+
 ## Core Boundary / Gate Layering
 
 1. Runtime protocol contracts may exist in `main/core/`, `main/protocol/`, and `main/analysis/`; they define split semantics, record schema, threshold calibration, manifests, and rebuildable tables.
