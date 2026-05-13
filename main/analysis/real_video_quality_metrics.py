@@ -6,6 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -231,8 +232,17 @@ def _compute_lpips_score(
         raise ImportError("lpips and torch packages required for LPIPS computation") from exc
 
     lpips_model_root = Path(lpips_model_root)
-    if not lpips_model_root.exists():
-        raise RuntimeError(f"LPIPS model directory not found: {lpips_model_root}")
+    lpips_model_root.mkdir(parents=True, exist_ok=True)
+
+    torch_hub = getattr(torch, "hub", None)
+    torch_hub_set_dir = getattr(torch_hub, "set_dir", None) if torch_hub is not None else None
+    if callable(torch_hub_set_dir):
+        try:
+            torch_hub_set_dir(str(lpips_model_root))
+        except Exception:
+            # 中文注释：hub 目录设置失败不应阻断 LPIPS 初始化，保留后续真实错误路径。
+            pass
+    os.environ["TORCH_HOME"] = str(lpips_model_root)
 
     # 初始化 LPIPS 网络
     # 注意：LPIPS 会尝试从缓存或 lpips_model_root 目录加载预训练权重
