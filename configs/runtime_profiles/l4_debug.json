@@ -1,0 +1,22 @@
+{
+  "runtime_profile": "l4_debug",
+  "gpu_target": "L4",
+  "device": "cuda",
+  "vae_dtype": "float16",
+  "vae_batch_size_frames": 4,
+  "lpips_batch_size": 8,
+  "clip_batch_size": 8,
+  "video_io_worker_count": 1,
+  "attack_worker_count": 1,
+  "shard_count": 1,
+  "reuse_encoded_latents": true,
+  "reuse_decoded_videos": true,
+  "reuse_attacked_videos": false,
+  "local_cache_policy": "session_local_prefer_local_runtime",
+  "profile_gpu_runtime": true,
+  "profile_run_timing": true,
+  "profile_drive_io": true,
+  "write_runtime_recommendation": true,
+  "gpu_profile_interval_seconds": 2,
+  "drive_io_sample_size_mb": 32
+}

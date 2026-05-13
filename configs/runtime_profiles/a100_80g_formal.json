@@ -1,0 +1,22 @@
+{
+  "runtime_profile": "a100_80g_formal",
+  "gpu_target": "A100-80G",
+  "device": "cuda",
+  "vae_dtype": "float16",
+  "vae_batch_size_frames": 16,
+  "lpips_batch_size": 32,
+  "clip_batch_size": 64,
+  "video_io_worker_count": 4,
+  "attack_worker_count": 4,
+  "shard_count": 1,
+  "reuse_encoded_latents": true,
+  "reuse_decoded_videos": true,
+  "reuse_attacked_videos": true,
+  "local_cache_policy": "session_local_prefer_local_runtime",
+  "profile_gpu_runtime": true,
+  "profile_run_timing": true,
+  "profile_drive_io": true,
+  "write_runtime_recommendation": true,
+  "gpu_profile_interval_seconds": 2,
+  "drive_io_sample_size_mb": 64
+}

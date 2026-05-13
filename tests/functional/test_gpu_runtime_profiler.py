@@ -213,3 +213,93 @@ def test_runtime_profile_workflow_records_warnings_for_forced_profiler_shutdown(
     assert payload["warning_count"] == 2
     assert payload["warnings"][0]["warning_type"] == "gpu_runtime_profiler_force_terminate"
     assert payload["warnings"][1]["warning_type"] == "gpu_runtime_profiler_force_kill"
+
+
+def test_runtime_profile_workflow_loads_governed_profile_config() -> None:
+    """Validate the notebook helper loads a governed runtime-profile config.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    payload = runtime_profile_workflow.load_runtime_profile_config(
+        runtime_profile="l4_formal",
+    )
+
+    assert payload["runtime_profile"] == "l4_formal"
+    assert payload["gpu_target"] == "L4"
+    assert payload["batch_size_frames"] == 8
+    assert payload["vae_batch_size_frames"] == 8
+    assert payload["profile_runtime"] is True
+    assert payload["config_path"].endswith("configs\\runtime_profiles\\l4_formal.json")
+    assert len(payload["config_digest"]) == 64
+
+
+def test_runtime_profile_workflow_persists_profile_plan(tmp_path: Path) -> None:
+    """Validate runtime-profile config loading persists a profile plan under run_root.
+
+    Args:
+        tmp_path: Temporary run root.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "run_root"
+    payload = runtime_profile_workflow.load_runtime_profile_config(
+        runtime_profile="a100_80g_formal",
+        run_root=run_root,
+    )
+    plan_path = run_root / "runtime_profile" / "runtime_profile_plan.json"
+    persisted_payload = json.loads(plan_path.read_text(encoding="utf-8"))
+
+    assert plan_path.exists()
+    assert persisted_payload["runtime_profile"] == "a100_80g_formal"
+    assert persisted_payload["batch_size_frames"] == 16
+    assert persisted_payload["config_digest"] == payload["config_digest"]
+
+
+def test_runtime_profile_workflow_rejects_semantic_override_keys(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate runtime-profile configs reject semantic override keys.
+
+    Args:
+        tmp_path: Temporary config root.
+        monkeypatch: Pytest monkeypatch helper.
+
+    Returns:
+        None.
+    """
+    config_root = tmp_path / "configs" / "runtime_profiles"
+    config_root.mkdir(parents=True, exist_ok=True)
+    invalid_config_path = config_root / "l4_invalid.json"
+    invalid_config_path.write_text(
+        json.dumps(
+            {
+                "runtime_profile": "l4_invalid",
+                "gpu_target": "L4",
+                "device": "cuda",
+                "vae_dtype": "float16",
+                "vae_batch_size_frames": 8,
+                "target_fpr_override": 0.001,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        runtime_profile_workflow,
+        "_runtime_profile_config_root",
+        lambda: config_root,
+    )
+
+    with pytest.raises(ValueError, match="forbidden semantic keys"):
+        runtime_profile_workflow.load_runtime_profile_config(
+            runtime_profile="l4_invalid",
+        )

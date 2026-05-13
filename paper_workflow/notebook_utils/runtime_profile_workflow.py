@@ -6,6 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -66,6 +67,327 @@ def _runtime_profile_dir(run_root: str | Path) -> Path:
     runtime_profile_dir = Path(run_root) / "runtime_profile"
     runtime_profile_dir.mkdir(parents=True, exist_ok=True)
     return runtime_profile_dir
+
+
+ALLOWED_RUNTIME_PROFILE_KEYS = {
+    "runtime_profile",
+    "gpu_target",
+    "device",
+    "vae_dtype",
+    "vae_batch_size_frames",
+    "batch_size_frames",
+    "lpips_batch_size",
+    "clip_batch_size",
+    "video_io_worker_count",
+    "attack_worker_count",
+    "shard_count",
+    "reuse_encoded_latents",
+    "reuse_decoded_videos",
+    "reuse_attacked_videos",
+    "local_cache_policy",
+    "precision_mode",
+    "checkpointing_policy",
+    "profile_gpu_runtime",
+    "profile_run_timing",
+    "profile_drive_io",
+    "write_runtime_recommendation",
+    "gpu_profile_interval_seconds",
+    "drive_io_sample_size_mb",
+}
+
+FORBIDDEN_RUNTIME_PROFILE_KEYS = {
+    "target_fpr",
+    "target_fpr_override",
+    "shared_target_fpr",
+    "threshold_override",
+    "threshold_policy",
+    "score_weight_override",
+    "method_variant_selection_from_test",
+    "method_variants",
+    "sample_roles",
+    "splits",
+    "attack_matrix",
+    "attack_severity_override",
+    "decision_rule_override",
+    "formal_pass_override",
+}
+
+BOOLEAN_RUNTIME_PROFILE_KEYS = {
+    "reuse_encoded_latents",
+    "reuse_decoded_videos",
+    "reuse_attacked_videos",
+    "profile_gpu_runtime",
+    "profile_run_timing",
+    "profile_drive_io",
+    "write_runtime_recommendation",
+}
+
+POSITIVE_INTEGER_RUNTIME_PROFILE_KEYS = {
+    "vae_batch_size_frames",
+    "batch_size_frames",
+    "lpips_batch_size",
+    "clip_batch_size",
+    "video_io_worker_count",
+    "attack_worker_count",
+    "shard_count",
+    "gpu_profile_interval_seconds",
+    "drive_io_sample_size_mb",
+}
+
+STRING_RUNTIME_PROFILE_KEYS = {
+    "runtime_profile",
+    "gpu_target",
+    "device",
+    "vae_dtype",
+    "local_cache_policy",
+    "precision_mode",
+    "checkpointing_policy",
+}
+
+DEFAULT_RUNTIME_PROFILE_VALUES: dict[str, Any] = {
+    "device": "cuda",
+    "vae_dtype": "float16",
+    "vae_batch_size_frames": 8,
+    "batch_size_frames": 8,
+    "lpips_batch_size": 8,
+    "clip_batch_size": 16,
+    "video_io_worker_count": 2,
+    "attack_worker_count": 2,
+    "shard_count": 1,
+    "reuse_encoded_latents": True,
+    "reuse_decoded_videos": True,
+    "reuse_attacked_videos": False,
+    "local_cache_policy": "session_local_prefer_local_runtime",
+    "precision_mode": "mixed_precision_fp16",
+    "checkpointing_policy": "disabled",
+    "profile_gpu_runtime": True,
+    "profile_run_timing": True,
+    "profile_drive_io": True,
+    "write_runtime_recommendation": True,
+    "gpu_profile_interval_seconds": 2,
+    "drive_io_sample_size_mb": 64,
+}
+
+
+def _runtime_profile_config_root() -> Path:
+    """功能：返回受治理 runtime profile 配置目录。
+
+    Return the governed runtime-profile config root.
+
+    Args:
+        None.
+
+    Returns:
+        The runtime-profile config root path.
+    """
+    return _repository_root() / "configs" / "runtime_profiles"
+
+
+def _runtime_profile_config_path(runtime_profile: str) -> Path:
+    """功能：根据 profile 名称返回配置文件路径。
+
+    Resolve the config file path for a runtime profile name.
+
+    Args:
+        runtime_profile: Runtime-profile name.
+
+    Returns:
+        The resolved config path.
+
+    Raises:
+        ValueError: Raised when the runtime profile name is empty.
+    """
+    normalized_profile = str(runtime_profile).strip()
+    if not normalized_profile:
+        raise ValueError("runtime_profile must be a non-empty string")
+    if normalized_profile.endswith(".json"):
+        normalized_profile = normalized_profile[:-5]
+    return _runtime_profile_config_root() / f"{normalized_profile}.json"
+
+
+def _runtime_profile_config_digest(payload: dict[str, Any]) -> str:
+    """功能：计算 runtime profile 配置摘要。
+
+    Compute a stable digest for a runtime-profile configuration payload.
+
+    Args:
+        payload: Runtime-profile payload.
+
+    Returns:
+        The normalized SHA-256 digest string.
+    """
+    serialized_payload = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized_payload.encode("utf-8")).hexdigest()
+
+
+def _validate_runtime_profile_payload(
+    *,
+    runtime_profile: str,
+    payload: dict[str, Any],
+    config_path: Path,
+) -> dict[str, Any]:
+    """功能：校验并标准化 runtime profile 配置载荷。
+
+    Validate and normalize a runtime-profile configuration payload.
+
+    Args:
+        runtime_profile: Requested runtime-profile name.
+        payload: Parsed configuration payload.
+        config_path: Source configuration path.
+
+    Returns:
+        The normalized runtime-profile payload.
+
+    Raises:
+        ValueError: Raised when forbidden, unknown, or malformed fields are present.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError(f"runtime_profile config must be a JSON object: {config_path}")
+
+    payload_keys = set(payload.keys())
+    forbidden_keys = sorted(payload_keys & FORBIDDEN_RUNTIME_PROFILE_KEYS)
+    if forbidden_keys:
+        # 中文：runtime_profile 只能描述执行层参数，不能承载 threshold 或判决语义覆盖。
+        raise ValueError(
+            f"runtime_profile config contains forbidden semantic keys: {forbidden_keys}"
+        )
+
+    unknown_keys = sorted(payload_keys - ALLOWED_RUNTIME_PROFILE_KEYS)
+    if unknown_keys:
+        raise ValueError(
+            f"runtime_profile config contains unknown keys: {unknown_keys}"
+        )
+
+    for key, value in payload.items():
+        if isinstance(value, (dict, list)):
+            raise ValueError(
+                f"runtime_profile config values must stay flat and scalar-like: {key}"
+            )
+
+    normalized_payload: dict[str, Any] = dict(DEFAULT_RUNTIME_PROFILE_VALUES)
+    normalized_payload.update(payload)
+    normalized_payload["runtime_profile"] = str(
+        normalized_payload.get("runtime_profile", runtime_profile)
+    ).strip()
+    if normalized_payload["runtime_profile"] != str(runtime_profile).strip():
+        raise ValueError(
+            "runtime_profile field must exactly match the requested profile name"
+        )
+
+    for key in STRING_RUNTIME_PROFILE_KEYS:
+        if key not in normalized_payload:
+            continue
+        value = normalized_payload[key]
+        if value is None:
+            continue
+        normalized_value = str(value).strip()
+        if not normalized_value:
+            raise ValueError(f"runtime_profile field {key} must be a non-empty string")
+        normalized_payload[key] = normalized_value
+
+    for key in BOOLEAN_RUNTIME_PROFILE_KEYS:
+        if key not in normalized_payload:
+            continue
+        value = normalized_payload[key]
+        if not isinstance(value, bool):
+            raise ValueError(f"runtime_profile field {key} must be boolean")
+
+    for key in POSITIVE_INTEGER_RUNTIME_PROFILE_KEYS:
+        if key not in normalized_payload:
+            continue
+        value = normalized_payload[key]
+        if not isinstance(value, int) or value < 1:
+            raise ValueError(f"runtime_profile field {key} must be a positive integer")
+
+    vae_batch_size_frames = int(
+        payload.get(
+            "vae_batch_size_frames",
+            DEFAULT_RUNTIME_PROFILE_VALUES["vae_batch_size_frames"],
+        )
+    )
+    batch_size_frames = int(payload.get("batch_size_frames", vae_batch_size_frames))
+    if "vae_batch_size_frames" in payload and "batch_size_frames" in payload and vae_batch_size_frames != batch_size_frames:
+        raise ValueError(
+            "vae_batch_size_frames and batch_size_frames must match when both are provided"
+        )
+    normalized_payload["vae_batch_size_frames"] = vae_batch_size_frames
+    normalized_payload["batch_size_frames"] = batch_size_frames
+    normalized_payload["profile_runtime"] = bool(
+        normalized_payload["profile_gpu_runtime"]
+        or normalized_payload["profile_run_timing"]
+        or normalized_payload["profile_drive_io"]
+        or normalized_payload["write_runtime_recommendation"]
+    )
+    normalized_payload["config_path"] = str(config_path)
+    normalized_payload["config_digest"] = _runtime_profile_config_digest(
+        {
+            key: normalized_payload[key]
+            for key in sorted(ALLOWED_RUNTIME_PROFILE_KEYS)
+            if key in normalized_payload
+        }
+    )
+    return normalized_payload
+
+
+def load_runtime_profile_config(
+    *,
+    runtime_profile: str,
+    run_root: str | Path | None = None,
+) -> dict[str, Any]:
+    """功能：加载并校验 notebook 的 runtime profile 配置。
+
+    Load and validate the notebook runtime-profile configuration.
+
+    Args:
+        runtime_profile: Requested runtime-profile name.
+        run_root: Optional run-root path used to persist the profile plan.
+
+    Returns:
+        The normalized runtime-profile payload.
+
+    Raises:
+        FileNotFoundError: Raised when the governed profile config is missing.
+        ValueError: Raised when the profile config violates execution-only boundaries.
+    """
+    config_path = _runtime_profile_config_path(runtime_profile)
+    if not config_path.exists():
+        raise FileNotFoundError(config_path)
+    payload = read_json_file(config_path)
+    normalized_payload = _validate_runtime_profile_payload(
+        runtime_profile=str(runtime_profile).strip(),
+        payload=payload,
+        config_path=config_path,
+    )
+    if run_root is not None:
+        persist_runtime_profile_plan(
+            run_root=run_root,
+            runtime_profile_payload=normalized_payload,
+        )
+    return normalized_payload
+
+
+def persist_runtime_profile_plan(
+    *,
+    run_root: str | Path,
+    runtime_profile_payload: dict[str, Any],
+) -> dict[str, Any]:
+    """功能：将 runtime profile 计划写入 run_root/runtime_profile/。
+
+    Persist the normalized runtime-profile plan under run_root/runtime_profile/.
+
+    Args:
+        run_root: Run-root path.
+        runtime_profile_payload: Normalized runtime-profile payload.
+
+    Returns:
+        The persisted runtime-profile payload.
+    """
+    normalized_payload = dict(runtime_profile_payload)
+    write_json_file(
+        _runtime_profile_dir(run_root) / "runtime_profile_plan.json",
+        normalized_payload,
+    )
+    return normalized_payload
 
 
 def _gpu_profiler_session_path(run_root: str | Path) -> Path:

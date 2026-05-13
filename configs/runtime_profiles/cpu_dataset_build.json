@@ -1,0 +1,22 @@
+{
+  "runtime_profile": "cpu_dataset_build",
+  "gpu_target": "cpu_only",
+  "device": "cpu",
+  "vae_dtype": "float32",
+  "vae_batch_size_frames": 2,
+  "lpips_batch_size": 2,
+  "clip_batch_size": 4,
+  "video_io_worker_count": 2,
+  "attack_worker_count": 1,
+  "shard_count": 1,
+  "reuse_encoded_latents": false,
+  "reuse_decoded_videos": false,
+  "reuse_attacked_videos": false,
+  "local_cache_policy": "cpu_local_workspace_only",
+  "profile_gpu_runtime": false,
+  "profile_run_timing": true,
+  "profile_drive_io": true,
+  "write_runtime_recommendation": true,
+  "gpu_profile_interval_seconds": 2,
+  "drive_io_sample_size_mb": 16
+}
