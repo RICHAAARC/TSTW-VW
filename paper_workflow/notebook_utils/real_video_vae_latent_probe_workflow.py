@@ -240,6 +240,7 @@ def run_probe_runner(
     ablation_config: str | Path = "configs/ablation/real_video_vae_latent_ablation.json",
     dataset_manifest: str | Path | None = None,
     samples_per_role: int | None = None,
+    batch_size_frames: int | None = None,
     python_executable: str = sys.executable,
 ) -> None:
     """Run the governed probe runner module."""
@@ -269,6 +270,8 @@ def run_probe_runner(
         runner_command.extend(["--dataset-manifest", str(dataset_manifest)])
     if samples_per_role is not None:
         runner_command.extend(["--samples-per-role", str(int(samples_per_role))])
+    if batch_size_frames is not None:
+        runner_command.extend(["--batch-size-frames", str(int(batch_size_frames))])
     runner_env = dict(os.environ)
     existing_pythonpath = runner_env.get("PYTHONPATH")
     repository_root_text = str(repository_root)

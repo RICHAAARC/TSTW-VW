@@ -6,6 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
+import types
 from pathlib import Path
 
 import pytest
@@ -149,3 +150,62 @@ def test_runtime_splits_shrink_to_manifest_available_splits() -> None:
         "formal",
         dataset_manifest,
     ) == ["calibration", "test"]
+
+
+@pytest.mark.unit
+def test_cached_decoded_video_artifact_reuses_same_latent_across_attack_relpaths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate decoded artifacts are reused for the same latent across attack cases.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    decode_call_count = {"value": 0}
+    expected_metadata = {
+        "video_relpath": "artifacts/videos/decoded/frame_prc/shared.mp4",
+        "video_digest": "decoded-digest",
+        "container": "mp4",
+        "codec": "libx264",
+    }
+    sample = types.SimpleNamespace(latent_tensor_digest_random="latent-digest")
+
+    monkeypatch.setattr(runner, "_load_latent_tensor", lambda _sample: "latent-array")
+
+    def _fake_decode(*args, **kwargs):
+        del args, kwargs
+        decode_call_count["value"] += 1
+        return "decoded-video"
+
+    monkeypatch.setattr(runner, "_decode_latent_to_video", _fake_decode)
+    monkeypatch.setattr(runner, "_write_video_artifact", lambda *args, **kwargs: dict(expected_metadata))
+
+    cache: dict[tuple[str, str], dict[str, object]] = {}
+    first_metadata = runner._cached_decoded_video_artifact(
+        cache,
+        sample,
+        vae_runtime_backend=object(),
+        vae_metadata={},
+        output_root=ROOT,
+        artifact_relpath=Path("artifacts/videos/decoded/frame_prc/attack_a.mp4"),
+        fps=8,
+        target_resolution=(256, 256),
+    )
+    second_metadata = runner._cached_decoded_video_artifact(
+        cache,
+        sample,
+        vae_runtime_backend=object(),
+        vae_metadata={},
+        output_root=ROOT,
+        artifact_relpath=Path("artifacts/videos/decoded/frame_prc/attack_b.mp4"),
+        fps=8,
+        target_resolution=(256, 256),
+    )
+
+    assert decode_call_count["value"] == 1
+    assert first_metadata == expected_metadata
+    assert second_metadata == expected_metadata

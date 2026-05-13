@@ -65,6 +65,43 @@ def test_write_probe_runtime_config_persists_dataset_manifest_path(tmp_path: Pat
 
 
 @pytest.mark.unit
+def test_write_probe_runtime_config_preserves_batch_size_frames_extra_config(tmp_path: Path) -> None:
+    """Validate runtime config keeps batch_size_frames as a notebook-visible tuning knob.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    local_dataset_root = tmp_path / "runtime" / "datasets" / "probe"
+    processed_dataset_root = tmp_path / "drive" / "processed" / "probe"
+    local_model_root = tmp_path / "runtime" / "models" / "autoencoder_kl"
+    dataset_manifest_path = local_dataset_root / "dataset_manifest.json"
+    runtime_config_path = tmp_path / "runtime_config.json"
+
+    local_dataset_root.mkdir(parents=True, exist_ok=True)
+    processed_dataset_root.mkdir(parents=True, exist_ok=True)
+    local_model_root.mkdir(parents=True, exist_ok=True)
+    dataset_manifest_path.write_text("{}\n", encoding="utf-8")
+
+    write_probe_runtime_config(
+        runtime_config_path=runtime_config_path,
+        execution_environment="colab",
+        processed_dataset_key="real_video_probe",
+        local_dataset_root=local_dataset_root,
+        processed_dataset_root=processed_dataset_root,
+        vae_model_local_path=local_model_root,
+        dataset_manifest_path=dataset_manifest_path,
+        require_formal_pass_criteria=True,
+        extra_config={"batch_size_frames": 16},
+    )
+
+    payload = json.loads(runtime_config_path.read_text(encoding="utf-8"))
+    assert payload["batch_size_frames"] == 16
+
+
+@pytest.mark.unit
 def test_prepare_session_autoencoder_kl_copies_local_model_into_session_root(
     tmp_path: Path,
 ) -> None:
@@ -138,6 +175,7 @@ def test_run_probe_runner_forwards_dataset_manifest_to_runner(
         runtime_profile="formal",
         runtime_config_path=tmp_path / "runtime_config.json",
         dataset_manifest=dataset_manifest_path,
+        batch_size_frames=16,
         python_executable="python",
     )
 
@@ -146,6 +184,8 @@ def test_run_probe_runner_forwards_dataset_manifest_to_runner(
     repository_root = Path(workflow_module.__file__).resolve().parents[2]
     assert "--dataset-manifest" in command
     assert str(dataset_manifest_path) in command
+    assert "--batch-size-frames" in command
+    assert "16" in command
     assert kwargs["cwd"] == repository_root
     assert kwargs["stdout"] == workflow_module.subprocess.PIPE
     assert kwargs["stderr"] == workflow_module.subprocess.STDOUT

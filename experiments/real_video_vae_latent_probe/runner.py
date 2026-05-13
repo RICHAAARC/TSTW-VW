@@ -124,6 +124,7 @@ class RealVideoVaeLatentRunner:
         output_root: str | Path,
         run_mode: str = "smoke",
         samples_per_role: int | None = None,
+        batch_size_frames: int | None = None,
         runtime_profile_override: str | None = None,
         method_variants: list[str] | None = None,
         protocol_config_path: str | Path | None = None,
@@ -141,6 +142,7 @@ class RealVideoVaeLatentRunner:
             output_root: Run root path.
             run_mode: Runtime mode, one of `smoke` or `formal`.
             samples_per_role: Optional sample count per split-role pair.
+            batch_size_frames: Optional VAE frame-batch size override.
             runtime_profile_override: Optional explicit runtime profile.
             method_variants: Optional explicit method-variant allowlist.
             protocol_config_path: Optional protocol config path.
@@ -177,6 +179,8 @@ class RealVideoVaeLatentRunner:
             self._repository_root / "configs" / "ablation" / "real_video_vae_latent_ablation.json",
         )
         runtime_config_overrides = self._load_runtime_config(runtime_config_path)
+        if batch_size_frames is not None:
+            runtime_config_overrides["batch_size_frames"] = int(batch_size_frames)
         if dataset_manifest_path is None and any(
             key in runtime_config_overrides
             for key in ("local_dataset_root", "dataset_manifest_path")
@@ -223,6 +227,8 @@ class RealVideoVaeLatentRunner:
             backend_config["vae_model_local_path"] = runtime_config_overrides["local_vae_model_root"]
         elif "vae_model_local_path" in runtime_config_overrides:
             backend_config["vae_model_local_path"] = runtime_config_overrides["vae_model_local_path"]
+        if "batch_size_frames" in runtime_config_overrides:
+            backend_config["batch_size_frames"] = int(runtime_config_overrides["batch_size_frames"])
         if "frame_sampling_policy" in dataset_manifest:
             backend_config["frame_sampling_policy"] = dataset_manifest["frame_sampling_policy"]
         if "default_frame_count" in dataset_manifest and "target_frame_count" not in backend_config:
@@ -510,6 +516,15 @@ class RealVideoVaeLatentRunner:
                     "attack_name": event_plan_entry.attack_name,
                 }
             )[:24]
+            decoded_artifact_digest = compute_object_digest(
+                {
+                    "source_sample_id": source_sample_id,
+                    "source_sample_role": source_sample_role,
+                    "split": event_plan_entry.split,
+                    "method_variant": method_config["method_variant"],
+                    "latent_digest": working_sample.latent_tensor_digest_random,
+                }
+            )[:24]
             embedded_key = (
                 event_plan_entry.split,
                 source_sample_role,
@@ -552,7 +567,7 @@ class RealVideoVaeLatentRunner:
                 / "videos"
                 / "decoded"
                 / method_config["method_variant"]
-                / f"{event_artifact_digest}{video_artifact_suffix}"
+                / f"{decoded_artifact_digest}{video_artifact_suffix}"
             )
             decoded_video_metadata = self._cached_decoded_video_artifact(
                 decoded_video_cache,
@@ -815,7 +830,11 @@ class RealVideoVaeLatentRunner:
         fps: int,
         target_resolution: tuple[int, int],
     ) -> dict[str, Any]:
-        cache_key = (sample.latent_tensor_digest_random, artifact_relpath.as_posix())
+        cache_key = (
+            sample.latent_tensor_digest_random,
+            str(fps),
+            f"{int(target_resolution[0])}x{int(target_resolution[1])}",
+        )
         cached_metadata = cache.get(cache_key)
         if cached_metadata is not None:
             return cached_metadata
@@ -1475,6 +1494,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--run-mode", choices=("smoke", "formal"), default="smoke")
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--samples-per-role", type=int, default=None)
+    parser.add_argument("--batch-size-frames", type=int, default=None)
     parser.add_argument("--runtime-profile", default=None)
     parser.add_argument("--protocol-config", default=None)
     parser.add_argument("--backend-config", default=None)
@@ -1487,6 +1507,7 @@ def main(argv: list[str] | None = None) -> None:
         output_root=args.run_root,
         run_mode=args.run_mode,
         samples_per_role=args.samples_per_role,
+        batch_size_frames=args.batch_size_frames,
         runtime_profile_override=args.runtime_profile,
         protocol_config_path=args.protocol_config,
         backend_config_path=args.backend_config,

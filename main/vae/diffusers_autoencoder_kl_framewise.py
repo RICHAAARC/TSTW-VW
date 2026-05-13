@@ -57,6 +57,9 @@ class DiffusersAutoencoderKLFramewiseBackend(VAEBackend):
         self._vae_dtype = str(
             config.get("vae_dtype", "float16_on_cuda_float32_on_cpu")
         )
+        self._batch_size_frames = int(config.get("batch_size_frames", 8))
+        if self._batch_size_frames < 1:
+            raise ValueError("batch_size_frames must be a positive integer")
 
         required_model = self._runtime_profile == "formal"
         self._model_root = resolve_vae_model_root(config, required=required_model)
@@ -175,6 +178,7 @@ class DiffusersAutoencoderKLFramewiseBackend(VAEBackend):
             "vae_decode_mode": self._vae_decode_mode,
             "device": self._device,
             "dtype": self._vae_dtype,
+            "batch_size_frames": self._batch_size_frames,
             "runtime_impl": self._runtime_impl,
             "deterministic_encode": True,
         }
@@ -227,30 +231,42 @@ class DiffusersAutoencoderKLFramewiseBackend(VAEBackend):
 
         torch = self._torch
         video_nchw = rgb_video_to_nchw_minus1_1(video_batch)
-        tensor = torch.from_numpy(video_nchw).to(device=self._device)
-        if self._device == "cuda" and "float16" in self._vae_dtype:
-            tensor = tensor.to(dtype=torch.float16)
-        else:
-            tensor = tensor.to(dtype=torch.float32)
-        with torch.no_grad():
-            posterior = self._vae_model.encode(tensor).latent_dist
-            latents = posterior.mode()
-            scaling_factor = float(getattr(self._vae_model.config, "scaling_factor", 1.0))
-            latents = latents * scaling_factor
-        return latents.detach().float().cpu().numpy()
+        latent_batches: list[np.ndarray] = []
+        for frame_start in range(0, int(video_nchw.shape[0]), self._batch_size_frames):
+            frame_stop = frame_start + self._batch_size_frames
+            tensor = torch.from_numpy(video_nchw[frame_start:frame_stop]).to(device=self._device)
+            if self._device == "cuda" and "float16" in self._vae_dtype:
+                tensor = tensor.to(dtype=torch.float16)
+            else:
+                tensor = tensor.to(dtype=torch.float32)
+            with torch.no_grad():
+                posterior = self._vae_model.encode(tensor).latent_dist
+                latents = posterior.mode()
+                scaling_factor = float(getattr(self._vae_model.config, "scaling_factor", 1.0))
+                latents = latents * scaling_factor
+            latent_batches.append(latents.detach().float().cpu().numpy())
+        if not latent_batches:
+            raise RuntimeError("encode_video requires at least one frame")
+        return np.concatenate(latent_batches, axis=0)
 
     def _decode_with_diffusers(self, latent_batch: np.ndarray) -> np.ndarray:
         if self._torch is None or self._vae_model is None:
             raise RuntimeError("diffusers runtime is not initialized")
 
         torch = self._torch
-        tensor = torch.from_numpy(latent_batch).to(device=self._device)
-        if self._device == "cuda" and "float16" in self._vae_dtype:
-            tensor = tensor.to(dtype=torch.float16)
-        else:
-            tensor = tensor.to(dtype=torch.float32)
+        decoded_batches: list[np.ndarray] = []
         scaling_factor = float(getattr(self._vae_model.config, "scaling_factor", 1.0))
-        with torch.no_grad():
-            decoded = self._vae_model.decode(tensor / scaling_factor).sample
-        decoded_np = decoded.detach().float().cpu().numpy()
+        for frame_start in range(0, int(latent_batch.shape[0]), self._batch_size_frames):
+            frame_stop = frame_start + self._batch_size_frames
+            tensor = torch.from_numpy(latent_batch[frame_start:frame_stop]).to(device=self._device)
+            if self._device == "cuda" and "float16" in self._vae_dtype:
+                tensor = tensor.to(dtype=torch.float16)
+            else:
+                tensor = tensor.to(dtype=torch.float32)
+            with torch.no_grad():
+                decoded = self._vae_model.decode(tensor / scaling_factor).sample
+            decoded_batches.append(decoded.detach().float().cpu().numpy())
+        if not decoded_batches:
+            raise RuntimeError("decode_video requires at least one latent frame")
+        decoded_np = np.concatenate(decoded_batches, axis=0)
         return nchw_minus1_1_to_rgb_video(decoded_np)

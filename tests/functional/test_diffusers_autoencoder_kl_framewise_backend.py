@@ -152,3 +152,132 @@ def test_diffusers_autoencoder_kl_framewise_backend_formal_accepts_autoencoder_r
     assert captured_loader_call["device"] == "cpu"
     assert captured_loader_call["eval_called"] is True
     assert backend.backend_metadata()["runtime_impl"] == "diffusers_autoencoder_kl"
+
+
+@pytest.mark.unit
+def test_diffusers_autoencoder_kl_framewise_backend_chunks_by_batch_size(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate diffusers encode/decode calls are chunked by batch_size_frames.
+
+    Args:
+        tmp_path: Temporary model root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    model_root = tmp_path / "models" / "vae"
+    model_root.mkdir(parents=True, exist_ok=True)
+    (model_root / "config.json").write_text("{}\n", encoding="utf-8")
+    encode_calls: list[int] = []
+    decode_calls: list[int] = []
+
+    class _FakeTensor:
+        def __init__(self, array: np.ndarray) -> None:
+            self.array = np.asarray(array, dtype=np.float32)
+
+        def to(self, *, device: str | None = None, dtype: object | None = None):
+            del device, dtype
+            return self
+
+        def detach(self):
+            return self
+
+        def float(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self) -> np.ndarray:
+            return np.asarray(self.array, dtype=np.float32)
+
+        def __mul__(self, value: float):
+            return _FakeTensor(self.array * float(value))
+
+        def __truediv__(self, value: float):
+            return _FakeTensor(self.array / float(value))
+
+    class _FakePosterior:
+        def __init__(self, array: np.ndarray) -> None:
+            self._array = array
+
+        def mode(self) -> _FakeTensor:
+            frame_count = int(self._array.shape[0])
+            latent = np.ones((frame_count, 4, 4, 4), dtype=np.float32)
+            return _FakeTensor(latent)
+
+    class _FakeModel:
+        def __init__(self) -> None:
+            self.config = types.SimpleNamespace(scaling_factor=1.0)
+
+        def to(self, *, device: str, dtype: object):
+            del device, dtype
+            return self
+
+        def eval(self) -> None:
+            return None
+
+        def encode(self, tensor: _FakeTensor):
+            encode_calls.append(int(tensor.array.shape[0]))
+            return types.SimpleNamespace(latent_dist=_FakePosterior(tensor.array))
+
+        def decode(self, tensor: _FakeTensor):
+            decode_calls.append(int(tensor.array.shape[0]))
+            frame_count = int(tensor.array.shape[0])
+            sample = np.zeros((frame_count, 3, 32, 32), dtype=np.float32)
+            return types.SimpleNamespace(sample=_FakeTensor(sample))
+
+    class _FakeAutoencoderKL:
+        @staticmethod
+        def from_pretrained(model_path: str, *, local_files_only: bool):
+            del model_path, local_files_only
+            return _FakeModel()
+
+    class _FakeNoGrad:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, traceback):
+            del exc_type, exc, traceback
+            return False
+
+    fake_torch = types.SimpleNamespace(
+        cuda=types.SimpleNamespace(is_available=lambda: False),
+        float16="float16",
+        float32="float32",
+        from_numpy=lambda array: _FakeTensor(array),
+        no_grad=lambda: _FakeNoGrad(),
+    )
+    fake_diffusers = types.SimpleNamespace(AutoencoderKL=_FakeAutoencoderKL)
+
+    def _fake_import_module(module_name: str) -> object:
+        if module_name == "torch":
+            return fake_torch
+        if module_name == "diffusers":
+            return fake_diffusers
+        raise ImportError(module_name)
+
+    monkeypatch.setattr(backend_module.importlib, "import_module", _fake_import_module)
+
+    backend = DiffusersAutoencoderKLFramewiseBackend(
+        {
+            "runtime_profile": "formal",
+            "vae_backend_name": "diffusers_autoencoder_kl_framewise",
+            "vae_model_local_path": str(model_root),
+            "allow_mock_vae_backend": False,
+            "batch_size_frames": 2,
+        }
+    )
+
+    video_batch = np.random.default_rng(20260510).random((5, 32, 32, 3), dtype=np.float32)
+    latent = backend.encode_video(video_batch)
+    decoded = backend.decode_video(latent, config={"target_resolution": (32, 32)})
+
+    assert encode_calls == [2, 2, 1]
+    assert decode_calls == [2, 2, 1]
+    assert latent.shape == (5, 4, 4, 4)
+    assert decoded.shape == (5, 32, 32, 3)
+    assert backend.backend_metadata()["batch_size_frames"] == 2

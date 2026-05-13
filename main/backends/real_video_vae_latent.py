@@ -142,6 +142,7 @@ class RealVideoVAELatentBackend(LatentBackend):
         vae_model_local_path: str | Path | None = None,
         allow_mock_vae_backend: bool = True,
         latent_downsample_factor: int = 8,
+        batch_size_frames: int = 8,
     ) -> None:
         normalized_latent_shape = _normalize_latent_shape(latent_shape)
         if not isinstance(latent_generation_seed, int):
@@ -171,6 +172,8 @@ class RealVideoVAELatentBackend(LatentBackend):
             not isinstance(target_frame_count, int) or target_frame_count < 1
         ):
             raise ValueError("target_frame_count must be a positive integer")
+        if not isinstance(batch_size_frames, int) or batch_size_frames < 1:
+            raise ValueError("batch_size_frames must be a positive integer")
 
         self._runtime_profile = runtime_profile
         self._video_fps = video_fps
@@ -186,6 +189,7 @@ class RealVideoVAELatentBackend(LatentBackend):
         else:
             self._target_resolution = (int(target_resolution[0]), int(target_resolution[1]))
         self._frame_sampling_policy = frame_sampling_policy
+        self._batch_size_frames = batch_size_frames
         self._mp4_runtime_available = importlib.util.find_spec("imageio_ffmpeg") is not None
         self._local_dataset_root = None if local_dataset_root is None else Path(local_dataset_root)
         self._dataset_manifest_path = None if dataset_manifest_path is None else Path(dataset_manifest_path)
@@ -210,6 +214,7 @@ class RealVideoVAELatentBackend(LatentBackend):
             "vae_decode_mode": vae_decode_mode,
             "allow_mock_vae_backend": bool(allow_mock_vae_backend),
             "latent_downsample_factor": int(latent_downsample_factor),
+            "batch_size_frames": int(batch_size_frames),
         }
         if vae_model_local_path is not None:
             vae_config["vae_model_local_path"] = str(vae_model_local_path)
@@ -230,6 +235,7 @@ class RealVideoVAELatentBackend(LatentBackend):
                 "target_frame_count": self._target_frame_count,
                 "target_resolution": list(self._target_resolution),
                 "frame_sampling_policy": self._frame_sampling_policy,
+                "batch_size_frames": self._batch_size_frames,
                 "dataset_manifest_path": None if self._dataset_manifest_path is None else str(self._dataset_manifest_path),
                 "local_dataset_root": None if self._local_dataset_root is None else str(self._local_dataset_root),
                 "vae_model_local_path": None if vae_model_local_path is None else str(vae_model_local_path),
@@ -605,4 +611,5 @@ def build_real_video_vae_latent_backend_from_support_config(
         vae_model_local_path=support_config.get("vae_model_local_path"),
         allow_mock_vae_backend=bool(support_config.get("allow_mock_vae_backend", True)),
         latent_downsample_factor=int(support_config.get("latent_downsample_factor", 8)),
+        batch_size_frames=int(support_config.get("batch_size_frames", 8)),
     )
