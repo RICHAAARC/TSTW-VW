@@ -101,6 +101,17 @@ def _assert_step_key_order(cells: list[object], required_step_keys: list[str]) -
     )
 
 
+def _all_indices(text: str, substring: str) -> list[int]:
+    indices: list[int] = []
+    start = 0
+    while True:
+        index = text.find(substring, start)
+        if index < 0:
+            return indices
+        indices.append(index)
+        start = index + len(substring)
+
+
 def test_processed_dataset_notebook_exists_and_uses_governed_entrypoints() -> None:
     """Validate that notebook A exists and only delegates to the dataset builder path.
 
@@ -224,6 +235,15 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
     assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
     assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
+    summarize_run_timing_call = "run_timing_summary = run_timing_workflow.summarize_run_timing("
+    summarize_run_timing_indices = _all_indices(notebook_text, summarize_run_timing_call)
+    formal_checker_index = notebook_text.index(
+        "formal_validation_summary = probe_workflow.check_probe_outputs("
+    )
+    package_call_index = notebook_text.index("probe_workflow.package_probe_family_results(")
+    assert len(summarize_run_timing_indices) == 3
+    assert formal_checker_index < summarize_run_timing_indices[1] < package_call_index
+    assert package_call_index < summarize_run_timing_indices[2]
     assert "formal_validation_summary" in notebook_text
     assert "result_registry.jsonl" in notebook_text
     assert "family_registry.jsonl" in notebook_text
