@@ -30,6 +30,10 @@
     ]
   },
   "samples_per_role_by_profile": {
+    "tiny": 1,
+    "smoke": 1,
+    "proof": 8,
+    "formal": 20,
     "debug_real_video": 1
   },
   "required_method_variants": [

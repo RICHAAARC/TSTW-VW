@@ -203,6 +203,8 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "PROFILE_RUNTIME = RUN_MODE == 'formal'" in notebook_text
     assert "PROFILE_GPU_RUNTIME = PROFILE_RUNTIME" in notebook_text
     assert "GPU_PROFILE_INTERVAL_SECONDS = 2" in notebook_text
+    assert "TSTW_REQUIRE_LPIPS_EVIDENCE" in notebook_text
+    assert "TSTW_SAMPLES_PER_ROLE_OVERRIDE" in notebook_text
     assert "run_timer = run_timing_workflow.start_run_timing(" in notebook_text
     assert "runtime_profile_workflow.capture_colab_environment(" in notebook_text
     assert "runtime_profile_workflow.profile_drive_io(" in notebook_text
@@ -238,6 +240,8 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "REQUIRE_FORMAL_PASS = True" in notebook_text
     assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
     assert "mechanism_summary=stage2_mechanism_summary" in notebook_text
+    assert "samples_per_role=RUNNER_SAMPLES_PER_ROLE_OVERRIDE" in notebook_text
+    assert "lpips_evidence_summary" in notebook_text
     assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
     assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
     summarize_run_timing_call = "run_timing_summary = run_timing_workflow.summarize_run_timing("

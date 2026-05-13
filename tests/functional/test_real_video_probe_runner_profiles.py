@@ -106,6 +106,27 @@ def test_debug_real_video_profile_filters_protocol_scope_and_attacks() -> None:
 
 
 @pytest.mark.unit
+def test_real_video_profile_sample_counts_are_explicit_for_governed_profiles() -> None:
+    """Validate governed profiles do not rely on runner sample-count fallbacks.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    protocol_config = load_json_config(
+        ROOT / "configs" / "protocol" / "real_video_vae_latent_probe.json"
+    )
+
+    assert runner._resolve_samples_per_role(None, protocol_config, "tiny") == 1
+    assert runner._resolve_samples_per_role(None, protocol_config, "smoke") == 1
+    assert runner._resolve_samples_per_role(None, protocol_config, "proof") == 8
+    assert runner._resolve_samples_per_role(None, protocol_config, "formal") == 20
+
+
+@pytest.mark.unit
 def test_runtime_splits_shrink_to_manifest_available_splits() -> None:
     """Validate runner uses only dataset-manifest splits that actually exist.
 
