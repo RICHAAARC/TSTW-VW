@@ -17,6 +17,11 @@ from experiments.real_video_vae_latent_probe.output_layout import (
 from scripts.check_results.real_video_vae_latent_output_checker import (
     check_real_video_vae_latent_outputs,
 )
+from scripts.package_results.package_real_video_vae_latent_outputs import (
+    build_family_package_manifest,
+    _build_stage2_family_summary,
+    _read_optional_stage2_mechanism_summary,
+)
 from scripts.package_results.tar_zst_packager import (
     _build_tar_inputs,
     _pack_with_external_tar_zstd,
@@ -59,12 +64,30 @@ def package_real_video_vae_latent_tar_zst(
         checks_payload=checks_payload,
         exclude_large_intermediate_latents=exclude_large_intermediate_latents,
     )
+    family_manifest = build_family_package_manifest(
+        family_id=family_root_path.name,
+        run_id=checks_payload.get("run_id"),
+        construction_phase=checks_payload.get("construction_phase"),
+        package_format="tar.zst",
+        package_path=tar_payload["archive_path"],
+        archive_format="tar.zst",
+        archive_path=tar_payload["archive_path"],
+        summary_path=tar_payload["summary_path"],
+        checks_path=tar_payload["checks_path"],
+        runtime_profile_included=True,
+        compat_package_path=family_root_path / "packages" / f"{checks_payload.get('run_id', run_root_path.name)}.zip",
+    )
+    stage2_summary = _build_stage2_family_summary(run_root_path, checks_payload)
     family_summary = {
         "family_id": family_root_path.name,
+        "package_format": "tar.zst",
         "drive_archive_path": str(tar_payload["archive_path"]),
+        "package_path": str(tar_payload["archive_path"]),
         "archive_format": "tar.zst",
+        "archive_path": str(tar_payload["archive_path"]),
         "formal_validation_summary": checks_payload,
         "runtime_profile_dir": str(run_root_path / "runtime_profile"),
+        **stage2_summary,
     }
     family_checks = {
         "status": bool(checks_payload.get("status", False)),
@@ -72,7 +95,15 @@ def package_real_video_vae_latent_tar_zst(
         "formal_checks": checks_payload.get("formal_checks"),
         "runtime_profile_included": True,
     }
+    family_manifest.update(stage2_summary)
+    mechanism_summary = _read_optional_stage2_mechanism_summary(run_root_path)
+    if mechanism_summary is not None:
+        family_checks["stage2_mechanism_summary"] = mechanism_summary
 
+    (family_root_path / "family_manifest.json").write_text(
+        json.dumps(family_manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     (family_root_path / "family_summary.json").write_text(
         json.dumps(family_summary, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -85,6 +116,7 @@ def package_real_video_vae_latent_tar_zst(
         "archive_path": tar_payload["archive_path"],
         "summary_path": tar_payload["summary_path"],
         "checks_path": tar_payload["checks_path"],
+        "family_manifest_path": family_root_path / "family_manifest.json",
         "family_summary_path": family_root_path / "family_summary.json",
         "family_checks_path": family_root_path / "family_checks.json",
     }

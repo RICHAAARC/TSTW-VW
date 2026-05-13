@@ -5,8 +5,10 @@ Module type: Notebook workflow helper
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -15,6 +17,12 @@ from typing import Any
 
 from experiments.real_video_vae_latent_probe.artifact_builder import (
     RealVideoVaeLatentArtifactBuilder,
+)
+from experiments.real_video_vae_latent_probe.mechanism_audit import (
+    run_stage2_mechanism_audit,
+)
+from experiments.real_video_vae_latent_probe.output_layout import (
+    build_real_video_vae_latent_output_paths,
 )
 from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check
 from scripts.check_results.check_real_video_vae_latent_outputs import (
@@ -26,6 +34,7 @@ from scripts.package_results.package_real_video_vae_latent_outputs import (
 from scripts.package_results.package_real_video_vae_latent_tar_zst import (
     package_real_video_vae_latent_tar_zst,
 )
+from scripts.profile_runtime import iso_timestamp_utc
 from scripts.prepare_models.prepare_session_autoencoder_kl import (
     prepare_session_autoencoder_kl,
 )
@@ -42,6 +51,58 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, tuple):
         return [_json_safe(item) for item in value]
     return value
+
+
+def materialize_family_id(
+    *,
+    family_id_template: str,
+    git_commit: str | None,
+    utc_timestamp: str | None = None,
+) -> str:
+    """Materialize a governed family identifier from template tokens.
+
+    Args:
+        family_id_template: Family-id template or pre-materialized id.
+        git_commit: Git commit string.
+        utc_timestamp: Optional UTC timestamp override.
+
+    Returns:
+        The materialized family id.
+
+    Raises:
+        ValueError: Raised when the family-id template is empty.
+    """
+    normalized_template = str(family_id_template).strip()
+    if not normalized_template:
+        raise ValueError("family_id_template must not be empty")
+
+    short_commit = _normalize_short_commit(git_commit)
+    compact_utc_timestamp = _compact_utc_timestamp(utc_timestamp or iso_timestamp_utc())
+    materialized_family_id = normalized_template.replace("utc_time", compact_utc_timestamp)
+    materialized_family_id = materialized_family_id.replace("short_commit", short_commit)
+    materialized_family_id = materialized_family_id.replace("unknown_short_commit", short_commit)
+    return materialized_family_id
+
+
+def _normalize_short_commit(git_commit: str | None) -> str:
+    normalized_commit = (git_commit or "").strip()
+    if not normalized_commit:
+        return "unknown_commit"
+    if normalized_commit.lower() in {"short_commit", "commit", "unknown", "template"}:
+        return "unknown_commit"
+    return normalized_commit[:7]
+
+
+def _compact_utc_timestamp(timestamp_value: str) -> str:
+    normalized_value = str(timestamp_value).strip()
+    if not normalized_value:
+        return dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    if re.fullmatch(r"\d{8}T\d{6}Z", normalized_value):
+        return normalized_value
+    parsed_value = dt.datetime.fromisoformat(normalized_value.replace("Z", "+00:00"))
+    if parsed_value.tzinfo is None:
+        parsed_value = parsed_value.replace(tzinfo=dt.timezone.utc)
+    return parsed_value.astimezone(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def prepare_probe_runtime_workspace(
@@ -272,6 +333,22 @@ def check_probe_outputs(
     )
 
 
+def run_probe_stage2_mechanism_audit(
+    *,
+    run_root: str | Path,
+    mechanism_config_path: str | Path = "configs/protocol/stage2_mechanism_gate.json",
+    target_fpr: float | None = None,
+) -> dict[str, Any]:
+    """Run the stage-two mechanism audit through the notebook helper layer."""
+    return _json_safe(
+        run_stage2_mechanism_audit(
+            run_root=run_root,
+            mechanism_config_path=mechanism_config_path,
+            target_fpr=target_fpr,
+        )
+    )
+
+
 def package_probe_family_results(
     *,
     run_root: str | Path,
@@ -284,8 +361,10 @@ def package_probe_family_results(
     step_key: str | None = None,
     run_mode: str = "formal",
     exclude_large_intermediate_latents: bool = False,
+    mechanism_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Package checked probe outputs and optionally append registry entries."""
+    resolved_mechanism_summary = mechanism_summary or _load_stage2_mechanism_summary(run_root)
     zip_pack = package_real_video_vae_latent_outputs(
         run_root=run_root,
         family_root=family_root,
@@ -301,9 +380,14 @@ def package_probe_family_results(
         "zip_pack": _json_safe(zip_pack),
         "tar_pack": _json_safe(tar_pack),
         "drive_archive_path": str(tar_pack["archive_path"]),
+        "package_path": str(tar_pack["archive_path"]),
+        "package_format": "tar.zst",
+        "archive_format": "tar.zst",
         "compat_pack_root": str(Path(run_root)),
         "formal_validation_summary": formal_validation_summary,
     }
+    if resolved_mechanism_summary is not None:
+        package_payload["stage2_mechanism_summary"] = _json_safe(resolved_mechanism_summary)
 
     if drive_root is not None and family_id is not None:
         registry_entry = {
@@ -311,11 +395,18 @@ def package_probe_family_results(
             "workflow_key": workflow_key,
             "step_key": step_key,
             "run_mode": run_mode,
+            "package_format": "tar.zst",
+            "archive_format": "tar.zst",
             "archive_path": package_payload["drive_archive_path"],
+            "package_path": package_payload["package_path"],
             "zip_path": str(zip_pack["zip_path"]),
             "compat_pack_root": package_payload["compat_pack_root"],
             "formal_validation_summary": formal_validation_summary,
         }
+        if resolved_mechanism_summary is not None:
+            registry_entry["stage2_mechanism_summary"] = _json_safe(
+                resolved_mechanism_summary
+            )
         registry_paths = _append_registry_entries(
             drive_root=drive_root,
             registry_entry=registry_entry,
@@ -323,6 +414,13 @@ def package_probe_family_results(
         package_payload["registry_paths"] = registry_paths
 
     return _json_safe(package_payload)
+
+
+def _load_stage2_mechanism_summary(run_root: str | Path) -> dict[str, Any] | None:
+    output_paths = build_real_video_vae_latent_output_paths(run_root)
+    if not output_paths.stage2_mechanism_decision_path.exists():
+        return None
+    return json.loads(output_paths.stage2_mechanism_decision_path.read_text(encoding="utf-8"))
 
 
 def _append_registry_entries(

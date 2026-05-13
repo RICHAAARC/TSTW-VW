@@ -37,6 +37,13 @@ def build_real_video_temporal_metrics_payload(
         ValueError: Raised when frame counts are too small.
     """
     runtime_config = runtime_config or {}
+    temporal_config = runtime_config.get("temporal_metrics", {})
+    enable_motion_consistency = bool(temporal_config.get("enable_motion_consistency"))
+    disabled_temporal_metrics = []
+    motion_consistency_failure_reason = None
+    if not enable_motion_consistency:
+        disabled_temporal_metrics.append("motion_consistency")
+        motion_consistency_failure_reason = "motion_consistency_disabled_by_config"
 
     try:
         reference_video = read_video_frames(reference_video_path)
@@ -47,8 +54,9 @@ def build_real_video_temporal_metrics_payload(
             "temporal_consistency_score": None,
             "flicker_score": None,
             "motion_consistency_score": None,
-            "disabled_temporal_metrics": ["motion_consistency"],
+            "disabled_temporal_metrics": disabled_temporal_metrics,
             "temporal_failure_reason": f"video_io_error: {str(exc)}",
+            "motion_consistency_failure_reason": motion_consistency_failure_reason,
         }
 
     ref_frames = reference_video.frames
@@ -60,8 +68,9 @@ def build_real_video_temporal_metrics_payload(
             "temporal_consistency_score": None,
             "flicker_score": None,
             "motion_consistency_score": None,
-            "disabled_temporal_metrics": ["motion_consistency"],
+            "disabled_temporal_metrics": disabled_temporal_metrics,
             "temporal_failure_reason": "invalid_frame_tensor_shape",
+            "motion_consistency_failure_reason": motion_consistency_failure_reason,
         }
 
     # 对齐帧数并检查最小帧数要求
@@ -72,13 +81,16 @@ def build_real_video_temporal_metrics_payload(
             "temporal_consistency_score": None,
             "flicker_score": None,
             "motion_consistency_score": None,
-            "disabled_temporal_metrics": ["motion_consistency"],
+            "disabled_temporal_metrics": disabled_temporal_metrics,
             "temporal_failure_reason": "insufficient_frames_for_temporal_metrics",
+            "motion_consistency_failure_reason": motion_consistency_failure_reason,
         }
 
     # 计算帧间差异
-    ref_frame_diffs = _compute_frame_differences(ref_frames[:frame_count])
-    cmp_frame_diffs = _compute_frame_differences(cmp_frames[:frame_count])
+    ref_frame_diff_tensors = _compute_frame_difference_tensors(ref_frames[:frame_count])
+    cmp_frame_diff_tensors = _compute_frame_difference_tensors(cmp_frames[:frame_count])
+    ref_frame_diffs = _reduce_frame_differences(ref_frame_diff_tensors)
+    cmp_frame_diffs = _reduce_frame_differences(cmp_frame_diff_tensors)
 
     if not ref_frame_diffs or not cmp_frame_diffs:
         return {
@@ -86,8 +98,9 @@ def build_real_video_temporal_metrics_payload(
             "temporal_consistency_score": None,
             "flicker_score": None,
             "motion_consistency_score": None,
-            "disabled_temporal_metrics": ["motion_consistency"],
+            "disabled_temporal_metrics": disabled_temporal_metrics,
             "temporal_failure_reason": "frame_difference_computation_failed",
+            "motion_consistency_failure_reason": motion_consistency_failure_reason,
         }
 
     # 计算闪烁分数（flicker score）
@@ -103,40 +116,97 @@ def build_real_video_temporal_metrics_payload(
     normalized_flicker = min(1.0, flicker_score)
     temporal_consistency_score = max(0.0, 1.0 - normalized_flicker)
 
+    motion_consistency_score = None
+    if enable_motion_consistency:
+        motion_consistency_score = _compute_motion_consistency_score(
+            ref_frame_diff_tensors,
+            cmp_frame_diff_tensors,
+        )
+        if motion_consistency_score is None:
+            motion_consistency_failure_reason = "motion_consistency_computation_failed"
+
     return {
         "temporal_metrics_runtime": "real_video_frame_metrics",
         "temporal_consistency_score": round(temporal_consistency_score, 6),
         "flicker_score": round(flicker_score, 6),
-        "motion_consistency_score": None,
-        "disabled_temporal_metrics": ["motion_consistency"],
+        "motion_consistency_score": (
+            round(motion_consistency_score, 6)
+            if motion_consistency_score is not None
+            else None
+        ),
+        "disabled_temporal_metrics": disabled_temporal_metrics,
         "temporal_failure_reason": None,
+        "motion_consistency_failure_reason": motion_consistency_failure_reason,
     }
 
 
-def _compute_frame_differences(frames: np.ndarray) -> list[float]:
-    """功能：计算连续帧间的平均绝对差异。
+def _compute_frame_difference_tensors(frames: np.ndarray) -> list[np.ndarray]:
+    """功能：计算连续帧间的绝对差异张量。
 
-    Compute mean absolute difference between consecutive frames.
+    Compute absolute difference tensors between consecutive frames.
 
     Args:
         frames: Video frames in `[F, H, W, 3]`, float32, range [0, 1].
 
     Returns:
-        List of mean absolute differences between consecutive frames.
+        List of absolute difference tensors between consecutive frames.
     """
     if frames.shape[0] < 2:
         return []
 
     frame_count = frames.shape[0]
-    diffs: list[float] = []
+    diffs: list[np.ndarray] = []
 
     for frame_idx in range(frame_count - 1):
         current_frame = np.clip(frames[frame_idx], 0.0, 1.0)
         next_frame = np.clip(frames[frame_idx + 1], 0.0, 1.0)
 
-        # 按像素计算绝对差异的平均值
         absolute_diff = np.abs(next_frame.astype(np.float32) - current_frame.astype(np.float32))
-        mean_diff = float(np.mean(absolute_diff))
-        diffs.append(mean_diff)
+        diffs.append(absolute_diff)
 
     return diffs
+
+
+def _reduce_frame_differences(frame_diff_tensors: list[np.ndarray]) -> list[float]:
+    """功能：将帧差异张量规约为逐帧平均值。
+
+    Reduce frame-difference tensors to per-frame scalar means.
+
+    Args:
+        frame_diff_tensors: Absolute frame-difference tensors.
+
+    Returns:
+        Mean absolute difference for each temporal transition.
+    """
+    return [float(np.mean(diff_tensor)) for diff_tensor in frame_diff_tensors]
+
+
+def _compute_motion_consistency_score(
+    reference_frame_diffs: list[np.ndarray],
+    comparison_frame_diffs: list[np.ndarray],
+) -> float | None:
+    """功能：计算 motion consistency 的轻量代理分数。
+
+    Compute a lightweight proxy for motion-consistency alignment.
+
+    Args:
+        reference_frame_diffs: Reference absolute frame-difference tensors.
+        comparison_frame_diffs: Comparison absolute frame-difference tensors.
+
+    Returns:
+        A score in `[0, 1]`, where larger indicates more similar motion energy.
+    """
+    aligned_pairs = list(zip(reference_frame_diffs, comparison_frame_diffs))
+    if not aligned_pairs:
+        return None
+
+    normalized_errors: list[float] = []
+    for reference_diff, comparison_diff in aligned_pairs:
+        reference_motion = float(np.mean(reference_diff))
+        comparison_motion = float(np.mean(comparison_diff))
+        motion_scale = max(reference_motion, comparison_motion, 1e-6)
+        normalized_errors.append(
+            min(1.0, abs(reference_motion - comparison_motion) / motion_scale)
+        )
+
+    return max(0.0, 1.0 - float(np.mean(normalized_errors)))

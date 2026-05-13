@@ -182,11 +182,14 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "from paper_workflow.notebook_utils import run_timing_workflow" in notebook_text
     assert "probe_workflow.prepare_probe_runtime_workspace" in notebook_text
     assert "probe_workflow.prepare_probe_session_model" in notebook_text
+    assert "probe_workflow.materialize_family_id(" in notebook_text
     assert "probe_workflow.write_probe_runtime_config" in notebook_text
     assert "probe_workflow.run_probe_runner" in notebook_text
     assert "probe_workflow.rebuild_probe_tables_and_reports" in notebook_text
     assert "probe_workflow.check_probe_outputs" in notebook_text
+    assert "probe_workflow.run_probe_stage2_mechanism_audit" in notebook_text
     assert "probe_workflow.package_probe_family_results" in notebook_text
+    assert "FAMILY_ID_TEMPLATE" in notebook_text
     assert "PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "dataset_manifest_path=PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "dataset_manifest=PROCESSED_DATASET_MANIFEST" in notebook_text
@@ -215,6 +218,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "with run_timer.event('real_video_vae_latent_runner'" in notebook_text
     assert "with run_timer.event('table_and_report_rebuild'" in notebook_text
     assert "with run_timer.event('formal_checker'" in notebook_text
+    assert "with run_timer.event('stage2_mechanism_audit'" in notebook_text
     assert "with run_timer.event('result_packaging'" in notebook_text
     assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
     assert "scripts.prepare_models.prepare_session_autoencoder_kl" not in notebook_text
@@ -233,6 +237,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "dataset_manifest_path" in workflow_text
     assert "REQUIRE_FORMAL_PASS = True" in notebook_text
     assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
+    assert "mechanism_summary=stage2_mechanism_summary" in notebook_text
     assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
     assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
     summarize_run_timing_call = "run_timing_summary = run_timing_workflow.summarize_run_timing("
@@ -240,8 +245,12 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     formal_checker_index = notebook_text.index(
         "formal_validation_summary = probe_workflow.check_probe_outputs("
     )
+    mechanism_audit_index = notebook_text.index(
+        "stage2_mechanism_summary = probe_workflow.run_probe_stage2_mechanism_audit("
+    )
     package_call_index = notebook_text.index("probe_workflow.package_probe_family_results(")
     assert len(summarize_run_timing_indices) == 3
+    assert formal_checker_index < mechanism_audit_index < package_call_index
     assert formal_checker_index < summarize_run_timing_indices[1] < package_call_index
     assert package_call_index < summarize_run_timing_indices[2]
     assert "formal_validation_summary" in notebook_text

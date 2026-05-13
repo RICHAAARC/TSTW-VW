@@ -202,10 +202,13 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | clip_similarity_score | protocol | none | true | false | false | Reserved CLIP-similarity field; the current real_video_vae_latent_probe scaffold records it as disabled. |
 | disabled_quality_metrics | protocol | none | true | false | false | Explicit list of quality metrics disabled in the current real_video_vae_latent_probe scaffold. |
 | quality_failure_reason | protocol | none | true | false | false | Recorded reason when a placeholder quality threshold is violated in stage two. |
+| lpips_failure_reason | protocol | none | true | false | false | Explicit LPIPS failure or disablement reason recorded in stage-two real-video quality payloads. |
+| clip_failure_reason | protocol | none | true | false | false | Explicit CLIP-similarity failure or disablement reason recorded in stage-two real-video quality payloads. |
 | temporal_consistency_score | protocol | none | true | false | false | Placeholder-derived temporal consistency score computed from video artifacts. |
 | flicker_score | protocol | none | true | false | false | Placeholder-derived flicker score computed from frame-difference deltas. |
 | motion_consistency_score | protocol | none | true | false | false | Reserved motion-consistency field; the current real_video_vae_latent_probe scaffold records it as disabled. |
 | disabled_temporal_metrics | protocol | none | true | false | false | Explicit list of temporal metrics disabled in the current real_video_vae_latent_probe scaffold. |
+| motion_consistency_failure_reason | protocol | none | true | false | false | Explicit motion-consistency failure or disablement reason recorded in stage-two real-video temporal payloads. |
 | artifact_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the real_video_vae_latent_probe artifact manifest. |
 | colab_runtime_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the real_video_vae_latent_probe runtime manifest. |
 | colab_real_video_vae_latent_runtime_config_path | artifact_layout | none | false | false | false | Relative layout path for the real_video_vae_latent_probe runtime-config manifest. |
@@ -216,7 +219,12 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | quality_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt real_video_vae_latent_probe quality table. |
 | temporal_consistency_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt real_video_vae_latent_probe temporal consistency table. |
 | real_video_vae_latent_governance_summary_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt real_video_vae_latent_probe governance summary table. |
+| stage2_mechanism_audit_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two mechanism audit table. |
+| stage2_score_distribution_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two score-distribution table. |
+| stage2_sync_gain_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two sync-gain table. |
 | quality_robustness_tradeoff_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt real_video_vae_latent_probe quality-robustness tradeoff figure. |
+| stage2_mechanism_report_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two mechanism audit report. |
+| stage2_mechanism_decision_path | artifact_layout | none | false | false | false | Relative layout path for the persisted stage-two mechanism decision artifact. |
 | method_variants_summary | governance | none | false | false | false | Comma-separated method-variant summary emitted by the real_video_vae_latent_probe governance summary table and consumed by the real_video_vae_latent_probe report. |
 | attack_names_summary | governance | none | false | false | false | Comma-separated attack-name summary emitted by the real_video_vae_latent_probe governance summary table and consumed by the real_video_vae_latent_probe report. |
 | target_fprs_summary | governance | none | false | false | false | Comma-separated target-FPR summary emitted by the real_video_vae_latent_probe governance summary table and consumed by the real_video_vae_latent_probe report. |
@@ -234,6 +242,30 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | real_video_vae_latent_decision | governance | none | false | false | false | Structured real_video_vae_latent_probe governance decision written into the governance summary table and mirrored by the Markdown report. |
 | blocking_reasons | governance | none | false | false | false | Semicolon-separated blocking reasons explaining the current real_video_vae_latent_probe governance decision. |
 | next_allowed_stage | governance | none | false | false | false | Governed next-stage recommendation emitted by the real_video_vae_latent_probe governance summary table. |
+| Stage2ImplementationDecision | governance | none | false | false | false | Separate implementation-completion decision emitted by the stage-two mechanism audit and family summaries. |
+| Stage2MechanismDecision | governance | none | false | false | false | Mechanism-evidence decision emitted by the stage-two mechanism audit and family summaries. |
+| Stage2MechanismBlockingReasons | governance | none | false | false | false | Ordered blocking-reason list explaining why the stage-two mechanism decision is not PASS. |
+| Stage2MechanismWarnings | governance | none | false | false | false | Ordered warning list emitted by the stage-two mechanism audit when optional metrics or gates are not fully enabled. |
+| NextAllowedStageByImplementation | governance | none | false | false | false | Next-stage recommendation implied by the implementation-completion decision. |
+| NextAllowedStageByMechanism | governance | none | false | false | false | Next-stage recommendation implied by the mechanism-evidence decision. |
+| RecommendedNextAction | governance | none | false | false | false | Human-facing recommended next action emitted by the stage-two mechanism audit. |
+| quality_metrics_enabled | governance | none | false | false | false | Stage-two mechanism-audit summary container recording which governed quality metrics were enabled at runtime. |
+| temporal_metrics_enabled | governance | none | false | false | false | Stage-two mechanism-audit summary container recording which governed temporal metrics were enabled at runtime. |
+| sample_count_summary | governance | none | false | false | false | Stage-two mechanism-audit summary container recording per-key sample-count sufficiency thresholds and shortages. |
+| mechanism_metrics | governance | none | false | false | false | Stage-two mechanism-audit summary container recording key gain, gap, and quality summary metrics. |
+| minimum_positive_count_per_key | governance | none | true | false | false | Mechanism-gate minimum required positive sample count for each `(method_variant, attack_name)` key. |
+| minimum_negative_count_per_key | governance | none | true | false | false | Mechanism-gate minimum required negative sample count for each `(method_variant, attack_name)` key. |
+| required_main_variants | governance | none | true | false | false | Ordered primary method variants that must be present before the stage-two mechanism gate can PASS. |
+| required_mechanism_attacks | governance | none | true | false | false | Ordered attack roster that must be covered before the stage-two mechanism gate can PASS. |
+| max_clean_negative_fpr | governance | none | true | false | false | Maximum allowed clean-negative FPR used by the stage-two mechanism gate. |
+| max_attacked_negative_fpr | governance | none | true | false | false | Maximum allowed attacked-negative FPR used by the stage-two mechanism gate. |
+| min_no_attack_clean_positive_tpr | governance | none | true | false | false | Minimum required no-attack clean-positive TPR used by the stage-two mechanism gate. |
+| min_tubelet_only_gain_over_frame_prc | governance | none | true | false | false | Minimum required gain of `tubelet_only` over `frame_prc` used by the stage-two mechanism gate. |
+| min_tubelet_sync_gain_over_tubelet_only_temporal | governance | none | true | false | false | Minimum required temporal gain of `tubelet_sync` over `tubelet_only` used by the stage-two mechanism gate. |
+| min_sync_positive_negative_score_gap | governance | none | true | false | false | Minimum required positive-negative `S_sync` score gap used by the stage-two mechanism gate. |
+| require_quality_not_collapsed | governance | none | true | false | false | Boolean mechanism-gate flag requiring stage-two quality metrics to stay above configured floors. |
+| min_watermarked_video_psnr | governance | none | true | false | false | Minimum watermarked-video PSNR floor used by the stage-two mechanism gate. |
+| min_watermarked_video_ssim | governance | none | true | false | false | Minimum watermarked-video SSIM floor used by the stage-two mechanism gate. |
 | video_vae_backend_placeholder | placeholder | _placeholder | true | false | true | Placeholder VAE backend field reserved while the repository remains under synthetic_tubelet_sync_probe governance. |
 | clip_similarity_placeholder | placeholder | _placeholder | true | false | true | Placeholder field representing disabled CLIP-similarity support in the real_video_vae_latent_probe scaffold. |
 | motion_consistency_placeholder | placeholder | _placeholder | true | false | true | Placeholder field representing disabled motion-consistency support in the real_video_vae_latent_probe scaffold. |

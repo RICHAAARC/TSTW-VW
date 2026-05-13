@@ -11,7 +11,59 @@ from pathlib import Path
 from typing import Any
 import zipfile
 
+from experiments.real_video_vae_latent_probe.output_layout import (
+    build_real_video_vae_latent_output_paths,
+)
 from scripts.package_results.drive_packager import pack_real_video_vae_latent_run
+
+
+def build_family_package_manifest(
+    *,
+    family_id: str,
+    run_id: str | None,
+    construction_phase: str | None,
+    package_format: str,
+    package_path: str | Path,
+    archive_format: str,
+    archive_path: str | Path,
+    summary_path: str | Path,
+    checks_path: str | Path,
+    runtime_profile_included: bool,
+    compat_package_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Build the canonical family package manifest payload.
+
+    Args:
+        family_id: Family identifier.
+        run_id: Run identifier.
+        construction_phase: Construction phase.
+        package_format: Canonical package format.
+        package_path: Canonical package path.
+        archive_format: Canonical archive format.
+        archive_path: Canonical archive path.
+        summary_path: Summary path.
+        checks_path: Checks path.
+        runtime_profile_included: Whether runtime_profile is included.
+        compat_package_path: Optional compatibility package path.
+
+    Returns:
+        A canonical family package manifest payload.
+    """
+    manifest_payload: dict[str, Any] = {
+        "family_id": family_id,
+        "run_id": run_id,
+        "construction_phase": construction_phase,
+        "package_format": package_format,
+        "archive_format": archive_format,
+        "package_path": str(package_path),
+        "archive_path": str(archive_path),
+        "summary_path": str(summary_path),
+        "checks_path": str(checks_path),
+        "runtime_profile_included": bool(runtime_profile_included),
+    }
+    if compat_package_path is not None:
+        manifest_payload["compat_package_path"] = str(compat_package_path)
+    return manifest_payload
 
 
 def package_real_video_vae_latent_outputs(
@@ -47,21 +99,28 @@ def package_real_video_vae_latent_outputs(
 
     summary_payload = json.loads(package_payload["summary_path"].read_text(encoding="utf-8"))
     checks_payload = json.loads(package_payload["checks_path"].read_text(encoding="utf-8"))
-    family_manifest = {
-        "family_id": family_root_path.name,
-        "run_id": summary_payload.get("run_id"),
-        "construction_phase": summary_payload.get("construction_phase"),
-        "package_format": "zip",
-        "package_path": str(package_payload["zip_path"]),
-        "summary_path": str(package_payload["summary_path"]),
-        "checks_path": str(package_payload["checks_path"]),
-        "runtime_profile_included": True,
-    }
+    family_manifest = build_family_package_manifest(
+        family_id=family_root_path.name,
+        run_id=summary_payload.get("run_id"),
+        construction_phase=summary_payload.get("construction_phase"),
+        package_format="zip",
+        package_path=package_payload["zip_path"],
+        archive_format="zip",
+        archive_path=package_payload["zip_path"],
+        summary_path=package_payload["summary_path"],
+        checks_path=package_payload["checks_path"],
+        runtime_profile_included=True,
+    )
+    stage2_summary = _build_stage2_family_summary(run_root_path, checks_payload)
     family_summary = {
         "family_id": family_root_path.name,
         "drive_result_summary": summary_payload,
+        "package_format": "zip",
+        "archive_format": "zip",
         "package_path": str(package_payload["zip_path"]),
+        "archive_path": str(package_payload["zip_path"]),
         "runtime_profile_dir": str(run_root_path / "runtime_profile"),
+        **stage2_summary,
     }
     family_checks = {
         "status": bool(checks_payload.get("status", False)),
@@ -69,6 +128,11 @@ def package_real_video_vae_latent_outputs(
         "package_exists": package_payload["zip_path"].exists(),
         "runtime_profile_included": True,
     }
+    family_manifest.update(stage2_summary)
+    if stage2_summary.get("Stage2MechanismDecision") not in {None, "NOT_RUN"}:
+        family_checks["stage2_mechanism_summary"] = _read_optional_stage2_mechanism_summary(
+            run_root_path
+        )
 
     (family_root_path / "family_manifest.json").write_text(
         json.dumps(family_manifest, ensure_ascii=False, indent=2) + "\n",
@@ -115,6 +179,54 @@ def _append_runtime_profile_to_zip(
                 file_path,
                 arcname=f"{run_root.name}/{file_path.relative_to(run_root).as_posix()}",
             )
+
+
+def _read_optional_stage2_mechanism_summary(run_root: Path) -> dict[str, Any] | None:
+    output_paths = build_real_video_vae_latent_output_paths(run_root)
+    if not output_paths.stage2_mechanism_decision_path.exists():
+        return None
+    return json.loads(output_paths.stage2_mechanism_decision_path.read_text(encoding="utf-8"))
+
+
+def _build_stage2_family_summary(
+    run_root: Path,
+    checks_payload: dict[str, Any],
+) -> dict[str, Any]:
+    mechanism_summary = _read_optional_stage2_mechanism_summary(run_root)
+    summary_payload = {
+        "Stage2ImplementationDecision": checks_payload.get(
+            "Stage2ImplementationDecision",
+            checks_payload.get("RealVideoVaeLatentDecision", "INCONCLUSIVE"),
+        ),
+        "NextAllowedStageByImplementation": checks_payload.get(
+            "NextAllowedStageByImplementation",
+            checks_payload.get("NextAllowedStage", "remain_in_real_video_vae_latent_probe"),
+        ),
+    }
+    if mechanism_summary is None:
+        summary_payload.update(
+            {
+                "Stage2MechanismDecision": "NOT_RUN",
+                "Stage2MechanismBlockingReasons": ["stage2_mechanism_audit_missing"],
+                "NextAllowedStageByMechanism": "remain_in_real_video_vae_latent_probe",
+                "RecommendedNextAction": "run_stage2_mechanism_audit",
+            }
+        )
+        return summary_payload
+    for field_name in (
+        "Stage2ImplementationDecision",
+        "Stage2MechanismDecision",
+        "Stage2MechanismBlockingReasons",
+        "Stage2MechanismWarnings",
+        "NextAllowedStageByImplementation",
+        "NextAllowedStageByMechanism",
+        "RecommendedNextAction",
+        "quality_metrics_enabled",
+        "temporal_metrics_enabled",
+    ):
+        if field_name in mechanism_summary:
+            summary_payload[field_name] = mechanism_summary[field_name]
+    return summary_payload
 
 
 def main(argv: list[str] | None = None) -> int:

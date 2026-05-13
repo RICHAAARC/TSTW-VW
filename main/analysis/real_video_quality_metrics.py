@@ -38,6 +38,23 @@ def build_real_video_quality_metrics_payload(
         ValueError: Raised when frame counts or shapes do not align.
     """
     runtime_config = runtime_config or {}
+    quality_config = runtime_config.get("quality_metrics", {})
+    enable_lpips = bool(
+        quality_config.get("enable_lpips")
+        or runtime_config.get("local_lpips_model_root")
+        or runtime_config.get("lpips_model_root")
+    )
+    enable_clip_similarity = bool(quality_config.get("enable_clip_similarity"))
+    disabled_quality_metrics = []
+    if not enable_lpips:
+        disabled_quality_metrics.append("watermarked_video_lpips")
+    if not enable_clip_similarity:
+        disabled_quality_metrics.append("clip_similarity")
+    clip_failure_reason = (
+        "clip_similarity_not_implemented"
+        if enable_clip_similarity
+        else "clip_similarity_disabled_by_config"
+    )
     
     try:
         reference_video = read_video_frames(reference_video_path)
@@ -51,8 +68,14 @@ def build_real_video_quality_metrics_payload(
             "watermarked_video_ssim": None,
             "watermarked_video_lpips": None,
             "clip_similarity_score": None,
-            "disabled_quality_metrics": ["clip_similarity"],
+            "disabled_quality_metrics": disabled_quality_metrics,
             "quality_failure_reason": f"video_io_error: {str(exc)}",
+            "lpips_failure_reason": (
+                "lpips_disabled_by_config"
+                if not enable_lpips
+                else "lpips_not_attempted_due_video_io_error"
+            ),
+            "clip_failure_reason": clip_failure_reason,
         }
 
     ref_frames = reference_video.frames
@@ -67,8 +90,14 @@ def build_real_video_quality_metrics_payload(
             "watermarked_video_ssim": None,
             "watermarked_video_lpips": None,
             "clip_similarity_score": None,
-            "disabled_quality_metrics": ["clip_similarity"],
+            "disabled_quality_metrics": disabled_quality_metrics,
             "quality_failure_reason": "invalid_frame_tensor_shape",
+            "lpips_failure_reason": (
+                "lpips_disabled_by_config"
+                if not enable_lpips
+                else "lpips_not_attempted_due_invalid_frame_tensor_shape"
+            ),
+            "clip_failure_reason": clip_failure_reason,
         }
 
     # 对齐帧数
@@ -82,8 +111,14 @@ def build_real_video_quality_metrics_payload(
             "watermarked_video_ssim": None,
             "watermarked_video_lpips": None,
             "clip_similarity_score": None,
-            "disabled_quality_metrics": ["clip_similarity"],
+            "disabled_quality_metrics": disabled_quality_metrics,
             "quality_failure_reason": "frame_count_alignment_failed",
+            "lpips_failure_reason": (
+                "lpips_disabled_by_config"
+                if not enable_lpips
+                else "lpips_not_attempted_due_frame_count_alignment_failed"
+            ),
+            "clip_failure_reason": clip_failure_reason,
         }
 
     # 按帧计算 PSNR 与 SSIM
@@ -117,8 +152,14 @@ def build_real_video_quality_metrics_payload(
             "watermarked_video_ssim": None,
             "watermarked_video_lpips": None,
             "clip_similarity_score": None,
-            "disabled_quality_metrics": ["clip_similarity"],
+            "disabled_quality_metrics": disabled_quality_metrics,
             "quality_failure_reason": "metric_computation_failed",
+            "lpips_failure_reason": (
+                "lpips_disabled_by_config"
+                if not enable_lpips
+                else "lpips_not_attempted_due_metric_computation_failed"
+            ),
+            "clip_failure_reason": clip_failure_reason,
         }
 
     mean_psnr = float(np.mean(psnr_scores))
@@ -131,7 +172,9 @@ def build_real_video_quality_metrics_payload(
     lpips_model_root = runtime_config.get("local_lpips_model_root") or runtime_config.get(
         "lpips_model_root"
     )
-    if lpips_model_root:
+    if not enable_lpips:
+        lpips_failure_reason = "lpips_disabled_by_config"
+    elif lpips_model_root:
         try:
             lpips_score = _compute_lpips_score(
                 ref_frames[:frame_count], cmp_frames[:frame_count], lpips_model_root
@@ -153,9 +196,10 @@ def build_real_video_quality_metrics_payload(
         "watermarked_video_ssim": round(mean_ssim, 6),
         "watermarked_video_lpips": round(lpips_score, 6) if lpips_score is not None else None,
         "clip_similarity_score": None,
-        "disabled_quality_metrics": ["clip_similarity"],
+        "disabled_quality_metrics": disabled_quality_metrics,
         "quality_failure_reason": quality_failure_reason,
         "lpips_failure_reason": lpips_failure_reason,
+        "clip_failure_reason": clip_failure_reason,
     }
 
 

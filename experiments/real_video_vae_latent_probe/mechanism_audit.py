@@ -1,0 +1,909 @@
+"""
+文件用途：从阶段 2 records 重建机制审计表、报告与机制门禁决策。
+File purpose: Rebuild stage-two mechanism audit tables, report, and gate decision from governed records.
+Module type: General module
+"""
+
+from __future__ import annotations
+
+import csv
+import json
+import math
+import statistics
+from pathlib import Path
+from typing import Any
+
+from experiments.real_video_vae_latent_probe.output_layout import (
+    build_real_video_vae_latent_output_paths,
+)
+from main.core.records import RecordWriter
+
+
+STAGE2_MECHANISM_AUDIT_COLUMNS = [
+    "run_id",
+    "construction_phase",
+    "method_variant",
+    "base_method_variant",
+    "attack_name",
+    "sample_role",
+    "count",
+    "S_tubelet_mean",
+    "S_tubelet_std",
+    "S_sync_mean",
+    "S_sync_std",
+    "S_final_mean",
+    "S_final_std",
+    "decision_rate",
+    "clean_negative_FPR",
+    "attacked_negative_FPR",
+    "clean_positive_TPR",
+    "attacked_positive_TPR",
+    "local_clip_TPR",
+    "sync_alignment_error_mean",
+    "sync_peak_rank_median",
+    "quality_psnr_mean",
+    "quality_ssim_mean",
+    "temporal_consistency_score_mean",
+    "flicker_score_mean",
+]
+STAGE2_SCORE_DISTRIBUTION_COLUMNS = [
+    "run_id",
+    "construction_phase",
+    "method_variant",
+    "attack_name",
+    "sample_role",
+    "count",
+    "S_tubelet_mean",
+    "S_tubelet_std",
+    "S_sync_mean",
+    "S_sync_std",
+    "S_final_mean",
+    "S_final_std",
+]
+STAGE2_SYNC_GAIN_COLUMNS = [
+    "attack_name",
+    "metric_name",
+    "tubelet_only_value",
+    "tubelet_sync_value",
+    "sync_gain",
+    "negative_fpr_delta",
+    "positive_count",
+    "negative_count",
+    "mechanism_signal_status",
+]
+DEFAULT_MECHANISM_CONFIG_PATH = Path("configs/protocol/stage2_mechanism_gate.json")
+TEMPORAL_ATTACKS = {"temporal_crop", "frame_dropping", "local_clip", "speed_change"}
+
+
+def run_stage2_mechanism_audit(
+    *,
+    run_root: str | Path,
+    mechanism_config_path: str | Path = DEFAULT_MECHANISM_CONFIG_PATH,
+    target_fpr: float | None = None,
+) -> dict[str, Any]:
+    """Run the governed stage-two mechanism audit over persisted records.
+
+    Args:
+        run_root: Run-root path.
+        mechanism_config_path: Mechanism-gate config path.
+        target_fpr: Optional target FPR override.
+
+    Returns:
+        Stage-two mechanism summary payload.
+    """
+    run_root_path = Path(run_root)
+    output_paths = build_real_video_vae_latent_output_paths(run_root_path)
+    record_writer = RecordWriter(run_root_path)
+    event_score_records = record_writer.read_event_score_records()
+    threshold_records = record_writer.read_threshold_records()
+    mechanism_config = json.loads(Path(mechanism_config_path).read_text(encoding="utf-8"))
+    governance_summary_row = _read_single_csv_row(
+        output_paths.real_video_vae_latent_governance_summary_path
+    )
+    runtime_config = _read_json_payload(output_paths.runtime_config_path)
+
+    audit_rows = build_stage2_mechanism_audit_rows(event_score_records, threshold_records)
+    score_rows = build_stage2_score_distribution_rows(event_score_records)
+    sync_gain_rows = build_stage2_sync_gain_rows(
+        event_score_records,
+        required_attacks=_string_list(mechanism_config.get("required_mechanism_attacks", [])),
+    )
+    decision_payload = build_stage2_mechanism_decision(
+        event_score_records=event_score_records,
+        threshold_records=threshold_records,
+        mechanism_config=mechanism_config,
+        governance_summary_row=governance_summary_row,
+        runtime_config=runtime_config,
+        target_fpr=target_fpr,
+    )
+
+    _write_csv(
+        output_paths.stage2_mechanism_audit_table_path,
+        STAGE2_MECHANISM_AUDIT_COLUMNS,
+        audit_rows,
+    )
+    _write_csv(
+        output_paths.stage2_score_distribution_table_path,
+        STAGE2_SCORE_DISTRIBUTION_COLUMNS,
+        score_rows,
+    )
+    _write_csv(
+        output_paths.stage2_sync_gain_table_path,
+        STAGE2_SYNC_GAIN_COLUMNS,
+        sync_gain_rows,
+    )
+    output_paths.stage2_mechanism_report_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.stage2_mechanism_report_path.write_text(
+        build_stage2_mechanism_report_text(decision_payload, sync_gain_rows),
+        encoding="utf-8",
+    )
+    output_paths.stage2_mechanism_decision_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.stage2_mechanism_decision_path.write_text(
+        json.dumps(decision_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return {
+        **decision_payload,
+        "stage2_mechanism_audit_table_path": str(output_paths.stage2_mechanism_audit_table_path),
+        "stage2_score_distribution_table_path": str(output_paths.stage2_score_distribution_table_path),
+        "stage2_sync_gain_table_path": str(output_paths.stage2_sync_gain_table_path),
+        "stage2_mechanism_report_path": str(output_paths.stage2_mechanism_report_path),
+        "stage2_mechanism_decision_path": str(output_paths.stage2_mechanism_decision_path),
+    }
+
+
+def build_stage2_mechanism_audit_rows(
+    event_score_records: list[dict[str, Any]],
+    threshold_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build the mechanism audit table rows from governed records."""
+    del threshold_records
+    rows: list[dict[str, Any]] = []
+    test_records = [record for record in event_score_records if record.get("split") == "test"]
+    grouped_keys = sorted(
+        {
+            (
+                str(record.get("method_variant")),
+                str(record.get("base_method_variant", record.get("method_variant"))),
+                str(record.get("attack_name")),
+                str(record.get("sample_role")),
+            )
+            for record in test_records
+        }
+    )
+    for method_variant, base_method_variant, attack_name, sample_role in grouped_keys:
+        grouped_records = [
+            record
+            for record in test_records
+            if str(record.get("method_variant")) == method_variant
+            and str(record.get("attack_name")) == attack_name
+            and str(record.get("sample_role")) == sample_role
+        ]
+        if not grouped_records:
+            continue
+        rows.append(
+            {
+                "run_id": grouped_records[0].get("run_id"),
+                "construction_phase": grouped_records[0].get("mechanism_trace", {}).get(
+                    "construction_phase"
+                ),
+                "method_variant": method_variant,
+                "base_method_variant": base_method_variant,
+                "attack_name": attack_name,
+                "sample_role": sample_role,
+                "count": len(grouped_records),
+                "S_tubelet_mean": _mean_record_score(grouped_records, "S_tubelet"),
+                "S_tubelet_std": _std_record_score(grouped_records, "S_tubelet"),
+                "S_sync_mean": _mean_record_score(grouped_records, "S_sync"),
+                "S_sync_std": _std_record_score(grouped_records, "S_sync"),
+                "S_final_mean": _mean_record_score(grouped_records, "S_final"),
+                "S_final_std": _std_record_score(grouped_records, "S_final"),
+                "decision_rate": _decision_rate(grouped_records),
+                "clean_negative_FPR": _decision_rate_for_role(test_records, method_variant, attack_name, "clean_negative"),
+                "attacked_negative_FPR": _decision_rate_for_role(test_records, method_variant, attack_name, "attacked_negative"),
+                "clean_positive_TPR": _decision_rate_for_role(test_records, method_variant, attack_name, "watermarked_positive"),
+                "attacked_positive_TPR": _decision_rate_for_role(test_records, method_variant, attack_name, "attacked_positive"),
+                "local_clip_TPR": _local_clip_tpr(test_records, method_variant, attack_name),
+                "sync_alignment_error_mean": _mean_mechanism_trace_value(grouped_records, "sync_alignment_error"),
+                "sync_peak_rank_median": _median_mechanism_trace_value(grouped_records, "sync_peak_rank"),
+                "quality_psnr_mean": _mean_payload_value(grouped_records, "quality_metrics", "watermarked_video_psnr"),
+                "quality_ssim_mean": _mean_payload_value(grouped_records, "quality_metrics", "watermarked_video_ssim"),
+                "temporal_consistency_score_mean": _mean_payload_value(grouped_records, "temporal_metrics", "temporal_consistency_score"),
+                "flicker_score_mean": _mean_payload_value(grouped_records, "temporal_metrics", "flicker_score"),
+            }
+        )
+    return rows
+
+
+def build_stage2_score_distribution_rows(
+    event_score_records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build score-distribution rows from test records."""
+    rows: list[dict[str, Any]] = []
+    test_records = [record for record in event_score_records if record.get("split") == "test"]
+    grouped_keys = sorted(
+        {
+            (
+                str(record.get("method_variant")),
+                str(record.get("attack_name")),
+                str(record.get("sample_role")),
+            )
+            for record in test_records
+        }
+    )
+    for method_variant, attack_name, sample_role in grouped_keys:
+        grouped_records = [
+            record
+            for record in test_records
+            if str(record.get("method_variant")) == method_variant
+            and str(record.get("attack_name")) == attack_name
+            and str(record.get("sample_role")) == sample_role
+        ]
+        if not grouped_records:
+            continue
+        rows.append(
+            {
+                "run_id": grouped_records[0].get("run_id"),
+                "construction_phase": grouped_records[0].get("mechanism_trace", {}).get(
+                    "construction_phase"
+                ),
+                "method_variant": method_variant,
+                "attack_name": attack_name,
+                "sample_role": sample_role,
+                "count": len(grouped_records),
+                "S_tubelet_mean": _mean_record_score(grouped_records, "S_tubelet"),
+                "S_tubelet_std": _std_record_score(grouped_records, "S_tubelet"),
+                "S_sync_mean": _mean_record_score(grouped_records, "S_sync"),
+                "S_sync_std": _std_record_score(grouped_records, "S_sync"),
+                "S_final_mean": _mean_record_score(grouped_records, "S_final"),
+                "S_final_std": _std_record_score(grouped_records, "S_final"),
+            }
+        )
+    return rows
+
+
+def build_stage2_sync_gain_rows(
+    event_score_records: list[dict[str, Any]],
+    *,
+    required_attacks: list[str],
+) -> list[dict[str, Any]]:
+    """Build sync-gain rows comparing tubelet_only and tubelet_sync."""
+    test_records = [record for record in event_score_records if record.get("split") == "test"]
+    observed_attacks = sorted({str(record.get("attack_name")) for record in test_records})
+    attack_names = sorted(set(required_attacks) | set(observed_attacks))
+    rows: list[dict[str, Any]] = []
+    for attack_name in attack_names:
+        metric_name = "clean_positive_tpr" if attack_name == "no_attack" else "attacked_positive_tpr"
+        tubelet_only_positive_rate = _relevant_positive_rate(test_records, "tubelet_only", attack_name)
+        tubelet_sync_positive_rate = _relevant_positive_rate(test_records, "tubelet_sync", attack_name)
+        negative_fpr_delta = _difference(
+            _relevant_negative_rate(test_records, "tubelet_sync", attack_name),
+            _relevant_negative_rate(test_records, "tubelet_only", attack_name),
+        )
+        rows.append(
+            {
+                "attack_name": attack_name,
+                "metric_name": metric_name,
+                "tubelet_only_value": tubelet_only_positive_rate,
+                "tubelet_sync_value": tubelet_sync_positive_rate,
+                "sync_gain": _difference(tubelet_sync_positive_rate, tubelet_only_positive_rate),
+                "negative_fpr_delta": negative_fpr_delta,
+                "positive_count": _relevant_positive_count(test_records, "tubelet_sync", attack_name),
+                "negative_count": _relevant_negative_count(test_records, "tubelet_sync", attack_name),
+                "mechanism_signal_status": _mechanism_signal_status(
+                    _difference(tubelet_sync_positive_rate, tubelet_only_positive_rate),
+                    negative_fpr_delta,
+                ),
+            }
+        )
+        rows.append(
+            {
+                "attack_name": attack_name,
+                "metric_name": "S_final_positive_mean",
+                "tubelet_only_value": _relevant_positive_score_mean(test_records, "tubelet_only", attack_name, "S_final"),
+                "tubelet_sync_value": _relevant_positive_score_mean(test_records, "tubelet_sync", attack_name, "S_final"),
+                "sync_gain": _difference(
+                    _relevant_positive_score_mean(test_records, "tubelet_sync", attack_name, "S_final"),
+                    _relevant_positive_score_mean(test_records, "tubelet_only", attack_name, "S_final"),
+                ),
+                "negative_fpr_delta": negative_fpr_delta,
+                "positive_count": _relevant_positive_count(test_records, "tubelet_sync", attack_name),
+                "negative_count": _relevant_negative_count(test_records, "tubelet_sync", attack_name),
+                "mechanism_signal_status": _mechanism_signal_status(
+                    _difference(
+                        _relevant_positive_score_mean(test_records, "tubelet_sync", attack_name, "S_final"),
+                        _relevant_positive_score_mean(test_records, "tubelet_only", attack_name, "S_final"),
+                    ),
+                    negative_fpr_delta,
+                ),
+            }
+        )
+        rows.append(
+            {
+                "attack_name": attack_name,
+                "metric_name": "S_sync_positive_negative_gap",
+                "tubelet_only_value": None,
+                "tubelet_sync_value": _sync_positive_negative_gap(test_records, attack_name),
+                "sync_gain": _sync_positive_negative_gap(test_records, attack_name),
+                "negative_fpr_delta": negative_fpr_delta,
+                "positive_count": _relevant_positive_count(test_records, "tubelet_sync", attack_name),
+                "negative_count": _relevant_negative_count(test_records, "tubelet_sync", attack_name),
+                "mechanism_signal_status": _mechanism_signal_status(
+                    _sync_positive_negative_gap(test_records, attack_name),
+                    negative_fpr_delta,
+                ),
+            }
+        )
+    return rows
+
+
+def build_stage2_mechanism_decision(
+    *,
+    event_score_records: list[dict[str, Any]],
+    threshold_records: list[dict[str, Any]],
+    mechanism_config: dict[str, Any],
+    governance_summary_row: dict[str, Any],
+    runtime_config: dict[str, Any],
+    target_fpr: float | None,
+) -> dict[str, Any]:
+    """Build the stage-two mechanism gate decision from governed records."""
+    del threshold_records
+    implementation_decision = str(
+        governance_summary_row.get("real_video_vae_latent_decision", "INCONCLUSIVE")
+    )
+    next_allowed_stage_by_implementation = str(
+        governance_summary_row.get("next_allowed_stage", "remain_in_real_video_vae_latent_probe")
+    )
+    required_variants = _string_list(mechanism_config.get("required_main_variants", []))
+    required_attacks = _string_list(mechanism_config.get("required_mechanism_attacks", []))
+    observed_variants = {str(record.get("method_variant")) for record in event_score_records}
+    test_records = [record for record in event_score_records if record.get("split") == "test"]
+    blocking_reasons: list[str] = []
+    warnings: list[str] = []
+
+    missing_variants = sorted(set(required_variants) - observed_variants)
+    if missing_variants:
+        blocking_reasons.append("missing_required_main_variants")
+
+    missing_attacks = [
+        attack_name
+        for attack_name in required_attacks
+        if not any(str(record.get("attack_name")) == attack_name for record in test_records)
+    ]
+    if missing_attacks:
+        blocking_reasons.append("missing_required_mechanism_attacks")
+
+    if implementation_decision != "PASS":
+        warnings.append("implementation_decision_not_pass")
+
+    minimum_positive_count = int(mechanism_config.get("minimum_positive_count_per_key", 0) or 0)
+    minimum_negative_count = int(mechanism_config.get("minimum_negative_count_per_key", 0) or 0)
+    insufficient_keys = [
+        {
+            "method_variant": method_variant,
+            "attack_name": attack_name,
+            "positive_count": _relevant_positive_count(test_records, method_variant, attack_name),
+            "negative_count": _relevant_negative_count(test_records, method_variant, attack_name),
+        }
+        for method_variant in required_variants
+        for attack_name in required_attacks
+        if _relevant_positive_count(test_records, method_variant, attack_name) < minimum_positive_count
+        or _relevant_negative_count(test_records, method_variant, attack_name) < minimum_negative_count
+    ]
+    if insufficient_keys:
+        blocking_reasons.append("sample_count_insufficient")
+
+    max_clean_negative_fpr = _safe_float(
+        mechanism_config.get("max_clean_negative_fpr"),
+    )
+    if max_clean_negative_fpr is not None:
+        clean_negative_failures = [
+            method_variant
+            for method_variant in required_variants
+            if (_relevant_negative_rate(test_records, method_variant, "no_attack") or 0.0) > max_clean_negative_fpr
+        ]
+        if clean_negative_failures:
+            blocking_reasons.append("clean_negative_fpr_not_controlled")
+
+    max_attacked_negative_fpr = _safe_float(mechanism_config.get("max_attacked_negative_fpr"))
+    attacked_negative_failures = [
+        attack_name
+        for attack_name in required_attacks
+        if attack_name != "no_attack"
+        and (_max_attacked_negative_rate(test_records, required_variants, attack_name) or 0.0) > (max_attacked_negative_fpr or 1.0)
+    ]
+    if attacked_negative_failures:
+        blocking_reasons.append("attacked_negative_fpr_not_controlled")
+
+    min_no_attack_clean_positive_tpr = _safe_float(
+        mechanism_config.get("min_no_attack_clean_positive_tpr")
+    )
+    if min_no_attack_clean_positive_tpr is not None:
+        for method_variant in ("tubelet_only", "tubelet_sync"):
+            no_attack_positive_tpr = _relevant_positive_rate(test_records, method_variant, "no_attack")
+            if no_attack_positive_tpr is None or no_attack_positive_tpr < min_no_attack_clean_positive_tpr:
+                blocking_reasons.append(f"{method_variant}_no_attack_positive_tpr_low")
+
+    min_tubelet_gain = _safe_float(mechanism_config.get("min_tubelet_only_gain_over_frame_prc"))
+    tubelet_only_gain = _aggregate_positive_rate(test_records, "tubelet_only", required_attacks) - _aggregate_positive_rate(
+        test_records,
+        "frame_prc",
+        required_attacks,
+    )
+    if min_tubelet_gain is not None and tubelet_only_gain < min_tubelet_gain:
+        blocking_reasons.append("tubelet_only_not_above_frame_prc")
+
+    temporal_attacks = [attack_name for attack_name in required_attacks if attack_name in TEMPORAL_ATTACKS]
+    min_sync_temporal_gain = _safe_float(
+        mechanism_config.get("min_tubelet_sync_gain_over_tubelet_only_temporal")
+    )
+    sync_temporal_gain = _aggregate_positive_rate(test_records, "tubelet_sync", temporal_attacks) - _aggregate_positive_rate(
+        test_records,
+        "tubelet_only",
+        temporal_attacks,
+    )
+    if temporal_attacks and min_sync_temporal_gain is not None and sync_temporal_gain < min_sync_temporal_gain:
+        blocking_reasons.append("tubelet_sync_not_above_tubelet_only_temporal")
+
+    min_sync_gap = _safe_float(mechanism_config.get("min_sync_positive_negative_score_gap"))
+    mean_sync_gap = _mean(
+        [_sync_positive_negative_gap(test_records, attack_name) for attack_name in temporal_attacks or required_attacks]
+    )
+    if min_sync_gap is not None and (mean_sync_gap is None or mean_sync_gap < min_sync_gap):
+        blocking_reasons.append("sync_positive_negative_score_gap_low")
+
+    require_quality_not_collapsed = bool(mechanism_config.get("require_quality_not_collapsed", False))
+    min_psnr = _safe_float(mechanism_config.get("min_watermarked_video_psnr"))
+    min_ssim = _safe_float(mechanism_config.get("min_watermarked_video_ssim"))
+    positive_quality_records = [
+        record
+        for record in test_records
+        if str(record.get("sample_role")) in {"watermarked_positive", "attacked_positive"}
+        and str(record.get("method_variant")) in set(required_variants)
+    ]
+    mean_psnr = _mean_payload_value(positive_quality_records, "quality_metrics", "watermarked_video_psnr")
+    mean_ssim = _mean_payload_value(positive_quality_records, "quality_metrics", "watermarked_video_ssim")
+    if require_quality_not_collapsed and (
+        mean_psnr is None
+        or mean_ssim is None
+        or (min_psnr is not None and mean_psnr < min_psnr)
+        or (min_ssim is not None and mean_ssim < min_ssim)
+    ):
+        blocking_reasons.append("quality_collapsed")
+
+    quality_metrics_enabled = _quality_metrics_enabled(runtime_config, test_records)
+    temporal_metrics_enabled = _temporal_metrics_enabled(runtime_config, test_records)
+    if not quality_metrics_enabled["lpips"]:
+        warnings.append("lpips_not_enabled")
+    if not quality_metrics_enabled["clip_similarity"]:
+        warnings.append("clip_similarity_not_enabled")
+    if not temporal_metrics_enabled["motion_consistency"]:
+        warnings.append("motion_consistency_not_enabled")
+
+    inconclusive_reasons = {
+        "missing_required_main_variants",
+        "missing_required_mechanism_attacks",
+        "sample_count_insufficient",
+    }
+    if implementation_decision != "PASS":
+        mechanism_decision = "INCONCLUSIVE"
+        recommended_next_action = "stage2_implementation_fix"
+    elif any(reason in inconclusive_reasons for reason in blocking_reasons):
+        mechanism_decision = "INCONCLUSIVE"
+        recommended_next_action = "stage2_mechanism_calibration_run"
+    elif blocking_reasons:
+        mechanism_decision = "FAIL"
+        recommended_next_action = "stage2_mechanism_calibration_run"
+    else:
+        mechanism_decision = "PASS"
+        recommended_next_action = "trajectory_statistic_probe"
+
+    next_allowed_stage_by_mechanism = (
+        "trajectory_statistic_probe"
+        if mechanism_decision == "PASS"
+        else "remain_in_real_video_vae_latent_probe"
+    )
+    resolved_target_fpr = target_fpr
+    if resolved_target_fpr is None:
+        resolved_target_fpr = _safe_float(mechanism_config.get("target_fpr"))
+    if resolved_target_fpr is None and event_score_records:
+        resolved_target_fpr = _safe_float(event_score_records[0].get("target_fpr"))
+
+    return {
+        "run_id": event_score_records[0].get("run_id") if event_score_records else None,
+        "construction_phase": mechanism_config.get("construction_phase", "real_video_vae_latent_probe"),
+        "target_fpr": resolved_target_fpr,
+        "Stage2ImplementationDecision": implementation_decision,
+        "Stage2MechanismDecision": mechanism_decision,
+        "Stage2MechanismBlockingReasons": sorted(dict.fromkeys(blocking_reasons)),
+        "Stage2MechanismWarnings": sorted(dict.fromkeys(warnings)),
+        "NextAllowedStageByImplementation": next_allowed_stage_by_implementation,
+        "NextAllowedStageByMechanism": next_allowed_stage_by_mechanism,
+        "RecommendedNextAction": recommended_next_action,
+        "quality_metrics_enabled": quality_metrics_enabled,
+        "temporal_metrics_enabled": temporal_metrics_enabled,
+        "sample_count_summary": {
+            "minimum_positive_count_per_key": minimum_positive_count,
+            "minimum_negative_count_per_key": minimum_negative_count,
+            "insufficient_keys": insufficient_keys,
+        },
+        "mechanism_metrics": {
+            "tubelet_only_gain_over_frame_prc": _round_or_none(tubelet_only_gain),
+            "tubelet_sync_gain_over_tubelet_only_temporal": _round_or_none(sync_temporal_gain),
+            "sync_positive_negative_score_gap": _round_or_none(mean_sync_gap),
+            "mean_watermarked_video_psnr": _round_or_none(mean_psnr),
+            "mean_watermarked_video_ssim": _round_or_none(mean_ssim),
+        },
+    }
+
+
+def build_stage2_mechanism_report_text(
+    decision_payload: dict[str, Any],
+    sync_gain_rows: list[dict[str, Any]],
+) -> str:
+    """Build the stage-two mechanism audit report text."""
+    sync_gain_preview = [
+        row
+        for row in sync_gain_rows
+        if row.get("metric_name") in {"clean_positive_tpr", "attacked_positive_tpr"}
+    ][:5]
+    return "\n".join(
+        [
+            "# Stage2 Mechanism Audit Report",
+            "",
+            "## Decisions",
+            f"- Stage2ImplementationDecision: {decision_payload['Stage2ImplementationDecision']}",
+            f"- Stage2MechanismDecision: {decision_payload['Stage2MechanismDecision']}",
+            f"- Stage2MechanismBlockingReasons: {', '.join(decision_payload['Stage2MechanismBlockingReasons']) or 'none'}",
+            f"- Stage2MechanismWarnings: {', '.join(decision_payload['Stage2MechanismWarnings']) or 'none'}",
+            f"- NextAllowedStageByImplementation: {decision_payload['NextAllowedStageByImplementation']}",
+            f"- NextAllowedStageByMechanism: {decision_payload['NextAllowedStageByMechanism']}",
+            f"- RecommendedNextAction: {decision_payload['RecommendedNextAction']}",
+            "",
+            "## Metric Enablement",
+            f"- quality_metrics_enabled: {json.dumps(decision_payload['quality_metrics_enabled'], ensure_ascii=False)}",
+            f"- temporal_metrics_enabled: {json.dumps(decision_payload['temporal_metrics_enabled'], ensure_ascii=False)}",
+            "",
+            "## Mechanism Metrics",
+            *[
+                f"- {metric_name}: {metric_value}"
+                for metric_name, metric_value in decision_payload["mechanism_metrics"].items()
+            ],
+            "",
+            "## Sync Gain Preview",
+            *[
+                f"- {row['attack_name']} / {row['metric_name']}: sync_gain={row['sync_gain']}, negative_fpr_delta={row['negative_fpr_delta']}, status={row['mechanism_signal_status']}"
+                for row in sync_gain_preview
+            ],
+        ]
+    ) + "\n"
+
+
+def _read_single_csv_row(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            return dict(row)
+    return {}
+
+
+def _read_json_payload(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value]
+
+
+def _values_for_payload(records: list[dict[str, Any]], payload_key: str, value_key: str) -> list[float]:
+    values: list[float] = []
+    for record in records:
+        payload = record.get(payload_key, {})
+        if not isinstance(payload, dict):
+            continue
+        numeric_value = _safe_float(payload.get(value_key))
+        if numeric_value is None:
+            continue
+        values.append(numeric_value)
+    return values
+
+
+def _values_for_score(records: list[dict[str, Any]], score_name: str) -> list[float]:
+    values: list[float] = []
+    for record in records:
+        evidence_scores = record.get("evidence_scores", {})
+        if not isinstance(evidence_scores, dict):
+            continue
+        numeric_value = _safe_float(evidence_scores.get(score_name))
+        if numeric_value is None:
+            continue
+        values.append(numeric_value)
+    return values
+
+
+def _mean(values: list[float | None]) -> float | None:
+    filtered_values = [float(value) for value in values if value is not None and math.isfinite(float(value))]
+    if not filtered_values:
+        return None
+    return round(statistics.fmean(filtered_values), 6)
+
+
+def _std(values: list[float | None]) -> float | None:
+    filtered_values = [float(value) for value in values if value is not None and math.isfinite(float(value))]
+    if not filtered_values:
+        return None
+    if len(filtered_values) == 1:
+        return 0.0
+    return round(statistics.pstdev(filtered_values), 6)
+
+
+def _median(values: list[float | None]) -> float | None:
+    filtered_values = [float(value) for value in values if value is not None and math.isfinite(float(value))]
+    if not filtered_values:
+        return None
+    return round(float(statistics.median(filtered_values)), 6)
+
+
+def _safe_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _decision_rate(records: list[dict[str, Any]]) -> float | None:
+    if not records:
+        return None
+    decision_values = [1.0 if bool(record.get("decision")) else 0.0 for record in records]
+    return _mean(decision_values)
+
+
+def _decision_rate_for_role(
+    records: list[dict[str, Any]],
+    method_variant: str,
+    attack_name: str,
+    sample_role: str,
+) -> float | None:
+    matched_records = [
+        record
+        for record in records
+        if str(record.get("method_variant")) == method_variant
+        and str(record.get("attack_name")) == attack_name
+        and str(record.get("sample_role")) == sample_role
+    ]
+    return _decision_rate(matched_records)
+
+
+def _local_clip_tpr(records: list[dict[str, Any]], method_variant: str, attack_name: str) -> float | None:
+    if attack_name != "local_clip":
+        return None
+    return _decision_rate_for_role(records, method_variant, attack_name, "attacked_positive")
+
+
+def _mean_record_score(records: list[dict[str, Any]], score_name: str) -> float | None:
+    return _mean(_values_for_score(records, score_name))
+
+
+def _std_record_score(records: list[dict[str, Any]], score_name: str) -> float | None:
+    return _std(_values_for_score(records, score_name))
+
+
+def _mean_mechanism_trace_value(records: list[dict[str, Any]], value_key: str) -> float | None:
+    values = [
+        _safe_float(record.get("mechanism_trace", {}).get(value_key))
+        for record in records
+        if isinstance(record.get("mechanism_trace"), dict)
+    ]
+    return _mean(values)
+
+
+def _median_mechanism_trace_value(records: list[dict[str, Any]], value_key: str) -> float | None:
+    values = [
+        _safe_float(record.get("mechanism_trace", {}).get(value_key))
+        for record in records
+        if isinstance(record.get("mechanism_trace"), dict)
+    ]
+    return _median(values)
+
+
+def _mean_payload_value(records: list[dict[str, Any]], payload_key: str, value_key: str) -> float | None:
+    return _mean(_values_for_payload(records, payload_key, value_key))
+
+
+def _relevant_positive_role(attack_name: str) -> str:
+    return "watermarked_positive" if attack_name == "no_attack" else "attacked_positive"
+
+
+def _relevant_negative_role(attack_name: str) -> str:
+    return "clean_negative" if attack_name == "no_attack" else "attacked_negative"
+
+
+def _records_for_variant_attack_role(
+    records: list[dict[str, Any]],
+    method_variant: str,
+    attack_name: str,
+    sample_role: str,
+) -> list[dict[str, Any]]:
+    return [
+        record
+        for record in records
+        if str(record.get("method_variant")) == method_variant
+        and str(record.get("attack_name")) == attack_name
+        and str(record.get("sample_role")) == sample_role
+    ]
+
+
+def _relevant_positive_rate(records: list[dict[str, Any]], method_variant: str, attack_name: str) -> float | None:
+    return _decision_rate(
+        _records_for_variant_attack_role(
+            records,
+            method_variant,
+            attack_name,
+            _relevant_positive_role(attack_name),
+        )
+    )
+
+
+def _relevant_negative_rate(records: list[dict[str, Any]], method_variant: str, attack_name: str) -> float | None:
+    return _decision_rate(
+        _records_for_variant_attack_role(
+            records,
+            method_variant,
+            attack_name,
+            _relevant_negative_role(attack_name),
+        )
+    )
+
+
+def _relevant_positive_count(records: list[dict[str, Any]], method_variant: str, attack_name: str) -> int:
+    return len(
+        _records_for_variant_attack_role(
+            records,
+            method_variant,
+            attack_name,
+            _relevant_positive_role(attack_name),
+        )
+    )
+
+
+def _relevant_negative_count(records: list[dict[str, Any]], method_variant: str, attack_name: str) -> int:
+    return len(
+        _records_for_variant_attack_role(
+            records,
+            method_variant,
+            attack_name,
+            _relevant_negative_role(attack_name),
+        )
+    )
+
+
+def _relevant_positive_score_mean(
+    records: list[dict[str, Any]],
+    method_variant: str,
+    attack_name: str,
+    score_name: str,
+) -> float | None:
+    matched_records = _records_for_variant_attack_role(
+        records,
+        method_variant,
+        attack_name,
+        _relevant_positive_role(attack_name),
+    )
+    return _mean_record_score(matched_records, score_name)
+
+
+def _sync_positive_negative_gap(records: list[dict[str, Any]], attack_name: str) -> float | None:
+    positive_records = _records_for_variant_attack_role(
+        records,
+        "tubelet_sync",
+        attack_name,
+        _relevant_positive_role(attack_name),
+    )
+    negative_records = _records_for_variant_attack_role(
+        records,
+        "tubelet_sync",
+        attack_name,
+        _relevant_negative_role(attack_name),
+    )
+    positive_mean = _mean_record_score(positive_records, "S_sync")
+    negative_mean = _mean_record_score(negative_records, "S_sync")
+    return _difference(positive_mean, negative_mean)
+
+
+def _difference(left_value: float | None, right_value: float | None) -> float | None:
+    if left_value is None or right_value is None:
+        return None
+    return round(left_value - right_value, 6)
+
+
+def _aggregate_positive_rate(records: list[dict[str, Any]], method_variant: str, attack_names: list[str]) -> float:
+    return float(
+        _mean([
+            _relevant_positive_rate(records, method_variant, attack_name)
+            for attack_name in attack_names
+        ])
+        or 0.0
+    )
+
+
+def _max_attacked_negative_rate(
+    records: list[dict[str, Any]],
+    method_variants: list[str],
+    attack_name: str,
+) -> float | None:
+    return _mean(
+        [
+            _relevant_negative_rate(records, method_variant, attack_name)
+            for method_variant in method_variants
+        ]
+    )
+
+
+def _mechanism_signal_status(sync_gain: float | None, negative_fpr_delta: float | None) -> str:
+    if sync_gain is None:
+        return "insufficient_signal"
+    if sync_gain > 0 and (negative_fpr_delta is None or negative_fpr_delta <= 0):
+        return "positive_gain_with_controlled_fpr"
+    if sync_gain > 0:
+        return "positive_gain_with_fpr_risk"
+    if sync_gain == 0:
+        return "flat_signal"
+    return "no_positive_gain"
+
+
+def _quality_metrics_enabled(runtime_config: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, bool]:
+    quality_config = runtime_config.get("quality_metrics", {}) if isinstance(runtime_config, dict) else {}
+    any_lpips_signal = any(
+        record.get("quality_metrics", {}).get("watermarked_video_lpips") is not None
+        or record.get("quality_metrics", {}).get("lpips_failure_reason") not in {None, "lpips_disabled_by_config"}
+        for record in records
+    )
+    any_clip_signal = any(
+        record.get("quality_metrics", {}).get("clip_similarity_score") is not None
+        or record.get("quality_metrics", {}).get("clip_failure_reason") not in {None, "clip_similarity_disabled_by_config"}
+        for record in records
+    )
+    return {
+        "psnr": True,
+        "ssim": True,
+        "lpips": bool(quality_config.get("enable_lpips", any_lpips_signal)),
+        "clip_similarity": bool(quality_config.get("enable_clip_similarity", any_clip_signal)),
+    }
+
+
+def _temporal_metrics_enabled(runtime_config: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, bool]:
+    temporal_config = runtime_config.get("temporal_metrics", {}) if isinstance(runtime_config, dict) else {}
+    any_motion_signal = any(
+        record.get("temporal_metrics", {}).get("motion_consistency_score") is not None
+        or record.get("temporal_metrics", {}).get("motion_consistency_failure_reason") not in {None, "motion_consistency_disabled_by_config"}
+        for record in records
+    )
+    return {
+        "flicker_score": True,
+        "motion_consistency": bool(
+            temporal_config.get("enable_motion_consistency", any_motion_signal)
+        ),
+    }
+
+
+def _round_or_none(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return round(float(value), 6)

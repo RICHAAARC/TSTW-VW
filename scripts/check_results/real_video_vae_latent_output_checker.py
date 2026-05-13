@@ -98,8 +98,10 @@ def check_real_video_vae_latent_outputs(
         "threshold_count": len(threshold_records),
         "all_s_traj_null": all_s_traj_null,
         "construction_phase_matches": construction_phase_matches,
+        "Stage2ImplementationDecision": real_video_vae_latent_decision,
         "RealVideoVaeLatentDecision": real_video_vae_latent_decision,
         "BlockingReasons": blocking_reasons,
+        "NextAllowedStageByImplementation": next_allowed_stage,
         "NextAllowedStage": next_allowed_stage,
         "formal_checks": formal_checks if require_formal_pass_criteria else None,
     }

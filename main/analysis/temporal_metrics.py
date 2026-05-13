@@ -47,9 +47,31 @@ def build_temporal_metrics_payload(
                 comparison_video_path,
                 runtime_config=runtime_config,
             )
-        except Exception:
-            # 若真实实现失败，降级到占位实现
-            pass
+        except Exception as exc:
+            if runtime_config.get("allow_placeholder_metrics_fallback", False):
+                return _build_placeholder_temporal_metrics_payload(
+                    reference_video_path,
+                    comparison_video_path,
+                )
+            enable_motion_consistency = bool(
+                runtime_config.get("temporal_metrics", {}).get("enable_motion_consistency")
+            )
+            disabled_temporal_metrics = []
+            if not enable_motion_consistency:
+                disabled_temporal_metrics.append("motion_consistency")
+            return {
+                "temporal_metrics_runtime": "real_video_frame_metrics",
+                "temporal_consistency_score": None,
+                "flicker_score": None,
+                "motion_consistency_score": None,
+                "disabled_temporal_metrics": disabled_temporal_metrics,
+                "temporal_failure_reason": f"real_temporal_metrics_runtime_error: {str(exc)}",
+                "motion_consistency_failure_reason": (
+                    None
+                    if enable_motion_consistency
+                    else "motion_consistency_disabled_by_config"
+                ),
+            }
 
     # 使用占位实现
     return _build_placeholder_temporal_metrics_payload(

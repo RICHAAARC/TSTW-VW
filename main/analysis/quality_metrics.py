@@ -48,9 +48,45 @@ def build_quality_metrics_payload(
                 comparison_video_path,
                 runtime_config=runtime_config,
             )
-        except Exception:
-            # 若真实实现失败，降级到占位实现
-            pass
+        except Exception as exc:
+            if runtime_config.get("allow_placeholder_metrics_fallback", False):
+                return _build_placeholder_quality_metrics_payload(
+                    reference_video_path,
+                    comparison_video_path,
+                )
+            quality_config = runtime_config.get("quality_metrics", {})
+            enable_lpips = bool(
+                quality_config.get("enable_lpips")
+                or runtime_config.get("local_lpips_model_root")
+                or runtime_config.get("lpips_model_root")
+            )
+            enable_clip_similarity = bool(quality_config.get("enable_clip_similarity"))
+            disabled_quality_metrics = []
+            if not enable_lpips:
+                disabled_quality_metrics.append("watermarked_video_lpips")
+            if not enable_clip_similarity:
+                disabled_quality_metrics.append("clip_similarity")
+            return {
+                "quality_metrics_runtime": "real_video_frame_metrics",
+                "vae_reconstruction_psnr": None,
+                "vae_reconstruction_ssim": None,
+                "watermarked_video_psnr": None,
+                "watermarked_video_ssim": None,
+                "watermarked_video_lpips": None,
+                "clip_similarity_score": None,
+                "disabled_quality_metrics": disabled_quality_metrics,
+                "quality_failure_reason": f"real_quality_metrics_runtime_error: {str(exc)}",
+                "lpips_failure_reason": (
+                    "lpips_disabled_by_config"
+                    if not enable_lpips
+                    else "lpips_not_attempted_due_runtime_error"
+                ),
+                "clip_failure_reason": (
+                    "clip_similarity_not_implemented"
+                    if enable_clip_similarity
+                    else "clip_similarity_disabled_by_config"
+                ),
+            }
 
     # 使用占位实现
     return _build_placeholder_quality_metrics_payload(

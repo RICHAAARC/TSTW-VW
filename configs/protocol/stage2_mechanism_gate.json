@@ -1,0 +1,27 @@
+{
+  "construction_phase": "real_video_vae_latent_probe",
+  "target_fpr": 0.001,
+  "minimum_positive_count_per_key": 20,
+  "minimum_negative_count_per_key": 20,
+  "required_main_variants": [
+    "frame_prc",
+    "tubelet_only",
+    "tubelet_sync"
+  ],
+  "required_mechanism_attacks": [
+    "no_attack",
+    "temporal_crop",
+    "frame_dropping",
+    "local_clip",
+    "h264_compression"
+  ],
+  "max_clean_negative_fpr": 0.05,
+  "max_attacked_negative_fpr": 0.1,
+  "min_no_attack_clean_positive_tpr": 0.5,
+  "min_tubelet_only_gain_over_frame_prc": 0.0,
+  "min_tubelet_sync_gain_over_tubelet_only_temporal": 0.1,
+  "min_sync_positive_negative_score_gap": 0.05,
+  "require_quality_not_collapsed": true,
+  "min_watermarked_video_psnr": 20.0,
+  "min_watermarked_video_ssim": 0.5
+}

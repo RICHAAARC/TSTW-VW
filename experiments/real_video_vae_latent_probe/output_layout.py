@@ -45,6 +45,11 @@ class RealVideoVaeLatentOutputPaths(BaseRunOutputPaths):
     quality_robustness_tradeoff_path: Path
     report_path: Path
     failure_case_gallery_path: Path
+    stage2_mechanism_audit_table_path: Path
+    stage2_score_distribution_table_path: Path
+    stage2_sync_gain_table_path: Path
+    stage2_mechanism_report_path: Path
+    stage2_mechanism_decision_path: Path
 
     def table_paths(self) -> list[Path]:
         return [
@@ -58,6 +63,13 @@ class RealVideoVaeLatentOutputPaths(BaseRunOutputPaths):
 
     def figure_paths(self) -> list[Path]:
         return [self.quality_robustness_tradeoff_path]
+
+    def analysis_only_table_paths(self) -> list[Path]:
+        return [
+            self.stage2_mechanism_audit_table_path,
+            self.stage2_score_distribution_table_path,
+            self.stage2_sync_gain_table_path,
+        ]
 
 
 def build_real_video_vae_latent_output_paths(output_root: str | Path) -> RealVideoVaeLatentOutputPaths:
@@ -96,4 +108,19 @@ def build_real_video_vae_latent_output_paths(output_root: str | Path) -> RealVid
         ),
         report_path=output_root_path / "reports" / "vae_latent_probe_report.md",
         failure_case_gallery_path=output_root_path / "failure_case_gallery",
+        stage2_mechanism_audit_table_path=(
+            output_root_path / "tables" / "stage2_mechanism_audit_table.csv"
+        ),
+        stage2_score_distribution_table_path=(
+            output_root_path / "tables" / "stage2_score_distribution_table.csv"
+        ),
+        stage2_sync_gain_table_path=(
+            output_root_path / "tables" / "stage2_sync_gain_table.csv"
+        ),
+        stage2_mechanism_report_path=(
+            output_root_path / "reports" / "stage2_mechanism_audit_report.md"
+        ),
+        stage2_mechanism_decision_path=(
+            output_root_path / "artifacts" / "stage2_mechanism_decision.json"
+        ),
     )
