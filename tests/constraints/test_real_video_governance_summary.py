@@ -10,6 +10,57 @@ import pytest
 
 pytestmark = [pytest.mark.constraint, pytest.mark.formal]
 
+from experiments.real_video_vae_latent_probe.artifact_builder import (
+    build_real_video_vae_latent_governance_summary_rows,
+)
+
+
+def _build_governance_event_record(
+    *,
+    method_variant: str,
+    base_method_variant: str,
+    derived_variant: str,
+    ablation_axis: str,
+    tubelet_length: int,
+    attack_name: str,
+    sample_role: str,
+    decision: bool,
+    target_fpr: float = 0.001,
+) -> dict[str, object]:
+    return {
+        "run_id": "real_video_summary_test",
+        "method_family": "temporal_tubelet_watermark",
+        "method_variant": method_variant,
+        "base_method_variant": base_method_variant,
+        "derived_variant": derived_variant,
+        "ablation_axis": ablation_axis,
+        "tubelet_length": tubelet_length,
+        "target_fpr": target_fpr,
+        "threshold_id": f"{method_variant}_threshold",
+        "split": "test",
+        "attack_name": attack_name,
+        "attack_params": {},
+        "sample_role": sample_role,
+        "decision": decision,
+        "evidence_scores": {"S_traj": None},
+        "mechanism_trace": {
+            "construction_phase": "real_video_vae_latent_probe",
+            "video_runtime_status": "real_mp4_runtime",
+            "vae_backend_name": "diffusers_autoencoder_kl_framewise",
+            "quality_metrics_runtime": "real_video_frame_metrics",
+            "temporal_metrics_runtime": "real_video_frame_metrics",
+            "video_container": "mp4",
+        },
+    }
+
+
+def _build_governance_threshold_record(method_variant: str) -> dict[str, object]:
+    return {
+        "method_variant": method_variant,
+        "threshold_id": f"{method_variant}_threshold",
+        "fusion_rule": "sum",
+    }
+
 
 def test_governance_summary_pass_condition_1_records_non_empty() -> None:
     """功能：条件 1：records 非空。
@@ -89,6 +140,90 @@ def test_governance_summary_pass_condition_4_attacked_fpr_reported() -> None:
     
     fpr_unreported = all(row["attacked_negative_FPR"] is not None for row in unreported_rows)
     assert not fpr_unreported, "Missing attacked FPR should fail"
+
+
+def test_governance_summary_ignores_non_primary_ablation_rows_for_clean_fpr_control() -> None:
+    event_score_records = [
+        _build_governance_event_record(
+            method_variant="frame_prc",
+            base_method_variant="frame_prc",
+            derived_variant="base",
+            ablation_axis="none",
+            tubelet_length=1,
+            attack_name="no_attack",
+            sample_role="clean_negative",
+            decision=False,
+        ),
+        _build_governance_event_record(
+            method_variant="tubelet_only_lt02",
+            base_method_variant="tubelet_only",
+            derived_variant="lt02",
+            ablation_axis="tubelet_length",
+            tubelet_length=2,
+            attack_name="no_attack",
+            sample_role="clean_negative",
+            decision=True,
+        ),
+    ]
+    threshold_records = [
+        _build_governance_threshold_record("frame_prc"),
+        _build_governance_threshold_record("tubelet_only_lt02"),
+    ]
+    attack_breakdown_rows = [
+        {
+            "method_variant": "frame_prc",
+            "attack_name": "h264_compression",
+            "attacked_negative_FPR": 0.0,
+        }
+    ]
+
+    summary_row = build_real_video_vae_latent_governance_summary_rows(
+        event_score_records,
+        threshold_records,
+        attack_breakdown_rows,
+        [{"video_count": 1}],
+        [{"video_count": 1}],
+    )[0]
+
+    assert summary_row["clean_negative_fpr_controlled"] is True
+
+
+def test_governance_summary_ignores_no_attack_rows_for_attacked_fpr_reporting() -> None:
+    event_score_records = [
+        _build_governance_event_record(
+            method_variant="frame_prc",
+            base_method_variant="frame_prc",
+            derived_variant="base",
+            ablation_axis="none",
+            tubelet_length=1,
+            attack_name="no_attack",
+            sample_role="clean_negative",
+            decision=False,
+        )
+    ]
+    threshold_records = [_build_governance_threshold_record("frame_prc")]
+    attack_breakdown_rows = [
+        {
+            "method_variant": "frame_prc",
+            "attack_name": "no_attack",
+            "attacked_negative_FPR": None,
+        },
+        {
+            "method_variant": "frame_prc",
+            "attack_name": "h264_compression",
+            "attacked_negative_FPR": 0.0,
+        },
+    ]
+
+    summary_row = build_real_video_vae_latent_governance_summary_rows(
+        event_score_records,
+        threshold_records,
+        attack_breakdown_rows,
+        [{"video_count": 1}],
+        [{"video_count": 1}],
+    )[0]
+
+    assert summary_row["attacked_negative_fpr_reported"] is True
 
 
 def test_governance_summary_pass_condition_5_quality_table_non_empty() -> None:

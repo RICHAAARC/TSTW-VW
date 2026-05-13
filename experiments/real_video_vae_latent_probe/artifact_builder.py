@@ -15,7 +15,11 @@ import zlib
 
 from main.analysis.failure_case_exporter import export_failure_case_gallery
 from main.core.records import RecordWriter
-from main.protocol.evaluator import build_ablation_table_rows, build_main_metrics_rows
+from main.protocol.evaluator import (
+    build_ablation_table_rows,
+    build_main_metrics_rows,
+    is_primary_stage1_method_variant,
+)
 from experiments.real_video_vae_latent_probe.output_layout import (
     RealVideoVaeLatentOutputPaths,
     build_real_video_vae_latent_output_paths,
@@ -558,19 +562,29 @@ def build_real_video_vae_latent_governance_summary_rows(
         List with a single governance summary row.
     """
     main_metric_rows = build_main_metrics_rows(event_score_records, threshold_records)
+    primary_main_metric_rows = [
+        row
+        for row in main_metric_rows
+        if is_primary_stage1_method_variant(str(row.get("method_variant", "")))
+    ]
+    attacked_breakdown_rows = [
+        row
+        for row in attack_breakdown_rows
+        if str(row.get("attack_name", "")) != "no_attack"
+    ]
     
     # 条件 1-4：基础完整性检查
     records_non_empty = bool(event_score_records)
     thresholds_non_empty = bool(threshold_records)
     
     # 条件 3-4：FPR 控制检查
-    clean_negative_fpr_controlled = bool(main_metric_rows) and all(
+    clean_negative_fpr_controlled = bool(primary_main_metric_rows) and all(
         float(row["clean_negative_FPR"] or 0.0) <= float(row.get("target_fpr", 1.0) or 1.0)
-        for row in main_metric_rows
+        for row in primary_main_metric_rows
         if row.get("clean_negative_FPR") is not None
     )
-    attacked_negative_fpr_reported = bool(attack_breakdown_rows) and all(
-        row["attacked_negative_FPR"] is not None for row in attack_breakdown_rows
+    attacked_negative_fpr_reported = bool(attacked_breakdown_rows) and all(
+        row["attacked_negative_FPR"] is not None for row in attacked_breakdown_rows
     )
     
     # 条件 5-9：表格与重建检查
