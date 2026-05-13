@@ -167,6 +167,8 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
         "paper_workflow.notebook_utils import "
         "real_video_vae_latent_probe_workflow"
     ) in notebook_text
+    assert "from paper_workflow.notebook_utils import runtime_profile_workflow" in notebook_text
+    assert "from paper_workflow.notebook_utils import run_timing_workflow" in notebook_text
     assert "probe_workflow.prepare_probe_runtime_workspace" in notebook_text
     assert "probe_workflow.prepare_probe_session_model" in notebook_text
     assert "probe_workflow.write_probe_runtime_config" in notebook_text
@@ -177,17 +179,39 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "dataset_manifest_path=PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "dataset_manifest=PROCESSED_DATASET_MANIFEST" in notebook_text
+    assert "attack_matrix=ATTACK_MATRIX_PATH" in notebook_text
+    assert "ablation_config=ABLATION_CONFIG_PATH" in notebook_text
     assert "repo_env['PYTHONPATH']" in notebook_text
     assert "env=repo_env" in notebook_text
     assert "cwd=REPO_ROOT" in notebook_text
     assert "huggingface_hub" in notebook_text
     assert "diffusers" in notebook_text
+    assert "PROFILE_RUNTIME = RUN_MODE == 'formal'" in notebook_text
+    assert "PROFILE_GPU_RUNTIME = PROFILE_RUNTIME" in notebook_text
+    assert "GPU_PROFILE_INTERVAL_SECONDS = 2" in notebook_text
+    assert "run_timer = run_timing_workflow.start_run_timing(" in notebook_text
+    assert "runtime_profile_workflow.capture_colab_environment(" in notebook_text
+    assert "runtime_profile_workflow.profile_drive_io(" in notebook_text
+    assert "runtime_profile_workflow.estimate_real_video_vae_latent_run_scale(" in notebook_text
+    assert "runtime_profile_workflow.start_gpu_runtime_profile(" in notebook_text
+    assert "runtime_profile_workflow.stop_gpu_runtime_profile(" in notebook_text
+    assert "runtime_profile_workflow.summarize_gpu_runtime_profile(" in notebook_text
+    assert "run_timing_workflow.summarize_run_timing(" in notebook_text
+    assert "runtime_profile_workflow.summarize_run_failures(" in notebook_text
+    assert "runtime_profile_workflow.recommend_runtime_parameters(" in notebook_text
+    assert "with run_timer.event('runtime_preflight'" in notebook_text
+    assert "with run_timer.event('model_preparation'" in notebook_text
+    assert "with run_timer.event('real_video_vae_latent_runner'" in notebook_text
+    assert "with run_timer.event('table_and_report_rebuild'" in notebook_text
+    assert "with run_timer.event('formal_checker'" in notebook_text
+    assert "with run_timer.event('result_packaging'" in notebook_text
     assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
     assert "scripts.prepare_models.prepare_session_autoencoder_kl" not in notebook_text
     assert "scripts.check_results.check_real_video_vae_latent_outputs" not in notebook_text
     assert "scripts.package_results.package_real_video_vae_latent_outputs" not in notebook_text
     assert "scripts.package_results.package_real_video_vae_latent_tar_zst" not in notebook_text
     assert "from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check" not in notebook_text
+    assert "nvidia-smi" not in notebook_text
     assert "experiments.real_video_vae_latent_probe.runner" in workflow_text
     assert "scripts.prepare_models.prepare_session_autoencoder_kl" in workflow_text
     assert "scripts.check_results.check_real_video_vae_latent_outputs" in workflow_text

@@ -494,7 +494,7 @@ examples/colab/
 
 ```text
 main/cli/：面向方法功能的正式入口；
-scripts/：面向仓库操作、数据准备、模型准备、结果检查、结果打包和 release 生成的辅助入口。
+scripts/：面向仓库操作、数据准备、模型准备、runtime profiling、结果检查、结果打包和 release 生成的辅助入口。
 ```
 
 ### （二）推荐结构
@@ -507,7 +507,18 @@ scripts/
 │   └── prepare_session_autoencoder_kl.py
 ├── check_results/
 │   ├── real_video_vae_latent_output_checker.py
-│   └── check_real_video_vae_latent_outputs.py
+│   ├── check_real_video_vae_latent_outputs.py
+│   └── summarize_run_failures.py
+├── profile_runtime/
+│   ├── capture_colab_environment.py
+│   ├── profile_run_timing.py
+│   ├── summarize_run_timing.py
+│   ├── profile_gpu_runtime.py
+│   ├── summarize_gpu_profile.py
+│   ├── estimate_real_video_vae_latent_run_scale.py
+│   ├── watch_real_video_vae_latent_progress.py
+│   ├── profile_drive_io.py
+│   └── recommend_runtime_parameters.py
 └── package_results/
   ├── drive_packager.py
   ├── tar_zst_packager.py

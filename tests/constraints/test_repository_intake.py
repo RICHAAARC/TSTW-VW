@@ -12,7 +12,11 @@ pytestmark = [pytest.mark.constraint, pytest.mark.unit]
 
 from pathlib import Path
 
-from tools.harness.inspect_repository import EXPECTED_DIRECTORIES, inspect_repository
+from tools.harness.inspect_repository import (
+    EXPECTED_DIRECTORIES,
+    REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS,
+    inspect_repository,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -70,11 +74,40 @@ def test_governed_repository_reports_active_stage_status() -> None:
     next_stage_readiness = report["next_stage_readiness"]
     assert next_stage_readiness["target_construction_phase"] == "real_video_vae_latent_probe"
     assert next_stage_readiness["all_required_paths_present"] is True
-    assert next_stage_readiness["present_required_path_count"] == 18
-    assert next_stage_readiness["required_path_count"] == 18
+    assert next_stage_readiness["present_required_path_count"] == len(
+        REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS
+    )
+    assert next_stage_readiness["required_path_count"] == len(REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS)
     assert next_stage_readiness["required_paths"]["real_video_vae_latent_processed_dataset_notebook"]["exists"] is True
     assert next_stage_readiness["required_paths"]["real_video_vae_latent_probe_notebook"]["exists"] is True
     assert next_stage_readiness["required_paths"]["real_video_vae_latent_notebook_utils_root"]["exists"] is True
+    assert (
+        next_stage_readiness["required_paths"]["real_video_vae_latent_runtime_profile_root"]["exists"] is True
+    )
+    assert (
+        next_stage_readiness["required_paths"][
+            "real_video_vae_latent_runtime_profile_workflow_helper"
+        ]["exists"]
+        is True
+    )
+    assert (
+        next_stage_readiness["required_paths"][
+            "real_video_vae_latent_run_timing_workflow_helper"
+        ]["exists"]
+        is True
+    )
+    assert (
+        next_stage_readiness["required_paths"][
+            "real_video_vae_latent_runtime_parameter_recommendation_module"
+        ]["exists"]
+        is True
+    )
+    assert (
+        next_stage_readiness["required_paths"][
+            "real_video_vae_latent_run_failure_summary_module"
+        ]["exists"]
+        is True
+    )
     assert (
         next_stage_readiness["required_paths"]["real_video_vae_latent_runner_module"]["exists"] is True
     )

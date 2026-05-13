@@ -9,6 +9,7 @@ import argparse
 import json
 from pathlib import Path
 from typing import Any
+import zipfile
 
 from scripts.package_results.drive_packager import pack_real_video_vae_latent_run
 
@@ -29,14 +30,19 @@ def package_real_video_vae_latent_outputs(
     Returns:
         A package summary payload.
     """
+    run_root_path = Path(run_root)
     family_root_path = Path(family_root)
     packages_root = family_root_path / "packages"
     packages_root.mkdir(parents=True, exist_ok=True)
 
     package_payload = pack_real_video_vae_latent_run(
-        run_root=run_root,
+        run_root=run_root_path,
         drive_output_dir=packages_root,
         exclude_large_intermediate_latents=exclude_large_intermediate_latents,
+    )
+    _append_runtime_profile_to_zip(
+        zip_path=package_payload["zip_path"],
+        run_root=run_root_path,
     )
 
     summary_payload = json.loads(package_payload["summary_path"].read_text(encoding="utf-8"))
@@ -49,16 +55,19 @@ def package_real_video_vae_latent_outputs(
         "package_path": str(package_payload["zip_path"]),
         "summary_path": str(package_payload["summary_path"]),
         "checks_path": str(package_payload["checks_path"]),
+        "runtime_profile_included": True,
     }
     family_summary = {
         "family_id": family_root_path.name,
         "drive_result_summary": summary_payload,
         "package_path": str(package_payload["zip_path"]),
+        "runtime_profile_dir": str(run_root_path / "runtime_profile"),
     }
     family_checks = {
         "status": bool(checks_payload.get("status", False)),
         "run_checks": checks_payload,
         "package_exists": package_payload["zip_path"].exists(),
+        "runtime_profile_included": True,
     }
 
     (family_root_path / "family_manifest.json").write_text(
@@ -81,6 +90,31 @@ def package_real_video_vae_latent_outputs(
         "family_summary_path": family_root_path / "family_summary.json",
         "family_checks_path": family_root_path / "family_checks.json",
     }
+
+
+def _append_runtime_profile_to_zip(
+    *,
+    zip_path: Path,
+    run_root: Path,
+) -> None:
+    """Append runtime_profile artifacts into the family zip package.
+
+    Args:
+        zip_path: Target zip archive path.
+        run_root: Run-root path.
+
+    Returns:
+        None.
+    """
+    runtime_profile_dir = run_root / "runtime_profile"
+    if not runtime_profile_dir.exists():
+        return
+    with zipfile.ZipFile(zip_path, mode="a", compression=zipfile.ZIP_DEFLATED) as archive:
+        for file_path in sorted(path for path in runtime_profile_dir.rglob("*") if path.is_file()):
+            archive.write(
+                file_path,
+                arcname=f"{run_root.name}/{file_path.relative_to(run_root).as_posix()}",
+            )
 
 
 def main(argv: list[str] | None = None) -> int:

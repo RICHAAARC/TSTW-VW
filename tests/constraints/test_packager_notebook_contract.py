@@ -24,10 +24,26 @@ def test_real_video_tar_zst_packager_notebook_contract() -> None:
         / "notebook_utils"
         / "real_video_vae_latent_probe_workflow.py"
     )
+    zip_packager_path = (
+        ROOT
+        / "scripts"
+        / "package_results"
+        / "package_real_video_vae_latent_outputs.py"
+    )
+    tar_packager_path = (
+        ROOT
+        / "scripts"
+        / "package_results"
+        / "package_real_video_vae_latent_tar_zst.py"
+    )
     assert notebook_path.exists()
     assert workflow_path.exists()
+    assert zip_packager_path.exists()
+    assert tar_packager_path.exists()
     notebook_text = notebook_path.read_text(encoding="utf-8")
     workflow_text = workflow_path.read_text(encoding="utf-8")
+    zip_packager_text = zip_packager_path.read_text(encoding="utf-8")
+    tar_packager_text = tar_packager_path.read_text(encoding="utf-8")
 
     assert "probe_workflow.package_probe_family_results(" in notebook_text
     assert (
@@ -38,3 +54,7 @@ def test_real_video_tar_zst_packager_notebook_contract() -> None:
     assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
     assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
     assert '"drive_archive_path": str(tar_pack["archive_path"])' in workflow_text or "'drive_archive_path': str(tar_pack[\"archive_path\"])" in workflow_text
+    assert "runtime_profile" in zip_packager_text
+    assert "runtime_profile_included" in zip_packager_text
+    assert "runtime_profile" in tar_packager_text
+    assert "runtime_profile_included" in tar_packager_text
