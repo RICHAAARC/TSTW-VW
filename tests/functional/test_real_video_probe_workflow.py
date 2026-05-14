@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import json
+import shutil
 from io import StringIO
 from pathlib import Path
 
@@ -18,6 +19,7 @@ pytestmark = pytest.mark.quick
 import paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow as workflow_module
 
 from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
+    prepare_probe_runtime_workspace,
     run_probe_runner,
     write_probe_runtime_config,
 )
@@ -99,6 +101,151 @@ def test_write_probe_runtime_config_preserves_batch_size_frames_extra_config(tmp
 
     payload = json.loads(runtime_config_path.read_text(encoding="utf-8"))
     assert payload["batch_size_frames"] == 16
+
+
+@pytest.mark.unit
+def test_prepare_probe_runtime_workspace_falls_back_to_processed_dataset_when_copy_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate copy failures fall back to the verified processed dataset root.
+
+    Args:
+        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    processed_dataset_root = tmp_path / "drive" / "processed" / "probe"
+    local_dataset_root = tmp_path / "runtime" / "datasets" / "probe"
+    family_root = tmp_path / "drive" / "results" / "family"
+    run_root = tmp_path / "runtime" / "runs" / "probe"
+    source_root = processed_dataset_root / "source"
+    source_root.mkdir(parents=True, exist_ok=True)
+    source_video_path = source_root / "sample.mp4"
+    source_video_path.write_bytes(b"video-bytes")
+    (processed_dataset_root / "dataset_manifest.json").write_text(
+        json.dumps(
+            {
+                "dataset_name": "probe",
+                "dataset_version": "test",
+                "samples": [
+                    {
+                        "video_source_id": "sample_001",
+                        "split": "dev",
+                        "relpath": "source/sample.mp4",
+                    },
+                    {
+                        "video_source_id": "sample_002",
+                        "split": "calibration",
+                        "relpath": "source/sample.mp4",
+                    },
+                    {
+                        "video_source_id": "sample_003",
+                        "split": "test",
+                        "relpath": "source/sample.mp4",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def _failing_copytree(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise shutil.Error([("src", "dst", "transport endpoint is not connected")])
+
+    monkeypatch.setattr(workflow_module.shutil, "copytree", _failing_copytree)
+
+    handoff = prepare_probe_runtime_workspace(
+        processed_dataset_root=processed_dataset_root,
+        local_dataset_root=local_dataset_root,
+        family_root=family_root,
+        run_root=run_root,
+        copy_processed_dataset=True,
+    )
+
+    assert handoff["local_dataset_root"] == str(processed_dataset_root)
+    assert handoff["requested_local_dataset_root"] == str(local_dataset_root)
+    assert handoff["local_dataset_manifest_path"] == str(
+        processed_dataset_root / "dataset_manifest.json"
+    )
+    assert handoff["dataset_source_mode"] == "processed_dataset_in_place_fallback"
+    assert "transport endpoint is not connected" in str(handoff["dataset_copy_error"])
+    assert handoff["local_dataset_ready"] is True
+
+
+@pytest.mark.unit
+def test_prepare_probe_runtime_workspace_preserves_build_aligned_drive_root(
+    tmp_path: Path,
+) -> None:
+    """Validate run workspace preparation keeps the build-aligned Drive root unchanged.
+
+    Args:
+        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    drive_root = tmp_path / "content" / "drive" / "MyDrive"
+    processed_dataset_root = drive_root / "TSTW" / "datasets" / "processed" / "probe"
+    family_root = drive_root / "TSTW" / "results" / "families" / "family_001"
+    local_dataset_root = tmp_path / "runtime" / "datasets" / "probe"
+    run_root = tmp_path / "runtime" / "runs" / "probe"
+
+    source_root = processed_dataset_root / "source"
+    source_root.mkdir(parents=True, exist_ok=True)
+    (source_root / "sample.mp4").write_bytes(b"video-bytes")
+    (processed_dataset_root / "dataset_manifest.json").write_text(
+        json.dumps(
+            {
+                "dataset_name": "probe",
+                "dataset_version": "test",
+                "samples": [
+                    {
+                        "video_source_id": "sample_001",
+                        "split": "dev",
+                        "relpath": "source/sample.mp4",
+                    },
+                    {
+                        "video_source_id": "sample_002",
+                        "split": "calibration",
+                        "relpath": "source/sample.mp4",
+                    },
+                    {
+                        "video_source_id": "sample_003",
+                        "split": "test",
+                        "relpath": "source/sample.mp4",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    handoff = prepare_probe_runtime_workspace(
+        processed_dataset_root=processed_dataset_root,
+        local_dataset_root=local_dataset_root,
+        family_root=family_root,
+        run_root=run_root,
+        copy_processed_dataset=False,
+    )
+
+    assert handoff["processed_dataset_root"] == str(processed_dataset_root)
+    assert handoff["local_dataset_root"] == str(processed_dataset_root)
+    assert handoff["local_dataset_manifest_path"] == str(
+        processed_dataset_root / "dataset_manifest.json"
+    )
+    assert handoff["family_root"] == str(family_root)
+    assert handoff["dataset_source_mode"] == "processed_dataset_in_place"
 
 
 @pytest.mark.unit

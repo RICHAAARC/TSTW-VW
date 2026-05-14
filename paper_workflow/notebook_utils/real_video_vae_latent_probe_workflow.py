@@ -25,6 +25,7 @@ from experiments.real_video_vae_latent_probe.output_layout import (
     build_real_video_vae_latent_output_paths,
 )
 from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check
+from main.video.dataset_manifest import load_dataset_manifest, resolve_manifest_samples
 from scripts.check_results.check_real_video_vae_latent_outputs import (
     check_real_video_vae_latent_outputs,
 )
@@ -105,6 +106,24 @@ def _compact_utc_timestamp(timestamp_value: str) -> str:
     return parsed_value.astimezone(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
+def _dataset_root_is_complete(dataset_root: Path, manifest_path: Path) -> bool:
+    """Return whether a dataset root contains a complete manifest-backed sample set."""
+    if not dataset_root.exists() or not manifest_path.exists():
+        return False
+
+    try:
+        manifest_payload = load_dataset_manifest(manifest_path)
+        resolve_manifest_samples(
+            manifest_payload,
+            dataset_root,
+            formal_mode=True,
+        )
+    except (FileNotFoundError, TypeError, ValueError, json.JSONDecodeError):
+        # 这里返回 False 而不是抛错，因为调用方需要在多个候选数据根目录之间选择可用目录。
+        return False
+    return True
+
+
 def prepare_probe_runtime_workspace(
     *,
     processed_dataset_root: str | Path,
@@ -116,8 +135,11 @@ def prepare_probe_runtime_workspace(
     """Prepare the local notebook workspace and optional processed dataset copy."""
     processed_dataset_path = Path(processed_dataset_root)
     local_dataset_path = Path(local_dataset_root)
+    processed_dataset_manifest_path = processed_dataset_path / "dataset_manifest.json"
+    local_dataset_manifest_path = local_dataset_path / "dataset_manifest.json"
     family_root_path = Path(family_root)
     run_root_path = Path(run_root)
+    dataset_copy_error: str | None = None
 
     for directory_path in (
         local_dataset_path,
@@ -129,19 +151,49 @@ def prepare_probe_runtime_workspace(
     if copy_processed_dataset:
         if not processed_dataset_path.exists():
             raise FileNotFoundError(processed_dataset_path)
-        shutil.copytree(
-            processed_dataset_path,
-            local_dataset_path,
-            dirs_exist_ok=True,
+        if not processed_dataset_manifest_path.exists():
+            raise FileNotFoundError(processed_dataset_manifest_path)
+        try:
+            shutil.copytree(
+                processed_dataset_path,
+                local_dataset_path,
+                dirs_exist_ok=True,
+            )
+        except (shutil.Error, OSError) as error:
+            # Google Drive 挂载在 Colab 中可能瞬时失联；后续会回退到已验证可用的数据根目录。
+            dataset_copy_error = str(error)
+
+    if _dataset_root_is_complete(local_dataset_path, local_dataset_manifest_path):
+        effective_local_dataset_path = local_dataset_path
+        effective_local_dataset_manifest_path = local_dataset_manifest_path
+        dataset_source_mode = "local_runtime_dataset"
+    elif _dataset_root_is_complete(processed_dataset_path, processed_dataset_manifest_path):
+        effective_local_dataset_path = processed_dataset_path
+        effective_local_dataset_manifest_path = processed_dataset_manifest_path
+        if copy_processed_dataset and dataset_copy_error is not None:
+            dataset_source_mode = "processed_dataset_in_place_fallback"
+        else:
+            dataset_source_mode = "processed_dataset_in_place"
+    elif dataset_copy_error is not None:
+        raise RuntimeError(
+            "prepare_probe_runtime_workspace could not materialize a complete local dataset.\n"
+            f"processed_dataset_root: {processed_dataset_path}\n"
+            f"local_dataset_root: {local_dataset_path}\n"
+            f"copy_error: {dataset_copy_error}"
         )
+    else:
+        raise FileNotFoundError(processed_dataset_manifest_path)
 
     return {
         "processed_dataset_root": str(processed_dataset_path),
-        "local_dataset_root": str(local_dataset_path),
-        "local_dataset_manifest_path": str(local_dataset_path / "dataset_manifest.json"),
+        "requested_local_dataset_root": str(local_dataset_path),
+        "local_dataset_root": str(effective_local_dataset_path),
+        "local_dataset_manifest_path": str(effective_local_dataset_manifest_path),
         "family_root": str(family_root_path),
         "run_root": str(run_root_path),
-        "local_dataset_ready": local_dataset_path.exists(),
+        "local_dataset_ready": True,
+        "dataset_source_mode": dataset_source_mode,
+        "dataset_copy_error": dataset_copy_error,
     }
 
 
