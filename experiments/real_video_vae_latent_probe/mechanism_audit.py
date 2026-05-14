@@ -155,11 +155,22 @@ def run_stage2_mechanism_audit(
 def build_stage2_mechanism_audit_rows(
     event_score_records: list[dict[str, Any]],
     threshold_records: list[dict[str, Any]],
+    *,
+    allowed_splits: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build the mechanism audit table rows from governed records."""
+    """Build the mechanism audit table rows from governed records.
+
+    Args:
+        event_score_records: Governed event score records.
+        threshold_records: Governed threshold records.
+        allowed_splits: Optional split allowlist. Defaults to `{"test"}`.
+
+    Returns:
+        Stage-two mechanism audit table rows.
+    """
     del threshold_records
     rows: list[dict[str, Any]] = []
-    test_records = [record for record in event_score_records if record.get("split") == "test"]
+    selected_records = _filter_records_by_splits(event_score_records, allowed_splits)
     grouped_keys = sorted(
         {
             (
@@ -168,13 +179,13 @@ def build_stage2_mechanism_audit_rows(
                 str(record.get("attack_name")),
                 str(record.get("sample_role")),
             )
-            for record in test_records
+            for record in selected_records
         }
     )
     for method_variant, base_method_variant, attack_name, sample_role in grouped_keys:
         grouped_records = [
             record
-            for record in test_records
+            for record in selected_records
             if str(record.get("method_variant")) == method_variant
             and str(record.get("attack_name")) == attack_name
             and str(record.get("sample_role")) == sample_role
@@ -199,11 +210,11 @@ def build_stage2_mechanism_audit_rows(
                 "S_final_mean": _mean_record_score(grouped_records, "S_final"),
                 "S_final_std": _std_record_score(grouped_records, "S_final"),
                 "decision_rate": _decision_rate(grouped_records),
-                "clean_negative_FPR": _decision_rate_for_role(test_records, method_variant, attack_name, "clean_negative"),
-                "attacked_negative_FPR": _decision_rate_for_role(test_records, method_variant, attack_name, "attacked_negative"),
-                "clean_positive_TPR": _decision_rate_for_role(test_records, method_variant, attack_name, "watermarked_positive"),
-                "attacked_positive_TPR": _decision_rate_for_role(test_records, method_variant, attack_name, "attacked_positive"),
-                "local_clip_TPR": _local_clip_tpr(test_records, method_variant, attack_name),
+                "clean_negative_FPR": _decision_rate_for_role(selected_records, method_variant, attack_name, "clean_negative"),
+                "attacked_negative_FPR": _decision_rate_for_role(selected_records, method_variant, attack_name, "attacked_negative"),
+                "clean_positive_TPR": _decision_rate_for_role(selected_records, method_variant, attack_name, "watermarked_positive"),
+                "attacked_positive_TPR": _decision_rate_for_role(selected_records, method_variant, attack_name, "attacked_positive"),
+                "local_clip_TPR": _local_clip_tpr(selected_records, method_variant, attack_name),
                 "sync_alignment_error_mean": _mean_mechanism_trace_value(grouped_records, "sync_alignment_error"),
                 "sync_peak_rank_median": _median_mechanism_trace_value(grouped_records, "sync_peak_rank"),
                 "quality_psnr_mean": _mean_payload_value(grouped_records, "quality_metrics", "watermarked_video_psnr"),
@@ -217,10 +228,20 @@ def build_stage2_mechanism_audit_rows(
 
 def build_stage2_score_distribution_rows(
     event_score_records: list[dict[str, Any]],
+    *,
+    allowed_splits: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build score-distribution rows from test records."""
+    """Build score-distribution rows from governed records.
+
+    Args:
+        event_score_records: Governed event score records.
+        allowed_splits: Optional split allowlist. Defaults to `{"test"}`.
+
+    Returns:
+        Stage-two score distribution rows.
+    """
     rows: list[dict[str, Any]] = []
-    test_records = [record for record in event_score_records if record.get("split") == "test"]
+    selected_records = _filter_records_by_splits(event_score_records, allowed_splits)
     grouped_keys = sorted(
         {
             (
@@ -228,13 +249,13 @@ def build_stage2_score_distribution_rows(
                 str(record.get("attack_name")),
                 str(record.get("sample_role")),
             )
-            for record in test_records
+            for record in selected_records
         }
     )
     for method_variant, attack_name, sample_role in grouped_keys:
         grouped_records = [
             record
-            for record in test_records
+            for record in selected_records
             if str(record.get("method_variant")) == method_variant
             and str(record.get("attack_name")) == attack_name
             and str(record.get("sample_role")) == sample_role
@@ -266,19 +287,29 @@ def build_stage2_sync_gain_rows(
     event_score_records: list[dict[str, Any]],
     *,
     required_attacks: list[str],
+    allowed_splits: set[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build sync-gain rows comparing tubelet_only and tubelet_sync."""
-    test_records = [record for record in event_score_records if record.get("split") == "test"]
-    observed_attacks = sorted({str(record.get("attack_name")) for record in test_records})
+    """Build sync-gain rows comparing tubelet_only and tubelet_sync.
+
+    Args:
+        event_score_records: Governed event score records.
+        required_attacks: Required attack names to report.
+        allowed_splits: Optional split allowlist. Defaults to `{"test"}`.
+
+    Returns:
+        Stage-two sync-gain rows.
+    """
+    selected_records = _filter_records_by_splits(event_score_records, allowed_splits)
+    observed_attacks = sorted({str(record.get("attack_name")) for record in selected_records})
     attack_names = sorted(set(required_attacks) | set(observed_attacks))
     rows: list[dict[str, Any]] = []
     for attack_name in attack_names:
         metric_name = "clean_positive_tpr" if attack_name == "no_attack" else "attacked_positive_tpr"
-        tubelet_only_positive_rate = _relevant_positive_rate(test_records, "tubelet_only", attack_name)
-        tubelet_sync_positive_rate = _relevant_positive_rate(test_records, "tubelet_sync", attack_name)
+        tubelet_only_positive_rate = _relevant_positive_rate(selected_records, "tubelet_only", attack_name)
+        tubelet_sync_positive_rate = _relevant_positive_rate(selected_records, "tubelet_sync", attack_name)
         negative_fpr_delta = _difference(
-            _relevant_negative_rate(test_records, "tubelet_sync", attack_name),
-            _relevant_negative_rate(test_records, "tubelet_only", attack_name),
+            _relevant_negative_rate(selected_records, "tubelet_sync", attack_name),
+            _relevant_negative_rate(selected_records, "tubelet_only", attack_name),
         )
         rows.append(
             {
@@ -288,8 +319,8 @@ def build_stage2_sync_gain_rows(
                 "tubelet_sync_value": tubelet_sync_positive_rate,
                 "sync_gain": _difference(tubelet_sync_positive_rate, tubelet_only_positive_rate),
                 "negative_fpr_delta": negative_fpr_delta,
-                "positive_count": _relevant_positive_count(test_records, "tubelet_sync", attack_name),
-                "negative_count": _relevant_negative_count(test_records, "tubelet_sync", attack_name),
+                "positive_count": _relevant_positive_count(selected_records, "tubelet_sync", attack_name),
+                "negative_count": _relevant_negative_count(selected_records, "tubelet_sync", attack_name),
                 "mechanism_signal_status": _mechanism_signal_status(
                     _difference(tubelet_sync_positive_rate, tubelet_only_positive_rate),
                     negative_fpr_delta,
@@ -300,19 +331,19 @@ def build_stage2_sync_gain_rows(
             {
                 "attack_name": attack_name,
                 "metric_name": "S_final_positive_mean",
-                "tubelet_only_value": _relevant_positive_score_mean(test_records, "tubelet_only", attack_name, "S_final"),
-                "tubelet_sync_value": _relevant_positive_score_mean(test_records, "tubelet_sync", attack_name, "S_final"),
+                "tubelet_only_value": _relevant_positive_score_mean(selected_records, "tubelet_only", attack_name, "S_final"),
+                "tubelet_sync_value": _relevant_positive_score_mean(selected_records, "tubelet_sync", attack_name, "S_final"),
                 "sync_gain": _difference(
-                    _relevant_positive_score_mean(test_records, "tubelet_sync", attack_name, "S_final"),
-                    _relevant_positive_score_mean(test_records, "tubelet_only", attack_name, "S_final"),
+                    _relevant_positive_score_mean(selected_records, "tubelet_sync", attack_name, "S_final"),
+                    _relevant_positive_score_mean(selected_records, "tubelet_only", attack_name, "S_final"),
                 ),
                 "negative_fpr_delta": negative_fpr_delta,
-                "positive_count": _relevant_positive_count(test_records, "tubelet_sync", attack_name),
-                "negative_count": _relevant_negative_count(test_records, "tubelet_sync", attack_name),
+                "positive_count": _relevant_positive_count(selected_records, "tubelet_sync", attack_name),
+                "negative_count": _relevant_negative_count(selected_records, "tubelet_sync", attack_name),
                 "mechanism_signal_status": _mechanism_signal_status(
                     _difference(
-                        _relevant_positive_score_mean(test_records, "tubelet_sync", attack_name, "S_final"),
-                        _relevant_positive_score_mean(test_records, "tubelet_only", attack_name, "S_final"),
+                        _relevant_positive_score_mean(selected_records, "tubelet_sync", attack_name, "S_final"),
+                        _relevant_positive_score_mean(selected_records, "tubelet_only", attack_name, "S_final"),
                     ),
                     negative_fpr_delta,
                 ),
@@ -323,18 +354,39 @@ def build_stage2_sync_gain_rows(
                 "attack_name": attack_name,
                 "metric_name": "S_sync_positive_negative_gap",
                 "tubelet_only_value": None,
-                "tubelet_sync_value": _sync_positive_negative_gap(test_records, attack_name),
-                "sync_gain": _sync_positive_negative_gap(test_records, attack_name),
+                "tubelet_sync_value": _sync_positive_negative_gap(selected_records, attack_name),
+                "sync_gain": _sync_positive_negative_gap(selected_records, attack_name),
                 "negative_fpr_delta": negative_fpr_delta,
-                "positive_count": _relevant_positive_count(test_records, "tubelet_sync", attack_name),
-                "negative_count": _relevant_negative_count(test_records, "tubelet_sync", attack_name),
+                "positive_count": _relevant_positive_count(selected_records, "tubelet_sync", attack_name),
+                "negative_count": _relevant_negative_count(selected_records, "tubelet_sync", attack_name),
                 "mechanism_signal_status": _mechanism_signal_status(
-                    _sync_positive_negative_gap(test_records, attack_name),
+                    _sync_positive_negative_gap(selected_records, attack_name),
                     negative_fpr_delta,
                 ),
             }
         )
     return rows
+
+
+def _filter_records_by_splits(
+    event_score_records: list[dict[str, Any]],
+    allowed_splits: set[str] | None,
+) -> list[dict[str, Any]]:
+    """Filter governed records to the requested split set.
+
+    Args:
+        event_score_records: Governed event score records.
+        allowed_splits: Optional split allowlist. Defaults to `{"test"}`.
+
+    Returns:
+        The filtered event score records.
+    """
+    resolved_splits = {"test"} if allowed_splits is None else {str(split_name) for split_name in allowed_splits}
+    return [
+        record
+        for record in event_score_records
+        if str(record.get("split")) in resolved_splits
+    ]
 
 
 def build_stage2_mechanism_decision(

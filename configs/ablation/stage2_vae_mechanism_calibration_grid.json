@@ -1,0 +1,50 @@
+{
+  "construction_phase": "real_video_vae_latent_probe",
+  "calibration_purpose": "stage2_mechanism_effect_calibration",
+  "allowed_splits": [
+    "dev",
+    "calibration"
+  ],
+  "forbidden_splits": [
+    "test"
+  ],
+  "grid": {
+    "tubelet_length": [
+      1,
+      2,
+      4
+    ],
+    "spatial_patch_size": [
+      [4, 4],
+      [8, 8]
+    ],
+    "embedding_projection_support_weight": [
+      0.25,
+      0.45,
+      0.75,
+      1.0
+    ],
+    "lambda_sync": [
+      0.0,
+      0.05,
+      0.1
+    ],
+    "sync_search_radius": [
+      4,
+      8,
+      12
+    ],
+    "fusion_rule": [
+      "sync_rescue_fusion",
+      "calibrated_tubelet_sync"
+    ]
+  },
+  "selection_metrics": [
+    "no_attack_clean_positive_tpr",
+    "clean_negative_fpr",
+    "max_attacked_negative_fpr",
+    "temporal_crop_attacked_positive_tpr",
+    "frame_dropping_attacked_positive_tpr",
+    "local_clip_attacked_positive_tpr"
+  ]
+}
