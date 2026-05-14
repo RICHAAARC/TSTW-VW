@@ -1,6 +1,6 @@
 """
-文件用途：验证 tar.zst 打包器的轻量功能契约。
-File purpose: Validate quick functional contracts for the tar.zst packager.
+文件用途：验证 real-video zip / tar.zst 打包器的轻量功能契约。
+File purpose: Validate quick functional contracts for the real-video zip and tar.zst packagers.
 Module type: Functional test module
 """
 
@@ -11,9 +11,14 @@ from pathlib import Path
 import subprocess
 from typing import Any
 from unittest.mock import patch
+import zipfile
 
 import pytest
 
+import scripts.package_results.drive_packager as drive_packager_module
+import scripts.package_results.package_real_video_vae_latent_tar_zst as family_tar_packager_module
+
+from scripts.package_results.drive_packager import pack_real_video_vae_latent_run
 from scripts.package_results.tar_zst_packager import pack_run_to_tar_zst
 
 
@@ -71,7 +76,61 @@ def _make_run_root(tmp_path: Path) -> Path:
         + "\n",
         encoding="utf-8",
     )
+    (run_root / "artifacts" / "artifact_manifest.json").write_text(
+        json.dumps({"artifacts": []}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (run_root / "artifacts" / "runtime_manifest.json").write_text(
+        json.dumps({"git_commit": "test-commit"}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (run_root / "artifacts" / "runtime_config.json").write_text(
+        json.dumps({"runtime_profile": "debug_real_video"}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (run_root / "artifacts" / "stage2_mechanism_decision.json").write_text(
+        json.dumps(
+            {
+                "Stage2ImplementationDecision": "PASS",
+                "Stage2MechanismDecision": "INCONCLUSIVE",
+                "Stage2MechanismBlockingReasons": ["sample_count_insufficient"],
+                "NextAllowedStageByImplementation": "trajectory_statistic_probe",
+                "NextAllowedStageByMechanism": "remain_in_real_video_vae_latent_probe",
+                "RecommendedNextAction": "stage2_mechanism_calibration_run",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     return run_root
+
+
+def test_real_video_drive_packager_includes_stage2_mechanism_decision(tmp_path: Path) -> None:
+    run_root = _make_run_root(tmp_path)
+    drive_result_dir = tmp_path / "drive_zip"
+
+    with patch.object(
+        drive_packager_module,
+        "check_real_video_vae_latent_outputs",
+        return_value={
+            "RealVideoVaeLatentDecision": "INCONCLUSIVE",
+            "BlockingReasons": [],
+        },
+    ):
+        result = pack_real_video_vae_latent_run(
+            run_root=run_root,
+            drive_output_dir=drive_result_dir,
+            exclude_large_intermediate_latents=True,
+        )
+
+    with zipfile.ZipFile(result["zip_path"]) as archive:
+        archive_names = set(archive.namelist())
+
+    assert (
+        f"{run_root.name}/artifacts/stage2_mechanism_decision.json" in archive_names
+    )
 
 
 def test_real_video_tar_zst_packager_summary_fields(tmp_path: Path) -> None:
@@ -109,6 +168,90 @@ def test_real_video_tar_zst_packager_summary_fields(tmp_path: Path) -> None:
     assert "run_id" in summary
     assert isinstance(summary["excluded_patterns"], list)
     assert len(summary["excluded_patterns"]) > 0
+
+
+def test_real_video_family_tar_packager_keeps_stage2_mechanism_decision(
+    tmp_path: Path,
+) -> None:
+    run_root = _make_run_root(tmp_path)
+    drive_result_dir = tmp_path / "family_tar"
+    captured_inputs: dict[str, list[str]] = {}
+
+    def _capture_tar_inputs(
+        *,
+        archive_path: Path,
+        run_root_path: Path,
+        tar_inputs: list[str],
+    ) -> None:
+        del run_root_path
+        captured_inputs["tar_inputs"] = list(tar_inputs)
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+        archive_path.write_bytes(b"tar")
+
+    with (
+        patch.object(family_tar_packager_module, "_supports_tar_zstd", return_value=True),
+        patch.object(
+            family_tar_packager_module,
+            "_pack_with_external_tar_zstd",
+            side_effect=_capture_tar_inputs,
+        ),
+    ):
+        result = family_tar_packager_module._package_run_with_runtime_profile(
+            run_root=run_root,
+            drive_result_dir=drive_result_dir,
+            checks_payload={
+                "RealVideoVaeLatentDecision": "INCONCLUSIVE",
+                "status": False,
+            },
+            exclude_large_intermediate_latents=True,
+        )
+
+    assert result["archive_path"].exists()
+    assert (
+        f"{run_root.name}/artifacts/stage2_mechanism_decision.json"
+        in captured_inputs["tar_inputs"]
+    )
+
+
+def test_real_video_tar_zst_packager_keeps_stage2_mechanism_decision(
+    tmp_path: Path,
+) -> None:
+    run_root = _make_run_root(tmp_path)
+    drive_result_dir = tmp_path / "public_tar"
+    captured_inputs: dict[str, list[str]] = {}
+
+    def _capture_tar_inputs(
+        *,
+        archive_path: Path,
+        run_root_path: Path,
+        tar_inputs: list[str],
+    ) -> None:
+        del run_root_path
+        captured_inputs["tar_inputs"] = list(tar_inputs)
+        archive_path.write_bytes(b"tar")
+
+    with (
+        patch("scripts.package_results.tar_zst_packager._supports_tar_zstd", return_value=True),
+        patch(
+            "scripts.package_results.tar_zst_packager._pack_with_external_tar_zstd",
+            side_effect=_capture_tar_inputs,
+        ),
+    ):
+        result = pack_run_to_tar_zst(
+            run_root=run_root,
+            drive_result_dir=drive_result_dir,
+            checks_payload={
+                "RealVideoVaeLatentDecision": "INCONCLUSIVE",
+                "status": False,
+            },
+            exclude_large_intermediate_latents=True,
+        )
+
+    assert result["archive_path"].exists()
+    assert (
+        f"{run_root.name}/artifacts/stage2_mechanism_decision.json"
+        in captured_inputs["tar_inputs"]
+    )
 
 
 def test_real_video_tar_zst_packager_decision_matches_checks(tmp_path: Path) -> None:

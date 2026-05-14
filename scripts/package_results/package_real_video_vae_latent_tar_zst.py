@@ -169,6 +169,7 @@ def _package_run_with_runtime_profile(
                 "artifacts/artifact_manifest.json",
                 "artifacts/runtime_manifest.json",
                 "artifacts/runtime_config.json",
+                output_paths.stage2_mechanism_decision_path.relative_to(run_root).as_posix(),
             ]
         )
 

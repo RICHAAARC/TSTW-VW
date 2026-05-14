@@ -45,7 +45,7 @@ def pack_real_video_vae_latent_run(
         include_figures: Whether to include the figures directory.
         include_reports: Whether to include the reports directory.
         include_failure_gallery: Whether to include the failure-case gallery.
-        include_manifest: Whether to include manifest files under artifacts.
+        include_manifest: Whether to include manifest files and governed artifact JSON files.
         exclude_large_intermediate_latents: Whether to exclude artifact video/latent trees.
 
     Returns:
@@ -84,6 +84,7 @@ def pack_real_video_vae_latent_run(
                 output_paths.artifact_manifest_path,
                 output_paths.runtime_manifest_path,
                 output_paths.runtime_config_path,
+                output_paths.stage2_mechanism_decision_path,
             ):
                 if manifest_path.exists():
                     archive.write(manifest_path, arcname=_build_archive_name(run_root_path, manifest_path))

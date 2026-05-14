@@ -220,6 +220,9 @@ def pack_run_to_tar_zst(
         include_relpaths.append("artifacts/artifact_manifest.json")
         include_relpaths.append("artifacts/runtime_manifest.json")
         include_relpaths.append("artifacts/runtime_config.json")
+        include_relpaths.append(
+            output_paths.stage2_mechanism_decision_path.relative_to(run_root_path).as_posix()
+        )
 
     tar_inputs = _build_tar_inputs(run_root_path, include_relpaths)
     tar_failure_message: str | None = None
