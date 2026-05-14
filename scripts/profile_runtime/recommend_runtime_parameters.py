@@ -61,7 +61,9 @@ def _profile_batch_cap(current_runtime_profile: str, current_gpu_target: str) ->
     normalized_profile = str(current_runtime_profile).lower()
     normalized_target = str(current_gpu_target).lower()
     if normalized_profile.startswith("a100_80g") or "a100" in normalized_target:
-        return 32
+        return 256
+    if normalized_profile.startswith("l4") or "l4" in normalized_target:
+        return 128
     return 8
 
 

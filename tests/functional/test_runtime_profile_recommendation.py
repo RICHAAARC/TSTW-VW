@@ -44,8 +44,8 @@ def test_runtime_profile_recommendation_keeps_current_l4_formal_when_utilization
         {
             "runtime_profile": "l4_formal",
             "gpu_target": "L4",
-            "vae_batch_size_frames": 8,
-            "batch_size_frames": 8,
+            "vae_batch_size_frames": 128,
+            "batch_size_frames": 128,
         },
     )
     _write_json(
@@ -99,7 +99,7 @@ def test_runtime_profile_recommendation_keeps_current_l4_formal_when_utilization
     assert payload["current_runtime_profile"] == "l4_formal"
     assert payload["recommended_runtime_profile_next"] == "l4_formal"
     assert payload["batch_size_direction"] == "keep"
-    assert payload["recommended_batch_size_frames"] == 8
+    assert payload["recommended_batch_size_frames"] == 128
 
 
 @pytest.mark.unit

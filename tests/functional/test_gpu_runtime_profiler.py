@@ -230,8 +230,8 @@ def test_runtime_profile_workflow_loads_governed_profile_config() -> None:
 
     assert payload["runtime_profile"] == "l4_formal"
     assert payload["gpu_target"] == "L4"
-    assert payload["batch_size_frames"] == 8
-    assert payload["vae_batch_size_frames"] == 8
+    assert payload["batch_size_frames"] == 128
+    assert payload["vae_batch_size_frames"] == 128
     assert payload["profile_runtime"] is True
     assert payload["config_path"].endswith("configs\\runtime_profiles\\l4_formal.json")
     assert len(payload["config_digest"]) == 64
@@ -256,7 +256,7 @@ def test_runtime_profile_workflow_persists_profile_plan(tmp_path: Path) -> None:
 
     assert plan_path.exists()
     assert persisted_payload["runtime_profile"] == "a100_80g_formal"
-    assert persisted_payload["batch_size_frames"] == 16
+    assert persisted_payload["batch_size_frames"] == 256
     assert persisted_payload["config_digest"] == payload["config_digest"]
 
 
