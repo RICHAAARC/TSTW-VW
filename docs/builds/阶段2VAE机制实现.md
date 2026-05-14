@@ -1122,3 +1122,585 @@ Stage2ImplementationPass 已完成；
 Stage2MechanismPass 是否完成，由新增机制审计 gate 独立判定；
 若机制仍为 INCONCLUSIVE，则继续阶段 2 mechanism calibration run，而不是进入阶段 3。
 ```
+
+---
+
+## 十二、2026-05-15 机制失败审查增补
+
+本节用于增补本轮对 `tubelet_sync` 机制失败的定向审查结果。该审查基于既有 formal package 的 records 做离线重算与代码路径核对，不重新运行 VAE，不重建 attacked video，也不使用 test split 反向调参。
+
+### （一）当前项目状态
+
+当前项目状态可拆分为两层：
+
+```text
+Stage2ImplementationPass：已形成闭环，可视为完成；
+Stage2MechanismPass：尚不能判定为通过，当前更接近 INCONCLUSIVE / FAIL 边界，需要先修机制缺陷再重跑 formal。
+```
+
+本轮审查时，`tubelet_sync` 在 formal package 中的主要表现为：
+
+```text
+shared threshold = 1.1；
+overall test TPR = 0.042857；
+overall test FPR = 0.042857；
+temporal_crop：TPR = 0.0，FPR = 0.0；
+frame_dropping：TPR = 0.0，FPR = 0.0；
+local_clip：TPR = 0.15，FPR = 0.15。
+```
+
+这说明当前 formal failure 不是单纯“阈值太严”或“样本量太小”，而是存在明确的机制与代码层面控制项。
+
+### （二）本轮离线审查结果
+
+#### 1. 仅把 `sync_rescue_applied` gate 改严，无法救回 formal 结果
+
+已对 `tubelet_sync` 扫描 36 组更严格的 gate 反事实，并按 formal 协议重新校准 shared threshold。结果是：
+
+```text
+没有一组 stricter rescue gate 能让 temporal_crop 或 frame_dropping 的 test TPR 从 0 回升；
+所有这类反事实下，shared threshold 仍保持在 1.1。
+```
+
+因此，当前问题不能被解释为“gate 只要更严一点就行”。
+
+#### 2. 当前 shared threshold 的首要钉死源是 local_clip calibration negative
+
+calibration negative 的最高分样本中，存在一批 `local_clip` attacked-negative，表现为：
+
+```text
+S_tubelet = 1.0；
+S_sync = 1.0；
+S_payload_rescue_gain = 0.0；
+S_final = 1.1。
+```
+
+这说明它们把阈值钉在 1.1 的原因不是 rescue，而是：
+
+```text
+S_final = S_tubelet + lambda_sync * max(0, S_sync)
+```
+
+中的无条件 sync 项。
+
+#### 3. 诊断性反事实表明：如果先释放 local_clip 的阈值钉死，temporal_crop 与 frame_dropping 才有有限回升空间
+
+在“仅对 calibration 的 local_clip attacked-negative 去掉人工 sync 顶格项”的诊断性反事实下：
+
+```text
+shared threshold：1.1 -> 1.044697；
+temporal_crop：TPR = 0.1，FPR = 0.15；
+frame_dropping：TPR = 0.05，FPR = 0.1。
+```
+
+这说明：
+
+```text
+local_clip 路径错误是当前 formal failure 的第一控制项；
+只要它不修，其他 gate 调整几乎看不到收益；
+但即使修掉 local_clip，当前 temporal_crop / frame_dropping 仍不会自然变成“通过”。
+```
+
+#### 4. 诊断性 rank gate 只能用于审计，不应直接作为运行时修复策略
+
+在“先释放 local_clip 阈值钉死”的前提下，若继续施加更强的 margin/rank gate，最高可见到：
+
+```text
+shared threshold 降到 1.0；
+temporal_crop TPR 可到 0.2；
+但 frame_dropping TPR 仍可能维持 0.0。
+```
+
+但这里的 `sync_peak_rank` 依赖 ground-truth offset，仅适合做 audit 诊断，不适合直接进入运行时正式打分逻辑。也就是说，这组反事实用于说明“现有同步证据质量不足”，不应被当作正式实现方案。
+
+### （三）根因判断
+
+本轮审查后，可以将根因按控制强度排序为四层。
+
+#### 根因 1：`reference_latent_shape` 在 real-video 路径上缺失传播，导致 local_clip 同步搜索退化
+
+当前 source latent builder 生成 `mechanism_trace` 时，没有把 `reference_latent_shape` 写入 source sample。随后 attacked sample 与 reencoded sample 只是沿用既有 trace，因此缺失会一路传播到 detection。
+
+这会导致 evidence 构建 reference descriptor 时退回到 `sample.latent_shape` 的兜底逻辑，从而在 local_clip attacked sample 上把同步搜索退化成错误的 reference family，对应的 candidate map 会系统性偏向伪峰，最终在 calibration negative 上形成 `S_tubelet = 1.0`、`S_sync = 1.0`、`S_final = 1.1` 的顶格样本。
+
+该问题属于明确的代码级缺陷，而不是统计波动。
+
+#### 根因 2：当前 fusion 只 gate rescue，不 gate sync 项本身
+
+现有 `sync_rescue_fusion` 的结构本质上是：
+
+```text
+S_final = S_tubelet + gated_rescue_gain + lambda_sync * max(0, S_sync)
+```
+
+其中 `sync_rescue_applied` 只控制 `gated_rescue_gain`，并不控制 sync 项。因此：
+
+```text
+即使 rescue 被完全关掉，只要 S_sync 被错误地顶到 1.0，S_final 仍会被加到 1.1；
+所以“只改 sync_rescue_applied gate”不会改变当前 shared threshold 被 local_clip 钉死的事实。
+```
+
+这解释了为什么前述 36 组 stricter rescue gate 反事实全部无效。
+
+#### 根因 3：当前 sync candidate scoring 没有 coverage penalty，容易把稀疏重叠误判成高质量对齐
+
+当前 `_score_alignment_candidate()` 的候选分数，实质上是对已匹配 tubelet projection 求均值；若某个 offset / scale 候选只在少量 tubelet 上偶然拿到很高投影，它仍可能得到很高的 candidate score。
+
+当前实现缺少以下任一项：
+
+```text
+coverage ratio penalty；
+minimum aligned-count gate；
+best-vs-median 之外的 overlap consistency 约束。
+```
+
+这会直接放大 temporal_crop attacked-negative 的伪 rescue，也解释了为什么在 local_clip 阈值钉死被释放后，新的 calibration tail 又会被 temporal_crop negative 钉在约 1.044697。
+
+#### 根因 4：frame_dropping 与当前 offset / scale 同步模型先验不匹配
+
+`frame_dropping` attack 在参数层面提供的是 `kept_frame_indices`，同时显式给出：
+
+```text
+ground_truth_offset = None；
+ground_truth_scale = None。
+```
+
+而当前 sync 搜索只能在：
+
+```text
+offset；
+offset + scale
+```
+
+两类候选空间中寻找最佳对齐。
+
+这意味着当前 `tubelet_sync` 的同步模型并不能表达“稀疏删帧导致的非均匀时间映射”。因此：
+
+```text
+gate 只能抑制假阳性；
+但它不会凭空生成正确的 frame_dropping 对齐证据；
+所以 frame_dropping 在本轮所有反事实中几乎都回不来。
+```
+
+#### 补充背景：source latent alias 仍是上游压力项，但不是当前第一修复顺序
+
+此前已确认：no_attack clean-negative 的若干主导 alias family 在 source encoded latent 上已存在，reencode 主要起到放大与重排作用。该问题会持续抬高 clean-negative 上尾，但本轮 formal failure 的第一控制项仍是 local_clip 路径错误与 fusion / scoring 设计问题，而不是单独的 source alias。
+
+### （四）最终修复方案
+
+本轮建议采用“三层修复，逐层验证”的方案，而不是继续在现有 broken path 上做参数微调。
+
+#### 第一层：先修 `reference_latent_shape` 传播链，解除 local_clip 伪峰
+
+必须先修改以下路径：
+
+```text
+main/backends/real_video_vae_latent.py
+在 source sample 的 mechanism_trace 中显式写入 reference_latent_shape；
+
+experiments/real_video_vae_latent_probe/runner.py
+在 _build_video_attack_sample() 与 _build_reencoded_sample() 中增加 setdefault 级别的防御性继承；
+
+main/methods/temporal_tubelet_watermark/evidence.py
+保留 fallback，但新增审计可见的 fallback 记录，避免以后静默退回 sample.latent_shape。
+```
+
+预期效果：
+
+```text
+local_clip calibration negative 不再系统性顶到 1.1；
+shared threshold 应先从 1.1 释放；
+之后再看其他攻击是否仍然压住 formal 表现。
+```
+
+这一层是必须项，不应跳过。
+
+#### 第二层：把 sync 项与 rescue 一起纳入同一个“可观测置信度 gate”
+
+当前不合理之处不是“是否有 gate”，而是 gate 只作用在 rescue，不作用在 sync 项。修复时应把两部分统一为：
+
+```text
+若 sync_confident = false：S_final = S_tubelet；
+若 sync_confident = true：S_final = S_tubelet + rescue_gain + lambda_sync * S_sync。
+```
+
+其中 `sync_confident` 必须只依赖运行时可观测字段，不能依赖 ground truth。推荐优先使用：
+
+```text
+S_sync_positive_margin；
+sync_alignment_coverage_ratio；
+sync_alignment_matched_count。
+```
+
+不建议把 `sync_peak_rank` 直接接入正式打分，因为它依赖 benchmark 才知道的 ground-truth offset，仅适合 audit。
+
+#### 第三层：在 sync candidate scoring 中加入 coverage penalty，压掉伪 rescue
+
+建议将 `_score_alignment_candidate()` 从“纯均值”改成“均值 + coverage 约束”的形式，至少满足以下一项：
+
+```text
+candidate_score = mean_projection * coverage_ratio；
+或 candidate_score 在 coverage_ratio 低于阈值时直接降权；
+或 aligned_count 低于最小值时候选直接失效。
+```
+
+同时在 `mechanism_trace` 中补充：
+
+```text
+sync_alignment_matched_count；
+sync_alignment_candidate_count；
+sync_alignment_coverage_ratio；
+sync_candidate_score_raw；
+sync_candidate_score_penalized。
+```
+
+这样才能在不依赖 ground truth 的前提下，把 temporal_crop / frame_dropping 中“局部偶然高投影”的伪同步从 score 层面压掉。
+
+#### 第四层：对 frame_dropping 采用“短期降 claim，长期换模型”的策略
+
+在当前 offset / scale 同步模型下，不应指望通过 gate 微调就让 frame_dropping 变好。合理策略是：
+
+```text
+短期：把 frame_dropping 明确标记为当前 tubelet_sync 的未解决攻击，不作为已解决 supported claim；
+中期：新增 deletion-aware 的同步搜索或等价的非均匀时间映射搜索，再重新评估该攻击；
+在此之前，不使用 attack-specific threshold，不使用 test split 调参去“掩盖” frame_dropping 的结构性失配。
+```
+
+### （五）推荐执行顺序
+
+本轮修复建议按以下顺序推进：
+
+```text
+1. 修复并测试 reference_latent_shape 传播链；
+2. 重跑最小机制重算，确认 shared threshold 不再被 local_clip calibration negative 钉在 1.1；
+3. 为 sync candidate 增加 coverage 相关 trace 字段；
+4. 将 sync 项与 rescue 统一挂到基于 margin + coverage 的 observable confidence gate 下；
+5. 仅使用 dev / calibration 选择 gate 参数；
+6. 重跑 formal，重新审查 temporal_crop / frame_dropping / local_clip；
+7. 若 frame_dropping 仍失败，则维持其 unresolved 状态，并单独立项 deletion-aware sync，而不是继续挤压 shared threshold。
+```
+
+### （六）本轮审查后的最终判断
+
+截至 2026-05-15，可以给出以下结论：
+
+```text
+当前 tubelet_sync 的 formal failure 已可定位到明确根因；
+第一根因是 local_clip 路径上的 reference_latent_shape 传播缺陷；
+第二根因是 fusion 只 gate rescue、不 gate sync 项；
+第三根因是 sync candidate scoring 缺少 coverage penalty；
+frame_dropping 则属于当前同步模型与攻击类型的结构性失配。
+```
+
+因此，合理修复方案不是继续单独调 `sync_rescue_applied`，也不是直接改 shared threshold，而是：
+
+```text
+先修传播链；
+再改 fusion gate 作用域；
+再改 sync candidate scoring；
+最后把 frame_dropping 作为单独的下一阶段机制任务处理。
+```
+
+---
+
+## 十三、2026-05-15 性能优化审查增补
+
+本节用于增补本轮对 formal package 运行性能的定向审查结果。该审查基于既有 package 中的 `runtime_profile/gpu_runtime_trace.csv`、`run_timing_summary.json`、artifact 体量统计与代码路径核对，不重新运行 VAE，不重建 attacked video，也不依赖 test split 反向调参。
+
+### （一）当前项目性能状态
+
+当前项目在性能层面同样可拆分为两层：
+
+```text
+Stage2ImplementationPass：实现闭环已形成，但 wall-clock 成本过高；
+Stage2MechanismPass：尚未通过，同时当前性能状态已开始反过来限制机制迭代速度。
+```
+
+本轮审查时，最新 formal package 在 runtime profile 中的主要表现为：
+
+```text
+total_recorded_seconds = 11325.573497；
+real_video_vae_latent_runner = 11311.526187；
+gpu sample_count = 5585；
+mean_gpu_util_percent = 1.442614；
+median_gpu_util_percent = 0.0；
+peak_gpu_util_percent = 16.0；
+peak_memory_used_mb = 688.0；
+low_utilization_ratio = 1.0。
+```
+
+同时，GPU burst 形态表现为：
+
+```text
+burst_count = 934；
+mean_burst_seconds ≈ 2.807；
+median_burst_seconds = 2；
+max_burst_seconds = 8；
+active_ratio ≈ 0.2347。
+```
+
+这说明当前 formal run 不是“GPU 已经吃满但总算力不够”，而是明显的“短 burst + 长空档”负载；当前瓶颈更像 runner 内部的大量串行 CPU / I/O work，而不是单纯的 VAE batch 太小。
+
+### （二）本轮离线审查结果
+
+#### 1. 当前 formal run 不是 GPU 饱和，而是串行 hot path 把 GPU 供给切碎
+
+现有 `run_timing_summary.json` 只给出 5 个顶层事件，其中：
+
+```text
+model_preparation；
+runtime_preflight；
+real_video_vae_latent_runner；
+table_and_report_rebuild；
+formal_checker。
+```
+
+几乎全部耗时都落在 `real_video_vae_latent_runner`。但 `gpu_runtime_trace.csv` 中的 `event_tag` 全部为 `unlabeled`，因此当前 package 只能证明“runner 很慢”，不能直接把这3.15小时精确拆成 decode / attack / reencode / quality / temporal 五段。
+
+#### 2. decode cache 已经生效，初始 VAE decode 不是第一瓶颈
+
+本轮 package 内 artifact 体量统计为：
+
+```text
+decoded_videos = 621；
+attacked_videos = 7000；
+reencoded_latents = 7700；
+watermarked_latents = 3080；
+encoded_latents = 100。
+```
+
+这说明当前 decoded video cache 已明显摊薄了初始 decode 成本。相比之下，attack materialization、reencode 与其后的质量 / 时序后处理仍然在大规模重复发生，因此主瓶颈不再是“最前面的第一次 decode”。
+
+#### 3. 当前更像是 attack + quality / temporal 后处理主导，其中 quality / temporal 更可疑
+
+代码路径核对表明，当前每条 event 都按以下顺序串行执行：
+
+```text
+decode；
+attack；
+reencode；
+quality metrics；
+temporal metrics。
+```
+
+其中，`quality metrics` 与 `temporal metrics` 各自都会重新读取 reference / comparison video；`PSNR` / `SSIM` 当前走 CPU 路径；`LPIPS` 虽然走 GPU，但仍是“每次调用初始化模型 + 逐帧循环”的模式；`CLIP` 则尚未形成真实执行路径。也就是说，当前 runner 在 mp4 读盘、CPU 指标与小粒度 GPU 调用之间频繁切换，这正对应了前述“短 burst + 长空档”的 trace 形态。
+
+#### 4. 继续调大 `vae_batch_size_frames`、`batch_size_frames` 与 `clip_batch_size`，不会直接救回 wall-clock
+
+当前默认 formal clip 长度为32帧，而 VAE backend 的 batching 仅在“单个 clip 内按帧块切片”时生效。因此：
+
+```text
+当 batch_size_frames >= 32 后，再继续增大不会带来新的跨 clip batch；
+gpu_profile_interval_seconds 只影响观测粒度，不会直接提速；
+clip_batch_size 当前尚未进入真实 CLIP 执行路径；
+lpips_batch_size 当前也尚未形成真正的 batched inference 控制项。
+```
+
+因此，当前 formal run 的低利用率不能通过“继续堆大 batch 参数”解决。
+
+#### 5. attack-based split 不是首选分片单位，method-based split 更稳
+
+records 统计显示：
+
+```text
+event_score_records = 9800；
+local_clip = 2800；
+其余每种 attack = 700。
+```
+
+这意味着 attack 维度并不完全均匀，`local_clip` 工作量明显更大；但 threshold 又是按 `method_variant` 独立校准的。因此：
+
+```text
+attack-based split 虽然可做，但会切穿单个 method 的 calibration / threshold 语义；
+method-based split 更符合当前 runner 与 threshold 的组织方式。
+```
+
+### （三）根因判断
+
+本轮审查后，可以将性能根因按控制强度排序为四层。
+
+#### 根因 1：runner 仍是单进程、单事件串行闭环，GPU 空档无法被其他 clip 自动填满
+
+当前 `real_video_vae_latent_runner` 的事件循环本质上是：
+
+```text
+一条 event 做完 decode / attack / reencode / quality / temporal；
+再进入下一条 event。
+```
+
+在这种结构下，只要某一步骤落回 CPU / ffmpeg / 磁盘 I/O，GPU 就会空闲等待。由于当前没有“多 clip 并发补位”机制，L4 的绝大多数时间都会被浪费在阶段切换与串行等待上。
+
+#### 根因 2：quality / temporal 路径重复读盘，且大量计算仍在 CPU 侧完成
+
+当前质量与时序指标各自重复读取视频，并独立做后处理。这意味着：
+
+```text
+同一对 decoded / attacked video 会被 quality 读一次；
+同一对 decoded / attacked video 会被 temporal 再读一次；
+PSNR / SSIM 仍在 CPU 上按帧循环；
+LPIPS 仍按调用级别重复初始化并逐帧执行。
+```
+
+这类路径不会持续压满 GPU，却会稳定拉长 wall-clock。
+
+#### 根因 3：当前 clip 长度上限把单进程 VAE batching 的有效收益提前封顶
+
+当前 formal dataset 的 frame count 固定为32，而 backend 的 encode / decode 只在单 clip 内部分帧切块。因此：
+
+```text
+batch_size_frames 从 8 提到 32 仍有意义；
+batch_size_frames 从 32 再提到 128 / 256，执行语义几乎不变。
+```
+
+这意味着当前低 GPU 利用率不是因为“batch 还不够大”，而是因为“单个 clip 的天然工作量已经封顶”。
+
+#### 根因 4：当前 runtime profile 中多个 knob 尚未真正进入有效执行路径
+
+现有 profile 中的若干字段，当前并不是可靠的性能杠杆：
+
+```text
+clip_batch_size：当前没有真实 CLIP backend 与 batched CLIP inference；
+lpips_batch_size：当前没有形成真实的 LPIPS batch 调度；
+gpu_profile_interval_seconds：只影响采样可见性，不影响吞吐；
+继续增大 vae_batch_size_frames / batch_size_frames：已被32帧 clip 上限吃掉。
+```
+
+因此，当前性能问题的核心不在“参数没调对”，而在“执行结构还没有给 GPU 足够连续的工作面”。
+
+### （四）最终修复方案
+
+本轮建议采用“先补可观测性、再补并行度、后补 hot path”的三层修复方案，而不是继续在当前串行路径上盲调 batch。
+
+#### 第一层：先补 runner 内部可观测性，避免继续盲调
+
+必须先修改以下路径：
+
+```text
+experiments/real_video_vae_latent_probe/runner.py
+为 decode / attack / reencode / quality / temporal 增加子阶段 timing；
+
+paper_workflow/notebook_utils/runtime_profile_workflow.py
+增加 current_runtime_event_tag 的显式更新接口；
+
+scripts/profile_runtime/summarize_run_timing.py
+支持汇总 runner 子阶段事件，而不仅是 notebook 顶层事件。
+```
+
+预期效果：
+
+```text
+下一轮 formal package 能直接给出 decode / attack / reencode / quality / temporal 的占比；
+GPU trace 不再全部是 unlabeled；
+后续优化可以从“感觉像 I/O”升级为“有子阶段证据的定向修复”。
+```
+
+这一层是必须项，不应跳过。
+
+#### 第二层：按 `method_variant` 做两路并行分片，优先吃掉 L4 的闲置算力
+
+当前最现实、最可能直接缩短 wall-clock 的方案，不是继续增大 batch，而是把 formal run 从“单路长串行”改成“两路 method shard 并发”。推荐分片为：
+
+```text
+Shard A：frame_prc、tubelet_only、tubelet_sync；
+Shard B：tubelet_only_lt01、tubelet_only_lt02、tubelet_only_lt08、tubelet_only_lt16。
+```
+
+推荐修改路径：
+
+```text
+paper_workflow/run_real_video_vae_latent_probe.ipynb
+增加 method shard 配置与双 run_root 调度；
+
+experiments/real_video_vae_latent_probe/runner.py
+将现有 method_variants allowlist 暴露到 notebook / workflow 的正式调用路径；
+
+paper_workflow/notebook_utils/real_video_vae_latent_probe_workflow.py
+增加 shard 级 records / thresholds 合并与 rebuild 调度辅助；
+
+scripts/check_results/* 或既有 rebuild 路径
+复用 artifact builder / checker，从合并后的 governed records 重建 tables / reports。
+```
+
+预期效果：
+
+```text
+在不改变算法、不改 threshold 协议的前提下，提高 GPU 利用率并压缩墙钟时间；
+由于 CPU / I/O 仍会竞争，不应宣称线性 2×；
+但该方案是当前最接近“可立即落地”的 throughput 修复项。
+```
+
+#### 第三层：将 quality / temporal 改成“单次读盘、共享帧数据、共享模型”的后处理链
+
+必须继续修改以下路径：
+
+```text
+main/analysis/real_video_quality_metrics.py
+支持从已加载 frame tensor 直接计算，而不是强制内部再读 mp4；
+
+main/analysis/real_video_temporal_metrics.py
+支持复用同一份 reference / comparison frames；
+
+experiments/real_video_vae_latent_probe/runner.py
+将 decoded / attacked video 的帧数据在 quality 与 temporal 间共享；
+
+main/analysis/real_video_quality_metrics.py
+把 LPIPS 改成进程内单例模型 + batched frame inference，而不是逐调用初始化。
+```
+
+预期效果：
+
+```text
+减少重复 mp4 读盘；
+减少 CPU frame-loop 开销；
+给 GPU 更长、更连续的工作窗口；
+为后续启用 CLIP 提供可复用的质量后处理通道。
+```
+
+#### 第四层：CLIP 路径应在性能基线稳定后再接入 batched GPU backend，而不是作为本轮提速主方案
+
+当前 `CLIP similarity` 的主要问题是“治理口径与执行路径不一致”，而不是“它能立刻提速”。因此：
+
+```text
+CLIP 应修，但它属于 quality / semantic metric 修复，不属于当前首要吞吐修复；
+若要接入，必须与 LPIPS 共用 batched quality backend 与共享 frame 采样路径；
+不应在当前串行 hot path 尚未理顺时直接把 CLIP 叠加进去。
+```
+
+也就是说，本轮性能优化的主修复项是“并行度 + hot path”，而不是“先把 CLIP 打开”。
+
+### （五）推荐执行顺序
+
+本轮性能修复建议按以下顺序推进：
+
+```text
+1. 为 runner 增加 decode / attack / reencode / quality / temporal 子阶段 timing 与 GPU event tag；
+2. 先在 proof / 小样本 formal 上验证 profiling 能区分子阶段；
+3. 实现按 method_variant 的两路并行分片与结果合并；
+4. 对比单路与双路的 wall-clock、GPU util、CPU util 与磁盘压力；
+5. 将 quality / temporal 改成共享帧数据的单次读盘链路；
+6. 将 LPIPS 改成 batched GPU inference；
+7. 在性能基线稳定后，再把 CLIP 接到同一条 batched quality backend 上；
+8. 重跑 formal，并重新审查机制迭代速度与 GPU 利用率是否得到实质改善。
+```
+
+### （六）本轮审查后的最终判断
+
+截至 2026-05-15，可以给出以下结论：
+
+```text
+当前 real_video_vae_latent formal runtime 的主要性能问题不是 GPU 算力不足，而是 GPU 供给不足；
+当前 wall-clock 更像被串行 runner、attack materialization、quality / temporal 后处理与重复读盘共同拉长；
+继续增大 batch_size_frames、vae_batch_size_frames 或调整 profiler 采样频率，都不是当前第一修复方向；
+当前最可行、最有希望直接缩短运行时间的方案，是按 method_variant 做两路并行分片；
+随后必须把 quality / temporal 重构为共享帧数据与 batched GPU backend 的后处理链；
+CLIP 应修，但它首先是治理与质量指标修复项，而不是当前首要吞吐修复项。
+```
+
+因此，本轮合理的性能修复方案不是继续在单路串行 formal run 上盲调 batch，也不是先把 `CLIP similarity` 打开，而是：
+
+```text
+先补 runner 内部可观测性；
+再做 method-based 并行分片；
+再重构 quality / temporal hot path；
+最后再将 LPIPS / CLIP 纳入统一的 batched quality backend。
+```
