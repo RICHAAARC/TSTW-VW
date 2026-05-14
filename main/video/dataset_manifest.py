@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any
 
 
+REQUIRED_REAL_VIDEO_SPLITS = ("dev", "calibration", "test")
+
+
 @dataclass(frozen=True)
 class ResolvedVideoSample:
     """功能：表示解析后的本地视频样本。
@@ -169,8 +172,8 @@ def resolve_manifest_samples(
         )
 
     split_names = {sample.split for sample in resolved_samples}
-    if "calibration" not in split_names or "test" not in split_names:
-        raise ValueError("manifest must include both calibration and test splits")
+    if not set(REQUIRED_REAL_VIDEO_SPLITS).issubset(split_names):
+        raise ValueError("manifest must include dev, calibration, and test splits")
 
     if len(seen_video_source_ids) != len(resolved_samples):
         raise ValueError("video_source_id values must be unique")

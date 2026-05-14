@@ -11,6 +11,32 @@
   ],
   "samples": [
     {
+      "video_source_id": "rvp_000201",
+      "relpath": "source/rvp_000201.mp4",
+      "split": "dev",
+      "base_role": "negative_source",
+      "prompt_or_caption": null,
+      "expected_frame_count": 32,
+      "expected_fps": 8,
+      "expected_resolution": [
+        256,
+        256
+      ]
+    },
+    {
+      "video_source_id": "rvp_000202",
+      "relpath": "source/rvp_000202.mp4",
+      "split": "dev",
+      "base_role": "negative_source",
+      "prompt_or_caption": null,
+      "expected_frame_count": 32,
+      "expected_fps": 8,
+      "expected_resolution": [
+        256,
+        256
+      ]
+    },
+    {
       "video_source_id": "rvp_000001",
       "relpath": "source/rvp_000001.mp4",
       "split": "calibration",

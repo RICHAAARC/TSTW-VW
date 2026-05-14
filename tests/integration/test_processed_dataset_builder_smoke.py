@@ -81,10 +81,15 @@ def test_build_processed_real_video_dataset_from_local_video_directory(tmp_path:
     assert manifest_payload["dataset_key"] == "demo_dataset"
     assert manifest_payload["target_frame_count"] == 4
     assert manifest_payload["target_resolution"] == [8, 8]
-    assert len(manifest_payload["samples"]) == 2
-    assert {sample["split"] for sample in manifest_payload["samples"]} == {"calibration", "test"}
+    assert len(manifest_payload["samples"]) == 3
+    assert {sample["split"] for sample in manifest_payload["samples"]} == {"dev", "calibration", "test"}
     assert all(str(sample["relpath"]).endswith(".mp4") for sample in manifest_payload["samples"])
-    assert summary_payload["sample_count"] == 2
+    assert summary_payload["sample_count"] == 3
+    assert summary_payload["split_counts"] == {
+        "dev": 1,
+        "calibration": 1,
+        "test": 1,
+    }
     assert checks_payload["status"] is True
     assert checks_payload["required_paths"]["dataset_manifest"] is True
     assert isinstance(registry_payload.get("datasets"), list)

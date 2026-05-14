@@ -52,6 +52,11 @@ def test_real_video_vae_latent_backend_materializes_placeholder_artifacts(
                 "dataset_version": "v1",
                 "samples": [
                     {
+                        "video_source_id": "rvp_000000",
+                        "relpath": "source/rvp_000001.mp4",
+                        "split": "dev",
+                    },
+                    {
                         "video_source_id": "rvp_000001",
                         "relpath": "source/rvp_000001.mp4",
                         "split": "calibration",

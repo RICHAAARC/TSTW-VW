@@ -41,6 +41,11 @@ def test_dataset_localizer_resolves_runtime_dataset_paths(tmp_path: Path) -> Non
                 "dataset_version": "v1",
                 "samples": [
                     {
+                        "video_source_id": "rvp_000000",
+                        "relpath": "source/rvp_000000.mp4",
+                        "split": "dev",
+                    },
+                    {
                         "video_source_id": "rvp_000001",
                         "relpath": "source/rvp_000001.mp4",
                         "split": "calibration",
@@ -59,6 +64,7 @@ def test_dataset_localizer_resolves_runtime_dataset_paths(tmp_path: Path) -> Non
         encoding="utf-8",
     )
     (dataset_root / "source").mkdir(parents=True, exist_ok=True)
+    (dataset_root / "source" / "rvp_000000.mp4").write_bytes(b"video-dev")
     (dataset_root / "source" / "rvp_000001.mp4").write_bytes(b"video-a")
     (dataset_root / "source" / "rvp_000002.mp4").write_bytes(b"video-b")
 
@@ -87,8 +93,43 @@ def test_dataset_localizer_resolves_runtime_dataset_paths(tmp_path: Path) -> Non
 
     manifest = load_dataset_manifest(resolved_manifest)
     resolved_samples = resolve_manifest_samples(manifest, resolved_root, formal_mode=True)
-    assert len(resolved_samples) == 2
-    assert {sample.split for sample in resolved_samples} == {"calibration", "test"}
+    assert len(resolved_samples) == 3
+    assert {sample.split for sample in resolved_samples} == {"dev", "calibration", "test"}
+
+
+@pytest.mark.unit
+def test_resolve_manifest_samples_requires_governed_dev_split(tmp_path: Path) -> None:
+    """Validate the governed manifest requires a dev split.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    dataset_root = tmp_path / "datasets" / "real_video_probe"
+    (dataset_root / "source").mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "dataset_name": "tiny_dataset",
+        "dataset_version": "v1",
+        "samples": [
+            {
+                "video_source_id": "rvp_000010",
+                "relpath": "source/rvp_000010.mp4",
+                "split": "calibration",
+            },
+            {
+                "video_source_id": "rvp_000011",
+                "relpath": "source/rvp_000011.mp4",
+                "split": "test",
+            },
+        ],
+    }
+    (dataset_root / "source" / "rvp_000010.mp4").write_bytes(b"video-a")
+    (dataset_root / "source" / "rvp_000011.mp4").write_bytes(b"video-b")
+
+    with pytest.raises(ValueError, match="dev, calibration, and test"):
+        resolve_manifest_samples(manifest, dataset_root, formal_mode=True)
 
 
 @pytest.mark.unit
@@ -107,6 +148,11 @@ def test_resolve_manifest_samples_fails_when_formal_mp4_missing(tmp_path: Path) 
         "dataset_name": "tiny_dataset",
         "dataset_version": "v1",
         "samples": [
+            {
+                "video_source_id": "rvp_000009",
+                "relpath": "source/rvp_000009.mp4",
+                "split": "dev",
+            },
             {
                 "video_source_id": "rvp_000010",
                 "relpath": "source/rvp_000010.mp4",

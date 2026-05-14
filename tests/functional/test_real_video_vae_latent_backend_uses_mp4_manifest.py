@@ -48,6 +48,11 @@ def test_real_video_vae_latent_backend_reads_mp4_from_manifest(tmp_path: Path) -
                 "dataset_version": "v1",
                 "samples": [
                     {
+                        "video_source_id": "rvp_000000",
+                        "relpath": "source/rvp_000001.mp4",
+                        "split": "dev",
+                    },
+                    {
                         "video_source_id": "rvp_000001",
                         "relpath": "source/rvp_000001.mp4",
                         "split": "calibration",

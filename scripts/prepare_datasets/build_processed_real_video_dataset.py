@@ -25,6 +25,7 @@ from main.video.video_io import read_video_frames, write_video_mp4
 
 SUPPORTED_VIDEO_EXTENSIONS = (".mp4", ".mov", ".avi", ".mkv")
 SUPPORTED_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+REQUIRED_REAL_VIDEO_SPLITS = ("dev", "calibration", "test")
 
 
 @dataclass(frozen=True)
@@ -222,11 +223,36 @@ def _load_source_frames(raw_source: RawSource, *, fallback_fps: int) -> tuple[np
 
 def _infer_split(source_key: str, index: int) -> str:
     normalized_key = source_key.lower()
+    if any(token in normalized_key for token in ("dev", "development")):
+        return "dev"
     if any(token in normalized_key for token in ("calibration", "train", "training")):
         return "calibration"
     if any(token in normalized_key for token in ("test", "val", "validation", "eval")):
         return "test"
-    return "calibration" if index % 2 == 0 else "test"
+    return REQUIRED_REAL_VIDEO_SPLITS[index % len(REQUIRED_REAL_VIDEO_SPLITS)]
+
+
+def _build_processing_plan(raw_sources: list[RawSource]) -> list[tuple[RawSource, str]]:
+    if not raw_sources:
+        raise ValueError("raw_sources must not be empty")
+    processing_plan = [
+        (raw_source, _infer_split(raw_source.source_key, index))
+        for index, raw_source in enumerate(raw_sources)
+    ]
+    observed_splits = {split_name for _, split_name in processing_plan}
+    duplicate_source_index = 0
+    for split_name in REQUIRED_REAL_VIDEO_SPLITS:
+        if split_name in observed_splits:
+            continue
+        processing_plan.append(
+            (
+                raw_sources[duplicate_source_index % len(raw_sources)],
+                split_name,
+            )
+        )
+        duplicate_source_index += 1
+        observed_splits.add(split_name)
+    return processing_plan
 
 
 def _default_registry_path(processed_dataset_root: Path) -> Path:
@@ -349,12 +375,7 @@ def build_processed_real_video_dataset(
     checks_root = processed_root / "checks"
     checks_root.mkdir(parents=True, exist_ok=True)
 
-    processing_plan: list[tuple[RawSource, str]] = []
-    if len(raw_sources) == 1:
-        processing_plan.extend([(raw_sources[0], "calibration"), (raw_sources[0], "test")])
-    else:
-        for index, raw_source in enumerate(raw_sources):
-            processing_plan.append((raw_source, _infer_split(raw_source.source_key, index)))
+    processing_plan = _build_processing_plan(raw_sources)
 
     samples: list[dict[str, Any]] = []
     materialized_paths: list[Path] = []
@@ -442,7 +463,7 @@ def build_processed_real_video_dataset(
     )
     checks_payload = {
         "status": bool(samples)
-        and {"calibration", "test"}.issubset(set(split_counts))
+        and set(REQUIRED_REAL_VIDEO_SPLITS).issubset(set(split_counts))
         and all(path.exists() for path in materialized_paths),
         "processed_dataset_key": processed_dataset_key,
         "required_paths": {

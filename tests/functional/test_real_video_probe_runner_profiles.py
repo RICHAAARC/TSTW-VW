@@ -149,7 +149,7 @@ def test_runtime_splits_shrink_to_manifest_available_splits() -> None:
         protocol_config,
         "formal",
         dataset_manifest,
-    ) == ["calibration", "test"]
+    ) == ["dev", "calibration", "test"]
 
 
 @pytest.mark.unit
