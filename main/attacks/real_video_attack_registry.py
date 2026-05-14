@@ -129,6 +129,7 @@ class VideoTensorAttackPlaceholder:
         attacked_digest: str,
     ) -> LatentSample:
         mechanism_trace = dict(sample.mechanism_trace or {})
+        mechanism_trace.setdefault("reference_latent_shape", list(sample.latent_shape))
         mechanism_trace.update(
             {
                 "latent_shape": list(sample.latent_shape),

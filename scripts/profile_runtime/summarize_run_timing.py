@@ -45,6 +45,7 @@ def summarize_run_timing(
                 events.append(json.loads(normalized_line))
 
     events_by_name: dict[str, float] = {}
+    runner_substage_counts: dict[str, int] = {}
     failed_event_count = 0
     total_recorded_seconds = 0.0
     slowest_event_name = ""
@@ -54,6 +55,12 @@ def summarize_run_timing(
         elapsed_seconds = float(event.get("elapsed_seconds", 0.0) or 0.0)
         total_recorded_seconds += elapsed_seconds
         events_by_name[event_name] = round(events_by_name.get(event_name, 0.0) + elapsed_seconds, 6)
+        metadata = event.get("metadata", {})
+        if isinstance(metadata, dict) and metadata.get("event_group") == "runner_substage":
+            runner_substage_counts[event_name] = int(
+                runner_substage_counts.get(event_name, 0)
+                + int(metadata.get("invocation_count", 0) or 0)
+            )
         if str(event.get("status", "ok")) == "failed":
             failed_event_count += 1
         if elapsed_seconds > slowest_event_seconds:
@@ -75,6 +82,17 @@ def summarize_run_timing(
         "failed_event_count": failed_event_count,
         "total_recorded_seconds": round(total_recorded_seconds, 6),
         "events_by_name": events_by_name,
+        "runner_substage_counts": runner_substage_counts,
+        "decode_video_seconds": events_by_name.get("runner_decode_video", 0.0),
+        "video_attack_seconds": round(
+            events_by_name.get("runner_attack_video", 0.0)
+            + events_by_name.get("runner_attack_materialization", 0.0),
+            6,
+        ),
+        "vae_reencode_seconds": events_by_name.get("runner_reencode_latent", 0.0),
+        "quality_metrics_seconds": events_by_name.get("runner_quality_metrics", 0.0),
+        "temporal_metrics_seconds": events_by_name.get("runner_temporal_metrics", 0.0),
+        "metric_frame_loading_seconds": events_by_name.get("runner_load_metric_frames", 0.0),
         "slowest_event_name": slowest_event_name,
         "slowest_event_seconds": round(slowest_event_seconds, 6),
         "estimated_work_planning_label": estimated_work_planning_label,
@@ -89,6 +107,10 @@ def summarize_run_timing(
         f"- slowest_event_name: {summary['slowest_event_name']}",
         f"- slowest_event_seconds: {summary['slowest_event_seconds']}",
         f"- estimated_work_planning_label: {summary['estimated_work_planning_label']}",
+        f"- video_attack_seconds: {summary['video_attack_seconds']}",
+        f"- vae_reencode_seconds: {summary['vae_reencode_seconds']}",
+        f"- quality_metrics_seconds: {summary['quality_metrics_seconds']}",
+        f"- temporal_metrics_seconds: {summary['temporal_metrics_seconds']}",
         "",
         "## Events By Name",
         "",

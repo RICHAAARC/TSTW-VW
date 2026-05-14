@@ -108,5 +108,8 @@ def test_real_video_temporal_metrics_motion_consistency_enabled(
     assert payload["motion_consistency_score"] is not None
     assert payload["motion_consistency_score"] >= 0.0
     assert payload["motion_consistency_score"] <= 1.0
+    assert payload["motion_consistency_backend"] == "frame_difference_proxy"
+    assert payload["motion_consistency_frame_count"] == 4
+    assert payload["motion_consistency_normalization_mode"] == "per_transition_max_motion"
     assert payload["disabled_temporal_metrics"] == []
     assert payload["motion_consistency_failure_reason"] is None

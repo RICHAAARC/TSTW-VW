@@ -155,6 +155,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             payload_coded_projections,
             codebook,
             reference_descriptor_map,
+            reference_shape_trace,
         ) = self._build_payload_coded_projections(
             sample,
             tensor_artifact,
@@ -175,6 +176,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 "payload_digest": codebook.payload_digest,
             }
         )
+        mechanism_trace.update(reference_shape_trace)
         embedding_support = self._resolve_embedding_support(sample)
         attack_strength = self._resolve_attack_strength(sample)
 
@@ -188,7 +190,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         sync_rescue_applied = False
         trajectory_projections = payload_coded_projections
         if self._enabled_evidence.get("sync", False):
-            alignment_scores = self._build_alignment_candidate_scores(
+            alignment_scores, alignment_candidate_metrics = self._build_alignment_candidate_scores(
                 descriptors,
                 tensor_artifact,
                 reference_descriptor_map,
@@ -200,10 +202,18 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 mechanism_trace,
                 sample,
             )
+            sync_result.update(
+                self._build_best_alignment_candidate_trace(
+                    sync_result,
+                    alignment_candidate_metrics,
+                )
+            )
             mechanism_trace.update(sync_result)
             evidence_scores["S_sync"] = self._build_sync_support_score(
                 float(sync_result["S_sync_positive_margin"]),
             )
+            sync_confidence_trace = self._build_sync_confidence_trace(sync_result)
+            mechanism_trace.update(sync_confidence_trace)
             aligned_tubelet_projections = self._align_tubelet_projections(
                 descriptors,
                 tensor_artifact,
@@ -222,7 +232,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 max(0.0, S_payload_aligned - S_payload_unaligned),
                 6,
             )
-            sync_rescue_applied = bool(float(evidence_scores["S_sync"] or 0.0) > 0.0)
+            sync_rescue_applied = bool(sync_confidence_trace["sync_confident"])
         else:
             mechanism_trace.update(
                 {
@@ -243,6 +253,16 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                     "S_sync_peak_second_or_median": None,
                     "S_sync_peak_margin": None,
                     "S_sync_positive_margin": None,
+                    "sync_alignment_matched_count": None,
+                    "sync_alignment_candidate_count": None,
+                    "sync_alignment_coverage_ratio": None,
+                    "sync_candidate_score_raw": None,
+                    "sync_candidate_score_penalized": None,
+                    "sync_confident": False,
+                    "sync_confidence_failure_reason": "sync_disabled",
+                    "sync_confidence_min_margin": None,
+                    "sync_confidence_min_coverage_ratio": None,
+                    "sync_confidence_min_matched_count": None,
                 }
             )
         if self._enabled_evidence.get("tubelet", False):
@@ -279,10 +299,21 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         tensor_artifact: object,
         descriptors: list[object],
         partition_config: object,
-    ) -> tuple[list[float], object, dict[tuple[int, int, int], object]]:
+    ) -> tuple[list[float], object, dict[tuple[int, int, int], object], dict[str, object]]:
+        mechanism_trace = sample.mechanism_trace or {}
+        fallback_used = "reference_latent_shape" not in mechanism_trace
         reference_latent_shape = tuple(
-            (sample.mechanism_trace or {}).get("reference_latent_shape", sample.latent_shape)
+            mechanism_trace.get("reference_latent_shape", sample.latent_shape)
         )
+        reference_shape_trace = {
+            "reference_latent_shape": list(reference_latent_shape),
+            "reference_latent_shape_source": (
+                "sample_latent_shape_fallback"
+                if fallback_used
+                else "mechanism_trace"
+            ),
+            "reference_latent_shape_fallback_used": fallback_used,
+        }
         reference_descriptors = build_tubelet_descriptors(
             reference_latent_shape,
             partition_config,
@@ -325,6 +356,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             payload_coded_projections,
             codebook,
             reference_descriptor_map,
+            reference_shape_trace,
         )
 
     def _build_reference_descriptor_map(
@@ -386,21 +418,25 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         reference_descriptor_map: dict[tuple[int, int, int], object],
         codebook: object,
         sample: LatentSample,
-    ) -> dict[tuple[int, float], float]:
+    ) -> tuple[dict[tuple[int, float], float], dict[tuple[int, float], dict[str, float | int]]]:
         alignment_scores: dict[tuple[int, float], float] = {}
+        alignment_candidate_metrics: dict[tuple[int, float], dict[str, float | int]] = {}
         for offset_candidate in self._resolve_offset_candidates():
             for scale_candidate in self._resolve_scale_candidates(sample):
-                alignment_scores[(offset_candidate, scale_candidate)] = (
-                    self._score_alignment_candidate(
-                        descriptors,
-                        tensor_artifact,
-                        reference_descriptor_map,
-                        codebook,
-                        offset_candidate,
-                        scale_candidate,
-                    )
+                candidate_key = (offset_candidate, scale_candidate)
+                candidate_metrics = self._score_alignment_candidate(
+                    descriptors,
+                    tensor_artifact,
+                    reference_descriptor_map,
+                    codebook,
+                    offset_candidate,
+                    scale_candidate,
                 )
-        return alignment_scores
+                alignment_candidate_metrics[candidate_key] = candidate_metrics
+                alignment_scores[candidate_key] = float(
+                    candidate_metrics["sync_candidate_score_penalized"]
+                )
+        return alignment_scores, alignment_candidate_metrics
 
     def _score_alignment_candidate(
         self,
@@ -410,8 +446,9 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         codebook: object,
         offset_candidate: int,
         scale_candidate: float,
-    ) -> float:
+    ) -> dict[str, float | int]:
         candidate_payload_projections: list[float] = []
+        candidate_count = max(len(reference_descriptor_map), 1)
         for descriptor in descriptors:
             reference_descriptor = self._resolve_reference_descriptor(
                 reference_descriptor_map,
@@ -435,11 +472,79 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             )
             candidate_payload_projections.append(payload_projection)
         if not candidate_payload_projections:
-            return -1.0
+            return {
+                "sync_alignment_matched_count": 0,
+                "sync_alignment_candidate_count": candidate_count,
+                "sync_alignment_coverage_ratio": 0.0,
+                "sync_candidate_score_raw": -1.0,
+                "sync_candidate_score_penalized": -1.0,
+            }
         projection_support = sum(candidate_payload_projections) / len(
             candidate_payload_projections
         )
-        return round(projection_support, 6)
+        matched_count = len(candidate_payload_projections)
+        coverage_ratio = min(1.0, max(0.0, float(matched_count) / float(candidate_count)))
+        if self._coverage_penalty_enabled() and projection_support > 0.0:
+            penalized_score = projection_support * coverage_ratio
+        else:
+            penalized_score = projection_support
+        return {
+            "sync_alignment_matched_count": matched_count,
+            "sync_alignment_candidate_count": candidate_count,
+            "sync_alignment_coverage_ratio": round(coverage_ratio, 6),
+            "sync_candidate_score_raw": round(projection_support, 6),
+            "sync_candidate_score_penalized": round(penalized_score, 6),
+        }
+
+    def _build_best_alignment_candidate_trace(
+        self,
+        sync_result: dict[str, object],
+        alignment_candidate_metrics: dict[tuple[int, float], dict[str, float | int]],
+    ) -> dict[str, float | int | None]:
+        best_key = (
+            int(sync_result["sync_estimated_offset"]),
+            float(sync_result["sync_estimated_scale"]),
+        )
+        best_metrics = alignment_candidate_metrics.get(best_key)
+        if best_metrics is None:
+            return {
+                "sync_alignment_matched_count": None,
+                "sync_alignment_candidate_count": None,
+                "sync_alignment_coverage_ratio": None,
+                "sync_candidate_score_raw": None,
+                "sync_candidate_score_penalized": None,
+            }
+        return dict(best_metrics)
+
+    def _build_sync_confidence_trace(
+        self,
+        sync_result: dict[str, object],
+    ) -> dict[str, object]:
+        min_margin = self._resolve_sync_confidence_value("min_sync_positive_margin", 0.0)
+        min_coverage_ratio = self._resolve_sync_confidence_value(
+            "min_sync_alignment_coverage_ratio",
+            0.5,
+        )
+        min_matched_count = int(
+            self._resolve_sync_confidence_value("min_sync_alignment_matched_count", 1.0)
+        )
+        positive_margin = float(sync_result.get("S_sync_positive_margin") or 0.0)
+        coverage_ratio = float(sync_result.get("sync_alignment_coverage_ratio") or 0.0)
+        matched_count = int(sync_result.get("sync_alignment_matched_count") or 0)
+        failure_reasons: list[str] = []
+        if positive_margin <= float(min_margin):
+            failure_reasons.append("sync_margin_below_gate")
+        if coverage_ratio < float(min_coverage_ratio):
+            failure_reasons.append("sync_coverage_below_gate")
+        if matched_count < min_matched_count:
+            failure_reasons.append("sync_matched_count_below_gate")
+        return {
+            "sync_confident": not failure_reasons,
+            "sync_confidence_failure_reason": ";".join(failure_reasons) or None,
+            "sync_confidence_min_margin": round(float(min_margin), 6),
+            "sync_confidence_min_coverage_ratio": round(float(min_coverage_ratio), 6),
+            "sync_confidence_min_matched_count": min_matched_count,
+        }
 
     def _build_sync_search_result(
         self,
@@ -610,6 +715,17 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         if not isinstance(sync_search_config, dict):
             return {}
         return sync_search_config
+
+    def _coverage_penalty_enabled(self) -> bool:
+        sync_search_config = self._resolve_sync_search_config()
+        return bool(sync_search_config.get("coverage_penalty_enabled", True))
+
+    def _resolve_sync_confidence_value(self, field_name: str, default_value: float) -> float:
+        sync_search_config = self._resolve_sync_search_config()
+        field_value = sync_search_config.get(field_name, default_value)
+        if not isinstance(field_value, (int, float)):
+            return float(default_value)
+        return float(field_value)
 
     def _resolve_scale_search_snap_radius(self) -> int:
         sync_search_config = self._resolve_sync_search_config()

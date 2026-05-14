@@ -18,6 +18,7 @@ import pytest
 from paper_workflow.notebook_utils import runtime_profile_workflow
 import scripts.profile_runtime.profile_gpu_runtime as gpu_profile_module
 from scripts.profile_runtime.summarize_gpu_profile import summarize_gpu_runtime_profile
+from scripts.profile_runtime.summarize_run_timing import summarize_run_timing
 
 
 pytestmark = pytest.mark.quick
@@ -235,6 +236,63 @@ def test_runtime_profile_workflow_loads_governed_profile_config() -> None:
     assert payload["profile_runtime"] is True
     assert payload["config_path"].endswith("configs\\runtime_profiles\\l4_formal.json")
     assert len(payload["config_digest"]) == 64
+
+
+def test_run_timing_summary_reports_runner_substage_totals(tmp_path: Path) -> None:
+    """Validate runner substage timing events are summarized for performance audit.
+
+    Args:
+        tmp_path: Temporary run root.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "run_root"
+    runtime_profile_dir = run_root / "runtime_profile"
+    events_path = runtime_profile_dir / "run_timing_events.jsonl"
+    events_path.parent.mkdir(parents=True, exist_ok=True)
+    events = [
+        {
+            "run_id": "run_root",
+            "event_name": "runner_attack_materialization",
+            "event_group": "runner_substage",
+            "elapsed_seconds": 3.0,
+            "status": "ok",
+            "metadata": {"event_group": "runner_substage", "invocation_count": 2},
+        },
+        {
+            "run_id": "run_root",
+            "event_name": "runner_reencode_latent",
+            "event_group": "runner_substage",
+            "elapsed_seconds": 5.0,
+            "status": "ok",
+            "metadata": {"event_group": "runner_substage", "invocation_count": 4},
+        },
+        {
+            "run_id": "run_root",
+            "event_name": "runner_quality_metrics",
+            "event_group": "runner_substage",
+            "elapsed_seconds": 7.0,
+            "status": "ok",
+            "metadata": {"event_group": "runner_substage", "invocation_count": 4},
+        },
+    ]
+    events_path.write_text(
+        "".join(json.dumps(event, ensure_ascii=False) + "\n" for event in events),
+        encoding="utf-8",
+    )
+
+    summary = summarize_run_timing(
+        run_root=run_root,
+        events_jsonl=events_path,
+        output_json=runtime_profile_dir / "run_timing_summary.json",
+        output_md=runtime_profile_dir / "run_timing_report.md",
+    )
+
+    assert summary["video_attack_seconds"] == 3.0
+    assert summary["vae_reencode_seconds"] == 5.0
+    assert summary["quality_metrics_seconds"] == 7.0
+    assert summary["runner_substage_counts"]["runner_reencode_latent"] == 4
 
 
 def test_runtime_profile_workflow_persists_profile_plan(tmp_path: Path) -> None:

@@ -61,6 +61,8 @@ def build_quality_metrics_payload(
                 or runtime_config.get("lpips_model_root")
             )
             enable_clip_similarity = bool(quality_config.get("enable_clip_similarity"))
+            lpips_backbone = str(quality_config.get("lpips_backbone", "alex") or "alex")
+            lpips_device = str(quality_config.get("lpips_device", "cuda") or "cuda")
             disabled_quality_metrics = []
             if not enable_lpips:
                 disabled_quality_metrics.append("watermarked_video_lpips")
@@ -73,7 +75,11 @@ def build_quality_metrics_payload(
                 "watermarked_video_psnr": None,
                 "watermarked_video_ssim": None,
                 "watermarked_video_lpips": None,
+                "lpips_backbone": lpips_backbone if enable_lpips else None,
+                "lpips_device": lpips_device if enable_lpips else None,
                 "clip_similarity_score": None,
+                "clip_model_id": quality_config.get("clip_model_id"),
+                "clip_frame_sample_count": quality_config.get("clip_frame_sample_count"),
                 "disabled_quality_metrics": disabled_quality_metrics,
                 "quality_failure_reason": f"real_quality_metrics_runtime_error: {str(exc)}",
                 "lpips_failure_reason": (

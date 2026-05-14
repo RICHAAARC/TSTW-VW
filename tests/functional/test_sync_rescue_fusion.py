@@ -113,6 +113,35 @@ def test_unreliable_sync_does_not_lower_unaligned_payload_score() -> None:
 
 
 @pytest.mark.unit
+def test_positive_sync_score_is_gated_with_rescue() -> None:
+    evidence_scores = {
+        "S_tubelet": 0.42,
+        "S_sync": 0.8,
+        "S_traj": None,
+        "S_final": 0.0,
+    }
+
+    assert (
+        sync_rescue_fusion(
+            evidence_scores,
+            payload_rescue_gain=0.25,
+            lambda_sync=0.1,
+            gate_sync=False,
+        )
+        == 0.42
+    )
+    assert (
+        sync_rescue_fusion(
+            evidence_scores,
+            payload_rescue_gain=0.25,
+            lambda_sync=0.1,
+            gate_sync=True,
+        )
+        == 0.75
+    )
+
+
+@pytest.mark.unit
 def test_reliable_offset_alignment_can_create_payload_rescue_gain(tmp_path: Path) -> None:
     cropped_sample = _build_sync_embedded_crop(tmp_path)
     sync_result = build_method_from_config(TUBELET_SYNC_CONFIG).detect(
@@ -127,6 +156,9 @@ def test_reliable_offset_alignment_can_create_payload_rescue_gain(tmp_path: Path
     assert mechanism_trace["S_payload_aligned"] > mechanism_trace["S_payload_unaligned"]
     assert mechanism_trace["S_payload_rescue_gain"] > 0.0
     assert mechanism_trace["sync_rescue_applied"] is True
+    assert mechanism_trace["sync_confident"] is True
+    assert mechanism_trace["sync_alignment_coverage_ratio"] >= 0.5
+    assert mechanism_trace["sync_candidate_score_penalized"] <= mechanism_trace["sync_candidate_score_raw"]
     assert sync_result.evidence_scores["S_final"] > mechanism_trace["S_payload_unaligned"]
 
 

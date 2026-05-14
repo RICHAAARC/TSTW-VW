@@ -12,7 +12,10 @@ import importlib.util
 import json
 import platform
 import sys
+import time
 from array import array
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -32,10 +35,10 @@ from experiments.real_video_vae_latent_probe.output_layout import (
     build_real_video_vae_latent_output_paths,
 )
 from main.analysis.real_video_quality_metrics import (
-    build_real_video_quality_metrics_payload,
+    build_real_video_quality_metrics_payload_from_frames,
 )
 from main.analysis.real_video_temporal_metrics import (
-    build_real_video_temporal_metrics_payload,
+    build_real_video_temporal_metrics_payload_from_frames,
 )
 from main.attacks.real_video_attack_registry import build_real_video_attack_registry
 from main.backends.real_video_vae_latent import (
@@ -57,6 +60,8 @@ from main.video.dataset_localizer import resolve_runtime_dataset_manifest_path
 from main.video.dataset_manifest import load_dataset_manifest, summarize_dataset_manifest
 from main.video.video_io import probe_video_metadata, read_video_frames, write_video_mp4
 from main.video.video_artifact import copy_latent_artifact
+from scripts.profile_runtime import write_current_runtime_event_tag
+from scripts.profile_runtime.profile_run_timing import RunTimingRecorder
 
 
 SUPPORTED_RUNTIME_PROFILES = (
@@ -118,6 +123,11 @@ class RealVideoVaeLatentRunner:
         self._artifact_builder = RealVideoVaeLatentArtifactBuilder()
         self._threshold_calibrator = ThresholdCalibrator()
         self._runtime_config_overrides: dict[str, Any] = {}
+        self._runner_timing_recorder: RunTimingRecorder | None = None
+        self._runner_timing_totals: dict[str, float] = {}
+        self._runner_timing_counts: dict[str, int] = {}
+        self._runner_timing_failures: dict[str, int] = {}
+        self._current_runtime_event_tag = "unlabeled"
 
     def run(
         self,
@@ -263,26 +273,31 @@ class RealVideoVaeLatentRunner:
             method_variants,
         )
         run_id = output_root_path.name
+        self._begin_runner_timing(output_root_path, run_id)
         event_score_records: list[dict[str, Any]] = []
         threshold_records: list[dict[str, Any]] = []
         record_writer = RecordWriter(output_root_path)
         self._reset_incremental_outputs(record_writer)
 
-        for method_config in runtime_method_configs:
-            variant_event_records, threshold_record = self._run_method_variant(
-                run_id=run_id,
-                output_root=output_root_path,
-                event_plan=event_plan,
-                method_config=method_config,
-                protocol_config=protocol_config,
-                runtime_splits=runtime_splits,
-                runtime_sample_roles=runtime_sample_roles,
-                latent_backend=latent_backend,
-                vae_runtime_backend=vae_backend,
-                vae_metadata=vae_metadata,
-            )
-            event_score_records.extend(variant_event_records)
-            threshold_records.append(threshold_record)
+        try:
+            for method_config in runtime_method_configs:
+                variant_event_records, threshold_record = self._run_method_variant(
+                    run_id=run_id,
+                    output_root=output_root_path,
+                    event_plan=event_plan,
+                    method_config=method_config,
+                    protocol_config=protocol_config,
+                    runtime_splits=runtime_splits,
+                    runtime_sample_roles=runtime_sample_roles,
+                    latent_backend=latent_backend,
+                    vae_runtime_backend=vae_backend,
+                    vae_metadata=vae_metadata,
+                )
+                event_score_records.extend(variant_event_records)
+                threshold_records.append(threshold_record)
+        finally:
+            self._flush_runner_timing_events()
+            self._set_runtime_event_tag("unlabeled")
 
         record_writer.write_event_score_records(event_score_records)
         record_writer.write_threshold_records(threshold_records)
@@ -375,6 +390,63 @@ class RealVideoVaeLatentRunner:
             threshold_records=threshold_records,
             run_manifest=run_manifest,
         )
+
+    def _begin_runner_timing(self, output_root: Path, run_id: str) -> None:
+        self._runner_timing_recorder = RunTimingRecorder(output_root, run_id=run_id)
+        self._runner_timing_totals = {}
+        self._runner_timing_counts = {}
+        self._runner_timing_failures = {}
+        self._set_runtime_event_tag("real_video_vae_latent_runner")
+
+    @contextmanager
+    def _runner_substage(self, event_name: str, **metadata: Any) -> Iterator[None]:
+        if not isinstance(event_name, str) or not event_name:
+            raise ValueError("event_name must be a non-empty string")
+        previous_event_tag = self._current_runtime_event_tag
+        self._set_runtime_event_tag(event_name)
+        start_time = time.perf_counter()
+        status = "ok"
+        try:
+            yield
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            elapsed_seconds = max(time.perf_counter() - start_time, 0.0)
+            self._runner_timing_totals[event_name] = round(
+                self._runner_timing_totals.get(event_name, 0.0) + elapsed_seconds,
+                6,
+            )
+            self._runner_timing_counts[event_name] = self._runner_timing_counts.get(event_name, 0) + 1
+            if status == "failed":
+                self._runner_timing_failures[event_name] = self._runner_timing_failures.get(event_name, 0) + 1
+            del metadata
+            self._set_runtime_event_tag(previous_event_tag)
+
+    def _flush_runner_timing_events(self) -> None:
+        if self._runner_timing_recorder is None:
+            return
+        for event_name in sorted(self._runner_timing_totals):
+            status = "failed" if self._runner_timing_failures.get(event_name, 0) else "ok"
+            self._runner_timing_recorder.write_event(
+                event_name=event_name,
+                start_time=0.0,
+                end_time=float(self._runner_timing_totals[event_name]),
+                status=status,
+                event_group="runner_substage",
+                invocation_count=self._runner_timing_counts.get(event_name, 0),
+                failure_count=self._runner_timing_failures.get(event_name, 0),
+            )
+
+    def _set_runtime_event_tag(self, event_tag: str) -> None:
+        self._current_runtime_event_tag = event_tag
+        try:
+            write_current_runtime_event_tag(
+                self._runner_timing_recorder.run_root if self._runner_timing_recorder is not None else self._repository_root,
+                event_tag,
+            )
+        except Exception:
+            return
 
     def _run_method_variant(
         self,
@@ -498,11 +570,16 @@ class RealVideoVaeLatentRunner:
             source_key = (event_plan_entry.split, source_sample_role, source_sample_id)
             source_sample = source_sample_cache.get(source_key)
             if source_sample is None:
-                source_sample = latent_backend.build_sample(
-                    source_sample_id,
-                    event_plan_entry.split,
-                    source_sample_role,
-                )
+                with self._runner_substage(
+                    "runner_build_source_sample",
+                    method_variant=method_config["method_variant"],
+                    split=event_plan_entry.split,
+                ):
+                    source_sample = latent_backend.build_sample(
+                        source_sample_id,
+                        event_plan_entry.split,
+                        source_sample_role,
+                    )
                 source_sample_cache[source_key] = source_sample
 
             working_sample = source_sample
@@ -534,13 +611,18 @@ class RealVideoVaeLatentRunner:
             if event_plan_entry.sample_role in {"watermarked_positive", "attacked_positive"}:
                 working_sample = embedded_sample_cache.get(embedded_key)
                 if working_sample is None:
-                    working_sample = method.embed(
-                        source_sample,
-                        {
-                            "event_sample_id": event_plan_entry.sample_id,
-                            "event_sample_role": event_plan_entry.sample_role,
-                        },
-                    )
+                    with self._runner_substage(
+                        "runner_embed_latent",
+                        method_variant=method_config["method_variant"],
+                        split=event_plan_entry.split,
+                    ):
+                        working_sample = method.embed(
+                            source_sample,
+                            {
+                                "event_sample_id": event_plan_entry.sample_id,
+                                "event_sample_role": event_plan_entry.sample_role,
+                            },
+                        )
                     embedded_sample_cache[embedded_key] = working_sample
                 watermarked_latent_relpath = (
                     Path("artifacts")
@@ -569,28 +651,39 @@ class RealVideoVaeLatentRunner:
                 / method_config["method_variant"]
                 / f"{decoded_artifact_digest}{video_artifact_suffix}"
             )
-            decoded_video_metadata = self._cached_decoded_video_artifact(
-                decoded_video_cache,
-                working_sample,
-                vae_runtime_backend,
-                vae_metadata,
-                output_root,
-                decoded_video_relpath,
-                int(source_sample.mechanism_trace["video_fps"]),
-                tuple(source_sample.mechanism_trace["video_resolution"]),
-            )
+            with self._runner_substage(
+                "runner_decode_video",
+                method_variant=method_config["method_variant"],
+                split=event_plan_entry.split,
+            ):
+                decoded_video_metadata = self._cached_decoded_video_artifact(
+                    decoded_video_cache,
+                    working_sample,
+                    vae_runtime_backend,
+                    vae_metadata,
+                    output_root,
+                    decoded_video_relpath,
+                    int(source_sample.mechanism_trace["video_fps"]),
+                    tuple(source_sample.mechanism_trace["video_resolution"]),
+                )
 
-            materialized_attack_params = self._materialize_attack_params(
-                working_sample,
-                event_plan_entry.attack_object,
-                event_plan_entry.attack_name,
-                event_plan_entry.attack_params,
-            )
-            attacked_sample = self._build_video_attack_sample(
-                working_sample,
-                event_plan_entry.attack_name,
-                materialized_attack_params,
-            )
+            with self._runner_substage(
+                "runner_attack_video",
+                method_variant=method_config["method_variant"],
+                attack_name=event_plan_entry.attack_name,
+                split=event_plan_entry.split,
+            ):
+                materialized_attack_params = self._materialize_attack_params(
+                    working_sample,
+                    event_plan_entry.attack_object,
+                    event_plan_entry.attack_name,
+                    event_plan_entry.attack_params,
+                )
+                attacked_sample = self._build_video_attack_sample(
+                    working_sample,
+                    event_plan_entry.attack_name,
+                    materialized_attack_params,
+                )
             attacked_video_relpath = (
                 Path("artifacts")
                 / "videos"
@@ -601,37 +694,43 @@ class RealVideoVaeLatentRunner:
             if event_plan_entry.attack_name == "no_attack":
                 attacked_video_metadata = decoded_video_metadata
             else:
-                if decoded_video_metadata["container"] == "mp4":
-                    attacked_video_metadata = self._cached_attacked_video_artifact(
-                        attacked_video_cache,
-                        decoded_video_metadata,
-                        attacked_sample,
-                        event_plan_entry.attack_name,
-                        event_plan_entry.attack_object,
-                        output_root,
-                        attacked_video_relpath,
-                        int(source_sample.mechanism_trace["video_fps"]),
-                        tuple(source_sample.mechanism_trace["video_resolution"]),
-                        {
-                            "run_id": run_id,
-                            "sample_id": event_plan_entry.sample_id,
-                        },
-                    )
-                else:
-                    attacked_sample = event_plan_entry.attack_object.apply(working_sample)
-                    materialized_attack_params = (
-                        attacked_sample.applied_attack_params or materialized_attack_params
-                    )
-                    attacked_video_metadata = self._cached_decoded_video_artifact(
-                        decoded_video_cache,
-                        attacked_sample,
-                        vae_runtime_backend,
-                        vae_metadata,
-                        output_root,
-                        attacked_video_relpath,
-                        int(source_sample.mechanism_trace["video_fps"]),
-                        tuple(source_sample.mechanism_trace["video_resolution"]),
-                    )
+                with self._runner_substage(
+                    "runner_attack_materialization",
+                    method_variant=method_config["method_variant"],
+                    attack_name=event_plan_entry.attack_name,
+                    split=event_plan_entry.split,
+                ):
+                    if decoded_video_metadata["container"] == "mp4":
+                        attacked_video_metadata = self._cached_attacked_video_artifact(
+                            attacked_video_cache,
+                            decoded_video_metadata,
+                            attacked_sample,
+                            event_plan_entry.attack_name,
+                            event_plan_entry.attack_object,
+                            output_root,
+                            attacked_video_relpath,
+                            int(source_sample.mechanism_trace["video_fps"]),
+                            tuple(source_sample.mechanism_trace["video_resolution"]),
+                            {
+                                "run_id": run_id,
+                                "sample_id": event_plan_entry.sample_id,
+                            },
+                        )
+                    else:
+                        attacked_sample = event_plan_entry.attack_object.apply(working_sample)
+                        materialized_attack_params = (
+                            attacked_sample.applied_attack_params or materialized_attack_params
+                        )
+                        attacked_video_metadata = self._cached_decoded_video_artifact(
+                            decoded_video_cache,
+                            attacked_sample,
+                            vae_runtime_backend,
+                            vae_metadata,
+                            output_root,
+                            attacked_video_relpath,
+                            int(source_sample.mechanism_trace["video_fps"]),
+                            tuple(source_sample.mechanism_trace["video_resolution"]),
+                        )
 
             reencoded_latent_relpath = (
                 Path("artifacts")
@@ -640,32 +739,66 @@ class RealVideoVaeLatentRunner:
                 / event_plan_entry.attack_name
                 / f"{event_artifact_digest}.npy"
             )
-            reencoded_latent_metadata = self._cached_reencoded_latent_artifact(
-                reencoded_cache,
-                attacked_video_metadata,
-                attacked_sample,
-                vae_runtime_backend,
-                vae_metadata,
-                output_root,
-                reencoded_latent_relpath,
-            )
+            with self._runner_substage(
+                "runner_reencode_latent",
+                method_variant=method_config["method_variant"],
+                attack_name=event_plan_entry.attack_name,
+                split=event_plan_entry.split,
+            ):
+                reencoded_latent_metadata = self._cached_reencoded_latent_artifact(
+                    reencoded_cache,
+                    attacked_video_metadata,
+                    attacked_sample,
+                    vae_runtime_backend,
+                    vae_metadata,
+                    output_root,
+                    reencoded_latent_relpath,
+                )
             detection_sample = self._build_reencoded_sample(
                 attacked_sample,
                 reencoded_latent_metadata,
             )
-            detection_result = method.detect(detection_sample, threshold_record)
+            with self._runner_substage(
+                "runner_detect",
+                method_variant=method_config["method_variant"],
+                attack_name=event_plan_entry.attack_name,
+                split=event_plan_entry.split,
+            ):
+                detection_result = method.detect(detection_sample, threshold_record)
             reference_video_path = output_root / decoded_video_metadata["video_relpath"]
             comparison_video_path = output_root / attacked_video_metadata["video_relpath"]
-            quality_metrics = build_real_video_quality_metrics_payload(
-                reference_video_path,
-                comparison_video_path,
-                runtime_config=dict(self._runtime_config_overrides),
-            )
-            temporal_metrics = build_real_video_temporal_metrics_payload(
-                reference_video_path,
-                comparison_video_path,
-                runtime_config=dict(self._runtime_config_overrides),
-            )
+            with self._runner_substage(
+                "runner_load_metric_frames",
+                method_variant=method_config["method_variant"],
+                attack_name=event_plan_entry.attack_name,
+                split=event_plan_entry.split,
+            ):
+                reference_frames, comparison_frames = self._load_metric_frame_pair(
+                    reference_video_path,
+                    comparison_video_path,
+                )
+            with self._runner_substage(
+                "runner_quality_metrics",
+                method_variant=method_config["method_variant"],
+                attack_name=event_plan_entry.attack_name,
+                split=event_plan_entry.split,
+            ):
+                quality_metrics = build_real_video_quality_metrics_payload_from_frames(
+                    reference_frames,
+                    comparison_frames,
+                    runtime_config=dict(self._runtime_config_overrides),
+                )
+            with self._runner_substage(
+                "runner_temporal_metrics",
+                method_variant=method_config["method_variant"],
+                attack_name=event_plan_entry.attack_name,
+                split=event_plan_entry.split,
+            ):
+                temporal_metrics = build_real_video_temporal_metrics_payload_from_frames(
+                    reference_frames,
+                    comparison_frames,
+                    runtime_config=dict(self._runtime_config_overrides),
+                )
             mechanism_trace = dict(detection_sample.mechanism_trace or {})
             mechanism_trace.update(detection_result.mechanism_trace or {})
             mechanism_trace.update(
@@ -995,18 +1128,29 @@ class RealVideoVaeLatentRunner:
     ) -> LatentSample:
         artifact_path = Path(reference_sample.run_root_path) / reencoded_latent_metadata["latent_relpath"]
         artifact = read_float_tensor_npy(artifact_path)
+        latent_shape = (
+            int(artifact.shape[0]),
+            int(artifact.shape[1]),
+            int(artifact.shape[2]),
+            int(artifact.shape[3]),
+        )
+        mechanism_trace = dict(reference_sample.mechanism_trace or {})
+        mechanism_trace.setdefault("reference_latent_shape", list(reference_sample.latent_shape))
+        mechanism_trace.update(
+            {
+                "latent_shape": list(latent_shape),
+                "latent_artifact_relpath": reencoded_latent_metadata["latent_relpath"],
+                "latent_artifact_digest": reencoded_latent_metadata["latent_digest"],
+            }
+        )
         return replace(
             reference_sample,
-            latent_shape=(
-                int(artifact.shape[0]),
-                int(artifact.shape[1]),
-                int(artifact.shape[2]),
-                int(artifact.shape[3]),
-            ),
+            latent_shape=latent_shape,
             latent_tensor_digest_random=reencoded_latent_metadata["latent_digest"],
             latent_artifact_relpath=reencoded_latent_metadata["latent_relpath"],
             latent_artifact_path=str(artifact_path),
             latent_artifact_digest=reencoded_latent_metadata["latent_digest"],
+            mechanism_trace=mechanism_trace,
         )
 
     def _load_latent_tensor(self, sample: LatentSample) -> np.ndarray:
@@ -1104,6 +1248,15 @@ class RealVideoVaeLatentRunner:
         artifact = read_float_tensor_npy(artifact_path)
         return np.asarray(artifact.values, dtype=np.float32).reshape(artifact.shape).transpose(0, 2, 3, 1)
 
+    def _load_metric_frame_pair(
+        self,
+        reference_video_path: Path,
+        comparison_video_path: Path,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        reference_frames = self._read_video_tensor_from_artifact(reference_video_path)
+        comparison_frames = self._read_video_tensor_from_artifact(comparison_video_path)
+        return reference_frames, comparison_frames
+
     def _encode_video_to_latent(
         self,
         video_tensor: np.ndarray,
@@ -1179,6 +1332,10 @@ class RealVideoVaeLatentRunner:
         attack_params: dict[str, Any],
     ) -> LatentSample:
         mechanism_trace = dict(sample.mechanism_trace or {})
+        mechanism_trace.setdefault("reference_latent_shape", list(sample.latent_shape))
+        mechanism_trace.setdefault("latent_shape", list(sample.latent_shape))
+        mechanism_trace.setdefault("latent_artifact_relpath", sample.latent_artifact_relpath)
+        mechanism_trace.setdefault("latent_artifact_digest", sample.latent_artifact_digest)
         mechanism_trace["attack_name"] = attack_name
         if "ground_truth_offset" in attack_params:
             mechanism_trace["sync_ground_truth_offset"] = attack_params["ground_truth_offset"]
@@ -1502,6 +1659,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--ablation-config", default=None)
     parser.add_argument("--dataset-manifest", default=None)
     parser.add_argument("--runtime-config", default=None)
+    parser.add_argument("--method-variants", nargs="+", default=None)
     args = parser.parse_args(argv)
     RealVideoVaeLatentRunner(ROOT).run(
         output_root=args.run_root,
@@ -1509,6 +1667,7 @@ def main(argv: list[str] | None = None) -> None:
         samples_per_role=args.samples_per_role,
         batch_size_frames=args.batch_size_frames,
         runtime_profile_override=args.runtime_profile,
+        method_variants=args.method_variants,
         protocol_config_path=args.protocol_config,
         backend_config_path=args.backend_config,
         attack_matrix_path=args.attack_matrix,

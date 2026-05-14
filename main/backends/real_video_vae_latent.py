@@ -320,6 +320,10 @@ class RealVideoVAELatentBackend(LatentBackend):
             "construction_phase": TARGET_CONSTRUCTION_PHASE,
             "latent_backend_name": LATENT_BACKEND_NAME,
             "latent_backend_status": latent_backend_status,
+            "reference_latent_shape": [frames, channels, height, width],
+            "latent_shape": [frames, channels, height, width],
+            "latent_artifact_relpath": encoded_latent_relpath.as_posix(),
+            "latent_artifact_digest": encoded_latent_digest,
             "video_runtime_status": (
                 "real_mp4_runtime"
                 if source_video_metadata["container"] == "mp4"

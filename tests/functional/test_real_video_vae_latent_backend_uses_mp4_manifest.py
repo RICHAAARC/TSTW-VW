@@ -88,6 +88,10 @@ def test_real_video_vae_latent_backend_reads_mp4_from_manifest(tmp_path: Path) -
     mechanism_trace = sample.mechanism_trace
     assert mechanism_trace is not None
     assert mechanism_trace["video_source_id"] == "rvp_000001"
+    assert mechanism_trace["reference_latent_shape"] == list(sample.latent_shape)
+    assert mechanism_trace["latent_shape"] == list(sample.latent_shape)
+    assert mechanism_trace["latent_artifact_relpath"] == sample.latent_artifact_relpath
+    assert mechanism_trace["latent_artifact_digest"] == sample.latent_artifact_digest
     assert mechanism_trace["video_source_relpath"].endswith(".mp4")
     assert mechanism_trace["encoded_latent_relpath"].endswith(".npy")
     assert mechanism_trace["video_runtime_status"] == "real_mp4_runtime"

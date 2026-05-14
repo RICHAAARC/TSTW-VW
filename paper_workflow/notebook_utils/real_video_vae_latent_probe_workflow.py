@@ -293,9 +293,29 @@ def run_probe_runner(
     dataset_manifest: str | Path | None = None,
     samples_per_role: int | None = None,
     batch_size_frames: int | None = None,
+    method_variants: list[str] | None = None,
     python_executable: str = sys.executable,
 ) -> None:
-    """Run the governed probe runner module."""
+    """Run the governed probe runner module.
+
+    Args:
+        run_root: Run-root path.
+        run_mode: Runtime mode.
+        runtime_profile: Runtime profile label.
+        runtime_config_path: Runtime configuration path.
+        protocol_config: Protocol configuration path.
+        backend_config: Backend configuration path.
+        attack_matrix: Attack-matrix configuration path.
+        ablation_config: Ablation configuration path.
+        dataset_manifest: Optional dataset manifest path.
+        samples_per_role: Optional sample count override.
+        batch_size_frames: Optional VAE frame-batch override.
+        method_variants: Optional governed method-variant allowlist for method shards.
+        python_executable: Python executable used for the subprocess.
+
+    Returns:
+        None.
+    """
     repository_root = Path(__file__).resolve().parents[2]
     runner_command = [
         python_executable,
@@ -324,6 +344,11 @@ def run_probe_runner(
         runner_command.extend(["--samples-per-role", str(int(samples_per_role))])
     if batch_size_frames is not None:
         runner_command.extend(["--batch-size-frames", str(int(batch_size_frames))])
+    if method_variants is not None:
+        normalized_method_variants = [str(method_variant) for method_variant in method_variants]
+        if not normalized_method_variants or any(not value for value in normalized_method_variants):
+            raise ValueError("method_variants must contain non-empty values")
+        runner_command.extend(["--method-variants", *normalized_method_variants])
     runner_env = dict(os.environ)
     existing_pythonpath = runner_env.get("PYTHONPATH")
     repository_root_text = str(repository_root)

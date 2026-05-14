@@ -766,6 +766,23 @@ def start_gpu_runtime_profile(*, run_root: str | Path, interval_seconds: int = 2
         return None
 
 
+def set_current_runtime_event_tag(*, run_root: str | Path, event_tag: str) -> str:
+    """功能：显式更新 GPU profiler 的当前 runtime event tag。
+
+    Explicitly update the current runtime event tag consumed by the GPU profiler.
+
+    Args:
+        run_root: Run-root path.
+        event_tag: Event tag to persist.
+
+    Returns:
+        The sidecar path as text.
+    """
+    from scripts.profile_runtime import write_current_runtime_event_tag
+
+    return str(write_current_runtime_event_tag(run_root, event_tag))
+
+
 def stop_gpu_runtime_profile(process: subprocess.Popen[str] | None, *, run_root: str | Path) -> None:
     """功能：停止后台 GPU profiler 进程。
 

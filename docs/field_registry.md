@@ -52,6 +52,10 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | enable_scale_search | protocol | none | true | false | false | Boolean switch allowing offset-scale candidate synchronization search on speed-change samples. |
 | scale_candidates | protocol | none | true | false | false | Governed positive scale candidates used by speed-change synchronization search. |
 | scale_search_snap_radius | protocol | none | true | false | false | Maximum frame-start snap radius used when mapping scaled observed tubelets to reference descriptors. |
+| coverage_penalty_enabled | protocol | none | true | false | false | Boolean switch enabling coverage-penalized synchronization candidate scoring. |
+| min_sync_positive_margin | protocol | none | true | false | false | Minimum observable synchronization positive margin required by sync confidence gating. |
+| min_sync_alignment_coverage_ratio | protocol | none | true | false | false | Minimum observable synchronization coverage ratio required by sync confidence gating. |
+| min_sync_alignment_matched_count | protocol | none | true | false | false | Minimum observable matched tubelet count required by sync confidence gating. |
 | attack_name | protocol | none | true | false | false | Attack identifier written into protocol skeleton runtime event records. |
 | attack_params | protocol | none | true | false | false | Attack parameter object written into protocol skeleton runtime event records. |
 | score_name | protocol | none | true | false | false | Governed score identifier used by threshold records. |
@@ -147,6 +151,18 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | S_sync_peak_second_or_median | protocol | none | true | false | false | Second-best or median synchronization score used as the peak-margin baseline. |
 | S_sync_peak_margin | protocol | none | true | false | false | Raw difference between best synchronization peak and its comparison baseline. |
 | S_sync_positive_margin | protocol | none | true | false | false | Non-negative calibrated synchronization peak margin mapped to `S_sync`. |
+| sync_alignment_matched_count | protocol | none | true | false | false | Count of observed tubelets matched to reference descriptors for the selected synchronization candidate. |
+| sync_alignment_candidate_count | protocol | none | true | false | false | Reference descriptor count used as the denominator for synchronization candidate coverage. |
+| sync_alignment_coverage_ratio | protocol | none | true | false | false | Matched-count ratio for the selected synchronization candidate; larger indicates broader alignment support. |
+| sync_candidate_score_raw | protocol | none | true | false | false | Unpenalized mean payload projection for the selected synchronization candidate. |
+| sync_candidate_score_penalized | protocol | none | true | false | false | Coverage-penalized synchronization candidate score used for candidate ranking. |
+| sync_confident | protocol | none | true | false | false | Boolean gate indicating whether observable sync margin, coverage, and matched-count criteria allow sync evidence in fusion. |
+| sync_confidence_failure_reason | protocol | none | true | false | false | Semicolon-separated observable reasons explaining why synchronization confidence did not pass. |
+| sync_confidence_min_margin | protocol | none | true | false | false | Configured minimum `S_sync_positive_margin` required for sync confidence. |
+| sync_confidence_min_coverage_ratio | protocol | none | true | false | false | Configured minimum synchronization alignment coverage ratio required for sync confidence. |
+| sync_confidence_min_matched_count | protocol | none | true | false | false | Configured minimum matched tubelet count required for sync confidence. |
+| reference_latent_shape_source | protocol | none | true | false | false | Source label for `reference_latent_shape`, either governed trace or sample-shape fallback. |
+| reference_latent_shape_fallback_used | protocol | none | true | false | false | Boolean audit field indicating whether detection had to fall back to the observed sample latent shape. |
 | sync_rescue_applied | protocol | none | true | false | false | Boolean trace field showing whether sync-rescue gain was gated into the final score. |
 | clip_length | protocol | none | true | false | false | Materialized local-clip or crop length recorded in the synthetic_tubelet_sync_probe mechanism trace. |
 | created_at | protocol | none | true | false | false | ISO-8601 timestamp field for governed threshold and manifest records. |
@@ -199,7 +215,11 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | watermarked_video_psnr | protocol | none | true | false | false | Placeholder-derived PSNR summary for decoded or attacked comparison videos in stage two. |
 | watermarked_video_ssim | protocol | none | true | false | false | Placeholder-derived SSIM summary for decoded or attacked comparison videos in stage two. |
 | watermarked_video_lpips | protocol | none | true | false | false | Reserved LPIPS field; the current real_video_vae_latent_probe scaffold records it as disabled. |
+| lpips_backbone | protocol | none | true | false | false | LPIPS backbone identifier used when LPIPS quality scoring is enabled. |
+| lpips_device | protocol | none | true | false | false | Requested LPIPS device label recorded for auditability of quality scoring. |
 | clip_similarity_score | protocol | none | true | false | false | Reserved CLIP-similarity field; the current real_video_vae_latent_probe scaffold records it as disabled. |
+| clip_model_id | protocol | none | true | false | false | CLIP model identifier reserved for semantic preservation scoring and excluded from detection evidence. |
+| clip_frame_sample_count | protocol | none | true | false | false | Number of frames reserved for CLIP-similarity frame sampling when enabled. |
 | disabled_quality_metrics | protocol | none | true | false | false | Explicit list of quality metrics disabled in the current real_video_vae_latent_probe scaffold. |
 | quality_failure_reason | protocol | none | true | false | false | Recorded reason when a placeholder quality threshold is violated in stage two. |
 | lpips_failure_reason | protocol | none | true | false | false | Explicit LPIPS failure or disablement reason recorded in stage-two real-video quality payloads. |
@@ -207,6 +227,9 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | temporal_consistency_score | protocol | none | true | false | false | Placeholder-derived temporal consistency score computed from video artifacts. |
 | flicker_score | protocol | none | true | false | false | Placeholder-derived flicker score computed from frame-difference deltas. |
 | motion_consistency_score | protocol | none | true | false | false | Reserved motion-consistency field; the current real_video_vae_latent_probe scaffold records it as disabled. |
+| motion_consistency_backend | protocol | none | true | false | false | Motion-consistency backend identifier; current lightweight implementation uses `frame_difference_proxy`. |
+| motion_consistency_frame_count | protocol | none | true | false | false | Aligned frame count used by the motion-consistency metric. |
+| motion_consistency_normalization_mode | protocol | none | true | false | false | Normalization rule used by the motion-consistency metric. |
 | disabled_temporal_metrics | protocol | none | true | false | false | Explicit list of temporal metrics disabled in the current real_video_vae_latent_probe scaffold. |
 | motion_consistency_failure_reason | protocol | none | true | false | false | Explicit motion-consistency failure or disablement reason recorded in stage-two real-video temporal payloads. |
 | artifact_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the real_video_vae_latent_probe artifact manifest. |

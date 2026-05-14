@@ -56,6 +56,13 @@ def build_temporal_metrics_payload(
             enable_motion_consistency = bool(
                 runtime_config.get("temporal_metrics", {}).get("enable_motion_consistency")
             )
+            motion_backend = str(
+                runtime_config.get("temporal_metrics", {}).get(
+                    "motion_consistency_backend",
+                    "frame_difference_proxy",
+                )
+                or "frame_difference_proxy"
+            )
             disabled_temporal_metrics = []
             if not enable_motion_consistency:
                 disabled_temporal_metrics.append("motion_consistency")
@@ -64,6 +71,9 @@ def build_temporal_metrics_payload(
                 "temporal_consistency_score": None,
                 "flicker_score": None,
                 "motion_consistency_score": None,
+                "motion_consistency_backend": motion_backend if enable_motion_consistency else None,
+                "motion_consistency_frame_count": None,
+                "motion_consistency_normalization_mode": None,
                 "disabled_temporal_metrics": disabled_temporal_metrics,
                 "temporal_failure_reason": f"real_temporal_metrics_runtime_error: {str(exc)}",
                 "motion_consistency_failure_reason": (

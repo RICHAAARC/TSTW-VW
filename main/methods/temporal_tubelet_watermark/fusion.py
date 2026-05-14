@@ -127,7 +127,7 @@ def sync_rescue_fusion(
         evidence_scores: Governed evidence score payload.
         payload_rescue_gain: Non-negative aligned-payload rescue gain.
         lambda_sync: Configured sync-margin weight.
-        gate_sync: Whether the calibrated sync margin is positive.
+        gate_sync: Whether observable sync confidence allows sync evidence.
 
     Returns:
         The sync-rescue final score.
@@ -143,8 +143,9 @@ def sync_rescue_fusion(
     base_score = 0.0 if tubelet_score is None else float(tubelet_score)
     positive_sync_score = 0.0 if sync_score is None else max(0.0, float(sync_score))
     gated_rescue_gain = max(0.0, float(payload_rescue_gain)) if gate_sync else 0.0
+    gated_sync_score = positive_sync_score if gate_sync else 0.0
     return round(
-        base_score + gated_rescue_gain + (float(lambda_sync) * positive_sync_score),
+        base_score + gated_rescue_gain + (float(lambda_sync) * gated_sync_score),
         6,
     )
 

@@ -85,6 +85,26 @@ def write_markdown_file(path: str | Path, text: str) -> Path:
     return output_path
 
 
+def write_current_runtime_event_tag(run_root: str | Path, event_tag: str) -> Path:
+    """功能：写入当前 runtime event tag 供 GPU profiler 采样。
+
+    Write the current runtime event tag for GPU profiler sampling.
+
+    Args:
+        run_root: Run-root path.
+        event_tag: Event tag to expose to the profiler sidecar.
+
+    Returns:
+        The event-tag sidecar path.
+    """
+    if not isinstance(event_tag, str) or not event_tag.strip():
+        raise ValueError("event_tag must be a non-empty string")
+    runtime_profile_dir = ensure_runtime_profile_dir(run_root)
+    event_tag_path = runtime_profile_dir / "current_runtime_event_tag.txt"
+    event_tag_path.write_text(event_tag.strip() + "\n", encoding="utf-8")
+    return event_tag_path
+
+
 def read_json_file(path: str | Path) -> dict[str, Any]:
     """功能：读取 JSON 文件。
 

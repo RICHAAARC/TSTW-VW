@@ -39,6 +39,10 @@ def build_real_video_temporal_metrics_payload(
     runtime_config = runtime_config or {}
     temporal_config = runtime_config.get("temporal_metrics", {})
     enable_motion_consistency = bool(temporal_config.get("enable_motion_consistency"))
+    motion_backend = str(
+        temporal_config.get("motion_consistency_backend", "frame_difference_proxy")
+        or "frame_difference_proxy"
+    )
     disabled_temporal_metrics = []
     motion_consistency_failure_reason = None
     if not enable_motion_consistency:
@@ -54,13 +58,54 @@ def build_real_video_temporal_metrics_payload(
             "temporal_consistency_score": None,
             "flicker_score": None,
             "motion_consistency_score": None,
+            "motion_consistency_backend": motion_backend if enable_motion_consistency else None,
+            "motion_consistency_frame_count": None,
+            "motion_consistency_normalization_mode": None,
             "disabled_temporal_metrics": disabled_temporal_metrics,
             "temporal_failure_reason": f"video_io_error: {str(exc)}",
             "motion_consistency_failure_reason": motion_consistency_failure_reason,
         }
 
-    ref_frames = reference_video.frames
-    cmp_frames = comparison_video.frames
+    return build_real_video_temporal_metrics_payload_from_frames(
+        reference_video.frames,
+        comparison_video.frames,
+        runtime_config=runtime_config,
+    )
+
+
+def build_real_video_temporal_metrics_payload_from_frames(
+    reference_frames: np.ndarray,
+    comparison_frames: np.ndarray,
+    *,
+    runtime_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """功能：从已加载帧张量构建真实视频时序指标。
+
+    Build real-video temporal metrics from already loaded frame tensors.
+
+    Args:
+        reference_frames: Reference frames in `[F, H, W, 3]`.
+        comparison_frames: Comparison frames in `[F, H, W, 3]`.
+        runtime_config: Runtime configuration with optional motion-consistency flags.
+
+    Returns:
+        A temporal-metrics payload where larger consistency scores indicate better preservation.
+    """
+    runtime_config = runtime_config or {}
+    temporal_config = runtime_config.get("temporal_metrics", {})
+    enable_motion_consistency = bool(temporal_config.get("enable_motion_consistency"))
+    motion_backend = str(
+        temporal_config.get("motion_consistency_backend", "frame_difference_proxy")
+        or "frame_difference_proxy"
+    )
+    disabled_temporal_metrics = []
+    motion_consistency_failure_reason = None
+    if not enable_motion_consistency:
+        disabled_temporal_metrics.append("motion_consistency")
+        motion_consistency_failure_reason = "motion_consistency_disabled_by_config"
+
+    ref_frames = reference_frames
+    cmp_frames = comparison_frames
 
     if ref_frames.ndim != 4 or cmp_frames.ndim != 4:
         return {
@@ -68,6 +113,9 @@ def build_real_video_temporal_metrics_payload(
             "temporal_consistency_score": None,
             "flicker_score": None,
             "motion_consistency_score": None,
+            "motion_consistency_backend": motion_backend if enable_motion_consistency else None,
+            "motion_consistency_frame_count": None,
+            "motion_consistency_normalization_mode": None,
             "disabled_temporal_metrics": disabled_temporal_metrics,
             "temporal_failure_reason": "invalid_frame_tensor_shape",
             "motion_consistency_failure_reason": motion_consistency_failure_reason,
@@ -81,6 +129,9 @@ def build_real_video_temporal_metrics_payload(
             "temporal_consistency_score": None,
             "flicker_score": None,
             "motion_consistency_score": None,
+            "motion_consistency_backend": motion_backend if enable_motion_consistency else None,
+            "motion_consistency_frame_count": frame_count,
+            "motion_consistency_normalization_mode": None,
             "disabled_temporal_metrics": disabled_temporal_metrics,
             "temporal_failure_reason": "insufficient_frames_for_temporal_metrics",
             "motion_consistency_failure_reason": motion_consistency_failure_reason,
@@ -98,6 +149,9 @@ def build_real_video_temporal_metrics_payload(
             "temporal_consistency_score": None,
             "flicker_score": None,
             "motion_consistency_score": None,
+            "motion_consistency_backend": motion_backend if enable_motion_consistency else None,
+            "motion_consistency_frame_count": frame_count,
+            "motion_consistency_normalization_mode": None,
             "disabled_temporal_metrics": disabled_temporal_metrics,
             "temporal_failure_reason": "frame_difference_computation_failed",
             "motion_consistency_failure_reason": motion_consistency_failure_reason,
@@ -118,11 +172,14 @@ def build_real_video_temporal_metrics_payload(
 
     motion_consistency_score = None
     if enable_motion_consistency:
-        motion_consistency_score = _compute_motion_consistency_score(
-            ref_frame_diff_tensors,
-            cmp_frame_diff_tensors,
-        )
-        if motion_consistency_score is None:
+        if motion_backend != "frame_difference_proxy":
+            motion_consistency_failure_reason = "motion_consistency_backend_unsupported"
+        else:
+            motion_consistency_score = _compute_motion_consistency_score(
+                ref_frame_diff_tensors,
+                cmp_frame_diff_tensors,
+            )
+        if motion_consistency_score is None and motion_consistency_failure_reason is None:
             motion_consistency_failure_reason = "motion_consistency_computation_failed"
 
     return {
@@ -133,6 +190,11 @@ def build_real_video_temporal_metrics_payload(
             round(motion_consistency_score, 6)
             if motion_consistency_score is not None
             else None
+        ),
+        "motion_consistency_backend": motion_backend if enable_motion_consistency else None,
+        "motion_consistency_frame_count": frame_count,
+        "motion_consistency_normalization_mode": (
+            "per_transition_max_motion" if enable_motion_consistency else None
         ),
         "disabled_temporal_metrics": disabled_temporal_metrics,
         "temporal_failure_reason": None,
