@@ -13,10 +13,39 @@ from typing import Any
 import numpy as np
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 
+from main.analysis.clip_similarity_metrics import (
+    DEFAULT_CLIP_FRAME_SAMPLE_COUNT,
+    DEFAULT_CLIP_MODEL_ID,
+    compute_clip_similarity_payload_from_frames,
+)
 from main.video.video_io import read_video_frames
 
 
 _LPIPS_MODEL_CACHE: dict[tuple[str, str, str], Any] = {}
+
+
+def _resolve_clip_metric_settings(runtime_config: dict[str, Any]) -> tuple[str, int]:
+    quality_config = runtime_config.get("quality_metrics", {})
+    clip_model_id = quality_config.get("clip_model_id", DEFAULT_CLIP_MODEL_ID)
+    if not isinstance(clip_model_id, str) or not clip_model_id:
+        clip_model_id = DEFAULT_CLIP_MODEL_ID
+    requested_frame_sample_count = quality_config.get(
+        "clip_frame_sample_count",
+        runtime_config.get("clip_frame_sample_count", DEFAULT_CLIP_FRAME_SAMPLE_COUNT),
+    )
+    try:
+        clip_frame_sample_count = int(requested_frame_sample_count)
+    except (TypeError, ValueError):
+        clip_frame_sample_count = DEFAULT_CLIP_FRAME_SAMPLE_COUNT
+    if clip_frame_sample_count < 1:
+        clip_frame_sample_count = DEFAULT_CLIP_FRAME_SAMPLE_COUNT
+    return clip_model_id, clip_frame_sample_count
+
+
+def _clip_skip_reason(enable_clip_similarity: bool, reason_suffix: str) -> str:
+    if not enable_clip_similarity:
+        return "clip_similarity_disabled_by_config"
+    return f"clip_similarity_not_attempted_due_{reason_suffix}"
 
 
 def build_real_video_quality_metrics_payload(
@@ -51,18 +80,13 @@ def build_real_video_quality_metrics_payload(
     enable_clip_similarity = bool(quality_config.get("enable_clip_similarity"))
     lpips_backbone = str(quality_config.get("lpips_backbone", "alex") or "alex")
     lpips_device = str(quality_config.get("lpips_device", "cuda") or "cuda")
-    clip_model_id = quality_config.get("clip_model_id")
-    clip_frame_sample_count = quality_config.get("clip_frame_sample_count")
+    clip_model_id, clip_frame_sample_count = _resolve_clip_metric_settings(runtime_config)
     disabled_quality_metrics = []
     if not enable_lpips:
         disabled_quality_metrics.append("watermarked_video_lpips")
     if not enable_clip_similarity:
         disabled_quality_metrics.append("clip_similarity")
-    clip_failure_reason = (
-        "clip_similarity_not_implemented"
-        if enable_clip_similarity
-        else "clip_similarity_disabled_by_config"
-    )
+    clip_failure_reason = _clip_skip_reason(enable_clip_similarity, "video_io_error")
     
     try:
         reference_video = read_video_frames(reference_video_path)
@@ -125,18 +149,13 @@ def build_real_video_quality_metrics_payload_from_frames(
     enable_clip_similarity = bool(quality_config.get("enable_clip_similarity"))
     lpips_backbone = str(quality_config.get("lpips_backbone", "alex") or "alex")
     lpips_device = str(quality_config.get("lpips_device", "cuda") or "cuda")
-    clip_model_id = quality_config.get("clip_model_id")
-    clip_frame_sample_count = quality_config.get("clip_frame_sample_count")
+    clip_model_id, clip_frame_sample_count = _resolve_clip_metric_settings(runtime_config)
     disabled_quality_metrics = []
     if not enable_lpips:
         disabled_quality_metrics.append("watermarked_video_lpips")
     if not enable_clip_similarity:
         disabled_quality_metrics.append("clip_similarity")
-    clip_failure_reason = (
-        "clip_similarity_not_implemented"
-        if enable_clip_similarity
-        else "clip_similarity_disabled_by_config"
-    )
+    clip_failure_reason = _clip_skip_reason(enable_clip_similarity, "invalid_frame_tensor_shape")
 
     ref_frames = reference_frames
     cmp_frames = comparison_frames
@@ -186,7 +205,10 @@ def build_real_video_quality_metrics_payload_from_frames(
                 if not enable_lpips
                 else "lpips_not_attempted_due_frame_count_alignment_failed"
             ),
-            "clip_failure_reason": clip_failure_reason,
+            "clip_failure_reason": _clip_skip_reason(
+                enable_clip_similarity,
+                "frame_count_alignment_failed",
+            ),
         }
 
     # 按帧计算 PSNR 与 SSIM
@@ -231,7 +253,10 @@ def build_real_video_quality_metrics_payload_from_frames(
                 if not enable_lpips
                 else "lpips_not_attempted_due_metric_computation_failed"
             ),
-            "clip_failure_reason": clip_failure_reason,
+            "clip_failure_reason": _clip_skip_reason(
+                enable_clip_similarity,
+                "metric_computation_failed",
+            ),
         }
 
     mean_psnr = float(np.mean(psnr_scores))
@@ -262,6 +287,19 @@ def build_real_video_quality_metrics_payload_from_frames(
     else:
         lpips_failure_reason = "lpips_model_not_configured"
 
+    clip_payload = {
+        "clip_similarity_score": None,
+        "clip_model_id": clip_model_id,
+        "clip_frame_sample_count": clip_frame_sample_count,
+        "clip_failure_reason": "clip_similarity_disabled_by_config",
+    }
+    if enable_clip_similarity:
+        clip_payload = compute_clip_similarity_payload_from_frames(
+            ref_frames[:frame_count],
+            cmp_frames[:frame_count],
+            runtime_config=runtime_config,
+        )
+
     quality_failure_reason = None
     if mean_psnr < 15.0:
         quality_failure_reason = "psnr_below_threshold"
@@ -275,13 +313,13 @@ def build_real_video_quality_metrics_payload_from_frames(
         "watermarked_video_lpips": round(lpips_score, 6) if lpips_score is not None else None,
         "lpips_backbone": lpips_backbone if enable_lpips else None,
         "lpips_device": lpips_device if enable_lpips else None,
-        "clip_similarity_score": None,
-        "clip_model_id": clip_model_id,
-        "clip_frame_sample_count": clip_frame_sample_count,
+        "clip_similarity_score": clip_payload["clip_similarity_score"],
+        "clip_model_id": clip_payload["clip_model_id"],
+        "clip_frame_sample_count": clip_payload["clip_frame_sample_count"],
         "disabled_quality_metrics": disabled_quality_metrics,
         "quality_failure_reason": quality_failure_reason,
         "lpips_failure_reason": lpips_failure_reason,
-        "clip_failure_reason": clip_failure_reason,
+        "clip_failure_reason": clip_payload["clip_failure_reason"],
     }
 
 

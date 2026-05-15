@@ -19,7 +19,9 @@ pytestmark = pytest.mark.quick
 import paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow as workflow_module
 
 from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
+    merge_probe_method_shard_outputs,
     prepare_probe_runtime_workspace,
+    run_probe_method_shards,
     run_probe_runner,
     write_probe_runtime_config,
 )
@@ -379,3 +381,231 @@ def test_run_probe_runner_surfaces_runner_output_on_failure(
     assert "run_probe_runner failed while executing the governed runner" in str(
         exc_info.value
     )
+
+
+@pytest.mark.unit
+def test_run_probe_method_shards_launches_governed_method_allowlists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate method shards split the formal variants into governed runner subprocesses.
+
+    Args:
+        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    captured_commands: list[list[str]] = []
+    merge_calls: dict[str, object] = {}
+
+    class _FakeProcess:
+        def __init__(self, command: list[str], **kwargs: object) -> None:
+            del kwargs
+            captured_commands.append(list(command))
+
+        def communicate(self) -> tuple[str, None]:
+            return ("runner ok\n", None)
+
+        def wait(self) -> int:
+            return 0
+
+    monkeypatch.setattr(workflow_module.subprocess, "Popen", _FakeProcess)
+    monkeypatch.setattr(
+        workflow_module,
+        "merge_probe_method_shard_outputs",
+        lambda *, run_root, shard_run_roots, runtime_config_path=None, method_shard_plan=None: merge_calls.update(
+            {
+                "run_root": str(run_root),
+                "shard_run_roots": [str(path) for path in shard_run_roots],
+                "runtime_config_path": str(runtime_config_path) if runtime_config_path is not None else None,
+                "method_shard_plan": method_shard_plan,
+            }
+        )
+        or {"status": "merged"},
+    )
+
+    result = run_probe_method_shards(
+        run_root=tmp_path / "run_root",
+        run_mode="formal",
+        runtime_profile="formal",
+        runtime_config_path=tmp_path / "runtime_config.json",
+        method_variants=[
+            "frame_prc",
+            "tubelet_only",
+            "tubelet_sync",
+            "tubelet_only_lt01",
+            "tubelet_only_lt02",
+        ],
+        shard_count=2,
+        python_executable="python",
+    )
+
+    assert len(captured_commands) == 2
+    assert "--method-variants" in captured_commands[0]
+    assert captured_commands[0][-3:] == ["frame_prc", "tubelet_only", "tubelet_sync"]
+    assert captured_commands[1][-2:] == ["tubelet_only_lt01", "tubelet_only_lt02"]
+    assert merge_calls["run_root"] == str(tmp_path / "run_root")
+    assert merge_calls["shard_run_roots"] == [
+        str(tmp_path / "run_root" / "method_shards" / "shard_01_main_variants"),
+        str(tmp_path / "run_root" / "method_shards" / "shard_02_tubelet_sweep"),
+    ]
+    assert result["shard_count"] == 2
+
+
+@pytest.mark.unit
+def test_merge_probe_method_shard_outputs_combines_records_and_runtime_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate shard merging writes combined governed records and runtime metadata.
+
+    Args:
+        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "merged_run"
+    shard_a_root = run_root / "method_shards" / "shard_01_main_variants"
+    shard_b_root = run_root / "method_shards" / "shard_02_tubelet_sweep"
+    runtime_config_path = tmp_path / "runtime_config.json"
+    runtime_config_path.write_text(
+        json.dumps({"run_mode": "formal", "runtime_profile": "formal"}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    record_store: dict[str, dict[str, object]] = {
+        str(shard_a_root): {
+            "event_score_records": [
+                {"method_variant": "frame_prc", "attack_name": "no_attack"},
+                {"method_variant": "tubelet_only", "attack_name": "no_attack"},
+            ],
+            "threshold_records": [{"threshold_id": "frame_prc:threshold"}],
+        },
+        str(shard_b_root): {
+            "event_score_records": [
+                {"method_variant": "tubelet_only_lt01", "attack_name": "no_attack"},
+            ],
+            "threshold_records": [{"threshold_id": "tubelet_only_lt01:threshold"}],
+        },
+        str(run_root): {
+            "event_score_records": [],
+            "threshold_records": [],
+        },
+    }
+
+    class _FakeRecordWriter:
+        def __init__(self, output_root: str | Path) -> None:
+            self._output_root = str(Path(output_root))
+
+        def read_event_score_records(self) -> list[dict[str, object]]:
+            return list(record_store[self._output_root]["event_score_records"])
+
+        def read_threshold_records(self) -> list[dict[str, object]]:
+            return list(record_store[self._output_root]["threshold_records"])
+
+        def write_event_score_records(self, records: list[dict[str, object]]) -> None:
+            record_store[self._output_root]["written_event_score_records"] = list(records)
+
+        def write_threshold_records(self, records: list[dict[str, object]]) -> None:
+            record_store[self._output_root]["written_threshold_records"] = list(records)
+
+    class _FakeArtifactBuilder:
+        def build_artifacts(
+            self,
+            event_score_records: list[dict[str, object]],
+            threshold_records: list[dict[str, object]],
+            output_root: str | Path,
+        ) -> dict[str, Path]:
+            del event_score_records, threshold_records
+            output_paths = workflow_module.build_real_video_vae_latent_output_paths(output_root)
+            for table_path in output_paths.table_paths():
+                table_path.parent.mkdir(parents=True, exist_ok=True)
+                table_path.write_text("header\n", encoding="utf-8")
+            for figure_path in output_paths.figure_paths():
+                figure_path.parent.mkdir(parents=True, exist_ok=True)
+                figure_path.write_bytes(b"png")
+            output_paths.report_path.parent.mkdir(parents=True, exist_ok=True)
+            output_paths.report_path.write_text("- RealVideoVaeLatentDecision: INCONCLUSIVE\n", encoding="utf-8")
+            return {
+                "main_tpr_fpr_table_path": output_paths.main_tpr_fpr_table_path,
+                "report_path": output_paths.report_path,
+            }
+
+    monkeypatch.setattr(workflow_module, "RecordWriter", _FakeRecordWriter)
+    monkeypatch.setattr(workflow_module, "RealVideoVaeLatentArtifactBuilder", _FakeArtifactBuilder)
+
+    for shard_root, method_variant in (
+        (shard_a_root, "frame_prc"),
+        (shard_b_root, "tubelet_only_lt01"),
+    ):
+        output_paths = workflow_module.build_real_video_vae_latent_output_paths(shard_root)
+        output_paths.artifact_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        output_paths.artifact_manifest_path.write_text(
+            json.dumps(
+                [{"artifact_kind": "decoded_video", "relpath": f"artifacts/videos/{method_variant}.mp4", "digest": f"{method_variant}-digest"}],
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        output_paths.runtime_config_path.write_text(
+            json.dumps({"method_variants": [method_variant]}, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        output_paths.runtime_manifest_path.write_text(
+            json.dumps({"run_id": shard_root.name, "runtime_profile": "formal"}, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        output_paths.run_manifest_path.write_text(
+            json.dumps(
+                {
+                    "run_id": shard_root.name,
+                    "created_at": "2026-05-15T00:00:00Z",
+                    "construction_phase": "real_video_vae_latent_probe",
+                    "protocol_name": "fixed_low_fpr_calibrated_detection",
+                    "method_config_digest": f"{method_variant}-method-digest",
+                    "protocol_config_digest": "protocol-digest",
+                    "attack_matrix_digest": "attack-digest",
+                    "ablation_config_digest": "ablation-digest",
+                    "records_digest": "records-digest",
+                    "thresholds_digest": "thresholds-digest",
+                    "tables_digest": "tables-digest",
+                    "figures_digest": "figures-digest",
+                    "placeholder_fields": [],
+                    "random_fields": ["latent_generation_seed_random"],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    summary = merge_probe_method_shard_outputs(
+        run_root=run_root,
+        shard_run_roots=[shard_a_root, shard_b_root],
+        runtime_config_path=runtime_config_path,
+        method_shard_plan=[
+            {"shard_name": "shard_01_main_variants", "method_variants": ["frame_prc", "tubelet_only"]},
+            {"shard_name": "shard_02_tubelet_sweep", "method_variants": ["tubelet_only_lt01"]},
+        ],
+    )
+
+    assert len(record_store[str(run_root)]["written_event_score_records"]) == 3
+    assert len(record_store[str(run_root)]["written_threshold_records"]) == 2
+    merged_runtime_config = json.loads(
+        (run_root / "artifacts" / "runtime_config.json").read_text(encoding="utf-8")
+    )
+    assert merged_runtime_config["method_shard_mode"] == "parallel_method_variants"
+    assert merged_runtime_config["shard_count"] == 2
+    assert merged_runtime_config["method_variants"] == [
+        "frame_prc",
+        "tubelet_only",
+        "tubelet_only_lt01",
+    ]
+    assert len(summary["method_shard_schedule"]) == 2

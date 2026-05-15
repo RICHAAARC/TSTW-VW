@@ -184,6 +184,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "probe_workflow.prepare_probe_session_model" in notebook_text
     assert "probe_workflow.materialize_family_id(" in notebook_text
     assert "probe_workflow.write_probe_runtime_config" in notebook_text
+    assert "probe_workflow.run_probe_method_shards" in notebook_text
     assert "probe_workflow.run_probe_runner" in notebook_text
     assert "probe_workflow.rebuild_probe_tables_and_reports" in notebook_text
     assert "probe_workflow.check_probe_outputs" in notebook_text

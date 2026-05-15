@@ -1553,10 +1553,28 @@ class RealVideoVaeLatentRunner:
         method_variants = ablation_config.get("method_variants", [])
         if not isinstance(method_variants, list) or not method_variants:
             raise ValueError("ablation method_variants must be a non-empty list")
-        return {
-            method_variant: self._repository_root / "configs" / "method" / f"{method_variant}.json"
-            for method_variant in method_variants
-        }
+        method_config_paths = ablation_config.get("method_config_paths", {})
+        if not isinstance(method_config_paths, dict):
+            raise TypeError("ablation method_config_paths must be a dictionary when provided")
+        resolved_paths: dict[str, Path] = {}
+        for method_variant in method_variants:
+            override_path = method_config_paths.get(method_variant)
+            if override_path is None:
+                resolved_path = (
+                    self._repository_root / "configs" / "method" / f"{method_variant}.json"
+                )
+            else:
+                if not isinstance(override_path, str) or not override_path:
+                    raise ValueError(
+                        f"method_config_paths[{method_variant}] must be a non-empty string"
+                    )
+                resolved_path = Path(override_path)
+                if not resolved_path.is_absolute():
+                    resolved_path = self._repository_root / resolved_path
+            if not resolved_path.exists():
+                raise FileNotFoundError(resolved_path)
+            resolved_paths[str(method_variant)] = resolved_path
+        return resolved_paths
 
     def _build_runtime_method_configs(
         self,

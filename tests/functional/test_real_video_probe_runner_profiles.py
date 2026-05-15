@@ -62,6 +62,32 @@ def test_debug_real_video_profile_resolves_small_backend_targets_and_single_vari
 
 
 @pytest.mark.unit
+def test_runner_allows_method_config_path_overrides(tmp_path: Path) -> None:
+    """Validate ablation configs can override method config file paths.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    method_config_path = tmp_path / "custom_method_variant.json"
+    method_config_path.write_text("{}\n", encoding="utf-8")
+
+    resolved_paths = runner._build_method_config_paths(
+        {
+            "method_variants": ["custom_method_variant"],
+            "method_config_paths": {
+                "custom_method_variant": str(method_config_path),
+            },
+        }
+    )
+
+    assert resolved_paths["custom_method_variant"] == method_config_path
+
+
+@pytest.mark.unit
 def test_debug_real_video_profile_filters_protocol_scope_and_attacks() -> None:
     """Validate the debug profile keeps a tiny protocol scope and attack set.
 

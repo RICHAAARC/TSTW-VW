@@ -24,6 +24,9 @@ from experiments.real_video_vae_latent_probe.mechanism_audit import (
 from experiments.real_video_vae_latent_probe.output_layout import (
     build_real_video_vae_latent_output_paths,
 )
+from experiments.real_video_vae_latent_probe.runner import RealVideoVaeLatentRunner
+from main.core.digest import compute_object_digest, compute_path_collection_digest
+from main.core.records import RecordWriter
 from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check
 from main.video.dataset_manifest import load_dataset_manifest, resolve_manifest_samples
 from scripts.check_results.check_real_video_vae_latent_outputs import (
@@ -317,6 +320,85 @@ def run_probe_runner(
         None.
     """
     repository_root = Path(__file__).resolve().parents[2]
+    runner_command = _build_probe_runner_command(
+        run_root=run_root,
+        run_mode=run_mode,
+        runtime_profile=runtime_profile,
+        runtime_config_path=runtime_config_path,
+        protocol_config=protocol_config,
+        backend_config=backend_config,
+        attack_matrix=attack_matrix,
+        ablation_config=ablation_config,
+        dataset_manifest=dataset_manifest,
+        samples_per_role=samples_per_role,
+        batch_size_frames=batch_size_frames,
+        method_variants=method_variants,
+        python_executable=python_executable,
+    )
+    runner_env = _build_probe_runner_environment(repository_root)
+
+    process = subprocess.Popen(
+        runner_command,
+        cwd=repository_root,
+        env=runner_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    combined_output_lines: list[str] = []
+    if process.stdout is not None:
+        for output_line in process.stdout:
+            print(output_line, end="")
+            combined_output_lines.append(output_line)
+    return_code = process.wait()
+    if return_code != 0:
+        combined_output = "".join(combined_output_lines).strip()
+        raise RuntimeError(
+            "run_probe_runner failed while executing the governed runner.\n"
+            f"command: {subprocess.list2cmdline(runner_command)}\n"
+            f"cwd: {repository_root}\n"
+            f"runner_output:\n{combined_output or '<no runner output>'}"
+        )
+
+
+def _build_probe_runner_command(
+    *,
+    run_root: str | Path,
+    run_mode: str,
+    runtime_profile: str,
+    runtime_config_path: str | Path,
+    protocol_config: str | Path,
+    backend_config: str | Path,
+    attack_matrix: str | Path,
+    ablation_config: str | Path,
+    dataset_manifest: str | Path | None,
+    samples_per_role: int | None,
+    batch_size_frames: int | None,
+    method_variants: list[str] | None,
+    python_executable: str,
+) -> list[str]:
+    """Build the governed runner command line.
+
+    Args:
+        run_root: Run-root path.
+        run_mode: Runtime mode.
+        runtime_profile: Runtime profile label.
+        runtime_config_path: Runtime configuration path.
+        protocol_config: Protocol configuration path.
+        backend_config: Backend configuration path.
+        attack_matrix: Attack-matrix configuration path.
+        ablation_config: Ablation configuration path.
+        dataset_manifest: Optional dataset manifest path.
+        samples_per_role: Optional sample count override.
+        batch_size_frames: Optional frame-batch override.
+        method_variants: Optional method-variant allowlist.
+        python_executable: Python executable used for the subprocess.
+
+    Returns:
+        The normalized runner command.
+    """
     runner_command = [
         python_executable,
         "-m",
@@ -349,6 +431,18 @@ def run_probe_runner(
         if not normalized_method_variants or any(not value for value in normalized_method_variants):
             raise ValueError("method_variants must contain non-empty values")
         runner_command.extend(["--method-variants", *normalized_method_variants])
+    return runner_command
+
+
+def _build_probe_runner_environment(repository_root: Path) -> dict[str, str]:
+    """Build the subprocess environment for the governed runner.
+
+    Args:
+        repository_root: Repository root path.
+
+    Returns:
+        The normalized subprocess environment.
+    """
     runner_env = dict(os.environ)
     existing_pythonpath = runner_env.get("PYTHONPATH")
     repository_root_text = str(repository_root)
@@ -360,31 +454,474 @@ def run_probe_runner(
             )
     else:
         runner_env["PYTHONPATH"] = repository_root_text
+    return runner_env
 
-    process = subprocess.Popen(
-        runner_command,
-        cwd=repository_root,
-        env=runner_env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+
+def run_probe_method_shards(
+    *,
+    run_root: str | Path,
+    run_mode: str,
+    runtime_profile: str,
+    runtime_config_path: str | Path,
+    protocol_config: str | Path = "configs/protocol/real_video_vae_latent_probe.json",
+    backend_config: str | Path = "configs/backend/real_video_vae_latent.json",
+    attack_matrix: str | Path = "configs/attacks/real_video_attack_matrix.json",
+    ablation_config: str | Path = "configs/ablation/real_video_vae_latent_ablation.json",
+    dataset_manifest: str | Path | None = None,
+    samples_per_role: int | None = None,
+    batch_size_frames: int | None = None,
+    method_variants: list[str] | None = None,
+    shard_count: int = 2,
+    python_executable: str = sys.executable,
+) -> dict[str, Any]:
+    """Run the governed probe runner as multiple method shards and merge outputs.
+
+    Args:
+        run_root: Final merged run-root path.
+        run_mode: Runtime mode.
+        runtime_profile: Runtime profile label.
+        runtime_config_path: Runtime configuration path.
+        protocol_config: Protocol configuration path.
+        backend_config: Backend configuration path.
+        attack_matrix: Attack-matrix configuration path.
+        ablation_config: Ablation configuration path.
+        dataset_manifest: Optional dataset manifest path.
+        samples_per_role: Optional sample count override.
+        batch_size_frames: Optional frame-batch override.
+        method_variants: Optional method-variant allowlist.
+        shard_count: Requested method shard count.
+        python_executable: Python executable used for subprocesses.
+
+    Returns:
+        A shard execution and merge summary payload.
+    """
+    run_root_path = Path(run_root)
+    repository_root = Path(__file__).resolve().parents[2]
+    resolved_shard_count = int(shard_count)
+    if resolved_shard_count < 1:
+        raise ValueError("shard_count must be a positive integer")
+
+    resolved_method_variants = _resolve_probe_runtime_method_variants(
+        repository_root=repository_root,
+        ablation_config=ablation_config,
+        runtime_profile=runtime_profile,
+        method_variants=method_variants,
     )
-    combined_output_lines: list[str] = []
-    if process.stdout is not None:
-        for output_line in process.stdout:
-            print(output_line, end="")
-            combined_output_lines.append(output_line)
-    return_code = process.wait()
-    if return_code != 0:
-        combined_output = "".join(combined_output_lines).strip()
-        raise RuntimeError(
-            "run_probe_runner failed while executing the governed runner.\n"
-            f"command: {subprocess.list2cmdline(runner_command)}\n"
-            f"cwd: {repository_root}\n"
-            f"runner_output:\n{combined_output or '<no runner output>'}"
+    shard_plan = _plan_probe_method_shards(
+        method_variants=resolved_method_variants,
+        shard_count=resolved_shard_count,
+    )
+    if len(shard_plan) <= 1:
+        run_probe_runner(
+            run_root=run_root_path,
+            run_mode=run_mode,
+            runtime_profile=runtime_profile,
+            runtime_config_path=runtime_config_path,
+            protocol_config=protocol_config,
+            backend_config=backend_config,
+            attack_matrix=attack_matrix,
+            ablation_config=ablation_config,
+            dataset_manifest=dataset_manifest,
+            samples_per_role=samples_per_role,
+            batch_size_frames=batch_size_frames,
+            method_variants=resolved_method_variants,
+            python_executable=python_executable,
         )
+        return {
+            "run_root": str(run_root_path),
+            "shard_count": 1,
+            "method_shard_plan": [{"shard_name": "shard_01_full_run", "method_variants": resolved_method_variants}],
+            "shard_run_roots": [str(run_root_path)],
+        }
+
+    method_shards_root = run_root_path / "method_shards"
+    method_shards_root.mkdir(parents=True, exist_ok=True)
+    runner_env = _build_probe_runner_environment(repository_root)
+    shard_processes: list[dict[str, Any]] = []
+    for shard_entry in shard_plan:
+        shard_run_root = method_shards_root / str(shard_entry["shard_name"])
+        shard_run_root.parent.mkdir(parents=True, exist_ok=True)
+        runner_command = _build_probe_runner_command(
+            run_root=shard_run_root,
+            run_mode=run_mode,
+            runtime_profile=runtime_profile,
+            runtime_config_path=runtime_config_path,
+            protocol_config=protocol_config,
+            backend_config=backend_config,
+            attack_matrix=attack_matrix,
+            ablation_config=ablation_config,
+            dataset_manifest=dataset_manifest,
+            samples_per_role=samples_per_role,
+            batch_size_frames=batch_size_frames,
+            method_variants=shard_entry["method_variants"],
+            python_executable=python_executable,
+        )
+        process = subprocess.Popen(
+            runner_command,
+            cwd=repository_root,
+            env=runner_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        shard_processes.append(
+            {
+                "shard_name": shard_entry["shard_name"],
+                "method_variants": list(shard_entry["method_variants"]),
+                "run_root": shard_run_root,
+                "command": runner_command,
+                "process": process,
+            }
+        )
+
+    shard_outputs: list[dict[str, Any]] = []
+    for shard_process in shard_processes:
+        process = shard_process["process"]
+        if hasattr(process, "communicate"):
+            combined_output, _ = process.communicate()
+        else:
+            combined_output = ""
+            if process.stdout is not None:
+                combined_output = process.stdout.read()
+        combined_output = str(combined_output or "")
+        if combined_output:
+            print(f"[{shard_process['shard_name']}]\n{combined_output}", end="")
+        return_code = process.wait()
+        if return_code != 0:
+            raise RuntimeError(
+                "run_probe_method_shards failed while executing a governed runner shard.\n"
+                f"shard_name: {shard_process['shard_name']}\n"
+                f"command: {subprocess.list2cmdline(shard_process['command'])}\n"
+                f"cwd: {repository_root}\n"
+                f"runner_output:\n{combined_output or '<no runner output>'}"
+            )
+        shard_outputs.append(
+            {
+                "shard_name": shard_process["shard_name"],
+                "method_variants": list(shard_process["method_variants"]),
+                "run_root": str(shard_process["run_root"]),
+                "runner_output": combined_output.strip(),
+            }
+        )
+
+    merge_summary = merge_probe_method_shard_outputs(
+        run_root=run_root_path,
+        shard_run_roots=[Path(shard_process["run_root"]) for shard_process in shard_processes],
+        runtime_config_path=runtime_config_path,
+        method_shard_plan=shard_plan,
+    )
+    return {
+        "run_root": str(run_root_path),
+        "shard_count": len(shard_plan),
+        "method_shard_plan": _json_safe(shard_plan),
+        "shard_run_roots": [str(shard_process["run_root"]) for shard_process in shard_processes],
+        "shard_outputs": shard_outputs,
+        "merge_summary": _json_safe(merge_summary),
+    }
+
+
+def _resolve_probe_runtime_method_variants(
+    *,
+    repository_root: Path,
+    ablation_config: str | Path,
+    runtime_profile: str,
+    method_variants: list[str] | None,
+) -> list[str]:
+    """Resolve the governed runtime method variants for sharding.
+
+    Args:
+        repository_root: Repository root path.
+        ablation_config: Ablation configuration path.
+        runtime_profile: Runtime profile label.
+        method_variants: Optional method-variant allowlist.
+
+    Returns:
+        The ordered runtime method variants.
+    """
+    ablation_config_path = Path(ablation_config)
+    if not ablation_config_path.is_absolute():
+        ablation_config_path = repository_root / ablation_config_path
+    ablation_payload = json.loads(ablation_config_path.read_text(encoding="utf-8"))
+    runner = RealVideoVaeLatentRunner(repository_root)
+    runtime_method_configs = runner._build_runtime_method_configs(
+        ablation_payload,
+        runner._build_method_config_paths(ablation_payload),
+        runtime_profile,
+        method_variants,
+    )
+    return [str(method_config["method_variant"]) for method_config in runtime_method_configs]
+
+
+def _plan_probe_method_shards(
+    *,
+    method_variants: list[str],
+    shard_count: int,
+) -> list[dict[str, Any]]:
+    """Plan the governed method shards for a runner invocation.
+
+    Args:
+        method_variants: Ordered runtime method variants.
+        shard_count: Requested shard count.
+
+    Returns:
+        An ordered shard plan payload.
+    """
+    normalized_method_variants = [str(method_variant) for method_variant in method_variants]
+    if not normalized_method_variants:
+        raise ValueError("method_variants must not be empty")
+    if shard_count <= 1 or len(normalized_method_variants) <= 1:
+        return [
+            {
+                "shard_name": "shard_01_full_run",
+                "method_variants": normalized_method_variants,
+            }
+        ]
+
+    primary_order = ["frame_prc", "tubelet_only", "tubelet_sync"]
+    primary_variants = [
+        method_variant
+        for method_variant in primary_order
+        if method_variant in normalized_method_variants
+    ]
+    sweep_variants = [
+        method_variant
+        for method_variant in normalized_method_variants
+        if method_variant not in set(primary_order)
+    ]
+    if shard_count == 2 and primary_variants and sweep_variants:
+        return [
+            {
+                "shard_name": "shard_01_main_variants",
+                "method_variants": primary_variants,
+            },
+            {
+                "shard_name": "shard_02_tubelet_sweep",
+                "method_variants": sweep_variants,
+            },
+        ]
+
+    resolved_shard_count = min(int(shard_count), len(normalized_method_variants))
+    planned_groups: list[list[str]] = [[] for _ in range(resolved_shard_count)]
+    for method_index, method_variant in enumerate(normalized_method_variants):
+        planned_groups[method_index % resolved_shard_count].append(method_variant)
+    return [
+        {
+            "shard_name": f"shard_{group_index + 1:02d}",
+            "method_variants": planned_groups[group_index],
+        }
+        for group_index in range(resolved_shard_count)
+        if planned_groups[group_index]
+    ]
+
+
+def merge_probe_method_shard_outputs(
+    *,
+    run_root: str | Path,
+    shard_run_roots: list[str | Path],
+    runtime_config_path: str | Path | None = None,
+    method_shard_plan: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Merge multiple shard outputs into one governed probe run root.
+
+    Args:
+        run_root: Final merged run-root path.
+        shard_run_roots: Shard run-root paths.
+        runtime_config_path: Optional notebook runtime-config path.
+        method_shard_plan: Optional explicit shard plan metadata.
+
+    Returns:
+        A merge summary payload.
+    """
+    run_root_path = Path(run_root)
+    normalized_shard_roots = [Path(shard_root) for shard_root in shard_run_roots]
+    if not normalized_shard_roots:
+        raise ValueError("shard_run_roots must not be empty")
+
+    combined_event_score_records: list[dict[str, Any]] = []
+    combined_threshold_records: list[dict[str, Any]] = []
+    combined_artifact_manifest: dict[tuple[str, str], dict[str, Any]] = {}
+    shard_summaries: list[dict[str, Any]] = []
+    shard_runtime_manifests: list[dict[str, Any]] = []
+    shard_run_manifests: list[dict[str, Any]] = []
+    shard_runtime_configs: list[dict[str, Any]] = []
+
+    plan_lookup = {
+        str(shard_entry.get("shard_name")): shard_entry
+        for shard_entry in (method_shard_plan or [])
+        if isinstance(shard_entry, dict)
+    }
+    for shard_root_path in normalized_shard_roots:
+        shard_record_writer = RecordWriter(shard_root_path)
+        shard_event_score_records = shard_record_writer.read_event_score_records()
+        shard_threshold_records = shard_record_writer.read_threshold_records()
+        if not shard_event_score_records or not shard_threshold_records:
+            raise ValueError(f"shard output is incomplete: {shard_root_path}")
+        combined_event_score_records.extend(shard_event_score_records)
+        combined_threshold_records.extend(shard_threshold_records)
+
+        shard_output_paths = build_real_video_vae_latent_output_paths(shard_root_path)
+        if shard_output_paths.artifact_manifest_path.exists():
+            for artifact_entry in json.loads(
+                shard_output_paths.artifact_manifest_path.read_text(encoding="utf-8")
+            ):
+                artifact_key = (
+                    str(artifact_entry.get("artifact_kind")),
+                    str(artifact_entry.get("relpath")),
+                )
+                combined_artifact_manifest[artifact_key] = artifact_entry
+        if shard_output_paths.runtime_manifest_path.exists():
+            shard_runtime_manifests.append(
+                json.loads(shard_output_paths.runtime_manifest_path.read_text(encoding="utf-8"))
+            )
+        if shard_output_paths.run_manifest_path.exists():
+            shard_run_manifests.append(
+                json.loads(shard_output_paths.run_manifest_path.read_text(encoding="utf-8"))
+            )
+        if shard_output_paths.runtime_config_path.exists():
+            shard_runtime_configs.append(
+                json.loads(shard_output_paths.runtime_config_path.read_text(encoding="utf-8"))
+            )
+
+        shard_name = shard_root_path.name
+        planned_variants = plan_lookup.get(shard_name, {}).get("method_variants")
+        if planned_variants is None:
+            planned_variants = sorted(
+                {str(record.get("method_variant")) for record in shard_event_score_records}
+            )
+        shard_summaries.append(
+            {
+                "shard_name": shard_name,
+                "shard_run_root": str(shard_root_path),
+                "method_variants": list(planned_variants),
+                "event_record_count": len(shard_event_score_records),
+                "threshold_record_count": len(shard_threshold_records),
+            }
+        )
+
+    merged_record_writer = RecordWriter(run_root_path)
+    merged_record_writer.write_event_score_records(combined_event_score_records)
+    merged_record_writer.write_threshold_records(combined_threshold_records)
+
+    artifact_builder = RealVideoVaeLatentArtifactBuilder()
+    artifact_paths = artifact_builder.build_artifacts(
+        combined_event_score_records,
+        combined_threshold_records,
+        run_root_path,
+    )
+    output_paths = build_real_video_vae_latent_output_paths(run_root_path)
+    output_paths.artifact_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.artifact_manifest_path.write_text(
+        json.dumps(
+            [combined_artifact_manifest[key] for key in sorted(combined_artifact_manifest.keys())],
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    base_runtime_config: dict[str, Any] = {}
+    if runtime_config_path is not None and Path(runtime_config_path).exists():
+        base_runtime_config = json.loads(Path(runtime_config_path).read_text(encoding="utf-8"))
+    elif shard_runtime_configs:
+        base_runtime_config = dict(shard_runtime_configs[0])
+    merged_method_variants = sorted(
+        {str(record.get("method_variant")) for record in combined_event_score_records}
+    )
+    merged_runtime_config = {
+        **base_runtime_config,
+        "method_variants": merged_method_variants,
+        "method_shard_mode": "parallel_method_variants",
+        "shard_count": len(shard_summaries),
+        "method_shard_schedule": shard_summaries,
+        "merged_from_method_shards": True,
+    }
+    output_paths.runtime_config_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.runtime_config_path.write_text(
+        json.dumps(merged_runtime_config, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    base_runtime_manifest = dict(shard_runtime_manifests[0]) if shard_runtime_manifests else {}
+    merged_runtime_manifest = {
+        **base_runtime_manifest,
+        "run_id": run_root_path.name,
+        "method_variants": merged_method_variants,
+        "method_shard_schedule": shard_summaries,
+        "shard_count": len(shard_summaries),
+        "merged_from_method_shards": True,
+    }
+    output_paths.runtime_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.runtime_manifest_path.write_text(
+        json.dumps(merged_runtime_manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    base_run_manifest = dict(shard_run_manifests[0]) if shard_run_manifests else {}
+    merged_run_manifest = {
+        **base_run_manifest,
+        "run_id": run_root_path.name,
+        "created_at": str(base_run_manifest.get("created_at", iso_timestamp_utc())),
+        "runtime_config_digest": compute_object_digest(merged_runtime_config),
+        "records_digest": compute_object_digest(combined_event_score_records),
+        "thresholds_digest": compute_object_digest(combined_threshold_records),
+        "tables_digest": compute_path_collection_digest(output_paths.table_paths()),
+        "figures_digest": compute_path_collection_digest(output_paths.figure_paths()),
+        "method_config_digest": compute_object_digest(
+            sorted(
+                str(run_manifest.get("method_config_digest"))
+                for run_manifest in shard_run_manifests
+            )
+        ),
+        "placeholder_fields": sorted(
+            {
+                str(field_name)
+                for run_manifest in shard_run_manifests
+                for field_name in run_manifest.get("placeholder_fields", [])
+            }
+        ),
+        "random_fields": sorted(
+            {
+                str(field_name)
+                for run_manifest in shard_run_manifests
+                for field_name in run_manifest.get("random_fields", [])
+            }
+        ),
+        "method_shard_schedule": shard_summaries,
+    }
+    output_paths.run_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.run_manifest_path.write_text(
+        json.dumps(merged_run_manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    method_shard_summary_path = output_paths.root_path / "artifacts" / "method_shard_summary.json"
+    method_shard_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    method_shard_summary_path.write_text(
+        json.dumps(
+            {
+                "run_root": str(run_root_path),
+                "method_variants": merged_method_variants,
+                "shard_count": len(shard_summaries),
+                "method_shard_schedule": shard_summaries,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "run_root": str(run_root_path),
+        "event_record_count": len(combined_event_score_records),
+        "threshold_record_count": len(combined_threshold_records),
+        "method_variants": merged_method_variants,
+        "shard_count": len(shard_summaries),
+        "method_shard_schedule": shard_summaries,
+        "artifact_paths": _json_safe(artifact_paths),
+        "method_shard_summary_path": str(method_shard_summary_path),
+    }
 
 
 def rebuild_probe_tables_and_reports(

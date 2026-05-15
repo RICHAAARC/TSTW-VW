@@ -58,7 +58,7 @@ def test_real_video_quality_metrics_disabled_flags_are_explicit(
 def test_real_video_quality_metrics_clip_flag_reports_not_implemented(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Validate CLIP enablement is auditable even before implementation lands.
+    """Validate enabled CLIP scoring surfaces a governed similarity payload.
 
     Args:
         monkeypatch: Pytest monkeypatch fixture.
@@ -71,6 +71,61 @@ def test_real_video_quality_metrics_clip_flag_reports_not_implemented(
         real_quality_metrics,
         "read_video_frames",
         lambda path: SimpleNamespace(frames=frames),
+    )
+    monkeypatch.setattr(
+        real_quality_metrics,
+        "compute_clip_similarity_payload_from_frames",
+        lambda reference_frames, comparison_frames, runtime_config=None: {
+            "clip_similarity_score": 0.987654,
+            "clip_model_id": "openai/clip-vit-base-patch32",
+            "clip_frame_sample_count": 4,
+            "clip_failure_reason": None,
+        },
+    )
+
+    payload = real_quality_metrics.build_real_video_quality_metrics_payload(
+        "reference.mp4",
+        "comparison.mp4",
+        runtime_config={
+            "quality_metrics": {
+                "enable_lpips": False,
+                "enable_clip_similarity": True,
+            }
+        },
+    )
+
+    assert payload["clip_similarity_score"] == pytest.approx(0.987654)
+    assert payload["clip_model_id"] == "openai/clip-vit-base-patch32"
+    assert payload["clip_frame_sample_count"] == 4
+    assert payload["clip_failure_reason"] is None
+
+
+def test_real_video_quality_metrics_clip_backend_failure_is_explicit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate CLIP backend failures remain auditable in the payload.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    frames = np.ones((4, 8, 8, 3), dtype=np.float32) * 0.5
+    monkeypatch.setattr(
+        real_quality_metrics,
+        "read_video_frames",
+        lambda path: SimpleNamespace(frames=frames),
+    )
+    monkeypatch.setattr(
+        real_quality_metrics,
+        "compute_clip_similarity_payload_from_frames",
+        lambda reference_frames, comparison_frames, runtime_config=None: {
+            "clip_similarity_score": None,
+            "clip_model_id": "openai/clip-vit-base-patch32",
+            "clip_frame_sample_count": 4,
+            "clip_failure_reason": "clip_backend_unavailable: transformers missing",
+        },
     )
 
     payload = real_quality_metrics.build_real_video_quality_metrics_payload(
@@ -85,7 +140,7 @@ def test_real_video_quality_metrics_clip_flag_reports_not_implemented(
     )
 
     assert payload["clip_similarity_score"] is None
-    assert payload["clip_failure_reason"] == "clip_similarity_not_implemented"
+    assert payload["clip_failure_reason"] == "clip_backend_unavailable: transformers missing"
 
 
 def test_lpips_score_creates_cache_dir_and_routes_torch_hub(
