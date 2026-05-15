@@ -176,6 +176,81 @@ def test_runtime_profile_recommendation_promotes_to_a100_for_vae_reencode_heavy_
 
 
 @pytest.mark.unit
+def test_runtime_profile_recommendation_prioritizes_quality_metric_hotspot(
+    tmp_path: Path,
+) -> None:
+    """Validate quality-metric timing dominates the advised next action.
+
+    Args:
+        tmp_path: Temporary run root.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "run_root"
+    runtime_profile_dir = run_root / "runtime_profile"
+
+    _write_json(
+        runtime_profile_dir / "runtime_profile_plan.json",
+        {
+            "runtime_profile": "l4_formal",
+            "gpu_target": "L4",
+            "vae_batch_size_frames": 128,
+            "batch_size_frames": 128,
+        },
+    )
+    _write_json(
+        runtime_profile_dir / "gpu_runtime_summary.json",
+        {
+            "peak_memory_ratio": 0.22,
+            "mean_gpu_util_percent": 2.4,
+        },
+    )
+    _write_json(
+        runtime_profile_dir / "run_timing_summary.json",
+        {
+            "estimated_work_planning_label": "long_run",
+            "events_by_name": {
+                "real_video_vae_latent_runner": 4276.0,
+            },
+            "video_attack_seconds": 6676.0,
+            "vae_reencode_seconds": 4228.0,
+            "quality_metrics_seconds": 14457.0,
+            "temporal_metrics_seconds": 699.0,
+            "metric_frame_loading_seconds": 5770.0,
+        },
+    )
+    _write_json(
+        runtime_profile_dir / "run_scale_estimate.json",
+        {
+            "scale_label": "formal_large",
+        },
+    )
+    _write_json(
+        runtime_profile_dir / "run_failure_summary.json",
+        {
+            "checker_status": True,
+            "runtime_profile_failures": [],
+        },
+    )
+    _write_json(
+        runtime_profile_dir / "drive_io_profile.json",
+        {
+            "drive_io_status": "moderate",
+        },
+    )
+
+    payload = recommend_runtime_parameters(
+        run_root=run_root,
+        output_json=runtime_profile_dir / "runtime_parameter_recommendation.json",
+    )
+
+    assert payload["recommended_action"] == "optimize_quality_metrics_or_reduce_metric_sampling_or_shard"
+    assert "quality_metrics_seconds dominates the profiled runtime" in payload["reasoning"]
+    assert "video_attack_seconds dominates the profiled runtime" not in payload["reasoning"]
+
+
+@pytest.mark.unit
 def test_runtime_profile_recommendation_reduces_batch_after_oom_signal(
     tmp_path: Path,
 ) -> None:

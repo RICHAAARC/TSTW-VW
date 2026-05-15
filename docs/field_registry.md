@@ -163,6 +163,10 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | sync_confidence_min_matched_count | protocol | none | true | false | false | Configured minimum matched tubelet count required for sync confidence. |
 | reference_latent_shape_source | protocol | none | true | false | false | Source label for `reference_latent_shape`, either governed trace or sample-shape fallback. |
 | reference_latent_shape_fallback_used | protocol | none | true | false | false | Boolean audit field indicating whether detection had to fall back to the observed sample latent shape. |
+| tubelet_projection_matched_count | protocol | none | true | false | false | Count of observed tubelets matched to reference descriptors for unaligned tubelet evidence. |
+| tubelet_projection_candidate_count | protocol | none | true | false | false | Reference descriptor count used as the denominator for unaligned tubelet evidence coverage. |
+| tubelet_projection_coverage_ratio | protocol | none | true | false | false | Matched-count ratio for unaligned tubelet evidence; positive evidence is coverage-penalized under partial clips. |
+| tubelet_coverage_penalty_enabled | protocol | none | true | false | false | Boolean trace field indicating whether positive tubelet evidence uses coverage-penalized scoring. |
 | sync_rescue_applied | protocol | none | true | false | false | Boolean trace field showing whether sync-rescue gain was gated into the final score. |
 | clip_length | protocol | none | true | false | false | Materialized local-clip or crop length recorded in the synthetic_tubelet_sync_probe mechanism trace. |
 | created_at | protocol | none | true | false | false | ISO-8601 timestamp field for governed threshold and manifest records. |

@@ -6,6 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 from typing import Any
 
@@ -16,6 +17,8 @@ DEFAULT_CLIP_MODEL_ID = "openai/clip-vit-base-patch32"
 DEFAULT_CLIP_FRAME_SAMPLE_COUNT = 4
 DEFAULT_CLIP_BATCH_SIZE = 8
 _CLIP_BACKEND_CACHE: dict[tuple[str, str], dict[str, Any]] = {}
+_CLIP_EMBEDDING_CACHE: dict[tuple[str, str, str], Any] = {}
+_CLIP_EMBEDDING_CACHE_MAX_ENTRIES = 4096
 
 
 def compute_clip_similarity_payload_from_frames(
@@ -261,10 +264,16 @@ def _encode_clip_image_batch(
     device: Any,
     frames: np.ndarray,
 ) -> Any:
-    images = [
-        np.rint(np.clip(frame, 0.0, 1.0) * 255.0).astype(np.uint8)
-        for frame in frames
-    ]
+    images_array = np.rint(np.clip(frames, 0.0, 1.0) * 255.0).astype(np.uint8)
+    cache_key = _build_clip_embedding_cache_key(model, device, images_array)
+    cached_embedding = _CLIP_EMBEDDING_CACHE.get(cache_key)
+    if cached_embedding is not None:
+        to_function = getattr(cached_embedding, "to", None)
+        if callable(to_function):
+            return to_function(device)
+        return cached_embedding
+
+    images = [image for image in images_array]
     processor_inputs = processor(images=images, return_tensors="pt", padding=True)
     if hasattr(processor_inputs, "to"):
         processor_inputs = processor_inputs.to(device)
@@ -277,7 +286,49 @@ def _encode_clip_image_batch(
     if not callable(get_image_features):
         raise RuntimeError("CLIP model does not expose get_image_features")
     image_features = get_image_features(**processor_inputs)
-    return _normalize_embeddings(torch_module, image_features)
+    image_features = _extract_clip_embedding_tensor(image_features)
+    normalized_embeddings = _normalize_embeddings(torch_module, image_features)
+    _store_clip_embedding_cache(cache_key, normalized_embeddings)
+    return normalized_embeddings
+
+
+def _build_clip_embedding_cache_key(model: Any, device: Any, images_array: np.ndarray) -> tuple[str, str, str]:
+    model_identifier = str(getattr(model, "name_or_path", model.__class__.__name__))
+    device_identifier = str(device)
+    contiguous_images = np.ascontiguousarray(images_array)
+    digest = hashlib.sha256()
+    digest.update(str(tuple(contiguous_images.shape)).encode("utf-8"))
+    digest.update(contiguous_images.tobytes())
+    return (model_identifier, device_identifier, digest.hexdigest())
+
+
+def _store_clip_embedding_cache(cache_key: tuple[str, str, str], normalized_embeddings: Any) -> None:
+    detach_function = getattr(normalized_embeddings, "detach", None)
+    cached_embedding = detach_function() if callable(detach_function) else normalized_embeddings
+    cpu_function = getattr(cached_embedding, "cpu", None)
+    if callable(cpu_function):
+        cached_embedding = cpu_function()
+    _CLIP_EMBEDDING_CACHE[cache_key] = cached_embedding
+    while len(_CLIP_EMBEDDING_CACHE) > _CLIP_EMBEDDING_CACHE_MAX_ENTRIES:
+        oldest_key = next(iter(_CLIP_EMBEDDING_CACHE))
+        _CLIP_EMBEDDING_CACHE.pop(oldest_key, None)
+
+
+def _extract_clip_embedding_tensor(image_features: Any) -> Any:
+    for attribute_name in ("image_embeds", "pooler_output"):
+        attribute_value = getattr(image_features, attribute_name, None)
+        if attribute_value is not None:
+            return attribute_value
+    last_hidden_state = getattr(image_features, "last_hidden_state", None)
+    if last_hidden_state is not None:
+        mean_function = getattr(last_hidden_state, "mean", None)
+        if callable(mean_function):
+            return mean_function(dim=1)
+    if isinstance(image_features, (list, tuple)) and image_features:
+        return image_features[0]
+    if not hasattr(image_features, "norm"):
+        raise RuntimeError("CLIP image feature output is not a tensor-like embedding")
+    return image_features
 
 
 def _normalize_embeddings(torch_module: Any, image_features: Any) -> Any:

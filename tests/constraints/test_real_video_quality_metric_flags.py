@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 import main.analysis.real_video_quality_metrics as real_quality_metrics
+import main.analysis.clip_similarity_metrics as clip_similarity_metrics
 
 
 pytestmark = [pytest.mark.constraint, pytest.mark.unit]
@@ -141,6 +142,23 @@ def test_real_video_quality_metrics_clip_backend_failure_is_explicit(
 
     assert payload["clip_similarity_score"] is None
     assert payload["clip_failure_reason"] == "clip_backend_unavailable: transformers missing"
+
+
+def test_clip_similarity_extracts_tensor_from_transformers_output() -> None:
+    """Validate CLIP output objects are converted to tensor-like embeddings.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    fake_embedding = SimpleNamespace(norm=lambda **kwargs: None)
+    fake_output = SimpleNamespace(pooler_output=fake_embedding)
+
+    resolved_embedding = clip_similarity_metrics._extract_clip_embedding_tensor(fake_output)
+
+    assert resolved_embedding is fake_embedding
 
 
 def test_lpips_score_creates_cache_dir_and_routes_torch_hub(

@@ -23,6 +23,7 @@ from main.methods.temporal_tubelet_watermark.codebook import (
 from main.methods.temporal_tubelet_watermark.embedding import (
     build_partition_config_from_method_config,
 )
+from main.methods.temporal_tubelet_watermark.evidence import SyntheticProbeEvidenceExtractor
 from main.methods.temporal_tubelet_watermark.fusion import sync_rescue_fusion
 from main.methods.temporal_tubelet_watermark.method import build_method_from_config
 from main.methods.temporal_tubelet_watermark.tubelet_partition import (
@@ -139,6 +140,32 @@ def test_positive_sync_score_is_gated_with_rescue() -> None:
         )
         == 0.75
     )
+
+
+@pytest.mark.unit
+def test_positive_tubelet_score_is_coverage_penalized_for_partial_clip() -> None:
+    extractor = SyntheticProbeEvidenceExtractor(
+        method_variant="tubelet_only",
+        method_config=TUBELET_ONLY_CONFIG,
+        enabled_evidence={"tubelet": True, "sync": False, "trajectory": False},
+        fusion_rule="tubelet_score_only",
+    )
+
+    saturated_partial_score = extractor._build_tubelet_score(
+        [1.0],
+        embedding_support=0.0,
+        attack_strength=0.0,
+        coverage_ratio=0.125,
+    )
+    full_coverage_score = extractor._build_tubelet_score(
+        [1.0],
+        embedding_support=0.0,
+        attack_strength=0.0,
+        coverage_ratio=1.0,
+    )
+
+    assert saturated_partial_score == 0.125
+    assert full_coverage_score == 1.0
 
 
 @pytest.mark.unit
@@ -274,9 +301,10 @@ def _rebuild_aligned_payload_scores(cropped_sample, estimated_offset: int) -> tu
             - float(cropped_sample.mechanism_trace["mean_projection_before"]),
         ),
     )
+    coverage_ratio = len(pure_payload_projections) / max(len(reference_descriptor_map), 1)
     return (
-        _score_payload_projections(pure_payload_projections, embedding_support),
-        _score_payload_projections(sync_coupled_projections, embedding_support),
+        _score_payload_projections(pure_payload_projections, embedding_support, coverage_ratio),
+        _score_payload_projections(sync_coupled_projections, embedding_support, coverage_ratio),
     )
 
 
@@ -296,8 +324,18 @@ def _dot_observed_tubelet_direction(
     )
 
 
-def _score_payload_projections(projections: list[float], embedding_support: float) -> float:
-    return _clip_score((sum(projections) / len(projections)) + (embedding_support * 0.45))
+def _score_payload_projections(
+    projections: list[float],
+    embedding_support: float,
+    coverage_ratio: float,
+) -> float:
+    base_score = sum(projections) / len(projections)
+    support_score = embedding_support * 0.45
+    if base_score > 0.0:
+        base_score *= coverage_ratio
+    if support_score > 0.0:
+        support_score *= coverage_ratio
+    return _clip_score(base_score + support_score)
 
 
 def _clip_score(score: float) -> float:

@@ -179,11 +179,15 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         mechanism_trace.update(reference_shape_trace)
         embedding_support = self._resolve_embedding_support(sample)
         attack_strength = self._resolve_attack_strength(sample)
+        tubelet_projection_coverage_ratio = float(
+            reference_shape_trace["tubelet_projection_coverage_ratio"]
+        )
 
         S_payload_unaligned = self._build_tubelet_score(
             payload_coded_projections,
             embedding_support,
             attack_strength,
+            tubelet_projection_coverage_ratio,
         )
         S_payload_aligned = S_payload_unaligned
         S_payload_rescue_gain = 0.0
@@ -223,10 +227,15 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 float(sync_result["sync_estimated_scale"]),
             )
             trajectory_projections = aligned_tubelet_projections
+            aligned_projection_coverage_ratio = float(
+                sync_result.get("sync_alignment_coverage_ratio")
+                or tubelet_projection_coverage_ratio
+            )
             S_payload_aligned = self._build_tubelet_score(
                 aligned_tubelet_projections,
                 embedding_support,
                 attack_strength,
+                aligned_projection_coverage_ratio,
             )
             S_payload_rescue_gain = round(
                 max(0.0, S_payload_aligned - S_payload_unaligned),
@@ -352,6 +361,20 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             )
         if not payload_coded_projections:
             raise ValueError("projection extraction produced no valid tubelets")
+        tubelet_candidate_count = max(len(reference_descriptor_map), 1)
+        tubelet_matched_count = len(payload_coded_projections)
+        tubelet_coverage_ratio = min(
+            1.0,
+            max(0.0, float(tubelet_matched_count) / float(tubelet_candidate_count)),
+        )
+        reference_shape_trace.update(
+            {
+                "tubelet_projection_matched_count": tubelet_matched_count,
+                "tubelet_projection_candidate_count": tubelet_candidate_count,
+                "tubelet_projection_coverage_ratio": round(tubelet_coverage_ratio, 6),
+                "tubelet_coverage_penalty_enabled": self._coverage_penalty_enabled(),
+            }
+        )
         return (
             payload_coded_projections,
             codebook,
@@ -609,15 +632,21 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         aligned_tubelet_projections: list[float],
         embedding_support: float,
         attack_strength: float,
+        coverage_ratio: float,
     ) -> float:
         del attack_strength
         base_score = sum(aligned_tubelet_projections) / len(aligned_tubelet_projections)
         projection_support_weight = self._resolve_score_calibration_value(
             "embedding_projection_support_weight",
         )
-        return self._clip_score(
-            base_score + (float(embedding_support) * projection_support_weight)
-        )
+        support_score = float(embedding_support) * projection_support_weight
+        if self._coverage_penalty_enabled():
+            normalized_coverage_ratio = max(0.0, min(1.0, float(coverage_ratio)))
+            if base_score > 0.0:
+                base_score *= normalized_coverage_ratio
+            if support_score > 0.0:
+                support_score *= normalized_coverage_ratio
+        return self._clip_score(base_score + support_score)
 
     def _resolve_score_calibration_value(self, field_name: str) -> float:
         score_calibration = self._method_config.get("score_calibration", {})

@@ -219,6 +219,38 @@ def recommend_runtime_parameters(
     vae_reencode_seconds = float(
         timing_summary.get("vae_reencode_seconds", events_by_name.get("vae_reencode_seconds", 0.0)) or 0.0
     )
+    quality_metrics_seconds = float(
+        timing_summary.get(
+            "quality_metrics_seconds",
+            events_by_name.get("quality_metrics_seconds", 0.0),
+        )
+        or 0.0
+    )
+    temporal_metrics_seconds = float(
+        timing_summary.get(
+            "temporal_metrics_seconds",
+            events_by_name.get("temporal_metrics_seconds", 0.0),
+        )
+        or 0.0
+    )
+    metric_frame_loading_seconds = float(
+        timing_summary.get(
+            "metric_frame_loading_seconds",
+            events_by_name.get("metric_frame_loading_seconds", 0.0),
+        )
+        or 0.0
+    )
+    runtime_stage_seconds = {
+        "video_attack_seconds": video_attack_seconds,
+        "vae_reencode_seconds": vae_reencode_seconds,
+        "quality_metrics_seconds": quality_metrics_seconds,
+        "temporal_metrics_seconds": temporal_metrics_seconds,
+        "metric_frame_loading_seconds": metric_frame_loading_seconds,
+    }
+    dominant_runtime_stage, dominant_runtime_seconds = max(
+        runtime_stage_seconds.items(),
+        key=lambda item: float(item[1]),
+    )
     runner_exceeds_shard_threshold = runner_elapsed_seconds >= 28800.0
     checker_blocking_reasons = failure_summary.get("checker_blocking_reasons", [])
     if not isinstance(checker_blocking_reasons, list):
@@ -275,19 +307,31 @@ def recommend_runtime_parameters(
         reasoning.append("run_scale_estimate indicates a larger formal workload")
     if runner_exceeds_shard_threshold:
         reasoning.append("real_video_vae_latent_runner exceeds 8 hours estimated runtime")
-    if video_attack_seconds > vae_reencode_seconds and video_attack_seconds > 0.0:
+    if dominant_runtime_stage == "video_attack_seconds" and dominant_runtime_seconds > 0.0:
         reasoning.append("video_attack_seconds dominates the profiled runtime")
-    if vae_reencode_seconds >= video_attack_seconds and vae_reencode_seconds > 0.0:
+    if dominant_runtime_stage == "vae_reencode_seconds" and dominant_runtime_seconds > 0.0:
         reasoning.append("vae_reencode_seconds dominates the profiled runtime")
+    if dominant_runtime_stage == "quality_metrics_seconds" and dominant_runtime_seconds > 0.0:
+        reasoning.append("quality_metrics_seconds dominates the profiled runtime")
+    if dominant_runtime_stage == "temporal_metrics_seconds" and dominant_runtime_seconds > 0.0:
+        reasoning.append("temporal_metrics_seconds dominates the profiled runtime")
+    if dominant_runtime_stage == "metric_frame_loading_seconds" and dominant_runtime_seconds > 0.0:
+        reasoning.append("metric_frame_loading_seconds dominates the profiled runtime")
 
     if checker_status is False and runtime_profile_failures:
         recommended_action = "fix_runtime_failures_before_rerun"
         reasoning.append("runtime failures were observed before a formal pass")
     elif drive_io_status == "slow":
         recommended_action = "reduce_drive_io_then_rerun"
-    elif video_attack_seconds > vae_reencode_seconds and video_attack_seconds > 0.0:
+    elif dominant_runtime_stage == "quality_metrics_seconds" and dominant_runtime_seconds > 0.0:
+        recommended_action = "optimize_quality_metrics_or_reduce_metric_sampling_or_shard"
+    elif dominant_runtime_stage == "metric_frame_loading_seconds" and dominant_runtime_seconds > 0.0:
+        recommended_action = "optimize_metric_frame_loading_or_shard"
+    elif dominant_runtime_stage == "temporal_metrics_seconds" and dominant_runtime_seconds > 0.0:
+        recommended_action = "optimize_temporal_metrics_or_shard"
+    elif dominant_runtime_stage == "video_attack_seconds" and dominant_runtime_seconds > 0.0:
         recommended_action = "tune_attack_workers_or_reduce_attack_subset_or_shard"
-    elif vae_reencode_seconds >= video_attack_seconds and vae_reencode_seconds > 0.0:
+    elif dominant_runtime_stage == "vae_reencode_seconds" and dominant_runtime_seconds > 0.0:
         recommended_action = "increase_vae_batch_size_frames_or_use_a100_profile"
     elif runner_exceeds_shard_threshold:
         recommended_action = "split_run_into_shards_or_reduce_attack_matrix_for_smoke"
