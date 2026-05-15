@@ -189,6 +189,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "probe_workflow.rebuild_probe_tables_and_reports" in notebook_text
     assert "probe_workflow.check_probe_outputs" in notebook_text
     assert "probe_workflow.run_probe_stage2_mechanism_audit" in notebook_text
+    assert "probe_workflow.run_probe_stage2_mechanism_calibration" in notebook_text
     assert "probe_workflow.package_probe_family_results" in notebook_text
     assert "FAMILY_ID_TEMPLATE" in notebook_text
     assert "PROCESSED_DATASET_MANIFEST" in notebook_text
@@ -224,6 +225,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "with run_timer.event('table_and_report_rebuild'" in notebook_text
     assert "with run_timer.event('formal_checker'" in notebook_text
     assert "with run_timer.event('stage2_mechanism_audit'" in notebook_text
+    assert "with run_timer.event('stage2_mechanism_calibration'" in notebook_text
     assert "with run_timer.event('result_packaging'" in notebook_text
     assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
     assert "scripts.prepare_models.prepare_session_autoencoder_kl" not in notebook_text

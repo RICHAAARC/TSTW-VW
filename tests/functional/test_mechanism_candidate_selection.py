@@ -138,11 +138,29 @@ def test_mechanism_candidate_selector_uses_dev_and_calibration_only(
                 ),
                 _build_event_record(
                     split_name=split_name,
+                    method_variant="tubelet_only",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=4,
+                    attack_name="local_clip",
+                    sample_role="attacked_positive",
+                    decision=False,
+                ),
+                _build_event_record(
+                    split_name=split_name,
                     method_variant="tubelet_only_lt01",
                     base_method_variant="tubelet_only",
                     tubelet_length=1,
                     attack_name="local_clip",
                     sample_role="attacked_negative",
+                    decision=False,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_lt01",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="local_clip",
+                    sample_role="attacked_positive",
                     decision=False,
                 ),
                 _build_event_record(
@@ -221,6 +239,150 @@ def test_mechanism_candidate_selector_uses_dev_and_calibration_only(
                     decision=False,
                     s_sync=0.1,
                 ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr04_ls000_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="no_attack",
+                    sample_role="clean_negative",
+                    decision=False,
+                    s_sync=0.05,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.0,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr04_ls000_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="no_attack",
+                    sample_role="watermarked_positive",
+                    decision=True,
+                    s_sync=0.35,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.0,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr04_ls000_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="temporal_crop",
+                    sample_role="attacked_positive",
+                    decision=True,
+                    s_sync=0.3,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.0,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr04_ls000_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="frame_dropping",
+                    sample_role="attacked_positive",
+                    decision=True,
+                    s_sync=0.32,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.0,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr04_ls000_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="local_clip",
+                    sample_role="attacked_negative",
+                    decision=False,
+                    s_sync=0.1,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.0,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr04_ls000_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="local_clip",
+                    sample_role="attacked_positive",
+                    decision=True,
+                    s_sync=0.28,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.0,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr08_ls100_frcal_sync",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="no_attack",
+                    sample_role="clean_negative",
+                    decision=True,
+                    s_sync=0.15,
+                    fusion_rule="calibrated_tubelet_sync",
+                    lambda_sync=0.1,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr08_ls100_frcal_sync",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="no_attack",
+                    sample_role="watermarked_positive",
+                    decision=True,
+                    s_sync=0.33,
+                    fusion_rule="calibrated_tubelet_sync",
+                    lambda_sync=0.1,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr08_ls100_frcal_sync",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="temporal_crop",
+                    sample_role="attacked_positive",
+                    decision=True,
+                    s_sync=0.29,
+                    fusion_rule="calibrated_tubelet_sync",
+                    lambda_sync=0.1,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr08_ls100_frcal_sync",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="frame_dropping",
+                    sample_role="attacked_positive",
+                    decision=True,
+                    s_sync=0.31,
+                    fusion_rule="calibrated_tubelet_sync",
+                    lambda_sync=0.1,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr08_ls100_frcal_sync",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="local_clip",
+                    sample_role="attacked_negative",
+                    decision=True,
+                    s_sync=0.12,
+                    fusion_rule="calibrated_tubelet_sync",
+                    lambda_sync=0.1,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl01_sp04x04_w045_sr08_ls100_frcal_sync",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=1,
+                    attack_name="local_clip",
+                    sample_role="attacked_positive",
+                    decision=True,
+                    s_sync=0.25,
+                    fusion_rule="calibrated_tubelet_sync",
+                    lambda_sync=0.1,
+                ),
             ]
         )
     records.extend(
@@ -261,6 +423,14 @@ def test_mechanism_candidate_selector_uses_dev_and_calibration_only(
     assert result["observed_forbidden_splits"] == ["test"]
     assert result["tubelet_sync_scan_seed"]["seed_method_config"]["tubelet_length"] == 1
     assert result["tubelet_sync_scan_seed"]["parameter_scan"]["lambda_sync"] == [0.0, 0.1]
+    assert (
+        result["selected_tubelet_sync_candidate"]["method_variant"]
+        == "tubelet_sync_cal_tl01_sp04x04_w045_sr04_ls000_frsync_rescue"
+    )
+    assert result["selected_tubelet_sync_candidate"]["fusion_rule"] == "sync_rescue_fusion"
+    assert result["selected_tubelet_sync_candidate"]["lambda_sync"] == 0.0
+    assert result["selected_tubelet_sync_candidate"]["sync_search"]["offset_search_min"] == -4
+    assert result["selected_tubelet_sync_candidate"]["metrics"]["local_clip_sync_gain"] == 1.0
     assert Path(result["grid_output_path"]).exists()
     assert Path(result["report_path"]).exists()
     assert Path(result["output_path"]).exists()
@@ -276,6 +446,8 @@ def _build_event_record(
     sample_role: str,
     decision: bool,
     s_sync: float | None = None,
+    fusion_rule: str = "calibrated_tubelet_sync",
+    lambda_sync: float = 0.1,
 ) -> dict[str, object]:
     return {
         "run_id": "real_video_vae_latent_probe_formal",
@@ -307,6 +479,8 @@ def _build_event_record(
             "construction_phase": "real_video_vae_latent_probe",
             "tubelet_length": tubelet_length,
             "spatial_patch_size": [4, 4],
-            "embedding_projection_support_weight": 0.45
+            "embedding_projection_support_weight": 0.45,
+            "fusion_rule": fusion_rule,
+            "lambda_sync": lambda_sync,
         }
     }

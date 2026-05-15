@@ -26,11 +26,15 @@ DEFAULT_GRID_CONFIG_PATH = (
 DEFAULT_MECHANISM_CONFIG_PATH = ROOT / "configs" / "protocol" / "stage2_mechanism_gate.json"
 
 CALIBRATION_GRID_COLUMNS = [
+    "selection_scope",
     "method_variant",
     "base_method_variant",
     "tubelet_length",
     "spatial_patch_size",
     "embedding_projection_support_weight",
+    "fusion_rule",
+    "lambda_sync",
+    "sync_search_radius",
     "no_attack_clean_negative_fpr",
     "no_attack_clean_positive_tpr",
     "max_attacked_negative_fpr",
@@ -38,7 +42,15 @@ CALIBRATION_GRID_COLUMNS = [
     "frame_dropping_attacked_positive_tpr",
     "local_clip_attacked_positive_tpr",
     "mean_temporal_attacked_positive_tpr",
+    "quality_psnr_mean",
+    "quality_ssim_mean",
+    "temporal_crop_sync_gain",
+    "frame_dropping_sync_gain",
+    "local_clip_sync_gain",
+    "mean_temporal_sync_gain",
     "fpr_controlled",
+    "quality_not_collapsed",
+    "candidate_eligible",
     "selection_score",
 ]
 
@@ -86,15 +98,30 @@ def select_stage2_mechanism_candidate(
         [],
         allowed_splits=set(allowed_splits),
     )
-    calibration_rows = _build_calibration_grid_rows(
+    tubelet_only_rows = _build_tubelet_only_calibration_grid_rows(
         audit_rows,
         event_score_records,
         mechanism_config,
     )
     selected_candidate = _select_tubelet_only_candidate(
-        calibration_rows,
+        tubelet_only_rows,
         mechanism_config,
     )
+    sync_scan_seed = _build_tubelet_sync_scan_seed(
+        selected_candidate,
+        grid_config,
+    )
+    tubelet_sync_rows = _build_tubelet_sync_calibration_grid_rows(
+        audit_rows,
+        event_score_records,
+        mechanism_config,
+        selected_candidate=selected_candidate,
+    )
+    selected_tubelet_sync_candidate = _select_tubelet_sync_candidate(
+        tubelet_sync_rows,
+        mechanism_config,
+    )
+    calibration_rows = [*tubelet_only_rows, *tubelet_sync_rows]
     observed_splits = sorted({str(record.get("split")) for record in event_score_records})
     observed_forbidden_splits = sorted(set(observed_splits) & set(forbidden_splits))
 
@@ -114,10 +141,8 @@ def select_stage2_mechanism_candidate(
         "observed_forbidden_splits": observed_forbidden_splits,
         "selection_metrics": _read_string_list(grid_config, "selection_metrics"),
         "selected_tubelet_only_candidate": selected_candidate,
-        "tubelet_sync_scan_seed": _build_tubelet_sync_scan_seed(
-            selected_candidate,
-            grid_config,
-        ),
+        "tubelet_sync_scan_seed": sync_scan_seed,
+        "selected_tubelet_sync_candidate": selected_tubelet_sync_candidate,
     }
 
     resolved_grid_output_path = Path(grid_output_path) if grid_output_path else (
@@ -141,7 +166,7 @@ def select_stage2_mechanism_candidate(
     }
 
 
-def _build_calibration_grid_rows(
+def _build_tubelet_only_calibration_grid_rows(
     audit_rows: list[dict[str, Any]],
     event_score_records: list[dict[str, Any]],
     mechanism_config: dict[str, Any],
@@ -190,6 +215,7 @@ def _build_calibration_grid_rows(
         ]
         rows.append(
             {
+                "selection_scope": "tubelet_only",
                 "method_variant": method_variant,
                 "base_method_variant": str(
                     representative_record.get(
@@ -208,6 +234,9 @@ def _build_calibration_grid_rows(
                 "embedding_projection_support_weight": _resolve_projection_support_weight(
                     representative_record,
                 ),
+                "fusion_rule": None,
+                "lambda_sync": None,
+                "sync_search_radius": None,
                 "no_attack_clean_negative_fpr": _safe_float(
                     no_attack_negative_row.get("clean_negative_FPR")
                 ),
@@ -227,9 +256,32 @@ def _build_calibration_grid_rows(
                 "mean_temporal_attacked_positive_tpr": _mean_numeric_values(
                     temporal_positive_rates
                 ),
+                "quality_psnr_mean": _safe_float(
+                    no_attack_positive_row.get("quality_psnr_mean")
+                ),
+                "quality_ssim_mean": _safe_float(
+                    no_attack_positive_row.get("quality_ssim_mean")
+                ),
+                "temporal_crop_sync_gain": None,
+                "frame_dropping_sync_gain": None,
+                "local_clip_sync_gain": None,
+                "mean_temporal_sync_gain": None,
                 "fpr_controlled": _is_fpr_controlled(
                     _safe_float(no_attack_negative_row.get("clean_negative_FPR")),
                     max_attacked_negative_fpr,
+                    mechanism_config,
+                ),
+                "quality_not_collapsed": _is_quality_not_collapsed(
+                    _safe_float(no_attack_positive_row.get("quality_psnr_mean")),
+                    _safe_float(no_attack_positive_row.get("quality_ssim_mean")),
+                    mechanism_config,
+                ),
+                "candidate_eligible": _is_tubelet_only_candidate_eligible(
+                    _safe_float(no_attack_negative_row.get("clean_negative_FPR")),
+                    _safe_float(no_attack_positive_row.get("clean_positive_TPR")),
+                    max_attacked_negative_fpr,
+                    _safe_float(no_attack_positive_row.get("quality_psnr_mean")),
+                    _safe_float(no_attack_positive_row.get("quality_ssim_mean")),
                     mechanism_config,
                 ),
                 "selection_score": _selection_score(
@@ -244,6 +296,187 @@ def _build_calibration_grid_rows(
             0 if bool(row.get("fpr_controlled")) else 1,
             -float(row.get("selection_score") or 0.0),
             int(row.get("tubelet_length") or 1),
+        )
+    )
+    return rows
+
+
+def _build_tubelet_sync_calibration_grid_rows(
+    audit_rows: list[dict[str, Any]],
+    event_score_records: list[dict[str, Any]],
+    mechanism_config: dict[str, Any],
+    *,
+    selected_candidate: dict[str, Any],
+) -> list[dict[str, Any]]:
+    lookup = {
+        (
+            str(row.get("method_variant")),
+            str(row.get("attack_name")),
+            str(row.get("sample_role")),
+        ): row
+        for row in audit_rows
+    }
+    required_attacks = _read_string_list(mechanism_config, "required_mechanism_attacks")
+    selected_spatial_patch_size = list(
+        selected_candidate["tubelet_partition"]["spatial_patch_size"]
+    )
+    selected_support_weight = round(
+        float(
+            selected_candidate["score_calibration"][
+                "embedding_projection_support_weight"
+            ]
+        ),
+        6,
+    )
+    selected_tubelet_length = int(selected_candidate["tubelet_length"])
+    tubelet_only_metrics = selected_candidate["metrics"]
+    candidate_variants = sorted(
+        {
+            str(record.get("method_variant"))
+            for record in event_score_records
+            if str(record.get("base_method_variant", record.get("method_variant")))
+            == "tubelet_sync"
+        }
+    )
+    rows: list[dict[str, Any]] = []
+    for method_variant in candidate_variants:
+        representative_record = _find_variant_record(event_score_records, method_variant)
+        if representative_record is None:
+            continue
+        spatial_patch_size = representative_record.get("mechanism_trace", {}).get(
+            "spatial_patch_size",
+            [4, 4],
+        )
+        support_weight = _resolve_projection_support_weight(representative_record)
+        if int(representative_record.get("tubelet_length", 1)) != selected_tubelet_length:
+            continue
+        if list(spatial_patch_size) != selected_spatial_patch_size:
+            continue
+        if support_weight != selected_support_weight:
+            continue
+
+        no_attack_negative_row = lookup.get((method_variant, "no_attack", "clean_negative"), {})
+        no_attack_positive_row = lookup.get((method_variant, "no_attack", "watermarked_positive"), {})
+        temporal_crop_row = lookup.get((method_variant, "temporal_crop", "attacked_positive"), {})
+        frame_dropping_row = lookup.get((method_variant, "frame_dropping", "attacked_positive"), {})
+        local_clip_row = lookup.get((method_variant, "local_clip", "attacked_positive"), {})
+        attacked_negative_rates = [
+            _safe_float(
+                lookup.get((method_variant, attack_name, "attacked_negative"), {}).get(
+                    "attacked_negative_FPR"
+                )
+            )
+            for attack_name in required_attacks
+            if attack_name != "no_attack"
+        ]
+        max_attacked_negative_fpr = _max_numeric_value(attacked_negative_rates)
+        temporal_crop_positive_tpr = _safe_float(
+            temporal_crop_row.get("attacked_positive_TPR")
+        )
+        frame_dropping_positive_tpr = _safe_float(
+            frame_dropping_row.get("attacked_positive_TPR")
+        )
+        local_clip_positive_tpr = _safe_float(local_clip_row.get("attacked_positive_TPR"))
+        temporal_positive_rates = [
+            temporal_crop_positive_tpr,
+            frame_dropping_positive_tpr,
+            local_clip_positive_tpr,
+        ]
+        fusion_rule = _resolve_fusion_rule(representative_record)
+        lambda_sync = _resolve_lambda_sync(representative_record)
+        sync_search_radius = _resolve_sync_search_radius(representative_record)
+        temporal_crop_sync_gain = _difference(
+            temporal_crop_positive_tpr,
+            _safe_float(tubelet_only_metrics.get("temporal_crop_attacked_positive_tpr")),
+        )
+        frame_dropping_sync_gain = _difference(
+            frame_dropping_positive_tpr,
+            _safe_float(tubelet_only_metrics.get("frame_dropping_attacked_positive_tpr")),
+        )
+        local_clip_sync_gain = _difference(
+            local_clip_positive_tpr,
+            _safe_float(tubelet_only_metrics.get("local_clip_attacked_positive_tpr")),
+        )
+        mean_temporal_sync_gain = _mean_numeric_values(
+            [
+                temporal_crop_sync_gain,
+                frame_dropping_sync_gain,
+                local_clip_sync_gain,
+            ]
+        )
+        quality_psnr_mean = _safe_float(no_attack_positive_row.get("quality_psnr_mean"))
+        quality_ssim_mean = _safe_float(no_attack_positive_row.get("quality_ssim_mean"))
+        clean_negative_fpr = _safe_float(no_attack_negative_row.get("clean_negative_FPR"))
+        no_attack_clean_positive_tpr = _safe_float(
+            no_attack_positive_row.get("clean_positive_TPR")
+        )
+        rows.append(
+            {
+                "selection_scope": "tubelet_sync",
+                "method_variant": method_variant,
+                "base_method_variant": str(
+                    representative_record.get(
+                        "base_method_variant",
+                        representative_record.get("method_variant"),
+                    )
+                ),
+                "tubelet_length": int(representative_record.get("tubelet_length", 1)),
+                "spatial_patch_size": json.dumps(spatial_patch_size, ensure_ascii=False),
+                "embedding_projection_support_weight": support_weight,
+                "fusion_rule": fusion_rule,
+                "lambda_sync": lambda_sync,
+                "sync_search_radius": sync_search_radius,
+                "no_attack_clean_negative_fpr": clean_negative_fpr,
+                "no_attack_clean_positive_tpr": no_attack_clean_positive_tpr,
+                "max_attacked_negative_fpr": max_attacked_negative_fpr,
+                "temporal_crop_attacked_positive_tpr": temporal_crop_positive_tpr,
+                "frame_dropping_attacked_positive_tpr": frame_dropping_positive_tpr,
+                "local_clip_attacked_positive_tpr": local_clip_positive_tpr,
+                "mean_temporal_attacked_positive_tpr": _mean_numeric_values(
+                    temporal_positive_rates
+                ),
+                "quality_psnr_mean": quality_psnr_mean,
+                "quality_ssim_mean": quality_ssim_mean,
+                "temporal_crop_sync_gain": temporal_crop_sync_gain,
+                "frame_dropping_sync_gain": frame_dropping_sync_gain,
+                "local_clip_sync_gain": local_clip_sync_gain,
+                "mean_temporal_sync_gain": mean_temporal_sync_gain,
+                "fpr_controlled": _is_fpr_controlled(
+                    clean_negative_fpr,
+                    max_attacked_negative_fpr,
+                    mechanism_config,
+                ),
+                "quality_not_collapsed": _is_quality_not_collapsed(
+                    quality_psnr_mean,
+                    quality_ssim_mean,
+                    mechanism_config,
+                ),
+                "candidate_eligible": _is_tubelet_sync_candidate_eligible(
+                    clean_negative_fpr,
+                    no_attack_clean_positive_tpr,
+                    max_attacked_negative_fpr,
+                    quality_psnr_mean,
+                    quality_ssim_mean,
+                    temporal_crop_sync_gain,
+                    local_clip_sync_gain,
+                    mean_temporal_sync_gain,
+                    mechanism_config,
+                ),
+                "selection_score": _selection_score(
+                    no_attack_clean_positive_tpr,
+                    mean_temporal_sync_gain,
+                    max_attacked_negative_fpr,
+                ),
+            }
+        )
+    rows.sort(
+        key=lambda row: (
+            0 if bool(row.get("candidate_eligible")) else 1,
+            0 if bool(row.get("fpr_controlled")) else 1,
+            -float(row.get("selection_score") or 0.0),
+            float(row.get("lambda_sync") or 0.0),
+            int(row.get("sync_search_radius") or 0),
+            str(row.get("fusion_rule") or ""),
         )
     )
     return rows
@@ -305,6 +538,88 @@ def _select_tubelet_only_candidate(
     }
 
 
+def _select_tubelet_sync_candidate(
+    calibration_rows: list[dict[str, Any]],
+    mechanism_config: dict[str, Any],
+) -> dict[str, Any]:
+    if not calibration_rows:
+        raise ValueError("tubelet_sync calibration rows must not be empty")
+    selected_row = calibration_rows[0]
+    return {
+        "candidate_status": (
+            "sync_gain_candidate_selected"
+            if bool(selected_row.get("candidate_eligible"))
+            else "sync_gain_candidate_selected_best_effort"
+        ),
+        "method_variant": selected_row["method_variant"],
+        "base_method_variant": selected_row["base_method_variant"],
+        "tubelet_length": int(selected_row["tubelet_length"]),
+        "tubelet_partition": {
+            "spatial_patch_size": json.loads(str(selected_row["spatial_patch_size"])),
+        },
+        "score_calibration": {
+            "embedding_projection_support_weight": float(
+                selected_row["embedding_projection_support_weight"]
+            )
+        },
+        "fusion_rule": str(selected_row["fusion_rule"]),
+        "lambda_sync": float(selected_row["lambda_sync"]),
+        "sync_search": {
+            "offset_search_min": -int(selected_row["sync_search_radius"]),
+            "offset_search_max": int(selected_row["sync_search_radius"]),
+        },
+        "metrics": {
+            "no_attack_clean_negative_fpr": selected_row[
+                "no_attack_clean_negative_fpr"
+            ],
+            "no_attack_clean_positive_tpr": selected_row[
+                "no_attack_clean_positive_tpr"
+            ],
+            "max_attacked_negative_fpr": selected_row[
+                "max_attacked_negative_fpr"
+            ],
+            "temporal_crop_attacked_positive_tpr": selected_row[
+                "temporal_crop_attacked_positive_tpr"
+            ],
+            "frame_dropping_attacked_positive_tpr": selected_row[
+                "frame_dropping_attacked_positive_tpr"
+            ],
+            "local_clip_attacked_positive_tpr": selected_row[
+                "local_clip_attacked_positive_tpr"
+            ],
+            "quality_psnr_mean": selected_row["quality_psnr_mean"],
+            "quality_ssim_mean": selected_row["quality_ssim_mean"],
+            "temporal_crop_sync_gain": selected_row["temporal_crop_sync_gain"],
+            "frame_dropping_sync_gain": selected_row[
+                "frame_dropping_sync_gain"
+            ],
+            "local_clip_sync_gain": selected_row["local_clip_sync_gain"],
+            "mean_temporal_sync_gain": selected_row["mean_temporal_sync_gain"],
+        },
+        "selection_gate": {
+            "max_clean_negative_fpr": mechanism_config.get("max_clean_negative_fpr"),
+            "max_attacked_negative_fpr": mechanism_config.get(
+                "max_attacked_negative_fpr"
+            ),
+            "min_no_attack_clean_positive_tpr": mechanism_config.get(
+                "min_no_attack_clean_positive_tpr"
+            ),
+            "min_tubelet_sync_gain_over_tubelet_only_temporal": mechanism_config.get(
+                "min_tubelet_sync_gain_over_tubelet_only_temporal"
+            ),
+            "require_quality_not_collapsed": mechanism_config.get(
+                "require_quality_not_collapsed"
+            ),
+            "min_watermarked_video_psnr": mechanism_config.get(
+                "min_watermarked_video_psnr"
+            ),
+            "min_watermarked_video_ssim": mechanism_config.get(
+                "min_watermarked_video_ssim"
+            ),
+        },
+    }
+
+
 def _build_tubelet_sync_scan_seed(
     selected_candidate: dict[str, Any],
     grid_config: dict[str, Any],
@@ -339,6 +654,147 @@ def _build_tubelet_sync_scan_seed(
             "shrink_offset_search_radius_before_increasing_sync_weight",
         ],
     }
+
+
+def _is_tubelet_only_candidate_eligible(
+    clean_negative_fpr: float | None,
+    no_attack_clean_positive_tpr: float | None,
+    max_attacked_negative_fpr: float | None,
+    quality_psnr_mean: float | None,
+    quality_ssim_mean: float | None,
+    mechanism_config: dict[str, Any],
+) -> bool:
+    min_clean_positive_tpr = _safe_float(
+        mechanism_config.get("min_no_attack_clean_positive_tpr")
+    )
+    if not _is_fpr_controlled(
+        clean_negative_fpr,
+        max_attacked_negative_fpr,
+        mechanism_config,
+    ):
+        return False
+    if (
+        min_clean_positive_tpr is not None
+        and (
+            no_attack_clean_positive_tpr is None
+            or no_attack_clean_positive_tpr < min_clean_positive_tpr
+        )
+    ):
+        return False
+    return _is_quality_not_collapsed(
+        quality_psnr_mean,
+        quality_ssim_mean,
+        mechanism_config,
+    )
+
+
+def _is_tubelet_sync_candidate_eligible(
+    clean_negative_fpr: float | None,
+    no_attack_clean_positive_tpr: float | None,
+    max_attacked_negative_fpr: float | None,
+    quality_psnr_mean: float | None,
+    quality_ssim_mean: float | None,
+    temporal_crop_sync_gain: float | None,
+    local_clip_sync_gain: float | None,
+    mean_temporal_sync_gain: float | None,
+    mechanism_config: dict[str, Any],
+) -> bool:
+    min_sync_gain = _safe_float(
+        mechanism_config.get("min_tubelet_sync_gain_over_tubelet_only_temporal")
+    )
+    if not _is_tubelet_only_candidate_eligible(
+        clean_negative_fpr,
+        no_attack_clean_positive_tpr,
+        max_attacked_negative_fpr,
+        quality_psnr_mean,
+        quality_ssim_mean,
+        mechanism_config,
+    ):
+        return False
+    if temporal_crop_sync_gain is None or temporal_crop_sync_gain <= 0.0:
+        return False
+    if local_clip_sync_gain is None or local_clip_sync_gain <= 0.0:
+        return False
+    if min_sync_gain is not None and (
+        mean_temporal_sync_gain is None or mean_temporal_sync_gain < min_sync_gain
+    ):
+        return False
+    return True
+
+
+def _is_quality_not_collapsed(
+    quality_psnr_mean: float | None,
+    quality_ssim_mean: float | None,
+    mechanism_config: dict[str, Any],
+) -> bool:
+    if not bool(mechanism_config.get("require_quality_not_collapsed", False)):
+        return True
+    min_psnr = _safe_float(mechanism_config.get("min_watermarked_video_psnr"))
+    min_ssim = _safe_float(mechanism_config.get("min_watermarked_video_ssim"))
+    if min_psnr is not None and (quality_psnr_mean is None or quality_psnr_mean < min_psnr):
+        return False
+    if min_ssim is not None and (quality_ssim_mean is None or quality_ssim_mean < min_ssim):
+        return False
+    return True
+
+
+def _resolve_fusion_rule(event_record: dict[str, Any]) -> str | None:
+    mechanism_trace = event_record.get("mechanism_trace", {})
+    field_value = mechanism_trace.get("fusion_rule")
+    if isinstance(field_value, str) and field_value:
+        return field_value
+    return _parse_tubelet_sync_variant_name(str(event_record.get("method_variant", ""))).get(
+        "fusion_rule"
+    )
+
+
+def _resolve_lambda_sync(event_record: dict[str, Any]) -> float | None:
+    mechanism_trace = event_record.get("mechanism_trace", {})
+    field_value = mechanism_trace.get("lambda_sync")
+    if isinstance(field_value, (int, float)):
+        return round(float(field_value), 6)
+    parsed_payload = _parse_tubelet_sync_variant_name(
+        str(event_record.get("method_variant", ""))
+    )
+    lambda_sync = parsed_payload.get("lambda_sync")
+    if not isinstance(lambda_sync, (int, float)):
+        return None
+    return round(float(lambda_sync), 6)
+
+
+def _resolve_sync_search_radius(event_record: dict[str, Any]) -> int | None:
+    parsed_payload = _parse_tubelet_sync_variant_name(
+        str(event_record.get("method_variant", ""))
+    )
+    sync_search_radius = parsed_payload.get("sync_search_radius")
+    if isinstance(sync_search_radius, int):
+        return sync_search_radius
+    return None
+
+
+def _parse_tubelet_sync_variant_name(method_variant: str) -> dict[str, Any]:
+    if not method_variant.startswith("tubelet_sync_cal_"):
+        return {}
+    variant_tokens = method_variant.split("_")
+    parsed_payload: dict[str, Any] = {}
+    for token in variant_tokens:
+        if token.startswith("sr") and token[2:].isdigit():
+            parsed_payload["sync_search_radius"] = int(token[2:])
+        elif token.startswith("ls") and token[2:].isdigit():
+            parsed_payload["lambda_sync"] = round(int(token[2:]) / 1000.0, 6)
+        elif token.startswith("fr"):
+            fusion_rule_token = token[2:]
+            if fusion_rule_token == "sync":
+                continue
+            fusion_rule_map = {
+                "sync_rescue": "sync_rescue_fusion",
+                "cal_sync": "calibrated_tubelet_sync",
+            }
+            parsed_payload["fusion_rule"] = fusion_rule_map.get(
+                fusion_rule_token,
+                fusion_rule_token,
+            )
+    return parsed_payload
 
 
 def _find_variant_record(
@@ -406,6 +862,7 @@ def _write_text_report(
     calibration_rows: list[dict[str, Any]],
 ) -> None:
     selected_candidate = candidate_payload["selected_tubelet_only_candidate"]
+    selected_tubelet_sync_candidate = candidate_payload["selected_tubelet_sync_candidate"]
     lines = [
         "# Stage2 Mechanism Calibration Report",
         "",
@@ -421,6 +878,16 @@ def _write_text_report(
         f"- spatial_patch_size: {selected_candidate['tubelet_partition']['spatial_patch_size']}",
         f"- no_attack_clean_positive_tpr: {selected_candidate['metrics']['no_attack_clean_positive_tpr']}",
         f"- max_attacked_negative_fpr: {selected_candidate['metrics']['max_attacked_negative_fpr']}",
+        "",
+        "## Selected Tubelet-sync Candidate",
+        f"- candidate_status: {selected_tubelet_sync_candidate['candidate_status']}",
+        f"- method_variant: {selected_tubelet_sync_candidate['method_variant']}",
+        f"- fusion_rule: {selected_tubelet_sync_candidate['fusion_rule']}",
+        f"- lambda_sync: {selected_tubelet_sync_candidate['lambda_sync']}",
+        f"- sync_search: {selected_tubelet_sync_candidate['sync_search']}",
+        f"- temporal_crop_sync_gain: {selected_tubelet_sync_candidate['metrics']['temporal_crop_sync_gain']}",
+        f"- local_clip_sync_gain: {selected_tubelet_sync_candidate['metrics']['local_clip_sync_gain']}",
+        f"- mean_temporal_sync_gain: {selected_tubelet_sync_candidate['metrics']['mean_temporal_sync_gain']}",
         "",
         "## Tubelet-sync Scan Seed",
         f"- fusion_rule: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['fusion_rule']}",
@@ -500,6 +967,12 @@ def _max_numeric_value(values: list[float | None]) -> float | None:
     if not numeric_values:
         return None
     return round(max(numeric_values), 6)
+
+
+def _difference(left_value: float | None, right_value: float | None) -> float | None:
+    if left_value is None or right_value is None:
+        return None
+    return round(float(left_value) - float(right_value), 6)
 
 
 def main(argv: list[str] | None = None) -> int:

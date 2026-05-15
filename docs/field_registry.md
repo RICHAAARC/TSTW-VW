@@ -248,6 +248,10 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | quality_robustness_tradeoff_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt real_video_vae_latent_probe quality-robustness tradeoff figure. |
 | stage2_mechanism_report_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two mechanism audit report. |
 | stage2_mechanism_decision_path | artifact_layout | none | false | false | false | Relative layout path for the persisted stage-two mechanism decision artifact. |
+| calibration_purpose | protocol | none | false | false | false | Semantic calibration intent label recorded by stage-two mechanism calibration configs and candidate artifacts. |
+| selected_tubelet_only_candidate | protocol | none | false | false | false | Top-level artifact field carrying the governed tubelet-only calibration candidate selected from dev and calibration records only. |
+| tubelet_sync_scan_seed | protocol | none | false | false | false | Top-level artifact field describing the governed sync-parameter search seed derived from the selected tubelet-only calibration candidate. |
+| selected_tubelet_sync_candidate | protocol | none | false | false | false | Top-level artifact field carrying the governed tubelet-sync calibration candidate selected from actual scan records under the selected tubelet-only seed parameters. |
 | method_variants_summary | governance | none | false | false | false | Comma-separated method-variant summary emitted by the real_video_vae_latent_probe governance summary table and consumed by the real_video_vae_latent_probe report. |
 | attack_names_summary | governance | none | false | false | false | Comma-separated attack-name summary emitted by the real_video_vae_latent_probe governance summary table and consumed by the real_video_vae_latent_probe report. |
 | target_fprs_summary | governance | none | false | false | false | Comma-separated target-FPR summary emitted by the real_video_vae_latent_probe governance summary table and consumed by the real_video_vae_latent_probe report. |

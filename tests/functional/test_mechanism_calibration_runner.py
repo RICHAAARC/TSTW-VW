@@ -68,6 +68,34 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
                     "local_clip_attacked_positive_tpr": 0.9,
                 },
             },
+            "selected_tubelet_sync_candidate": {
+                "candidate_status": "sync_gain_candidate_selected",
+                "method_variant": "tubelet_sync_real_video_vae_candidate",
+                "base_method_variant": "tubelet_sync",
+                "tubelet_length": 1,
+                "tubelet_partition": {"spatial_patch_size": [4, 4]},
+                "score_calibration": {"embedding_projection_support_weight": 0.45},
+                "fusion_rule": "sync_rescue_fusion",
+                "lambda_sync": 0.05,
+                "sync_search": {
+                    "offset_search_min": -8,
+                    "offset_search_max": 8,
+                },
+                "metrics": {
+                    "no_attack_clean_negative_fpr": 0.0,
+                    "no_attack_clean_positive_tpr": 1.0,
+                    "max_attacked_negative_fpr": 0.0,
+                    "temporal_crop_attacked_positive_tpr": 1.0,
+                    "frame_dropping_attacked_positive_tpr": 1.0,
+                    "local_clip_attacked_positive_tpr": 1.0,
+                    "quality_psnr_mean": 24.0,
+                    "quality_ssim_mean": 0.7,
+                    "temporal_crop_sync_gain": 0.1,
+                    "frame_dropping_sync_gain": 0.1,
+                    "local_clip_sync_gain": 0.1,
+                    "mean_temporal_sync_gain": 0.1,
+                },
+            },
             "tubelet_sync_scan_seed": {
                 "base_method_variant": "tubelet_sync",
                 "recommended_method_variant": "tubelet_sync_real_video_vae_candidate",
@@ -130,9 +158,11 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     assert candidate_method_config["tubelet_length"] == 1
     assert candidate_method_config["tubelet_partition"]["spatial_patch_size"] == [4, 4]
     assert candidate_method_config["score_calibration"]["embedding_projection_support_weight"] == 0.45
-    assert candidate_method_config["lambda_sync"] == 0.0
-    assert candidate_method_config["sync_search"]["offset_search_min"] == -4
-    assert candidate_method_config["sync_search"]["offset_search_max"] == 4
+    assert candidate_method_config["lambda_sync"] == 0.05
+    assert candidate_method_config["fusion_rule"] == "sync_rescue_fusion"
+    assert candidate_method_config["sync_search"]["offset_search_min"] == -8
+    assert candidate_method_config["sync_search"]["offset_search_max"] == 8
     assert summary["generated_tubelet_sync_candidate_config_path"] == str(
         candidate_method_config_path
     )
+    assert summary["selected_tubelet_sync_candidate"]["method_variant"] == "tubelet_sync_real_video_vae_candidate"

@@ -21,6 +21,9 @@ from experiments.real_video_vae_latent_probe.artifact_builder import (
 from experiments.real_video_vae_latent_probe.mechanism_audit import (
     run_stage2_mechanism_audit,
 )
+from experiments.real_video_vae_latent_probe.mechanism_calibration_runner import (
+    run_stage2_mechanism_calibration,
+)
 from experiments.real_video_vae_latent_probe.output_layout import (
     build_real_video_vae_latent_output_paths,
 )
@@ -962,6 +965,44 @@ def run_probe_stage2_mechanism_audit(
             run_root=run_root,
             mechanism_config_path=mechanism_config_path,
             target_fpr=target_fpr,
+        )
+    )
+
+
+def run_probe_stage2_mechanism_calibration(
+    *,
+    run_root: str | Path,
+    run_mode: str = "formal",
+    runtime_profile: str = "formal",
+    grid_config_path: str | Path = "configs/ablation/stage2_vae_mechanism_calibration_grid.json",
+    protocol_config_path: str | Path = "configs/protocol/real_video_vae_latent_probe.json",
+    backend_config_path: str | Path = "configs/backend/real_video_vae_latent.json",
+    attack_matrix_path: str | Path = "configs/attacks/real_video_attack_matrix.json",
+    ablation_config_path: str | Path = "configs/ablation/real_video_vae_latent_ablation.json",
+    mechanism_config_path: str | Path = "configs/protocol/stage2_mechanism_gate.json",
+    dataset_manifest_path: str | Path | None = None,
+    runtime_config_path: str | Path | None = None,
+    samples_per_role: int | None = None,
+    batch_size_frames: int | None = None,
+    output_method_config_path: str | Path = "configs/method/tubelet_sync_real_video_vae_candidate.json",
+) -> dict[str, Any]:
+    """Run the stage-two mechanism calibration through the notebook helper layer."""
+    return _json_safe(
+        run_stage2_mechanism_calibration(
+            run_root=run_root,
+            run_mode=run_mode,
+            runtime_profile=runtime_profile,
+            grid_config_path=grid_config_path,
+            protocol_config_path=protocol_config_path,
+            backend_config_path=backend_config_path,
+            attack_matrix_path=attack_matrix_path,
+            ablation_config_path=ablation_config_path,
+            mechanism_config_path=mechanism_config_path,
+            dataset_manifest_path=dataset_manifest_path,
+            runtime_config_path=runtime_config_path,
+            samples_per_role=samples_per_role,
+            batch_size_frames=batch_size_frames,
+            output_method_config_path=output_method_config_path,
         )
     )
 

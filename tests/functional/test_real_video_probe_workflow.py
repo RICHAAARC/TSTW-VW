@@ -21,6 +21,7 @@ import paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow as wor
 from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
     merge_probe_method_shard_outputs,
     prepare_probe_runtime_workspace,
+    run_probe_stage2_mechanism_calibration,
     run_probe_method_shards,
     run_probe_runner,
     write_probe_runtime_config,
@@ -452,6 +453,61 @@ def test_run_probe_method_shards_launches_governed_method_allowlists(
         str(tmp_path / "run_root" / "method_shards" / "shard_02_tubelet_sweep"),
     ]
     assert result["shard_count"] == 2
+
+
+@pytest.mark.unit
+def test_run_probe_stage2_mechanism_calibration_forwards_governed_arguments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate notebook calibration helper delegates to the governed calibration runner.
+
+    Args:
+        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    captured_kwargs: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        workflow_module,
+        "run_stage2_mechanism_calibration",
+        lambda **kwargs: captured_kwargs.update(kwargs)
+        or {
+            "calibration_summary_path": tmp_path / "stage2_mechanism_calibration_summary.json",
+            "generated_tubelet_sync_candidate_config_path": tmp_path
+            / "tubelet_sync_real_video_vae_candidate.json",
+            "selected_tubelet_sync_candidate": {
+                "method_variant": "tubelet_sync_real_video_vae_candidate"
+            },
+        },
+    )
+
+    summary = run_probe_stage2_mechanism_calibration(
+        run_root=tmp_path / "calibration_run",
+        run_mode="formal",
+        runtime_profile="formal",
+        dataset_manifest_path=tmp_path / "dataset_manifest.json",
+        runtime_config_path=tmp_path / "runtime_config.json",
+        samples_per_role=2,
+        batch_size_frames=8,
+        output_method_config_path=tmp_path / "candidate_method.json",
+    )
+
+    assert captured_kwargs["run_root"] == tmp_path / "calibration_run"
+    assert captured_kwargs["run_mode"] == "formal"
+    assert captured_kwargs["runtime_profile"] == "formal"
+    assert captured_kwargs["samples_per_role"] == 2
+    assert captured_kwargs["batch_size_frames"] == 8
+    assert captured_kwargs["output_method_config_path"] == tmp_path / "candidate_method.json"
+    assert summary["calibration_summary_path"] == str(
+        tmp_path / "stage2_mechanism_calibration_summary.json"
+    )
+    assert summary["generated_tubelet_sync_candidate_config_path"] == str(
+        tmp_path / "tubelet_sync_real_video_vae_candidate.json"
+    )
 
 
 @pytest.mark.unit

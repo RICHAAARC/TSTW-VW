@@ -177,6 +177,9 @@ def run_stage2_mechanism_calibration(
         "selected_tubelet_only_candidate": selected_candidate_payload[
             "selected_tubelet_only_candidate"
         ],
+        "selected_tubelet_sync_candidate": selected_candidate_payload[
+            "selected_tubelet_sync_candidate"
+        ],
         "tubelet_sync_scan_seed": selected_candidate_payload["tubelet_sync_scan_seed"],
         "generated_tubelet_sync_candidate_config_path": str(output_method_config_file),
     }
@@ -428,17 +431,12 @@ def _build_tubelet_sync_candidate_method_config(
     tubelet_sync_template: dict[str, Any],
     candidate_payload: dict[str, Any],
 ) -> dict[str, Any]:
-    selected_candidate = candidate_payload["selected_tubelet_only_candidate"]
-    scan_seed = candidate_payload["tubelet_sync_scan_seed"]
-    parameter_scan = scan_seed["parameter_scan"]
-    sync_search_radius = _read_grid_integer_list(parameter_scan, "sync_search_radius")[0]
-    lambda_sync = _read_grid_numeric_list(parameter_scan, "lambda_sync")[0]
-    fusion_rule = _read_grid_string_list(parameter_scan, "fusion_rule")[0]
+    selected_candidate = candidate_payload["selected_tubelet_sync_candidate"]
     calibration_config = copy.deepcopy(tubelet_sync_template)
     calibration_config["target_construction_phase"] = "real_video_vae_latent_probe"
     calibration_config["method_status"] = "stage2_mechanism_calibration_candidate"
-    calibration_config["base_method_variant"] = str(scan_seed["base_method_variant"])
-    calibration_config["method_variant"] = str(scan_seed["recommended_method_variant"])
+    calibration_config["base_method_variant"] = str(selected_candidate["base_method_variant"])
+    calibration_config["method_variant"] = str(selected_candidate["method_variant"])
     calibration_config["tubelet_length"] = int(selected_candidate["tubelet_length"])
     calibration_config["tubelet_partition"] = {
         "spatial_patch_size": list(
@@ -453,10 +451,14 @@ def _build_tubelet_sync_candidate_method_config(
         6,
     )
     calibration_config.setdefault("sync_search", {})
-    calibration_config["sync_search"]["offset_search_min"] = -int(sync_search_radius)
-    calibration_config["sync_search"]["offset_search_max"] = int(sync_search_radius)
-    calibration_config["lambda_sync"] = round(float(lambda_sync), 6)
-    calibration_config["fusion_rule"] = str(fusion_rule)
+    calibration_config["sync_search"]["offset_search_min"] = int(
+        selected_candidate["sync_search"]["offset_search_min"]
+    )
+    calibration_config["sync_search"]["offset_search_max"] = int(
+        selected_candidate["sync_search"]["offset_search_max"]
+    )
+    calibration_config["lambda_sync"] = round(float(selected_candidate["lambda_sync"]), 6)
+    calibration_config["fusion_rule"] = str(selected_candidate["fusion_rule"])
     return calibration_config
 
 
