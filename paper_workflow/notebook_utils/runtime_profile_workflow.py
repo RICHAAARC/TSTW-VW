@@ -653,6 +653,10 @@ def estimate_real_video_vae_latent_run_scale(
     attack_matrix: str | Path,
     ablation_config: str | Path,
     runtime_profile: str,
+    protocol_config: str | Path | None = None,
+    samples_per_role: int | None = None,
+    execution_runtime_profile: str | None = None,
+    batch_size_frames: int | None = None,
 ) -> dict[str, Any]:
     """功能：估算 real-video VAE latent run 规模。
 
@@ -664,6 +668,10 @@ def estimate_real_video_vae_latent_run_scale(
         attack_matrix: Attack-matrix path.
         ablation_config: Ablation-config path.
         runtime_profile: Runtime profile.
+        protocol_config: Optional protocol-config path.
+        samples_per_role: Optional sample-count override.
+        execution_runtime_profile: Optional execution runtime-profile name.
+        batch_size_frames: Optional effective VAE frame batch size.
 
     Returns:
         The scale-estimation payload.
@@ -683,6 +691,26 @@ def estimate_real_video_vae_latent_run_scale(
             runtime_profile,
             "--output-json",
             str(output_json),
+            *(
+                ["--protocol-config", str(protocol_config)]
+                if protocol_config is not None
+                else []
+            ),
+            *(
+                ["--samples-per-role", str(int(samples_per_role))]
+                if samples_per_role is not None
+                else []
+            ),
+            *(
+                ["--execution-runtime-profile", str(execution_runtime_profile)]
+                if execution_runtime_profile is not None
+                else []
+            ),
+            *(
+                ["--batch-size-frames", str(int(batch_size_frames))]
+                if batch_size_frames is not None
+                else []
+            ),
         ],
     )
 
