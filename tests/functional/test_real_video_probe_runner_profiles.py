@@ -6,6 +6,8 @@ Module type: General module
 
 from __future__ import annotations
 
+import experiments.real_video_vae_latent_probe.runner as real_video_runner_module
+
 import types
 from pathlib import Path
 
@@ -16,6 +18,7 @@ pytestmark = pytest.mark.quick
 from experiments.real_video_vae_latent_probe.runner import RealVideoVaeLatentRunner
 from main.attacks.real_video_attack_registry import build_real_video_attack_registry
 from main.core.registry import load_json_config
+from main.protocol.calibrator import ThresholdCalibrator
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -151,6 +154,139 @@ def test_real_video_profile_sample_counts_are_explicit_for_governed_profiles() -
     assert runner._resolve_samples_per_role(None, protocol_config, "smoke") == 1
     assert runner._resolve_samples_per_role(None, protocol_config, "proof") == 8
     assert runner._resolve_samples_per_role(None, protocol_config, "formal") == 20
+
+
+@pytest.mark.unit
+def test_threshold_calibrator_uses_explicit_runtime_profile_override() -> None:
+    """Validate threshold calibration honors the active runtime profile override.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    calibrator = ThresholdCalibrator()
+    method_config = load_json_config(ROOT / "configs" / "method" / "frame_prc.json")
+    protocol_config = load_json_config(
+        ROOT / "configs" / "protocol" / "real_video_vae_latent_probe.json"
+    )
+    calibration_event_records = [
+        {
+            "event_id": "frame_prc:sample_calibration_clean_negative_000001:no_attack:default",
+            "sample_id": "sample_calibration_clean_negative_000001",
+            "split": "calibration",
+            "sample_role": "clean_negative",
+            "method_variant": "frame_prc",
+            "attack_name": "no_attack",
+            "evidence_scores": {"S_final": 0.01},
+        },
+        {
+            "event_id": "frame_prc:sample_calibration_attacked_negative_000001:h264_compression:default",
+            "sample_id": "sample_calibration_attacked_negative_000001",
+            "split": "calibration",
+            "sample_role": "attacked_negative",
+            "method_variant": "frame_prc",
+            "attack_name": "h264_compression",
+            "evidence_scores": {"S_final": 0.02},
+        },
+    ]
+
+    threshold_record = calibrator.calibrate(
+        "real_video_probe_threshold_profile_override",
+        method_config,
+        protocol_config,
+        calibration_event_records,
+        runtime_profile_override="formal",
+    )
+
+    assert threshold_record["runtime_profile"] == "formal"
+    assert threshold_record["validation_target_fpr"] == 0.001
+
+
+@pytest.mark.unit
+def test_runner_passes_active_runtime_profile_to_threshold_calibrator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate the real-video runner forwards its active runtime profile to calibration.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    method_config = load_json_config(ROOT / "configs" / "method" / "frame_prc.json")
+    protocol_config = load_json_config(
+        ROOT / "configs" / "protocol" / "real_video_vae_latent_probe.json"
+    )
+    captured_runtime_profile: dict[str, str] = {}
+    calibration_records = [
+        {
+            "event_id": "frame_prc:sample_calibration_clean_negative_000001:no_attack:default",
+            "sample_id": "sample_calibration_clean_negative_000001",
+            "split": "calibration",
+            "sample_role": "clean_negative",
+            "method_variant": "frame_prc",
+            "attack_name": "no_attack",
+            "evidence_scores": {"S_final": 0.01},
+        }
+    ]
+
+    class _FakeThresholdCalibrator:
+        def calibrate(
+            self,
+            run_id: str,
+            method_config: dict[str, object],
+            protocol_config: dict[str, object],
+            calibration_event_records: list[dict[str, object]],
+            runtime_profile_override: str | None = None,
+        ) -> dict[str, object]:
+            del run_id, method_config, protocol_config, calibration_event_records
+            captured_runtime_profile["value"] = str(runtime_profile_override)
+            return {
+                "threshold_id": "fixed_low_fpr_calibrated_detection:S_final:frame_prc",
+                "runtime_profile": str(runtime_profile_override),
+            }
+
+    def _fake_run_event_subset(*args: object, **kwargs: object) -> list[dict[str, object]]:
+        allowed_splits = kwargs.get("allowed_splits")
+        if allowed_splits is None:
+            allowed_splits = args[6]
+        if allowed_splits == {"calibration"}:
+            return calibration_records
+        return []
+
+    monkeypatch.setattr(
+        real_video_runner_module,
+        "build_method_from_config",
+        lambda _method_config: object(),
+    )
+    monkeypatch.setattr(runner, "_run_event_subset", _fake_run_event_subset)
+    runner._threshold_calibrator = _FakeThresholdCalibrator()
+
+    _, threshold_record = runner._run_method_variant(
+        run_id="real_video_probe_profile_passthrough",
+        output_root=ROOT,
+        event_plan=[],
+        method_config=method_config,
+        protocol_config=protocol_config,
+        runtime_profile="formal",
+        runtime_splits={"dev", "calibration", "test"},
+        runtime_sample_roles={
+            "clean_negative",
+            "attacked_negative",
+            "watermarked_positive",
+            "attacked_positive",
+        },
+        latent_backend=object(),
+        vae_runtime_backend=object(),
+        vae_metadata={},
+    )
+
+    assert captured_runtime_profile["value"] == "formal"
+    assert threshold_record["runtime_profile"] == "formal"
 
 
 @pytest.mark.unit

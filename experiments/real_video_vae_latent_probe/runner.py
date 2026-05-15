@@ -323,6 +323,7 @@ class RealVideoVaeLatentRunner:
                     event_plan=event_plan,
                     method_config=method_config,
                     protocol_config=protocol_config,
+                    runtime_profile=runtime_profile,
                     runtime_splits=runtime_splits,
                     runtime_sample_roles=runtime_sample_roles,
                     latent_backend=latent_backend,
@@ -510,6 +511,7 @@ class RealVideoVaeLatentRunner:
         event_plan: list[EventPlanEntry],
         method_config: dict[str, Any],
         protocol_config: dict[str, Any],
+        runtime_profile: str,
         runtime_splits: set[str],
         runtime_sample_roles: set[str],
         latent_backend: RealVideoVAELatentBackend,
@@ -568,6 +570,7 @@ class RealVideoVaeLatentRunner:
             method_config,
             protocol_config,
             calibration_records,
+            runtime_profile_override=runtime_profile,
         )
         threshold_record = dict(threshold_record)
         threshold_record["threshold_id"] = (

@@ -121,6 +121,7 @@ class ThresholdCalibrator:
         method_config: dict[str, Any],
         protocol_config: dict[str, Any],
         calibration_event_records: list[dict[str, Any]],
+        runtime_profile_override: str | None = None,
     ) -> dict[str, Any]:
         """功能：从 calibration negative records 生成 threshold record。
 
@@ -131,6 +132,7 @@ class ThresholdCalibrator:
             method_config: Parsed method config.
             protocol_config: Parsed protocol config.
             calibration_event_records: Candidate calibration event records.
+            runtime_profile_override: Optional explicit runtime profile for threshold semantics.
 
         Returns:
             A governed threshold record.
@@ -143,6 +145,12 @@ class ThresholdCalibrator:
             raise TypeError("protocol_config must be a dictionary")
         if not isinstance(calibration_event_records, list) or not calibration_event_records:
             raise ValueError("calibration_event_records must be a non-empty list")
+        if runtime_profile_override is not None:
+            if not isinstance(runtime_profile_override, str) or not runtime_profile_override.strip():
+                # 显式 runtime profile 覆盖必须可解析，避免阈值语义回落到错误 profile。
+                raise ValueError(
+                    "runtime_profile_override must be a non-empty string when provided"
+                )
         if not isinstance(method_config.get("method_family"), str) or not method_config[
             "method_family"
         ]:
@@ -154,7 +162,11 @@ class ThresholdCalibrator:
 
         threshold_protocol = protocol_config["threshold_protocol"]
         target_fpr = float(threshold_protocol["target_fpr_placeholder"])
-        runtime_profile = str(protocol_config.get("runtime_profile", "smoke"))
+        runtime_profile = (
+            runtime_profile_override.strip()
+            if runtime_profile_override is not None
+            else str(protocol_config.get("runtime_profile", "smoke"))
+        )
         validation_target_fpr = _resolve_profile_float(
             threshold_protocol.get("validation_target_fpr_by_profile", {}),
             runtime_profile,
