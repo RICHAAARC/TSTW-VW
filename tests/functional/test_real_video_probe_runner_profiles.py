@@ -235,3 +235,56 @@ def test_cached_decoded_video_artifact_reuses_same_latent_across_attack_relpaths
     assert decode_call_count["value"] == 1
     assert first_metadata == expected_metadata
     assert second_metadata == expected_metadata
+
+
+@pytest.mark.unit
+def test_split_plan_shard_selection_round_robins_within_split_and_sample_role() -> None:
+    """Validate split-plan sharding partitions each split-role stream independently.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    split_plan = [
+        types.SimpleNamespace(split="dev", sample_role="clean_negative", sample_id="cn_00"),
+        types.SimpleNamespace(split="dev", sample_role="clean_negative", sample_id="cn_01"),
+        types.SimpleNamespace(split="dev", sample_role="attacked_negative", sample_id="an_00"),
+        types.SimpleNamespace(split="dev", sample_role="attacked_negative", sample_id="an_01"),
+        types.SimpleNamespace(split="test", sample_role="clean_negative", sample_id="tcn_00"),
+        types.SimpleNamespace(split="test", sample_role="clean_negative", sample_id="tcn_01"),
+    ]
+
+    shard_zero = runner._select_split_plan_shard(split_plan, shard_count=2, shard_index=0)
+    shard_one = runner._select_split_plan_shard(split_plan, shard_count=2, shard_index=1)
+
+    assert [entry.sample_id for entry in shard_zero] == ["cn_00", "an_00", "tcn_00"]
+    assert [entry.sample_id for entry in shard_one] == ["cn_01", "an_01", "tcn_01"]
+
+
+@pytest.mark.unit
+def test_event_worker_buckets_keep_source_groups_intact() -> None:
+    """Validate worker buckets do not split events from the same source identity.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    event_plan_entries = [
+        types.SimpleNamespace(split="dev", sample_role="clean_negative", sample_id="sample_00", attack_name="no_attack"),
+        types.SimpleNamespace(split="dev", sample_role="attacked_negative", sample_id="sample_00", attack_name="h264_compression"),
+        types.SimpleNamespace(split="dev", sample_role="clean_negative", sample_id="sample_01", attack_name="no_attack"),
+        types.SimpleNamespace(split="dev", sample_role="attacked_negative", sample_id="sample_01", attack_name="temporal_crop"),
+    ]
+
+    grouped_event_plan = runner._group_event_plan_entries_by_source(event_plan_entries)
+    worker_buckets = runner._plan_event_worker_buckets(grouped_event_plan, worker_count=2)
+
+    assert len(worker_buckets) == 2
+    assert [entry.sample_id for entry in worker_buckets[0]] == ["sample_00", "sample_00"]
+    assert [entry.sample_id for entry in worker_buckets[1]] == ["sample_01", "sample_01"]

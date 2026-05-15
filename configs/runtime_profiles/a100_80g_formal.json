@@ -7,6 +7,7 @@
   "batch_size_frames": 256,
   "lpips_batch_size": 32,
   "clip_batch_size": 64,
+  "worker_count": 4,
   "video_io_worker_count": 4,
   "attack_worker_count": 4,
   "shard_count": 1,

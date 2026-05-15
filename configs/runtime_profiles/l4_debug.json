@@ -6,6 +6,7 @@
   "vae_batch_size_frames": 4,
   "lpips_batch_size": 8,
   "clip_batch_size": 8,
+  "worker_count": 1,
   "video_io_worker_count": 1,
   "attack_worker_count": 1,
   "shard_count": 1,

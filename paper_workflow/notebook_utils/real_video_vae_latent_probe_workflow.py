@@ -299,6 +299,9 @@ def run_probe_runner(
     dataset_manifest: str | Path | None = None,
     samples_per_role: int | None = None,
     batch_size_frames: int | None = None,
+    shard_count: int | None = None,
+    shard_index: int | None = None,
+    worker_count: int | None = None,
     method_variants: list[str] | None = None,
     python_executable: str = sys.executable,
 ) -> None:
@@ -316,7 +319,10 @@ def run_probe_runner(
         dataset_manifest: Optional dataset manifest path.
         samples_per_role: Optional sample count override.
         batch_size_frames: Optional VAE frame-batch override.
-        method_variants: Optional governed method-variant allowlist for method shards.
+        shard_count: Optional event-shard count override.
+        shard_index: Optional selected event-shard index override.
+        worker_count: Optional in-shard worker count override.
+        method_variants: Optional governed method-variant allowlist for legacy method-variant splits.
         python_executable: Python executable used for the subprocess.
 
     Returns:
@@ -335,6 +341,9 @@ def run_probe_runner(
         dataset_manifest=dataset_manifest,
         samples_per_role=samples_per_role,
         batch_size_frames=batch_size_frames,
+        shard_count=shard_count,
+        shard_index=shard_index,
+        worker_count=worker_count,
         method_variants=method_variants,
         python_executable=python_executable,
     )
@@ -379,6 +388,9 @@ def _build_probe_runner_command(
     dataset_manifest: str | Path | None,
     samples_per_role: int | None,
     batch_size_frames: int | None,
+    shard_count: int | None,
+    shard_index: int | None,
+    worker_count: int | None,
     method_variants: list[str] | None,
     python_executable: str,
 ) -> list[str]:
@@ -396,7 +408,10 @@ def _build_probe_runner_command(
         dataset_manifest: Optional dataset manifest path.
         samples_per_role: Optional sample count override.
         batch_size_frames: Optional frame-batch override.
-        method_variants: Optional method-variant allowlist.
+        shard_count: Optional event-shard count override.
+        shard_index: Optional selected event-shard index override.
+        worker_count: Optional in-shard worker count override.
+        method_variants: Optional method-variant allowlist for legacy method-variant splits.
         python_executable: Python executable used for the subprocess.
 
     Returns:
@@ -429,6 +444,12 @@ def _build_probe_runner_command(
         runner_command.extend(["--samples-per-role", str(int(samples_per_role))])
     if batch_size_frames is not None:
         runner_command.extend(["--batch-size-frames", str(int(batch_size_frames))])
+    if shard_count is not None:
+        runner_command.extend(["--shard-count", str(int(shard_count))])
+    if shard_index is not None:
+        runner_command.extend(["--shard-index", str(int(shard_index))])
+    if worker_count is not None:
+        runner_command.extend(["--worker-count", str(int(worker_count))])
     if method_variants is not None:
         normalized_method_variants = [str(method_variant) for method_variant in method_variants]
         if not normalized_method_variants or any(not value for value in normalized_method_variants):
@@ -460,7 +481,7 @@ def _build_probe_runner_environment(repository_root: Path) -> dict[str, str]:
     return runner_env
 
 
-def run_probe_method_shards(
+def run_probe_method_variant_splits(
     *,
     run_root: str | Path,
     run_mode: str,
@@ -474,10 +495,10 @@ def run_probe_method_shards(
     samples_per_role: int | None = None,
     batch_size_frames: int | None = None,
     method_variants: list[str] | None = None,
-    shard_count: int = 2,
+    method_variant_split_count: int = 2,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
-    """Run the governed probe runner as multiple method shards and merge outputs.
+    """Run the governed probe runner as legacy method-variant splits and merge outputs.
 
     Args:
         run_root: Final merged run-root path.
@@ -492,17 +513,17 @@ def run_probe_method_shards(
         samples_per_role: Optional sample count override.
         batch_size_frames: Optional frame-batch override.
         method_variants: Optional method-variant allowlist.
-        shard_count: Requested method shard count.
+        method_variant_split_count: Requested legacy method-variant split count.
         python_executable: Python executable used for subprocesses.
 
     Returns:
-        A shard execution and merge summary payload.
+        A split execution and merge summary payload.
     """
     run_root_path = Path(run_root)
     repository_root = Path(__file__).resolve().parents[2]
-    resolved_shard_count = int(shard_count)
-    if resolved_shard_count < 1:
-        raise ValueError("shard_count must be a positive integer")
+    resolved_method_variant_split_count = int(method_variant_split_count)
+    if resolved_method_variant_split_count < 1:
+        raise ValueError("method_variant_split_count must be a positive integer")
 
     resolved_method_variants = _resolve_probe_runtime_method_variants(
         repository_root=repository_root,
@@ -510,11 +531,11 @@ def run_probe_method_shards(
         runtime_profile=runtime_profile,
         method_variants=method_variants,
     )
-    shard_plan = _plan_probe_method_shards(
+    method_variant_split_plan = _plan_probe_method_variant_splits(
         method_variants=resolved_method_variants,
-        shard_count=resolved_shard_count,
+        split_count=resolved_method_variant_split_count,
     )
-    if len(shard_plan) <= 1:
+    if len(method_variant_split_plan) <= 1:
         run_probe_runner(
             run_root=run_root_path,
             run_mode=run_mode,
@@ -527,25 +548,33 @@ def run_probe_method_shards(
             dataset_manifest=dataset_manifest,
             samples_per_role=samples_per_role,
             batch_size_frames=batch_size_frames,
+            shard_count=None,
+            shard_index=None,
+            worker_count=None,
             method_variants=resolved_method_variants,
             python_executable=python_executable,
         )
         return {
             "run_root": str(run_root_path),
-            "shard_count": 1,
-            "method_shard_plan": [{"shard_name": "shard_01_full_run", "method_variants": resolved_method_variants}],
-            "shard_run_roots": [str(run_root_path)],
+            "method_variant_split_count": 1,
+            "method_variant_split_plan": [
+                {
+                    "split_name": "split_01_full_run",
+                    "method_variants": resolved_method_variants,
+                }
+            ],
+            "method_variant_split_run_roots": [str(run_root_path)],
         }
 
-    method_shards_root = run_root_path / "method_shards"
-    method_shards_root.mkdir(parents=True, exist_ok=True)
+    method_variant_splits_root = run_root_path / "method_variant_splits"
+    method_variant_splits_root.mkdir(parents=True, exist_ok=True)
     runner_env = _build_probe_runner_environment(repository_root)
-    shard_processes: list[dict[str, Any]] = []
-    for shard_entry in shard_plan:
-        shard_run_root = method_shards_root / str(shard_entry["shard_name"])
-        shard_run_root.parent.mkdir(parents=True, exist_ok=True)
+    split_processes: list[dict[str, Any]] = []
+    for split_entry in method_variant_split_plan:
+        split_run_root = method_variant_splits_root / str(split_entry["split_name"])
+        split_run_root.parent.mkdir(parents=True, exist_ok=True)
         runner_command = _build_probe_runner_command(
-            run_root=shard_run_root,
+            run_root=split_run_root,
             run_mode=run_mode,
             runtime_profile=runtime_profile,
             runtime_config_path=runtime_config_path,
@@ -556,7 +585,10 @@ def run_probe_method_shards(
             dataset_manifest=dataset_manifest,
             samples_per_role=samples_per_role,
             batch_size_frames=batch_size_frames,
-            method_variants=shard_entry["method_variants"],
+            shard_count=None,
+            shard_index=None,
+            worker_count=None,
+            method_variants=split_entry["method_variants"],
             python_executable=python_executable,
         )
         process = subprocess.Popen(
@@ -569,19 +601,19 @@ def run_probe_method_shards(
             encoding="utf-8",
             errors="replace",
         )
-        shard_processes.append(
+        split_processes.append(
             {
-                "shard_name": shard_entry["shard_name"],
-                "method_variants": list(shard_entry["method_variants"]),
-                "run_root": shard_run_root,
+                "split_name": split_entry["split_name"],
+                "method_variants": list(split_entry["method_variants"]),
+                "run_root": split_run_root,
                 "command": runner_command,
                 "process": process,
             }
         )
 
-    shard_outputs: list[dict[str, Any]] = []
-    for shard_process in shard_processes:
-        process = shard_process["process"]
+    split_outputs: list[dict[str, Any]] = []
+    for split_process in split_processes:
+        process = split_process["process"]
         if hasattr(process, "communicate"):
             combined_output, _ = process.communicate()
         else:
@@ -590,37 +622,39 @@ def run_probe_method_shards(
                 combined_output = process.stdout.read()
         combined_output = str(combined_output or "")
         if combined_output:
-            print(f"[{shard_process['shard_name']}]\n{combined_output}", end="")
+            print(f"[{split_process['split_name']}]\n{combined_output}", end="")
         return_code = process.wait()
         if return_code != 0:
             raise RuntimeError(
-                "run_probe_method_shards failed while executing a governed runner shard.\n"
-                f"shard_name: {shard_process['shard_name']}\n"
-                f"command: {subprocess.list2cmdline(shard_process['command'])}\n"
+                "run_probe_method_variant_splits failed while executing a governed runner split.\n"
+                f"split_name: {split_process['split_name']}\n"
+                f"command: {subprocess.list2cmdline(split_process['command'])}\n"
                 f"cwd: {repository_root}\n"
                 f"runner_output:\n{combined_output or '<no runner output>'}"
             )
-        shard_outputs.append(
+        split_outputs.append(
             {
-                "shard_name": shard_process["shard_name"],
-                "method_variants": list(shard_process["method_variants"]),
-                "run_root": str(shard_process["run_root"]),
+                "split_name": split_process["split_name"],
+                "method_variants": list(split_process["method_variants"]),
+                "run_root": str(split_process["run_root"]),
                 "runner_output": combined_output.strip(),
             }
         )
 
-    merge_summary = merge_probe_method_shard_outputs(
+    merge_summary = merge_probe_method_variant_split_outputs(
         run_root=run_root_path,
-        shard_run_roots=[Path(shard_process["run_root"]) for shard_process in shard_processes],
+        split_run_roots=[Path(split_process["run_root"]) for split_process in split_processes],
         runtime_config_path=runtime_config_path,
-        method_shard_plan=shard_plan,
+        method_variant_split_plan=method_variant_split_plan,
     )
     return {
         "run_root": str(run_root_path),
-        "shard_count": len(shard_plan),
-        "method_shard_plan": _json_safe(shard_plan),
-        "shard_run_roots": [str(shard_process["run_root"]) for shard_process in shard_processes],
-        "shard_outputs": shard_outputs,
+        "method_variant_split_count": len(method_variant_split_plan),
+        "method_variant_split_plan": _json_safe(method_variant_split_plan),
+        "method_variant_split_run_roots": [
+            str(split_process["run_root"]) for split_process in split_processes
+        ],
+        "method_variant_split_outputs": split_outputs,
         "merge_summary": _json_safe(merge_summary),
     }
 
@@ -657,27 +691,27 @@ def _resolve_probe_runtime_method_variants(
     return [str(method_config["method_variant"]) for method_config in runtime_method_configs]
 
 
-def _plan_probe_method_shards(
+def _plan_probe_method_variant_splits(
     *,
     method_variants: list[str],
-    shard_count: int,
+    split_count: int,
 ) -> list[dict[str, Any]]:
-    """Plan the governed method shards for a runner invocation.
+    """Plan the legacy method-variant splits for a runner invocation.
 
     Args:
         method_variants: Ordered runtime method variants.
-        shard_count: Requested shard count.
+        split_count: Requested split count.
 
     Returns:
-        An ordered shard plan payload.
+        An ordered split plan payload.
     """
     normalized_method_variants = [str(method_variant) for method_variant in method_variants]
     if not normalized_method_variants:
         raise ValueError("method_variants must not be empty")
-    if shard_count <= 1 or len(normalized_method_variants) <= 1:
+    if split_count <= 1 or len(normalized_method_variants) <= 1:
         return [
             {
-                "shard_name": "shard_01_full_run",
+                "split_name": "split_01_full_run",
                 "method_variants": normalized_method_variants,
             }
         ]
@@ -693,113 +727,113 @@ def _plan_probe_method_shards(
         for method_variant in normalized_method_variants
         if method_variant not in set(primary_order)
     ]
-    if shard_count == 2 and primary_variants and sweep_variants:
+    if split_count == 2 and primary_variants and sweep_variants:
         return [
             {
-                "shard_name": "shard_01_main_variants",
+                "split_name": "split_01_main_variants",
                 "method_variants": primary_variants,
             },
             {
-                "shard_name": "shard_02_tubelet_sweep",
+                "split_name": "split_02_tubelet_sweep",
                 "method_variants": sweep_variants,
             },
         ]
 
-    resolved_shard_count = min(int(shard_count), len(normalized_method_variants))
-    planned_groups: list[list[str]] = [[] for _ in range(resolved_shard_count)]
+    resolved_split_count = min(int(split_count), len(normalized_method_variants))
+    planned_groups: list[list[str]] = [[] for _ in range(resolved_split_count)]
     for method_index, method_variant in enumerate(normalized_method_variants):
-        planned_groups[method_index % resolved_shard_count].append(method_variant)
+        planned_groups[method_index % resolved_split_count].append(method_variant)
     return [
         {
-            "shard_name": f"shard_{group_index + 1:02d}",
+            "split_name": f"split_{group_index + 1:02d}",
             "method_variants": planned_groups[group_index],
         }
-        for group_index in range(resolved_shard_count)
+        for group_index in range(resolved_split_count)
         if planned_groups[group_index]
     ]
 
 
-def merge_probe_method_shard_outputs(
+def merge_probe_method_variant_split_outputs(
     *,
     run_root: str | Path,
-    shard_run_roots: list[str | Path],
+    split_run_roots: list[str | Path],
     runtime_config_path: str | Path | None = None,
-    method_shard_plan: list[dict[str, Any]] | None = None,
+    method_variant_split_plan: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Merge multiple shard outputs into one governed probe run root.
+    """Merge legacy method-variant split outputs into one governed probe run root.
 
     Args:
         run_root: Final merged run-root path.
-        shard_run_roots: Shard run-root paths.
+        split_run_roots: Split run-root paths.
         runtime_config_path: Optional notebook runtime-config path.
-        method_shard_plan: Optional explicit shard plan metadata.
+        method_variant_split_plan: Optional explicit split plan metadata.
 
     Returns:
         A merge summary payload.
     """
     run_root_path = Path(run_root)
-    normalized_shard_roots = [Path(shard_root) for shard_root in shard_run_roots]
-    if not normalized_shard_roots:
-        raise ValueError("shard_run_roots must not be empty")
+    normalized_split_roots = [Path(split_root) for split_root in split_run_roots]
+    if not normalized_split_roots:
+        raise ValueError("split_run_roots must not be empty")
 
     combined_event_score_records: list[dict[str, Any]] = []
     combined_threshold_records: list[dict[str, Any]] = []
     combined_artifact_manifest: dict[tuple[str, str], dict[str, Any]] = {}
-    shard_summaries: list[dict[str, Any]] = []
-    shard_runtime_manifests: list[dict[str, Any]] = []
-    shard_run_manifests: list[dict[str, Any]] = []
-    shard_runtime_configs: list[dict[str, Any]] = []
+    split_summaries: list[dict[str, Any]] = []
+    split_runtime_manifests: list[dict[str, Any]] = []
+    split_run_manifests: list[dict[str, Any]] = []
+    split_runtime_configs: list[dict[str, Any]] = []
 
     plan_lookup = {
-        str(shard_entry.get("shard_name")): shard_entry
-        for shard_entry in (method_shard_plan or [])
-        if isinstance(shard_entry, dict)
+        str(split_entry.get("split_name")): split_entry
+        for split_entry in (method_variant_split_plan or [])
+        if isinstance(split_entry, dict)
     }
-    for shard_root_path in normalized_shard_roots:
-        shard_record_writer = RecordWriter(shard_root_path)
-        shard_event_score_records = shard_record_writer.read_event_score_records()
-        shard_threshold_records = shard_record_writer.read_threshold_records()
-        if not shard_event_score_records or not shard_threshold_records:
-            raise ValueError(f"shard output is incomplete: {shard_root_path}")
-        combined_event_score_records.extend(shard_event_score_records)
-        combined_threshold_records.extend(shard_threshold_records)
+    for split_root_path in normalized_split_roots:
+        split_record_writer = RecordWriter(split_root_path)
+        split_event_score_records = split_record_writer.read_event_score_records()
+        split_threshold_records = split_record_writer.read_threshold_records()
+        if not split_event_score_records or not split_threshold_records:
+            raise ValueError(f"method-variant split output is incomplete: {split_root_path}")
+        combined_event_score_records.extend(split_event_score_records)
+        combined_threshold_records.extend(split_threshold_records)
 
-        shard_output_paths = build_real_video_vae_latent_output_paths(shard_root_path)
-        if shard_output_paths.artifact_manifest_path.exists():
+        split_output_paths = build_real_video_vae_latent_output_paths(split_root_path)
+        if split_output_paths.artifact_manifest_path.exists():
             for artifact_entry in json.loads(
-                shard_output_paths.artifact_manifest_path.read_text(encoding="utf-8")
+                split_output_paths.artifact_manifest_path.read_text(encoding="utf-8")
             ):
                 artifact_key = (
                     str(artifact_entry.get("artifact_kind")),
                     str(artifact_entry.get("relpath")),
                 )
                 combined_artifact_manifest[artifact_key] = artifact_entry
-        if shard_output_paths.runtime_manifest_path.exists():
-            shard_runtime_manifests.append(
-                json.loads(shard_output_paths.runtime_manifest_path.read_text(encoding="utf-8"))
+        if split_output_paths.runtime_manifest_path.exists():
+            split_runtime_manifests.append(
+                json.loads(split_output_paths.runtime_manifest_path.read_text(encoding="utf-8"))
             )
-        if shard_output_paths.run_manifest_path.exists():
-            shard_run_manifests.append(
-                json.loads(shard_output_paths.run_manifest_path.read_text(encoding="utf-8"))
+        if split_output_paths.run_manifest_path.exists():
+            split_run_manifests.append(
+                json.loads(split_output_paths.run_manifest_path.read_text(encoding="utf-8"))
             )
-        if shard_output_paths.runtime_config_path.exists():
-            shard_runtime_configs.append(
-                json.loads(shard_output_paths.runtime_config_path.read_text(encoding="utf-8"))
+        if split_output_paths.runtime_config_path.exists():
+            split_runtime_configs.append(
+                json.loads(split_output_paths.runtime_config_path.read_text(encoding="utf-8"))
             )
 
-        shard_name = shard_root_path.name
-        planned_variants = plan_lookup.get(shard_name, {}).get("method_variants")
+        split_name = split_root_path.name
+        planned_variants = plan_lookup.get(split_name, {}).get("method_variants")
         if planned_variants is None:
             planned_variants = sorted(
-                {str(record.get("method_variant")) for record in shard_event_score_records}
+                {str(record.get("method_variant")) for record in split_event_score_records}
             )
-        shard_summaries.append(
+        split_summaries.append(
             {
-                "shard_name": shard_name,
-                "shard_run_root": str(shard_root_path),
+                "split_name": split_name,
+                "split_run_root": str(split_root_path),
                 "method_variants": list(planned_variants),
-                "event_record_count": len(shard_event_score_records),
-                "threshold_record_count": len(shard_threshold_records),
+                "event_record_count": len(split_event_score_records),
+                "threshold_record_count": len(split_threshold_records),
             }
         )
 
@@ -828,18 +862,18 @@ def merge_probe_method_shard_outputs(
     base_runtime_config: dict[str, Any] = {}
     if runtime_config_path is not None and Path(runtime_config_path).exists():
         base_runtime_config = json.loads(Path(runtime_config_path).read_text(encoding="utf-8"))
-    elif shard_runtime_configs:
-        base_runtime_config = dict(shard_runtime_configs[0])
+    elif split_runtime_configs:
+        base_runtime_config = dict(split_runtime_configs[0])
     merged_method_variants = sorted(
         {str(record.get("method_variant")) for record in combined_event_score_records}
     )
     merged_runtime_config = {
         **base_runtime_config,
         "method_variants": merged_method_variants,
-        "method_shard_mode": "parallel_method_variants",
-        "shard_count": len(shard_summaries),
-        "method_shard_schedule": shard_summaries,
-        "merged_from_method_shards": True,
+        "method_variant_split_mode": "legacy_parallel_method_variants",
+        "method_variant_split_count": len(split_summaries),
+        "method_variant_split_schedule": split_summaries,
+        "merged_from_method_variant_splits": True,
     }
     output_paths.runtime_config_path.parent.mkdir(parents=True, exist_ok=True)
     output_paths.runtime_config_path.write_text(
@@ -847,14 +881,14 @@ def merge_probe_method_shard_outputs(
         encoding="utf-8",
     )
 
-    base_runtime_manifest = dict(shard_runtime_manifests[0]) if shard_runtime_manifests else {}
+    base_runtime_manifest = dict(split_runtime_manifests[0]) if split_runtime_manifests else {}
     merged_runtime_manifest = {
         **base_runtime_manifest,
         "run_id": run_root_path.name,
         "method_variants": merged_method_variants,
-        "method_shard_schedule": shard_summaries,
-        "shard_count": len(shard_summaries),
-        "merged_from_method_shards": True,
+        "method_variant_split_schedule": split_summaries,
+        "method_variant_split_count": len(split_summaries),
+        "merged_from_method_variant_splits": True,
     }
     output_paths.runtime_manifest_path.parent.mkdir(parents=True, exist_ok=True)
     output_paths.runtime_manifest_path.write_text(
@@ -862,7 +896,7 @@ def merge_probe_method_shard_outputs(
         encoding="utf-8",
     )
 
-    base_run_manifest = dict(shard_run_manifests[0]) if shard_run_manifests else {}
+    base_run_manifest = dict(split_run_manifests[0]) if split_run_manifests else {}
     merged_run_manifest = {
         **base_run_manifest,
         "run_id": run_root_path.name,
@@ -875,39 +909,41 @@ def merge_probe_method_shard_outputs(
         "method_config_digest": compute_object_digest(
             sorted(
                 str(run_manifest.get("method_config_digest"))
-                for run_manifest in shard_run_manifests
+                for run_manifest in split_run_manifests
             )
         ),
         "placeholder_fields": sorted(
             {
                 str(field_name)
-                for run_manifest in shard_run_manifests
+                for run_manifest in split_run_manifests
                 for field_name in run_manifest.get("placeholder_fields", [])
             }
         ),
         "random_fields": sorted(
             {
                 str(field_name)
-                for run_manifest in shard_run_manifests
+                for run_manifest in split_run_manifests
                 for field_name in run_manifest.get("random_fields", [])
             }
         ),
-        "method_shard_schedule": shard_summaries,
+        "method_variant_split_schedule": split_summaries,
     }
     output_paths.run_manifest_path.parent.mkdir(parents=True, exist_ok=True)
     output_paths.run_manifest_path.write_text(
         json.dumps(merged_run_manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    method_shard_summary_path = output_paths.root_path / "artifacts" / "method_shard_summary.json"
-    method_shard_summary_path.parent.mkdir(parents=True, exist_ok=True)
-    method_shard_summary_path.write_text(
+    method_variant_split_summary_path = (
+        output_paths.root_path / "artifacts" / "method_variant_split_summary.json"
+    )
+    method_variant_split_summary_path.parent.mkdir(parents=True, exist_ok=True)
+    method_variant_split_summary_path.write_text(
         json.dumps(
             {
                 "run_root": str(run_root_path),
                 "method_variants": merged_method_variants,
-                "shard_count": len(shard_summaries),
-                "method_shard_schedule": shard_summaries,
+                "method_variant_split_count": len(split_summaries),
+                "method_variant_split_schedule": split_summaries,
             },
             ensure_ascii=False,
             indent=2,
@@ -920,10 +956,10 @@ def merge_probe_method_shard_outputs(
         "event_record_count": len(combined_event_score_records),
         "threshold_record_count": len(combined_threshold_records),
         "method_variants": merged_method_variants,
-        "shard_count": len(shard_summaries),
-        "method_shard_schedule": shard_summaries,
+        "method_variant_split_count": len(split_summaries),
+        "method_variant_split_schedule": split_summaries,
         "artifact_paths": _json_safe(artifact_paths),
-        "method_shard_summary_path": str(method_shard_summary_path),
+        "method_variant_split_summary_path": str(method_variant_split_summary_path),
     }
 
 

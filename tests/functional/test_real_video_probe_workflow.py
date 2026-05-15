@@ -19,10 +19,10 @@ pytestmark = pytest.mark.quick
 import paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow as workflow_module
 
 from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
-    merge_probe_method_shard_outputs,
+    merge_probe_method_variant_split_outputs,
     prepare_probe_runtime_workspace,
     run_probe_stage2_mechanism_calibration,
-    run_probe_method_shards,
+    run_probe_method_variant_splits,
     run_probe_runner,
     write_probe_runtime_config,
 )
@@ -326,6 +326,9 @@ def test_run_probe_runner_forwards_dataset_manifest_to_runner(
         runtime_config_path=tmp_path / "runtime_config.json",
         dataset_manifest=dataset_manifest_path,
         batch_size_frames=16,
+        shard_count=4,
+        shard_index=1,
+        worker_count=3,
         python_executable="python",
     )
 
@@ -336,6 +339,12 @@ def test_run_probe_runner_forwards_dataset_manifest_to_runner(
     assert str(dataset_manifest_path) in command
     assert "--batch-size-frames" in command
     assert "16" in command
+    assert "--shard-count" in command
+    assert "4" in command
+    assert "--shard-index" in command
+    assert "1" in command
+    assert "--worker-count" in command
+    assert "3" in command
     assert kwargs["cwd"] == repository_root
     assert kwargs["stdout"] == workflow_module.subprocess.PIPE
     assert kwargs["stderr"] == workflow_module.subprocess.STDOUT
@@ -385,11 +394,11 @@ def test_run_probe_runner_surfaces_runner_output_on_failure(
 
 
 @pytest.mark.unit
-def test_run_probe_method_shards_launches_governed_method_allowlists(
+def test_run_probe_method_variant_splits_launches_governed_method_allowlists(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Validate method shards split the formal variants into governed runner subprocesses.
+    """Validate legacy method-variant splits launch governed runner subprocesses.
 
     Args:
         tmp_path: Temporary output root.
@@ -415,19 +424,19 @@ def test_run_probe_method_shards_launches_governed_method_allowlists(
     monkeypatch.setattr(workflow_module.subprocess, "Popen", _FakeProcess)
     monkeypatch.setattr(
         workflow_module,
-        "merge_probe_method_shard_outputs",
-        lambda *, run_root, shard_run_roots, runtime_config_path=None, method_shard_plan=None: merge_calls.update(
+        "merge_probe_method_variant_split_outputs",
+        lambda *, run_root, split_run_roots, runtime_config_path=None, method_variant_split_plan=None: merge_calls.update(
             {
                 "run_root": str(run_root),
-                "shard_run_roots": [str(path) for path in shard_run_roots],
+                "method_variant_split_run_roots": [str(path) for path in split_run_roots],
                 "runtime_config_path": str(runtime_config_path) if runtime_config_path is not None else None,
-                "method_shard_plan": method_shard_plan,
+                "method_variant_split_plan": method_variant_split_plan,
             }
         )
         or {"status": "merged"},
     )
 
-    result = run_probe_method_shards(
+    result = run_probe_method_variant_splits(
         run_root=tmp_path / "run_root",
         run_mode="formal",
         runtime_profile="formal",
@@ -439,7 +448,7 @@ def test_run_probe_method_shards_launches_governed_method_allowlists(
             "tubelet_only_lt01",
             "tubelet_only_lt02",
         ],
-        shard_count=2,
+        method_variant_split_count=2,
         python_executable="python",
     )
 
@@ -448,11 +457,11 @@ def test_run_probe_method_shards_launches_governed_method_allowlists(
     assert captured_commands[0][-3:] == ["frame_prc", "tubelet_only", "tubelet_sync"]
     assert captured_commands[1][-2:] == ["tubelet_only_lt01", "tubelet_only_lt02"]
     assert merge_calls["run_root"] == str(tmp_path / "run_root")
-    assert merge_calls["shard_run_roots"] == [
-        str(tmp_path / "run_root" / "method_shards" / "shard_01_main_variants"),
-        str(tmp_path / "run_root" / "method_shards" / "shard_02_tubelet_sweep"),
+    assert merge_calls["method_variant_split_run_roots"] == [
+        str(tmp_path / "run_root" / "method_variant_splits" / "split_01_main_variants"),
+        str(tmp_path / "run_root" / "method_variant_splits" / "split_02_tubelet_sweep"),
     ]
-    assert result["shard_count"] == 2
+    assert result["method_variant_split_count"] == 2
 
 
 @pytest.mark.unit
@@ -511,11 +520,11 @@ def test_run_probe_stage2_mechanism_calibration_forwards_governed_arguments(
 
 
 @pytest.mark.unit
-def test_merge_probe_method_shard_outputs_combines_records_and_runtime_config(
+def test_merge_probe_method_variant_split_outputs_combines_records_and_runtime_config(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Validate shard merging writes combined governed records and runtime metadata.
+    """Validate split merging writes combined governed records and runtime metadata.
 
     Args:
         tmp_path: Temporary output root.
@@ -525,8 +534,8 @@ def test_merge_probe_method_shard_outputs_combines_records_and_runtime_config(
         None.
     """
     run_root = tmp_path / "merged_run"
-    shard_a_root = run_root / "method_shards" / "shard_01_main_variants"
-    shard_b_root = run_root / "method_shards" / "shard_02_tubelet_sweep"
+    split_a_root = run_root / "method_variant_splits" / "split_01_main_variants"
+    split_b_root = run_root / "method_variant_splits" / "split_02_tubelet_sweep"
     runtime_config_path = tmp_path / "runtime_config.json"
     runtime_config_path.write_text(
         json.dumps({"run_mode": "formal", "runtime_profile": "formal"}, ensure_ascii=False) + "\n",
@@ -534,14 +543,14 @@ def test_merge_probe_method_shard_outputs_combines_records_and_runtime_config(
     )
 
     record_store: dict[str, dict[str, object]] = {
-        str(shard_a_root): {
+        str(split_a_root): {
             "event_score_records": [
                 {"method_variant": "frame_prc", "attack_name": "no_attack"},
                 {"method_variant": "tubelet_only", "attack_name": "no_attack"},
             ],
             "threshold_records": [{"threshold_id": "frame_prc:threshold"}],
         },
-        str(shard_b_root): {
+        str(split_b_root): {
             "event_score_records": [
                 {"method_variant": "tubelet_only_lt01", "attack_name": "no_attack"},
             ],
@@ -594,11 +603,11 @@ def test_merge_probe_method_shard_outputs_combines_records_and_runtime_config(
     monkeypatch.setattr(workflow_module, "RecordWriter", _FakeRecordWriter)
     monkeypatch.setattr(workflow_module, "RealVideoVaeLatentArtifactBuilder", _FakeArtifactBuilder)
 
-    for shard_root, method_variant in (
-        (shard_a_root, "frame_prc"),
-        (shard_b_root, "tubelet_only_lt01"),
+    for split_root, method_variant in (
+        (split_a_root, "frame_prc"),
+        (split_b_root, "tubelet_only_lt01"),
     ):
-        output_paths = workflow_module.build_real_video_vae_latent_output_paths(shard_root)
+        output_paths = workflow_module.build_real_video_vae_latent_output_paths(split_root)
         output_paths.artifact_manifest_path.parent.mkdir(parents=True, exist_ok=True)
         output_paths.artifact_manifest_path.write_text(
             json.dumps(
@@ -614,13 +623,13 @@ def test_merge_probe_method_shard_outputs_combines_records_and_runtime_config(
             encoding="utf-8",
         )
         output_paths.runtime_manifest_path.write_text(
-            json.dumps({"run_id": shard_root.name, "runtime_profile": "formal"}, ensure_ascii=False, indent=2) + "\n",
+            json.dumps({"run_id": split_root.name, "runtime_profile": "formal"}, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
         output_paths.run_manifest_path.write_text(
             json.dumps(
                 {
-                    "run_id": shard_root.name,
+                    "run_id": split_root.name,
                     "created_at": "2026-05-15T00:00:00Z",
                     "construction_phase": "real_video_vae_latent_probe",
                     "protocol_name": "fixed_low_fpr_calibrated_detection",
@@ -642,13 +651,13 @@ def test_merge_probe_method_shard_outputs_combines_records_and_runtime_config(
             encoding="utf-8",
         )
 
-    summary = merge_probe_method_shard_outputs(
+    summary = merge_probe_method_variant_split_outputs(
         run_root=run_root,
-        shard_run_roots=[shard_a_root, shard_b_root],
+        split_run_roots=[split_a_root, split_b_root],
         runtime_config_path=runtime_config_path,
-        method_shard_plan=[
-            {"shard_name": "shard_01_main_variants", "method_variants": ["frame_prc", "tubelet_only"]},
-            {"shard_name": "shard_02_tubelet_sweep", "method_variants": ["tubelet_only_lt01"]},
+        method_variant_split_plan=[
+            {"split_name": "split_01_main_variants", "method_variants": ["frame_prc", "tubelet_only"]},
+            {"split_name": "split_02_tubelet_sweep", "method_variants": ["tubelet_only_lt01"]},
         ],
     )
 
@@ -657,11 +666,11 @@ def test_merge_probe_method_shard_outputs_combines_records_and_runtime_config(
     merged_runtime_config = json.loads(
         (run_root / "artifacts" / "runtime_config.json").read_text(encoding="utf-8")
     )
-    assert merged_runtime_config["method_shard_mode"] == "parallel_method_variants"
-    assert merged_runtime_config["shard_count"] == 2
+    assert merged_runtime_config["method_variant_split_mode"] == "legacy_parallel_method_variants"
+    assert merged_runtime_config["method_variant_split_count"] == 2
     assert merged_runtime_config["method_variants"] == [
         "frame_prc",
         "tubelet_only",
         "tubelet_only_lt01",
     ]
-    assert len(summary["method_shard_schedule"]) == 2
+    assert len(summary["method_variant_split_schedule"]) == 2

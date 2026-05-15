@@ -12,9 +12,11 @@ import importlib.util
 import json
 import platform
 import sys
+import threading
 import time
 from array import array
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -127,7 +129,10 @@ class RealVideoVaeLatentRunner:
         self._runner_timing_totals: dict[str, float] = {}
         self._runner_timing_counts: dict[str, int] = {}
         self._runner_timing_failures: dict[str, int] = {}
+        self._runner_timing_lock = threading.Lock()
+        self._runtime_event_tag_lock = threading.Lock()
         self._current_runtime_event_tag = "unlabeled"
+        self._event_worker_count = 1
 
     def run(
         self,
@@ -135,6 +140,9 @@ class RealVideoVaeLatentRunner:
         run_mode: str = "smoke",
         samples_per_role: int | None = None,
         batch_size_frames: int | None = None,
+        shard_count: int | None = None,
+        shard_index: int | None = None,
+        worker_count: int | None = None,
         runtime_profile_override: str | None = None,
         method_variants: list[str] | None = None,
         protocol_config_path: str | Path | None = None,
@@ -153,6 +161,9 @@ class RealVideoVaeLatentRunner:
             run_mode: Runtime mode, one of `smoke` or `formal`.
             samples_per_role: Optional sample count per split-role pair.
             batch_size_frames: Optional VAE frame-batch size override.
+            shard_count: Optional outer event-shard count override.
+            shard_index: Optional selected event-shard index override.
+            worker_count: Optional in-shard worker-count override.
             runtime_profile_override: Optional explicit runtime profile.
             method_variants: Optional explicit method-variant allowlist.
             protocol_config_path: Optional protocol config path.
@@ -191,6 +202,12 @@ class RealVideoVaeLatentRunner:
         runtime_config_overrides = self._load_runtime_config(runtime_config_path)
         if batch_size_frames is not None:
             runtime_config_overrides["batch_size_frames"] = int(batch_size_frames)
+        if shard_count is not None:
+            runtime_config_overrides["shard_count"] = int(shard_count)
+        if shard_index is not None:
+            runtime_config_overrides["shard_index"] = int(shard_index)
+        if worker_count is not None:
+            runtime_config_overrides["worker_count"] = int(worker_count)
         if dataset_manifest_path is None and any(
             key in runtime_config_overrides
             for key in ("local_dataset_root", "dataset_manifest_path")
@@ -229,6 +246,20 @@ class RealVideoVaeLatentRunner:
         attack_config = load_json_config(attack_matrix_file)
         ablation_config = load_json_config(ablation_config_file)
         self._runtime_config_overrides = dict(runtime_config_overrides)
+        resolved_shard_count = self._resolve_positive_runtime_integer(
+            runtime_config_overrides.get("shard_count", 1),
+            field_name="shard_count",
+        )
+        resolved_shard_index = self._resolve_non_negative_runtime_integer(
+            runtime_config_overrides.get("shard_index", 0),
+            field_name="shard_index",
+        )
+        if resolved_shard_index >= resolved_shard_count:
+            raise ValueError("shard_index must satisfy 0 <= shard_index < shard_count")
+        self._event_worker_count = self._resolve_positive_runtime_integer(
+            runtime_config_overrides.get("worker_count", 1),
+            field_name="worker_count",
+        )
         dataset_summary = summarize_dataset_manifest(dataset_manifest)
         backend_config["dataset_manifest_path"] = str(dataset_manifest_file)
         if "local_dataset_root" in runtime_config_overrides:
@@ -253,6 +284,11 @@ class RealVideoVaeLatentRunner:
         latent_backend.set_output_root(output_root_path)
 
         split_plan = build_split_plan(samples_per_role=resolved_samples_per_role)
+        split_plan = self._select_split_plan_shard(
+            split_plan,
+            shard_count=resolved_shard_count,
+            shard_index=resolved_shard_index,
+        )
         attack_registry = build_real_video_attack_registry(
             attack_config,
             runtime_kind=(
@@ -312,6 +348,9 @@ class RealVideoVaeLatentRunner:
             {
                 "run_mode": run_mode,
                 "construction_phase": protocol_config["construction_phase"],
+                "shard_count": resolved_shard_count,
+                "shard_index": resolved_shard_index,
+                "worker_count": self._event_worker_count,
                 "protocol_config": str(protocol_config_file.relative_to(self._repository_root)).replace("\\", "/"),
                 "backend_config": str(backend_config_file.relative_to(self._repository_root)).replace("\\", "/"),
                 "attack_matrix_config": str(attack_matrix_file.relative_to(self._repository_root)).replace("\\", "/"),
@@ -398,11 +437,15 @@ class RealVideoVaeLatentRunner:
         self._runner_timing_failures = {}
         self._set_runtime_event_tag("real_video_vae_latent_runner")
 
+    def _get_runtime_event_tag(self) -> str:
+        with self._runtime_event_tag_lock:
+            return self._current_runtime_event_tag
+
     @contextmanager
     def _runner_substage(self, event_name: str, **metadata: Any) -> Iterator[None]:
         if not isinstance(event_name, str) or not event_name:
             raise ValueError("event_name must be a non-empty string")
-        previous_event_tag = self._current_runtime_event_tag
+        previous_event_tag = self._get_runtime_event_tag()
         self._set_runtime_event_tag(event_name)
         start_time = time.perf_counter()
         status = "ok"
@@ -413,13 +456,14 @@ class RealVideoVaeLatentRunner:
             raise
         finally:
             elapsed_seconds = max(time.perf_counter() - start_time, 0.0)
-            self._runner_timing_totals[event_name] = round(
-                self._runner_timing_totals.get(event_name, 0.0) + elapsed_seconds,
-                6,
-            )
-            self._runner_timing_counts[event_name] = self._runner_timing_counts.get(event_name, 0) + 1
-            if status == "failed":
-                self._runner_timing_failures[event_name] = self._runner_timing_failures.get(event_name, 0) + 1
+            with self._runner_timing_lock:
+                self._runner_timing_totals[event_name] = round(
+                    self._runner_timing_totals.get(event_name, 0.0) + elapsed_seconds,
+                    6,
+                )
+                self._runner_timing_counts[event_name] = self._runner_timing_counts.get(event_name, 0) + 1
+                if status == "failed":
+                    self._runner_timing_failures[event_name] = self._runner_timing_failures.get(event_name, 0) + 1
             del metadata
             self._set_runtime_event_tag(previous_event_tag)
 
@@ -439,14 +483,25 @@ class RealVideoVaeLatentRunner:
             )
 
     def _set_runtime_event_tag(self, event_tag: str) -> None:
-        self._current_runtime_event_tag = event_tag
-        try:
-            write_current_runtime_event_tag(
-                self._runner_timing_recorder.run_root if self._runner_timing_recorder is not None else self._repository_root,
-                event_tag,
-            )
-        except Exception:
-            return
+        with self._runtime_event_tag_lock:
+            self._current_runtime_event_tag = event_tag
+            try:
+                write_current_runtime_event_tag(
+                    self._runner_timing_recorder.run_root if self._runner_timing_recorder is not None else self._repository_root,
+                    event_tag,
+                )
+            except Exception:
+                return
+
+    def _resolve_positive_runtime_integer(self, value: Any, *, field_name: str) -> int:
+        if not isinstance(value, int) or value < 1:
+            raise ValueError(f"{field_name} must be a positive integer")
+        return int(value)
+
+    def _resolve_non_negative_runtime_integer(self, value: Any, *, field_name: str) -> int:
+        if not isinstance(value, int) or value < 0:
+            raise ValueError(f"{field_name} must be a non-negative integer")
+        return int(value)
 
     def _run_method_variant(
         self,
@@ -550,6 +605,72 @@ class RealVideoVaeLatentRunner:
         vae_runtime_backend: Any,
         vae_metadata: dict[str, Any],
     ) -> list[dict[str, Any]]:
+        selected_event_plan = [
+            event_plan_entry
+            for event_plan_entry in event_plan
+            if event_plan_entry.split in allowed_splits
+            and event_plan_entry.sample_role in allowed_sample_roles
+        ]
+        if not selected_event_plan:
+            return []
+        grouped_event_plan = self._group_event_plan_entries_by_source(selected_event_plan)
+        resolved_worker_count = min(self._event_worker_count, len(grouped_event_plan))
+        if resolved_worker_count <= 1:
+            return self._process_event_plan_entries(
+                run_id=run_id,
+                output_root=output_root,
+                event_plan_entries=selected_event_plan,
+                method=method,
+                method_config=method_config,
+                target_fpr=target_fpr,
+                threshold_record=threshold_record,
+                latent_backend=latent_backend,
+                vae_runtime_backend=vae_runtime_backend,
+                vae_metadata=vae_metadata,
+            )
+
+        worker_event_plan_buckets = self._plan_event_worker_buckets(
+            grouped_event_plan,
+            worker_count=resolved_worker_count,
+        )
+        worker_records: list[dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=resolved_worker_count) as executor:
+            futures = [
+                executor.submit(
+                    self._process_event_plan_entries,
+                    run_id=run_id,
+                    output_root=output_root,
+                    event_plan_entries=worker_event_plan,
+                    method=method,
+                    method_config=method_config,
+                    target_fpr=target_fpr,
+                    threshold_record=threshold_record,
+                    latent_backend=latent_backend,
+                    vae_runtime_backend=vae_runtime_backend,
+                    vae_metadata=vae_metadata,
+                )
+                for worker_event_plan in worker_event_plan_buckets
+                if worker_event_plan
+            ]
+            for future in futures:
+                worker_records.extend(future.result())
+        worker_records.sort(key=lambda record: str(record.get("event_id", "")))
+        return worker_records
+
+    def _process_event_plan_entries(
+        self,
+        *,
+        run_id: str,
+        output_root: Path,
+        event_plan_entries: list[EventPlanEntry],
+        method: Any,
+        method_config: dict[str, Any],
+        target_fpr: float,
+        threshold_record: dict[str, Any] | None,
+        latent_backend: RealVideoVAELatentBackend,
+        vae_runtime_backend: Any,
+        vae_metadata: dict[str, Any],
+    ) -> list[dict[str, Any]]:
         event_score_records: list[dict[str, Any]] = []
         source_sample_cache: dict[tuple[str, str, str], Any] = {}
         embedded_sample_cache: dict[tuple[str, str, str, str], Any] = {}
@@ -558,11 +679,7 @@ class RealVideoVaeLatentRunner:
         latent_copy_cache: dict[tuple[str, str], dict[str, str]] = {}
         reencoded_cache: dict[tuple[str, str], dict[str, str]] = {}
         output_paths = build_real_video_vae_latent_output_paths(output_root)
-        for event_plan_entry in event_plan:
-            if event_plan_entry.split not in allowed_splits:
-                continue
-            if event_plan_entry.sample_role not in allowed_sample_roles:
-                continue
+        for event_plan_entry in event_plan_entries:
             source_sample_id, source_sample_role = self._resolve_source_identity(
                 event_plan_entry.sample_id,
                 event_plan_entry.sample_role,
@@ -894,6 +1011,60 @@ class RealVideoVaeLatentRunner:
             validate_event_score_record(event_score_record)
             event_score_records.append(event_score_record)
         return event_score_records
+
+    def _group_event_plan_entries_by_source(
+        self,
+        event_plan_entries: list[EventPlanEntry],
+    ) -> list[list[EventPlanEntry]]:
+        grouped_entries: dict[tuple[str, str, str], list[EventPlanEntry]] = {}
+        ordered_keys: list[tuple[str, str, str]] = []
+        for event_plan_entry in event_plan_entries:
+            source_sample_id, source_sample_role = self._resolve_source_identity(
+                event_plan_entry.sample_id,
+                event_plan_entry.sample_role,
+            )
+            source_key = (event_plan_entry.split, source_sample_role, source_sample_id)
+            if source_key not in grouped_entries:
+                grouped_entries[source_key] = []
+                ordered_keys.append(source_key)
+            grouped_entries[source_key].append(event_plan_entry)
+        return [grouped_entries[source_key] for source_key in ordered_keys]
+
+    def _plan_event_worker_buckets(
+        self,
+        grouped_event_plan: list[list[EventPlanEntry]],
+        *,
+        worker_count: int,
+    ) -> list[list[EventPlanEntry]]:
+        if worker_count < 1:
+            raise ValueError("worker_count must be a positive integer")
+        worker_buckets: list[list[EventPlanEntry]] = [[] for _ in range(worker_count)]
+        for group_index, source_group in enumerate(grouped_event_plan):
+            worker_buckets[group_index % worker_count].extend(source_group)
+        return [worker_bucket for worker_bucket in worker_buckets if worker_bucket]
+
+    def _select_split_plan_shard(
+        self,
+        split_plan: list[Any],
+        *,
+        shard_count: int,
+        shard_index: int,
+    ) -> list[Any]:
+        if shard_count < 1:
+            raise ValueError("shard_count must be a positive integer")
+        if shard_index < 0 or shard_index >= shard_count:
+            raise ValueError("shard_index must satisfy 0 <= shard_index < shard_count")
+        if shard_count == 1:
+            return list(split_plan)
+        shard_offsets: dict[tuple[str, str], int] = {}
+        selected_entries: list[Any] = []
+        for split_plan_entry in split_plan:
+            shard_key = (str(split_plan_entry.split), str(split_plan_entry.sample_role))
+            shard_position = shard_offsets.get(shard_key, 0)
+            if shard_position % shard_count == shard_index:
+                selected_entries.append(split_plan_entry)
+            shard_offsets[shard_key] = shard_position + 1
+        return selected_entries
 
     def _build_event_plan(self, split_plan: list[Any], attack_registry: list[Any]) -> list[EventPlanEntry]:
         event_plan: list[EventPlanEntry] = []
@@ -1670,6 +1841,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--samples-per-role", type=int, default=None)
     parser.add_argument("--batch-size-frames", type=int, default=None)
+    parser.add_argument("--shard-count", type=int, default=None)
+    parser.add_argument("--shard-index", type=int, default=None)
+    parser.add_argument("--worker-count", type=int, default=None)
     parser.add_argument("--runtime-profile", default=None)
     parser.add_argument("--protocol-config", default=None)
     parser.add_argument("--backend-config", default=None)
@@ -1684,6 +1858,9 @@ def main(argv: list[str] | None = None) -> None:
         run_mode=args.run_mode,
         samples_per_role=args.samples_per_role,
         batch_size_frames=args.batch_size_frames,
+        shard_count=args.shard_count,
+        shard_index=args.shard_index,
+        worker_count=args.worker_count,
         runtime_profile_override=args.runtime_profile,
         method_variants=args.method_variants,
         protocol_config_path=args.protocol_config,

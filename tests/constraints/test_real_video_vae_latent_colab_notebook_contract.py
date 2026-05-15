@@ -184,7 +184,6 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "probe_workflow.prepare_probe_session_model" in notebook_text
     assert "probe_workflow.materialize_family_id(" in notebook_text
     assert "probe_workflow.write_probe_runtime_config" in notebook_text
-    assert "probe_workflow.run_probe_method_shards" in notebook_text
     assert "probe_workflow.run_probe_runner" in notebook_text
     assert "probe_workflow.rebuild_probe_tables_and_reports" in notebook_text
     assert "probe_workflow.check_probe_outputs" in notebook_text
@@ -206,7 +205,19 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "PROFILE_GPU_RUNTIME = PROFILE_RUNTIME" in notebook_text
     assert "GPU_PROFILE_INTERVAL_SECONDS = 2" in notebook_text
     assert "BATCH_SIZE_FRAMES = 8" in notebook_text
+    assert "NOTEBOOK_MANUAL_CONFIG" in notebook_text
+    assert "NOTEBOOK_MANUAL_ENV_MAP" in notebook_text
+    assert "TSTW_WORKFLOW_KEY" in notebook_text
+    assert "TSTW_STEP_KEY" in notebook_text
+    assert "TSTW_FAMILY_ID_TEMPLATE" in notebook_text
+    assert "TSTW_PROCESSED_DATASET_KEY" in notebook_text
+    assert "TSTW_DRIVE_ROOT" in notebook_text
+    assert "TSTW_LOCAL_RUNTIME_ROOT" in notebook_text
+    assert "TSTW_MODEL_ID" in notebook_text
     assert "TSTW_BATCH_SIZE_FRAMES" in notebook_text
+    assert "TSTW_SHARD_COUNT" in notebook_text
+    assert "TSTW_SHARD_INDEX" in notebook_text
+    assert "TSTW_WORKER_COUNT" in notebook_text
     assert "TSTW_REQUIRE_LPIPS_EVIDENCE" in notebook_text
     assert "TSTW_SAMPLES_PER_ROLE_OVERRIDE" in notebook_text
     assert "run_timer = run_timing_workflow.start_run_timing(" in notebook_text
@@ -247,6 +258,9 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "mechanism_summary=stage2_mechanism_summary" in notebook_text
     assert "samples_per_role=RUNNER_SAMPLES_PER_ROLE_OVERRIDE" in notebook_text
     assert "batch_size_frames=BATCH_SIZE_FRAMES" in notebook_text
+    assert "shard_count=SHARD_COUNT" in notebook_text
+    assert "shard_index=SHARD_INDEX" in notebook_text
+    assert "worker_count=WORKER_COUNT" in notebook_text
     assert "lpips_evidence_summary" in notebook_text
     assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
     assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
