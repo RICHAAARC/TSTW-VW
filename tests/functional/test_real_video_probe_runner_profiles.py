@@ -91,6 +91,30 @@ def test_runner_allows_method_config_path_overrides(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_runner_formats_runtime_config_paths_for_repo_and_external_configs(
+    tmp_path: Path,
+) -> None:
+    """Validate runtime-config path serialization keeps repo-relative and external absolute paths.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    repo_config_path = ROOT / "configs" / "protocol" / "real_video_vae_latent_probe.json"
+    external_config_path = tmp_path / "external_protocol_config.json"
+    external_config_path.write_text("{}\n", encoding="utf-8")
+
+    assert (
+        runner._format_runtime_config_path(repo_config_path)
+        == "configs/protocol/real_video_vae_latent_probe.json"
+    )
+    assert runner._format_runtime_config_path(external_config_path) == str(external_config_path)
+
+
+@pytest.mark.unit
 def test_debug_real_video_profile_filters_protocol_scope_and_attacks() -> None:
     """Validate the debug profile keeps a tiny protocol scope and attack set.
 

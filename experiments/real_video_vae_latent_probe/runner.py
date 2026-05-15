@@ -352,10 +352,10 @@ class RealVideoVaeLatentRunner:
                 "shard_count": resolved_shard_count,
                 "shard_index": resolved_shard_index,
                 "worker_count": self._event_worker_count,
-                "protocol_config": str(protocol_config_file.relative_to(self._repository_root)).replace("\\", "/"),
-                "backend_config": str(backend_config_file.relative_to(self._repository_root)).replace("\\", "/"),
-                "attack_matrix_config": str(attack_matrix_file.relative_to(self._repository_root)).replace("\\", "/"),
-                "ablation_config": str(ablation_config_file.relative_to(self._repository_root)).replace("\\", "/"),
+                "protocol_config": self._format_runtime_config_path(protocol_config_file),
+                "backend_config": self._format_runtime_config_path(backend_config_file),
+                "attack_matrix_config": self._format_runtime_config_path(attack_matrix_file),
+                "ablation_config": self._format_runtime_config_path(ablation_config_file),
                 "dataset_manifest": str(dataset_manifest_file),
                 "dataset_manifest_path": str(dataset_manifest_file),
                 "target_fpr": protocol_config["threshold_protocol"]["target_fpr_placeholder"],
@@ -1575,6 +1575,15 @@ class RealVideoVaeLatentRunner:
         if not resolved_path.exists():
             raise FileNotFoundError(resolved_path)
         return resolved_path
+
+    def _format_runtime_config_path(self, config_path: str | Path) -> str:
+        resolved_path = Path(config_path)
+        if not resolved_path.exists():
+            raise FileNotFoundError(resolved_path)
+        try:
+            return str(resolved_path.relative_to(self._repository_root)).replace("\\", "/")
+        except ValueError:
+            return str(resolved_path)
 
     def _load_runtime_config(self, runtime_config_path: str | Path | None) -> dict[str, Any]:
         """Load an optional Colab runtime-config payload.
