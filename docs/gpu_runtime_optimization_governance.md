@@ -41,6 +41,14 @@
   - method_variant_selection_from_test
   - sample split / attack severity / decision rule 覆盖
 
+### `shard_count` / `shard_index` / `worker_count` 并行语义
+
+- `shard_count` 表示外层 event shard 总数。它表示把某个 `sample_role` 的全部 source events 总共切成多少个 outer shard。
+- `shard_index` 不属于 checked-in `runtime_profile` JSON 字段，而是受治理的单次运行选择参数。它表示当前运行只处理第几个 outer shard，并且必须满足 `0 <= shard_index < shard_count`。
+- `worker_count` 表示已选 shard 内部的本地 worker 数。它不是额外的 outer shard 数，也不代表再次切分新的 shard 平面。
+- 受治理的执行顺序必须固定为两步：先用 `shard_count` 决定总任务切成几片，再用 `shard_index` 选中当前运行的 outer shard；只有在选中这一片之后，才允许用 `worker_count` 把该 shard 内部的 events 分给本地 worker 并行处理。
+- `shard_count` / `shard_index` 属于 shard 级并行语义，`worker_count` 属于 shard 内并行语义；governed notebook、workflow helper、harness audit 与约束测试不得将两者混用或互相重解释。
+
 ## 四、允许与禁止
 
 允许的运行优化：

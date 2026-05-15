@@ -78,6 +78,14 @@ def test_harness_engineering_mentions_utf8_encoding_gate() -> None:
     assert "utf-8" in text
 
 
+def test_harness_engineering_mentions_shard_and_worker_parallel_semantics() -> None:
+    text = _read("docs/harness_engineering.md")
+    assert "audit_runtime_profile_boundaries.py" in text
+    assert "`shard_count` 表示外层 event shard 总数" in text
+    assert "`shard_index` 表示当前选中的外层 shard 编号" in text
+    assert "`worker_count` 表示已选 shard 内部的本地 worker 数" in text
+
+
 def test_repository_intake_skill_mentions_file_organization_directories() -> None:
     text = _read(".codex/skills/repository_intake.skill.md")
     assert "docs/file_organization.md" in text
@@ -119,6 +127,15 @@ def test_notebook_entrypoint_skill_mentions_notebook_utils() -> None:
     assert "`paper_workflow/notebook_utils/`" in text
     assert "build_processed_real_video_dataset.ipynb" in text
     assert "run_real_video_vae_latent_probe.ipynb" in text
+
+
+def test_notebook_entrypoint_skill_mentions_outer_shard_and_in_shard_worker_semantics() -> None:
+    text = _read(".codex/skills/notebook_entrypoint.skill.md")
+    assert "`shard_count`" in text
+    assert "`shard_index`" in text
+    assert "`worker_count`" in text
+    assert "outer event-shard count" in text
+    assert "in-shard local worker count" in text
 
 
 def test_release_boundary_mentions_file_organization_contract() -> None:

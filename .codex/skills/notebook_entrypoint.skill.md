@@ -20,6 +20,7 @@ Applies to future `.ipynb` files, notebook execution entrypoints, `paper_workflo
 
 - Notebook governance requirements.
 - Notebook naming and helper-placement decision.
+- Parallel-semantics decision for `shard_count`, `shard_index`, and `worker_count`.
 - Audit decision for notebook bypass risk.
 - Blocking rationale when notebooks attempt to write formal artifacts directly.
 
@@ -29,6 +30,7 @@ Applies to future `.ipynb` files, notebook execution entrypoints, `paper_workflo
 - Notebooks must not write formal `records/`, `thresholds/`, `tables/`, `figures/`, or `reports/` artifacts directly.
 - Governed notebook entrypoints must use `snake_case` semantic names and must not append `_Colab`, `_Notebook`, `Run_`, or weak stage-number prefixes.
 - Notebook-specific or notebook-adjacent helpers may live under `paper_workflow/notebook_utils/`, but they must also use stage-free `snake_case`; reusable helpers may stay under `paper_workflow/colab_utils/`.
+- Governed notebook config and helper guidance must distinguish outer shard parallelism from in-shard worker parallelism: `shard_count` is the outer event-shard count, `shard_index` selects the current outer shard, and `worker_count` is the in-shard local worker count after shard selection.
 - While `project_stage` remains `synthetic_tubelet_sync_probe`, only `paper_workflow/build_processed_real_video_dataset.ipynb` and `paper_workflow/run_real_video_vae_latent_probe.ipynb` may exist as the governed transition-preparation workflow.
 
 ## Allowed Changes
@@ -36,6 +38,7 @@ Applies to future `.ipynb` files, notebook execution entrypoints, `paper_workflo
 - Add notebook governance documentation.
 - Add notebook audit scripts.
 - Add or update the governed two-notebook stage-two workflow entrypoints.
+- Add or update notebook contract text that freezes the order: first select the shard with `shard_count` and `shard_index`, then parallelize within the selected shard using `worker_count`.
 - Move notebook-only or stage-specific wrappers into `paper_workflow/notebook_utils/`, keep reusable Colab helpers in `paper_workflow/colab_utils/`, and keep reusable check or package logic in `scripts/`.
 - Add tests that confirm the governed notebook contract and output-bypass audit.
 

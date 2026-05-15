@@ -64,6 +64,24 @@ def test_runtime_profile_governance_doc_and_profile_configs_exist() -> None:
     assert {path.name for path in config_root.glob("*.json")} == EXPECTED_RUNTIME_PROFILES
 
 
+def test_runtime_profile_governance_doc_freezes_outer_shard_and_in_shard_worker_semantics() -> None:
+    """Validate the governance doc distinguishes outer shards from in-shard workers.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    governance_text = (ROOT / "docs" / "gpu_runtime_optimization_governance.md").read_text(encoding="utf-8")
+
+    assert "`shard_count` 表示外层 event shard 总数" in governance_text
+    assert "`shard_index`" in governance_text
+    assert "0 <= shard_index < shard_count" in governance_text
+    assert "`worker_count` 表示已选 shard 内部的本地 worker 数" in governance_text
+    assert "先用 `shard_count` 决定总任务切成几片，再用 `shard_index` 选中当前运行的 outer shard" in governance_text
+
+
 def test_runtime_profile_configs_remain_execution_only() -> None:
     """Validate runtime-profile configs stay within execution-only key boundaries.
 

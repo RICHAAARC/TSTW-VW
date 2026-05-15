@@ -6,6 +6,7 @@
 
 - `tools/harness/lib/` 提供标准库实现的扫描、命名规则、字段规则与 JSON 报告能力。
 - `tools/harness/audits/` 提供命名、字段、项目契约、support config、阈值协议、notebook bypass、notebook 命名、file organization、UTF-8 编码、main 边界与 skill 存在性审计。
+- `tools/harness/audits/audit_runtime_profile_boundaries.py` 与相关 notebook contract / governance docs 共同冻结运行并行语义：`shard_count` 表示外层 event shard 总数，`shard_index` 表示当前选中的外层 shard 编号，`worker_count` 表示已选 shard 内部的本地 worker 数；这些字段都属于 execution-only knob，不得被解释为方法语义。
 - `tools/harness/audits/audit_test_case_constraints.py` 执行 `docs/test_case_constraints.md` 对应的测试目录、marker、helper 命名与 pytest 默认口径审计。
 - `tools/harness/inspect_repository.py` 提供 governed repository intake，并报告 `configs/`、`docs/`、`tools/`、`tests/`、`main/`、`paper_workflow/`、`scripts/`、`experiments/`、`audit_reports/`、`.codex/`、`examples/`、`release/` 的状态，同时将 `outputs/` 归类为 ephemeral runtime root。
 - `docs/file_organization.md` 冻结目录边界：`main/` 为核心方法包，`experiments/` 为阶段性 runner，`scripts/` 为命令行辅助工具，`paper_workflow/` 为 Colab / Notebook workflow。
@@ -28,6 +29,7 @@
 - Harness 脚本仅依赖 Python 标准库。
 - `audit_reports/` 仅作为运行时审计输出目录，不属于正式论文 `outputs/`。
 - 受治理文本文件默认使用 `UTF-8`；仓库文本读写应显式声明 `encoding="utf-8"`，避免依赖本地默认代码页。
+- harness、governance docs 与 notebook contract 必须保持统一的并行语义：先按 `shard_count` / `shard_index` 选择 outer shard，再按 `worker_count` 对该 shard 内部做本地并行；不得把 `worker_count` 当作额外 shard 数，也不得把 `shard_count` / `shard_index` 当作线程数解释。
 - 当前阶段允许 synthetic / placeholder 驱动的最小 mechanism runtime，但这些实现不应继续占据 `main/` 的最终发布边界。
 - 当前阶段不创建 `minimal_release/`，也不允许将 `paper_workflow/` 变成唯一 formal 入口。
 
