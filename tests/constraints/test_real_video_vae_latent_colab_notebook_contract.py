@@ -220,6 +220,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TSTW_WORKER_COUNT" in notebook_text
     assert "TSTW_REQUIRE_LPIPS_EVIDENCE" in notebook_text
     assert "TSTW_SAMPLES_PER_ROLE_OVERRIDE" in notebook_text
+    assert "TSTW_RUN_MAIN_FORMAL" in notebook_text
     assert "run_timer = run_timing_workflow.start_run_timing(" in notebook_text
     assert "runtime_profile_workflow.capture_colab_environment(" in notebook_text
     assert "runtime_profile_workflow.profile_drive_io(" in notebook_text
@@ -238,6 +239,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "with run_timer.event('stage2_mechanism_audit'" in notebook_text
     assert "with run_timer.event('stage2_mechanism_calibration'" in notebook_text
     assert "with run_timer.event('result_packaging'" in notebook_text
+    assert "run_main_formal_disabled" in notebook_text
     assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
     assert "scripts.prepare_models.prepare_session_autoencoder_kl" not in notebook_text
     assert "scripts.check_results.check_real_video_vae_latent_outputs" not in notebook_text

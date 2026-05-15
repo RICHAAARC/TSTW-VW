@@ -1,6 +1,8 @@
 {
   "construction_phase": "real_video_vae_latent_probe",
   "calibration_purpose": "stage2_mechanism_effect_calibration",
+  "campaign_mode": "staged_search",
+  "top_candidate_limit": 8,
   "allowed_splits": [
     "dev",
     "calibration"
@@ -26,6 +28,7 @@
     ],
     "lambda_sync": [
       0.0,
+      0.025,
       0.05,
       0.1
     ],
@@ -35,10 +38,128 @@
       12
     ],
     "fusion_rule": [
-      "sync_rescue_fusion",
-      "calibrated_tubelet_sync"
+      "sync_rescue_fusion"
+    ],
+    "min_sync_positive_margin": [
+      0.0,
+      0.05,
+      0.12
+    ],
+    "min_sync_alignment_coverage_ratio": [
+      0.125,
+      0.25,
+      0.5
+    ],
+    "min_sync_alignment_matched_count": [
+      1,
+      2,
+      4
     ]
   },
+  "search_stages": [
+    {
+      "stage_name": "anchor_tubelet_only_wide",
+      "selection_scope": "tubelet_only",
+      "include_frame_prc_baseline": true,
+      "top_candidate_limit": 8,
+      "grid": {
+        "tubelet_length": [
+          1,
+          2,
+          4
+        ],
+        "spatial_patch_size": [
+          [4, 4],
+          [8, 8]
+        ],
+        "embedding_projection_support_weight": [
+          0.25,
+          0.45,
+          0.75,
+          1.0
+        ]
+      }
+    },
+    {
+      "stage_name": "sync_wide_scan",
+      "selection_scope": "tubelet_sync",
+      "candidate_source": "selected_tubelet_only_candidate",
+      "include_frame_prc_baseline": false,
+      "top_candidate_limit": 8,
+      "grid": {
+        "fusion_rule": [
+          "sync_rescue_fusion"
+        ],
+        "lambda_sync": [
+          0.0,
+          0.025,
+          0.05,
+          0.1
+        ],
+        "sync_search_radius": [
+          4,
+          8,
+          12
+        ],
+        "min_sync_positive_margin": [
+          0.0,
+          0.05,
+          0.12
+        ],
+        "min_sync_alignment_coverage_ratio": [
+          0.125,
+          0.25,
+          0.5
+        ],
+        "min_sync_alignment_matched_count": [
+          1,
+          2,
+          4
+        ]
+      }
+    },
+    {
+      "stage_name": "sync_refine_scan",
+      "selection_scope": "tubelet_sync",
+      "candidate_source": "selected_tubelet_sync_candidate",
+      "include_frame_prc_baseline": false,
+      "top_candidate_limit": 8,
+      "grid": {
+        "lambda_sync": [
+          0.0,
+          0.025,
+          0.05,
+          0.075
+        ],
+        "sync_search_radius": [
+          6,
+          8,
+          10,
+          12
+        ],
+        "min_sync_positive_margin": [
+          0.0,
+          0.03,
+          0.06,
+          0.09,
+          0.12
+        ],
+        "min_sync_alignment_coverage_ratio": [
+          0.125,
+          0.2,
+          0.3,
+          0.4,
+          0.5
+        ],
+        "min_sync_alignment_matched_count": [
+          1,
+          2,
+          3,
+          4
+        ]
+      }
+    }
+  ],
   "selection_metrics": [
     "no_attack_clean_positive_tpr",
     "clean_negative_fpr",

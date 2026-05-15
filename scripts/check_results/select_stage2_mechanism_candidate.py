@@ -35,6 +35,9 @@ CALIBRATION_GRID_COLUMNS = [
     "fusion_rule",
     "lambda_sync",
     "sync_search_radius",
+    "min_sync_positive_margin",
+    "min_sync_alignment_coverage_ratio",
+    "min_sync_alignment_matched_count",
     "no_attack_clean_negative_fpr",
     "no_attack_clean_positive_tpr",
     "max_attacked_negative_fpr",
@@ -60,6 +63,9 @@ def select_stage2_mechanism_candidate(
     run_root: str | Path,
     grid_config_path: str | Path = DEFAULT_GRID_CONFIG_PATH,
     mechanism_config_path: str | Path = DEFAULT_MECHANISM_CONFIG_PATH,
+    selection_scope: str = "full",
+    selected_tubelet_only_candidate: dict[str, Any] | None = None,
+    top_candidate_limit: int = 5,
     output_path: str | Path | None = None,
     report_path: str | Path | None = None,
     grid_output_path: str | Path | None = None,
@@ -70,6 +76,9 @@ def select_stage2_mechanism_candidate(
         run_root: Run-root path.
         grid_config_path: Calibration-grid config path.
         mechanism_config_path: Mechanism-gate config path.
+        selection_scope: Selection scope identifier.
+        selected_tubelet_only_candidate: Optional selected tubelet-only candidate used by sync-only stages.
+        top_candidate_limit: Maximum number of top rows retained in the payload summary.
         output_path: Optional candidate JSON output path.
         report_path: Optional markdown report output path.
         grid_output_path: Optional CSV grid output path.
@@ -87,6 +96,11 @@ def select_stage2_mechanism_candidate(
     forbidden_splits = _read_string_list(grid_config, "forbidden_splits")
     if set(allowed_splits) & set(forbidden_splits):
         raise ValueError("allowed_splits and forbidden_splits must not overlap")
+    if selection_scope not in {"full", "tubelet_only", "tubelet_sync"}:
+        raise ValueError("selection_scope must be one of: full, tubelet_only, tubelet_sync")
+    resolved_top_candidate_limit = int(top_candidate_limit)
+    if resolved_top_candidate_limit < 1:
+        raise ValueError("top_candidate_limit must be a positive integer")
 
     record_writer = RecordWriter(run_root_path)
     event_score_records = record_writer.read_event_score_records()
@@ -103,25 +117,57 @@ def select_stage2_mechanism_candidate(
         event_score_records,
         mechanism_config,
     )
-    selected_candidate = _select_tubelet_only_candidate(
-        tubelet_only_rows,
-        mechanism_config,
-    )
-    sync_scan_seed = _build_tubelet_sync_scan_seed(
-        selected_candidate,
-        grid_config,
-    )
-    tubelet_sync_rows = _build_tubelet_sync_calibration_grid_rows(
-        audit_rows,
-        event_score_records,
-        mechanism_config,
-        selected_candidate=selected_candidate,
-    )
-    selected_tubelet_sync_candidate = _select_tubelet_sync_candidate(
-        tubelet_sync_rows,
-        mechanism_config,
-    )
-    calibration_rows = [*tubelet_only_rows, *tubelet_sync_rows]
+    selected_candidate = None
+    sync_scan_seed = None
+    tubelet_sync_rows: list[dict[str, Any]] = []
+    selected_tubelet_sync_candidate = None
+    if selection_scope == "tubelet_only":
+        selected_candidate = _select_tubelet_only_candidate(
+            tubelet_only_rows,
+            mechanism_config,
+        )
+        calibration_rows = list(tubelet_only_rows)
+    elif selection_scope == "tubelet_sync":
+        if selected_tubelet_only_candidate is None:
+            raise ValueError(
+                "selected_tubelet_only_candidate must be provided for tubelet_sync selection"
+            )
+        selected_candidate = selected_tubelet_only_candidate
+        sync_scan_seed = _build_tubelet_sync_scan_seed(
+            selected_candidate,
+            grid_config,
+        )
+        tubelet_sync_rows = _build_tubelet_sync_calibration_grid_rows(
+            audit_rows,
+            event_score_records,
+            mechanism_config,
+            selected_candidate=selected_candidate,
+        )
+        selected_tubelet_sync_candidate = _select_tubelet_sync_candidate(
+            tubelet_sync_rows,
+            mechanism_config,
+        )
+        calibration_rows = list(tubelet_sync_rows)
+    else:
+        selected_candidate = _select_tubelet_only_candidate(
+            tubelet_only_rows,
+            mechanism_config,
+        )
+        sync_scan_seed = _build_tubelet_sync_scan_seed(
+            selected_candidate,
+            grid_config,
+        )
+        tubelet_sync_rows = _build_tubelet_sync_calibration_grid_rows(
+            audit_rows,
+            event_score_records,
+            mechanism_config,
+            selected_candidate=selected_candidate,
+        )
+        selected_tubelet_sync_candidate = _select_tubelet_sync_candidate(
+            tubelet_sync_rows,
+            mechanism_config,
+        )
+        calibration_rows = [*tubelet_only_rows, *tubelet_sync_rows]
     observed_splits = sorted({str(record.get("split")) for record in event_score_records})
     observed_forbidden_splits = sorted(set(observed_splits) & set(forbidden_splits))
 
@@ -139,10 +185,41 @@ def select_stage2_mechanism_candidate(
         "forbidden_splits": forbidden_splits,
         "observed_splits": observed_splits,
         "observed_forbidden_splits": observed_forbidden_splits,
+        "selection_scope": selection_scope,
+        "top_candidate_limit": resolved_top_candidate_limit,
         "selection_metrics": _read_string_list(grid_config, "selection_metrics"),
         "selected_tubelet_only_candidate": selected_candidate,
         "tubelet_sync_scan_seed": sync_scan_seed,
         "selected_tubelet_sync_candidate": selected_tubelet_sync_candidate,
+        "top_tubelet_only_candidates": _build_top_candidate_rows(
+            tubelet_only_rows,
+            resolved_top_candidate_limit,
+        ),
+        "top_tubelet_sync_candidates": _build_top_candidate_rows(
+            tubelet_sync_rows,
+            resolved_top_candidate_limit,
+        ),
+        "parameter_interval_summary": {
+            "tubelet_only": _build_parameter_interval_summary(
+                tubelet_only_rows[:resolved_top_candidate_limit],
+                [
+                    "tubelet_length",
+                    "spatial_patch_size",
+                    "embedding_projection_support_weight",
+                ],
+            ),
+            "tubelet_sync": _build_parameter_interval_summary(
+                tubelet_sync_rows[:resolved_top_candidate_limit],
+                [
+                    "fusion_rule",
+                    "lambda_sync",
+                    "sync_search_radius",
+                    "min_sync_positive_margin",
+                    "min_sync_alignment_coverage_ratio",
+                    "min_sync_alignment_matched_count",
+                ],
+            ),
+        },
     }
 
     resolved_grid_output_path = Path(grid_output_path) if grid_output_path else (
@@ -385,6 +462,7 @@ def _build_tubelet_sync_calibration_grid_rows(
         fusion_rule = _resolve_fusion_rule(representative_record)
         lambda_sync = _resolve_lambda_sync(representative_record)
         sync_search_radius = _resolve_sync_search_radius(representative_record)
+        sync_confidence_config = _resolve_sync_confidence_config(representative_record)
         temporal_crop_sync_gain = _difference(
             temporal_crop_positive_tpr,
             _safe_float(tubelet_only_metrics.get("temporal_crop_attacked_positive_tpr")),
@@ -426,6 +504,15 @@ def _build_tubelet_sync_calibration_grid_rows(
                 "fusion_rule": fusion_rule,
                 "lambda_sync": lambda_sync,
                 "sync_search_radius": sync_search_radius,
+                "min_sync_positive_margin": sync_confidence_config[
+                    "min_sync_positive_margin"
+                ],
+                "min_sync_alignment_coverage_ratio": sync_confidence_config[
+                    "min_sync_alignment_coverage_ratio"
+                ],
+                "min_sync_alignment_matched_count": sync_confidence_config[
+                    "min_sync_alignment_matched_count"
+                ],
                 "no_attack_clean_negative_fpr": clean_negative_fpr,
                 "no_attack_clean_positive_tpr": no_attack_clean_positive_tpr,
                 "max_attacked_negative_fpr": max_attacked_negative_fpr,
@@ -567,6 +654,15 @@ def _select_tubelet_sync_candidate(
         "sync_search": {
             "offset_search_min": -int(selected_row["sync_search_radius"]),
             "offset_search_max": int(selected_row["sync_search_radius"]),
+            "min_sync_positive_margin": float(
+                selected_row["min_sync_positive_margin"]
+            ),
+            "min_sync_alignment_coverage_ratio": float(
+                selected_row["min_sync_alignment_coverage_ratio"]
+            ),
+            "min_sync_alignment_matched_count": int(
+                selected_row["min_sync_alignment_matched_count"]
+            ),
         },
         "metrics": {
             "no_attack_clean_negative_fpr": selected_row[
@@ -647,6 +743,21 @@ def _build_tubelet_sync_scan_seed(
             "fusion_rule": _read_grid_string_list(grid, "fusion_rule"),
             "lambda_sync": _read_grid_numeric_list(grid, "lambda_sync"),
             "sync_search_radius": _read_grid_integer_list(grid, "sync_search_radius"),
+            "min_sync_positive_margin": _read_optional_grid_numeric_list(
+                grid,
+                "min_sync_positive_margin",
+                [0.0],
+            ),
+            "min_sync_alignment_coverage_ratio": _read_optional_grid_numeric_list(
+                grid,
+                "min_sync_alignment_coverage_ratio",
+                [0.5],
+            ),
+            "min_sync_alignment_matched_count": _read_optional_grid_integer_list(
+                grid,
+                "min_sync_alignment_matched_count",
+                [1],
+            ),
         },
         "rationale": [
             "reuse_tubelet_only_candidate_for_no_attack_recovery",
@@ -782,6 +893,18 @@ def _parse_tubelet_sync_variant_name(method_variant: str) -> dict[str, Any]:
             parsed_payload["sync_search_radius"] = int(token[2:])
         elif token.startswith("ls") and token[2:].isdigit():
             parsed_payload["lambda_sync"] = round(int(token[2:]) / 1000.0, 6)
+        elif token.startswith("mg") and token[2:].isdigit():
+            parsed_payload["min_sync_positive_margin"] = round(
+                int(token[2:]) / 1000.0,
+                6,
+            )
+        elif token.startswith("cv") and token[2:].isdigit():
+            parsed_payload["min_sync_alignment_coverage_ratio"] = round(
+                int(token[2:]) / 1000.0,
+                6,
+            )
+        elif token.startswith("mc") and token[2:].isdigit():
+            parsed_payload["min_sync_alignment_matched_count"] = int(token[2:])
         elif token.startswith("fr"):
             fusion_rule_token = token[2:]
             if fusion_rule_token == "sync":
@@ -813,6 +936,75 @@ def _resolve_projection_support_weight(event_record: dict[str, Any]) -> float:
     if not isinstance(field_value, (int, float)):
         return 0.45
     return round(float(field_value), 6)
+
+
+def _resolve_sync_confidence_config(event_record: dict[str, Any]) -> dict[str, float | int]:
+    mechanism_trace = event_record.get("mechanism_trace", {})
+    if not isinstance(mechanism_trace, dict):
+        mechanism_trace = {}
+    parsed_payload = _parse_tubelet_sync_variant_name(
+        str(event_record.get("method_variant", ""))
+    )
+    min_margin = _resolve_numeric_sync_confidence_value(
+        mechanism_trace,
+        parsed_payload,
+        trace_field_name="sync_confidence_min_margin",
+        parsed_field_name="min_sync_positive_margin",
+        default_value=0.0,
+    )
+    min_coverage_ratio = _resolve_numeric_sync_confidence_value(
+        mechanism_trace,
+        parsed_payload,
+        trace_field_name="sync_confidence_min_coverage_ratio",
+        parsed_field_name="min_sync_alignment_coverage_ratio",
+        default_value=0.5,
+    )
+    min_matched_count = _resolve_integer_sync_confidence_value(
+        mechanism_trace,
+        parsed_payload,
+        trace_field_name="sync_confidence_min_matched_count",
+        parsed_field_name="min_sync_alignment_matched_count",
+        default_value=1,
+    )
+    return {
+        "min_sync_positive_margin": min_margin,
+        "min_sync_alignment_coverage_ratio": min_coverage_ratio,
+        "min_sync_alignment_matched_count": min_matched_count,
+    }
+
+
+def _resolve_numeric_sync_confidence_value(
+    mechanism_trace: dict[str, Any],
+    parsed_payload: dict[str, Any],
+    *,
+    trace_field_name: str,
+    parsed_field_name: str,
+    default_value: float,
+) -> float:
+    field_value = mechanism_trace.get(trace_field_name)
+    if isinstance(field_value, (int, float)):
+        return round(float(field_value), 6)
+    parsed_value = parsed_payload.get(parsed_field_name)
+    if isinstance(parsed_value, (int, float)):
+        return round(float(parsed_value), 6)
+    return round(float(default_value), 6)
+
+
+def _resolve_integer_sync_confidence_value(
+    mechanism_trace: dict[str, Any],
+    parsed_payload: dict[str, Any],
+    *,
+    trace_field_name: str,
+    parsed_field_name: str,
+    default_value: int,
+) -> int:
+    field_value = mechanism_trace.get(trace_field_name)
+    if isinstance(field_value, int):
+        return int(field_value)
+    parsed_value = parsed_payload.get(parsed_field_name)
+    if isinstance(parsed_value, int):
+        return int(parsed_value)
+    return int(default_value)
 
 
 def _is_fpr_controlled(
@@ -847,6 +1039,41 @@ def _selection_score(
     return round(clean_positive + (0.25 * temporal_positive) - attacked_negative_penalty, 6)
 
 
+def _build_top_candidate_rows(
+    calibration_rows: list[dict[str, Any]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    resolved_limit = max(1, int(limit))
+    return [dict(row) for row in calibration_rows[:resolved_limit]]
+
+
+def _build_parameter_interval_summary(
+    calibration_rows: list[dict[str, Any]],
+    field_names: list[str],
+) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    for field_name in field_names:
+        field_values = [row.get(field_name) for row in calibration_rows if row.get(field_name) is not None]
+        if not field_values:
+            summary[field_name] = None
+            continue
+        if all(isinstance(field_value, (int, float)) for field_value in field_values):
+            normalized_values = sorted({round(float(field_value), 6) for field_value in field_values})
+            summary[field_name] = {
+                "min": normalized_values[0],
+                "max": normalized_values[-1],
+                "unique_count": len(normalized_values),
+                "unique_values": normalized_values,
+            }
+            continue
+        normalized_values = sorted({str(field_value) for field_value in field_values})
+        summary[field_name] = {
+            "unique_count": len(normalized_values),
+            "unique_values": normalized_values,
+        }
+    return summary
+
+
 def _write_grid_csv(file_path: Path, rows: list[dict[str, Any]]) -> None:
     file_path.parent.mkdir(parents=True, exist_ok=True)
     with file_path.open("w", encoding="utf-8", newline="") as handle:
@@ -863,40 +1090,62 @@ def _write_text_report(
 ) -> None:
     selected_candidate = candidate_payload["selected_tubelet_only_candidate"]
     selected_tubelet_sync_candidate = candidate_payload["selected_tubelet_sync_candidate"]
+    interval_summary = candidate_payload.get("parameter_interval_summary", {})
     lines = [
         "# Stage2 Mechanism Calibration Report",
         "",
         "## Selection Scope",
+        f"- selection_scope: {candidate_payload.get('selection_scope')}",
         f"- allowed_splits: {', '.join(candidate_payload['allowed_splits'])}",
         f"- forbidden_splits: {', '.join(candidate_payload['forbidden_splits'])}",
         f"- observed_forbidden_splits: {', '.join(candidate_payload['observed_forbidden_splits']) or 'none'}",
         "",
-        "## Selected Tubelet-only Candidate",
-        f"- candidate_status: {selected_candidate['candidate_status']}",
-        f"- method_variant: {selected_candidate['method_variant']}",
-        f"- tubelet_length: {selected_candidate['tubelet_length']}",
-        f"- spatial_patch_size: {selected_candidate['tubelet_partition']['spatial_patch_size']}",
-        f"- no_attack_clean_positive_tpr: {selected_candidate['metrics']['no_attack_clean_positive_tpr']}",
-        f"- max_attacked_negative_fpr: {selected_candidate['metrics']['max_attacked_negative_fpr']}",
-        "",
-        "## Selected Tubelet-sync Candidate",
-        f"- candidate_status: {selected_tubelet_sync_candidate['candidate_status']}",
-        f"- method_variant: {selected_tubelet_sync_candidate['method_variant']}",
-        f"- fusion_rule: {selected_tubelet_sync_candidate['fusion_rule']}",
-        f"- lambda_sync: {selected_tubelet_sync_candidate['lambda_sync']}",
-        f"- sync_search: {selected_tubelet_sync_candidate['sync_search']}",
-        f"- temporal_crop_sync_gain: {selected_tubelet_sync_candidate['metrics']['temporal_crop_sync_gain']}",
-        f"- local_clip_sync_gain: {selected_tubelet_sync_candidate['metrics']['local_clip_sync_gain']}",
-        f"- mean_temporal_sync_gain: {selected_tubelet_sync_candidate['metrics']['mean_temporal_sync_gain']}",
-        "",
-        "## Tubelet-sync Scan Seed",
-        f"- fusion_rule: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['fusion_rule']}",
-        f"- lambda_sync: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['lambda_sync']}",
-        f"- sync_search_radius: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['sync_search_radius']}",
-        "",
         "## Candidate Rows",
         f"- candidate_row_count: {len(calibration_rows)}",
     ]
+    if selected_candidate is not None:
+        lines.extend(
+            [
+                "",
+                "## Selected Tubelet-only Candidate",
+                f"- candidate_status: {selected_candidate['candidate_status']}",
+                f"- method_variant: {selected_candidate['method_variant']}",
+                f"- tubelet_length: {selected_candidate['tubelet_length']}",
+                f"- spatial_patch_size: {selected_candidate['tubelet_partition']['spatial_patch_size']}",
+                f"- no_attack_clean_positive_tpr: {selected_candidate['metrics']['no_attack_clean_positive_tpr']}",
+                f"- max_attacked_negative_fpr: {selected_candidate['metrics']['max_attacked_negative_fpr']}",
+                f"- parameter_interval_summary: {interval_summary.get('tubelet_only')}",
+            ]
+        )
+    if selected_tubelet_sync_candidate is not None:
+        lines.extend(
+            [
+                "",
+                "## Selected Tubelet-sync Candidate",
+                f"- candidate_status: {selected_tubelet_sync_candidate['candidate_status']}",
+                f"- method_variant: {selected_tubelet_sync_candidate['method_variant']}",
+                f"- fusion_rule: {selected_tubelet_sync_candidate['fusion_rule']}",
+                f"- lambda_sync: {selected_tubelet_sync_candidate['lambda_sync']}",
+                f"- sync_search: {selected_tubelet_sync_candidate['sync_search']}",
+                f"- temporal_crop_sync_gain: {selected_tubelet_sync_candidate['metrics']['temporal_crop_sync_gain']}",
+                f"- local_clip_sync_gain: {selected_tubelet_sync_candidate['metrics']['local_clip_sync_gain']}",
+                f"- mean_temporal_sync_gain: {selected_tubelet_sync_candidate['metrics']['mean_temporal_sync_gain']}",
+                f"- parameter_interval_summary: {interval_summary.get('tubelet_sync')}",
+            ]
+        )
+    if candidate_payload.get("tubelet_sync_scan_seed") is not None:
+        lines.extend(
+            [
+                "",
+                "## Tubelet-sync Scan Seed",
+                f"- fusion_rule: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['fusion_rule']}",
+                f"- lambda_sync: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['lambda_sync']}",
+                f"- sync_search_radius: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['sync_search_radius']}",
+                f"- min_sync_positive_margin: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['min_sync_positive_margin']}",
+                f"- min_sync_alignment_coverage_ratio: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['min_sync_alignment_coverage_ratio']}",
+                f"- min_sync_alignment_matched_count: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['min_sync_alignment_matched_count']}",
+            ]
+        )
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -941,6 +1190,34 @@ def _read_grid_numeric_list(payload: dict[str, Any], field_name: str) -> list[fl
 
 def _read_grid_integer_list(payload: dict[str, Any], field_name: str) -> list[int]:
     field_value = payload.get(field_name, [])
+    if not isinstance(field_value, list) or not field_value:
+        raise ValueError(f"grid field {field_name} must be a non-empty list")
+    resolved_values = [int(item) for item in field_value if isinstance(item, int)]
+    if not resolved_values:
+        raise ValueError(f"grid field {field_name} must contain integer values")
+    return resolved_values
+
+
+def _read_optional_grid_numeric_list(
+    payload: dict[str, Any],
+    field_name: str,
+    default_values: list[float],
+) -> list[float]:
+    field_value = payload.get(field_name, default_values)
+    if not isinstance(field_value, list) or not field_value:
+        raise ValueError(f"grid field {field_name} must be a non-empty list")
+    resolved_values = [round(float(item), 6) for item in field_value if isinstance(item, (int, float))]
+    if not resolved_values:
+        raise ValueError(f"grid field {field_name} must contain numeric values")
+    return resolved_values
+
+
+def _read_optional_grid_integer_list(
+    payload: dict[str, Any],
+    field_name: str,
+    default_values: list[int],
+) -> list[int]:
+    field_value = payload.get(field_name, default_values)
     if not isinstance(field_value, list) or not field_value:
         raise ValueError(f"grid field {field_name} must be a non-empty list")
     resolved_values = [int(item) for item in field_value if isinstance(item, int)]
