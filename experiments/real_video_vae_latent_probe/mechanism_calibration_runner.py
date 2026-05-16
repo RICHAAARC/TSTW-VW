@@ -107,6 +107,9 @@ def run_stage2_mechanism_calibration(
     temp_protocol_config_path = (
         calibration_workspace_root / "real_video_vae_mechanism_calibration_protocol.json"
     )
+    temp_runtime_config_path = (
+        calibration_workspace_root / "real_video_vae_mechanism_calibration_runtime_config.json"
+    )
     calibration_summary_path = (
         run_root_path / "artifacts" / "stage2_mechanism_calibration_summary.json"
     )
@@ -118,6 +121,8 @@ def run_stage2_mechanism_calibration(
     )
     calibration_workspace_root.mkdir(parents=True, exist_ok=True)
     _write_json(temp_protocol_config_path, calibration_protocol_config)
+    calibration_runtime_config = _build_calibration_runtime_config(runtime_config_file)
+    _write_json(temp_runtime_config_path, calibration_runtime_config)
     search_stages = _read_search_stages(grid_config)
     if search_stages:
         calibration_summary = _run_staged_mechanism_calibration(
@@ -134,7 +139,7 @@ def run_stage2_mechanism_calibration(
             backend_config_file=backend_config_file,
             attack_matrix_file=attack_matrix_file,
             dataset_manifest_file=dataset_manifest_file,
-            runtime_config_file=runtime_config_file,
+            runtime_config_file=temp_runtime_config_path,
             samples_per_role=samples_per_role,
             batch_size_frames=batch_size_frames,
             output_method_config_file=output_method_config_file,
@@ -157,7 +162,7 @@ def run_stage2_mechanism_calibration(
             backend_config_file=backend_config_file,
             attack_matrix_file=attack_matrix_file,
             dataset_manifest_file=dataset_manifest_file,
-            runtime_config_file=runtime_config_file,
+            runtime_config_file=temp_runtime_config_path,
             samples_per_role=samples_per_role,
             batch_size_frames=batch_size_frames,
             output_method_config_file=output_method_config_file,
@@ -167,6 +172,7 @@ def run_stage2_mechanism_calibration(
     _write_json(calibration_summary_path, calibration_summary)
     return {
         **calibration_summary,
+        "runtime_config_path": str(temp_runtime_config_path),
         "calibration_summary_path": str(calibration_summary_path),
     }
 
@@ -246,6 +252,7 @@ def _run_flat_mechanism_calibration(
         "forbidden_splits": _read_string_list(grid_config, "forbidden_splits"),
         "grid_config_path": str(grid_config_file),
         "protocol_config_path": str(protocol_config_path),
+        "runtime_config_path": str(runtime_config_file),
         "ablation_config_path": str(temp_ablation_config_path),
         "generated_method_variant_count": len(calibration_ablation_config["method_variants"]),
         "selected_candidate_output_path": str(selected_candidate_payload["output_path"]),
@@ -437,6 +444,7 @@ def _run_staged_mechanism_calibration(
         "forbidden_splits": _read_string_list(grid_config, "forbidden_splits"),
         "grid_config_path": str(grid_config_file),
         "protocol_config_path": str(protocol_config_path),
+        "runtime_config_path": str(runtime_config_file),
         "ablation_config_path": str(stage_summaries[-1]["ablation_config_path"]),
         "generated_method_variant_count": total_generated_method_variant_count,
         "selected_candidate_output_path": str(final_stage_selection_payload["output_path"]),
@@ -757,6 +765,26 @@ def _build_calibration_protocol_config(
     calibration_protocol_config.setdefault("splits_by_profile", {})
     calibration_protocol_config["splits_by_profile"][runtime_profile] = list(allowed_splits)
     return calibration_protocol_config
+
+
+def _build_calibration_runtime_config(runtime_config_path: Path | None) -> dict[str, Any]:
+    runtime_config = {} if runtime_config_path is None else load_json_config(runtime_config_path)
+    if not isinstance(runtime_config, dict):
+        raise TypeError("runtime_config must be a dictionary")
+    calibration_runtime_config = copy.deepcopy(runtime_config)
+
+    quality_metrics_config = dict(calibration_runtime_config.get("quality_metrics") or {})
+    quality_metrics_config["enable_lpips"] = False
+    quality_metrics_config["enable_clip_similarity"] = False
+    quality_metrics_config["enabled_attack_names"] = ["no_attack"]
+    quality_metrics_config["enabled_sample_roles"] = ["watermarked_positive"]
+    calibration_runtime_config["quality_metrics"] = quality_metrics_config
+
+    temporal_metrics_config = dict(calibration_runtime_config.get("temporal_metrics") or {})
+    temporal_metrics_config["enable_temporal_metrics"] = False
+    temporal_metrics_config["enable_motion_consistency"] = False
+    calibration_runtime_config["temporal_metrics"] = temporal_metrics_config
+    return calibration_runtime_config
 
 
 def _build_generated_method_configs(

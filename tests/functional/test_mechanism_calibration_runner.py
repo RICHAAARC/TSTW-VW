@@ -243,9 +243,11 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     )
 
     protocol_config_path = Path(summary["protocol_config_path"])
+    runtime_config_path = Path(summary["runtime_config_path"])
     ablation_config_path = Path(summary["ablation_config_path"])
     calibration_summary_path = Path(summary["calibration_summary_path"])
     assert protocol_config_path.exists()
+    assert runtime_config_path.exists()
     assert ablation_config_path.exists()
     assert calibration_summary_path.exists()
     assert summary["campaign_mode"] == "staged_search"
@@ -253,8 +255,15 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     assert Path(summary["search_stage_plan_path"]).exists()
 
     protocol_payload = json.loads(protocol_config_path.read_text(encoding="utf-8"))
+    runtime_payload = json.loads(runtime_config_path.read_text(encoding="utf-8"))
     assert protocol_payload["splits"] == ["dev", "calibration"]
     assert protocol_payload["splits_by_profile"]["formal"] == ["dev", "calibration"]
+    assert runtime_payload["quality_metrics"]["enable_lpips"] is False
+    assert runtime_payload["quality_metrics"]["enable_clip_similarity"] is False
+    assert runtime_payload["quality_metrics"]["enabled_attack_names"] == ["no_attack"]
+    assert runtime_payload["quality_metrics"]["enabled_sample_roles"] == ["watermarked_positive"]
+    assert runtime_payload["temporal_metrics"]["enable_temporal_metrics"] is False
+    assert runtime_payload["temporal_metrics"]["enable_motion_consistency"] is False
 
     stage_summaries = summary["search_stage_summaries"]
     anchor_ablation_payload = json.loads(
@@ -299,6 +308,7 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     for runner_call in captured_runner_calls:
         runner_kwargs = runner_call["kwargs"]
         assert runner_kwargs["protocol_config_path"] == protocol_config_path
+        assert runner_kwargs["runtime_config_path"] == runtime_config_path
         assert runner_kwargs["runtime_profile_override"] == "formal"
         assert runner_kwargs["samples_per_role"] == 2
         assert runner_kwargs["batch_size_frames"] == 8

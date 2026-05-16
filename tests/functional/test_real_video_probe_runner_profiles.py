@@ -11,6 +11,7 @@ import experiments.real_video_vae_latent_probe.runner as real_video_runner_modul
 import types
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 pytestmark = pytest.mark.quick
@@ -395,6 +396,195 @@ def test_cached_decoded_video_artifact_reuses_same_latent_across_attack_relpaths
     assert decode_call_count["value"] == 1
     assert first_metadata == expected_metadata
     assert second_metadata == expected_metadata
+
+
+@pytest.mark.unit
+def test_cached_attacked_video_artifact_uses_supplied_source_frames(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Validate attacked-video materialization can reuse in-memory source frames.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    source_frames = np.ones((2, 4, 4, 3), dtype=np.float32)
+    captured_frames: dict[str, np.ndarray] = {}
+    output_root = tmp_path
+    artifact_relpath = Path("artifacts/videos/attacked/h264_compression/sample.mp4")
+
+    class _FrameAttack:
+        def apply_frames(self, input_frames: np.ndarray, runtime_config: dict[str, object]) -> np.ndarray:
+            del runtime_config
+            captured_frames["value"] = np.asarray(input_frames, dtype=np.float32)
+            return np.asarray(input_frames, dtype=np.float32) * 0.5
+
+    monkeypatch.setattr(
+        real_video_runner_module,
+        "read_video_frames",
+        lambda _video_path: (_ for _ in ()).throw(AssertionError("unexpected source video read")),
+    )
+
+    metadata = runner._cached_attacked_video_artifact(
+        cache={},
+        source_video_metadata={
+            "video_digest": "decoded-digest",
+            "video_relpath": "artifacts/videos/decoded/frame_prc/source.mp4",
+        },
+        sample=types.SimpleNamespace(applied_attack_params={"quality": 23}),
+        attack_name="h264_compression",
+        attack_object=_FrameAttack(),
+        output_root=output_root,
+        artifact_relpath=artifact_relpath,
+        fps=8,
+        target_resolution=(4, 4),
+        runtime_config={},
+        source_video_frames=source_frames,
+    )
+
+    assert metadata["video_relpath"] == artifact_relpath.as_posix()
+    assert np.array_equal(captured_frames["value"], source_frames)
+
+
+@pytest.mark.unit
+def test_cached_reencoded_latent_artifact_uses_supplied_video_tensor(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Validate reencode can reuse in-memory attacked frames.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    expected_video_tensor = np.ones((2, 4, 4, 3), dtype=np.float32)
+    captured_video_tensor: dict[str, np.ndarray] = {}
+
+    monkeypatch.setattr(
+        runner,
+        "_read_video_tensor_from_artifact",
+        lambda _artifact_path: (_ for _ in ()).throw(AssertionError("unexpected artifact read")),
+    )
+
+    def _fake_encode(video_tensor: np.ndarray, *_args: object) -> np.ndarray:
+        captured_video_tensor["value"] = np.asarray(video_tensor, dtype=np.float32)
+        return np.ones((2, 4, 4, 4), dtype=np.float32)
+
+    monkeypatch.setattr(runner, "_encode_video_to_latent", _fake_encode)
+
+    metadata = runner._cached_reencoded_latent_artifact(
+        cache={},
+        video_metadata={"video_digest": "attacked-digest", "video_relpath": "artifacts/videos/attacked/sample.mp4"},
+        reference_sample=types.SimpleNamespace(),
+        vae_runtime_backend=object(),
+        vae_metadata={},
+        output_root=tmp_path,
+        artifact_relpath=Path("artifacts/latents/reencoded/no_attack/sample.npy"),
+        video_tensor=expected_video_tensor,
+    )
+
+    assert metadata["latent_relpath"] == "artifacts/latents/reencoded/no_attack/sample.npy"
+    assert np.array_equal(captured_video_tensor["value"], expected_video_tensor)
+
+
+@pytest.mark.unit
+def test_load_metric_frame_pair_uses_supplied_frames_without_artifact_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate metric-frame loading short-circuits artifact reads when frames are present.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    reference_frames = np.zeros((2, 4, 4, 3), dtype=np.float32)
+    comparison_frames = np.ones((2, 4, 4, 3), dtype=np.float32)
+
+    monkeypatch.setattr(
+        runner,
+        "_read_video_tensor_from_artifact",
+        lambda _artifact_path: (_ for _ in ()).throw(AssertionError("unexpected artifact read")),
+    )
+
+    resolved_reference_frames, resolved_comparison_frames = runner._load_metric_frame_pair(
+        ROOT / "reference.mp4",
+        ROOT / "comparison.mp4",
+        reference_frames=reference_frames,
+        comparison_frames=comparison_frames,
+    )
+
+    assert np.array_equal(resolved_reference_frames, reference_frames)
+    assert np.array_equal(resolved_comparison_frames, comparison_frames)
+
+
+@pytest.mark.unit
+def test_quality_metric_policy_can_limit_execution_to_selected_attack_and_role() -> None:
+    """Validate quality metrics can be scoped to specific attacks and sample roles.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    runner._runtime_config_overrides = {
+        "quality_metrics": {
+            "enabled_attack_names": ["no_attack"],
+            "enabled_sample_roles": ["watermarked_positive"],
+        }
+    }
+
+    assert runner._should_compute_quality_metrics(
+        types.SimpleNamespace(attack_name="no_attack", sample_role="watermarked_positive")
+    )
+    assert not runner._should_compute_quality_metrics(
+        types.SimpleNamespace(attack_name="temporal_crop", sample_role="watermarked_positive")
+    )
+    assert not runner._should_compute_quality_metrics(
+        types.SimpleNamespace(attack_name="no_attack", sample_role="attacked_positive")
+    )
+
+
+@pytest.mark.unit
+def test_temporal_metric_policy_can_disable_temporal_metrics() -> None:
+    """Validate temporal metrics can be fully disabled by runtime policy.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    runner._runtime_config_overrides = {
+        "temporal_metrics": {
+            "enable_temporal_metrics": False,
+        }
+    }
+
+    assert not runner._should_compute_temporal_metrics(
+        types.SimpleNamespace(attack_name="no_attack", sample_role="watermarked_positive")
+    )
+
+    skipped_payload = runner._build_skipped_temporal_metrics_payload(
+        reason="temporal_metrics_skipped_by_runtime_policy"
+    )
+    assert skipped_payload["temporal_consistency_score"] is None
+    assert skipped_payload["flicker_score"] is None
+    assert skipped_payload["temporal_failure_reason"] == "temporal_metrics_skipped_by_runtime_policy"
 
 
 @pytest.mark.unit
