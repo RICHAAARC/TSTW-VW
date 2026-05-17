@@ -67,6 +67,9 @@ from main.core.schema import LatentSample, NEGATIVE_SAMPLE_ROLES, SAMPLE_ROLES, 
 from main.core.tensor_artifact import read_float_tensor_npy, write_float_tensor_npy
 from main.methods.temporal_tubelet_watermark.method import build_method_from_config
 from main.protocol.calibrator import ThresholdCalibrator
+from main.protocol.threshold_decision_materialization import (
+    materialize_threshold_decisions,
+)
 from main.protocol.event_builder import EventPlanEntry
 from main.protocol.split_builder import build_split_plan
 from main.vae.vae_registry import resolve_vae_backend
@@ -673,6 +676,16 @@ class RealVideoVaeLatentRunner:
             f"{threshold_record['threshold_id']}:{protocol_config['construction_phase']}"
         )
         threshold_record["construction_phase"] = protocol_config["construction_phase"]
+        dev_records = materialize_threshold_decisions(
+            dev_records,
+            threshold_record,
+            attach_threshold_id=True,
+        )
+        calibration_records = materialize_threshold_decisions(
+            calibration_records,
+            threshold_record,
+            attach_threshold_id=False,
+        )
         test_records = self._run_event_subset(
             run_id,
             output_root,
@@ -686,6 +699,11 @@ class RealVideoVaeLatentRunner:
             latent_backend,
             vae_runtime_backend,
             vae_metadata,
+        )
+        test_records = materialize_threshold_decisions(
+            test_records,
+            threshold_record,
+            attach_threshold_id=True,
         )
         return dev_records + calibration_records + test_records, threshold_record
 

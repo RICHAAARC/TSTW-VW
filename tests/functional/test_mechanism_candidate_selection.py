@@ -16,11 +16,31 @@ from experiments.real_video_vae_latent_probe.output_layout import (
 )
 from scripts.check_results.select_stage2_mechanism_candidate import (
     _build_tubelet_sync_scan_seed,
+    _resolve_projection_support_weight,
     select_stage2_mechanism_candidate,
 )
 
 
 pytestmark = pytest.mark.quick
+
+
+def test_projection_support_weight_falls_back_to_variant_name() -> None:
+    """Validate support weight parsing falls back to the calibration variant name.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    weight = _resolve_projection_support_weight(
+        {
+            "method_variant": "tubelet_only_cal_tl01_sp04x04_w075",
+            "mechanism_trace": {},
+        }
+    )
+
+    assert weight == 0.75
 
 
 def test_tubelet_sync_scan_seed_uses_selected_candidate_defaults_for_missing_stage_grid_fields() -> None:

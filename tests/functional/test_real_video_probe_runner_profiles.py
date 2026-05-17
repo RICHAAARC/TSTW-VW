@@ -315,6 +315,116 @@ def test_runner_passes_active_runtime_profile_to_threshold_calibrator(
 
 
 @pytest.mark.unit
+def test_runner_materializes_post_calibration_decisions_without_calibration_threshold_leakage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate runner stamps dev decisions after calibration without leaking threshold_id into calibration.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    method_config = load_json_config(ROOT / "configs" / "method" / "frame_prc.json")
+    protocol_config = load_json_config(
+        ROOT / "configs" / "protocol" / "real_video_vae_latent_probe.json"
+    )
+    dev_records = [
+        {
+            "split": "dev",
+            "sample_role": "watermarked_positive",
+            "decision": False,
+            "threshold_id": None,
+            "evidence_scores": {"S_final": 0.6},
+        }
+    ]
+    calibration_records = [
+        {
+            "split": "calibration",
+            "sample_role": "clean_negative",
+            "decision": False,
+            "threshold_id": None,
+            "evidence_scores": {"S_final": 0.05},
+        }
+    ]
+    test_records = [
+        {
+            "split": "test",
+            "sample_role": "watermarked_positive",
+            "decision": True,
+            "threshold_id": "fixed_low_fpr_calibrated_detection:S_final:frame_prc:real_video_vae_latent_probe",
+            "evidence_scores": {"S_final": 0.6},
+        }
+    ]
+
+    class _FakeThresholdCalibrator:
+        def calibrate(
+            self,
+            run_id: str,
+            method_config: dict[str, object],
+            protocol_config: dict[str, object],
+            calibration_event_records: list[dict[str, object]],
+            runtime_profile_override: str | None = None,
+        ) -> dict[str, object]:
+            del run_id, method_config, protocol_config, calibration_event_records, runtime_profile_override
+            return {
+                "threshold_id": "fixed_low_fpr_calibrated_detection:S_final:frame_prc",
+                "threshold_value": 0.1,
+                "runtime_profile": "formal",
+            }
+
+    def _fake_run_event_subset(*args: object, **kwargs: object) -> list[dict[str, object]]:
+        allowed_splits = kwargs.get("allowed_splits")
+        if allowed_splits is None:
+            allowed_splits = args[6]
+        if allowed_splits == {"dev"}:
+            return [dict(record) for record in dev_records]
+        if allowed_splits == {"calibration"}:
+            return [dict(record) for record in calibration_records]
+        return [dict(record) for record in test_records]
+
+    monkeypatch.setattr(
+        real_video_runner_module,
+        "build_method_from_config",
+        lambda _method_config: object(),
+    )
+    monkeypatch.setattr(runner, "_run_event_subset", _fake_run_event_subset)
+    runner._threshold_calibrator = _FakeThresholdCalibrator()
+
+    event_records, threshold_record = runner._run_method_variant(
+        run_id="real_video_probe_materialized_decision_run",
+        output_root=ROOT,
+        event_plan=[],
+        method_config=method_config,
+        protocol_config=protocol_config,
+        runtime_profile="formal",
+        runtime_splits={"dev", "calibration", "test"},
+        runtime_sample_roles={
+            "clean_negative",
+            "attacked_negative",
+            "watermarked_positive",
+            "attacked_positive",
+        },
+        latent_backend=object(),
+        vae_runtime_backend=object(),
+        vae_metadata={},
+    )
+
+    dev_positive_record = next(record for record in event_records if record["split"] == "dev")
+    calibration_negative_record = next(
+        record for record in event_records if record["split"] == "calibration"
+    )
+
+    assert threshold_record["threshold_id"].endswith(":real_video_vae_latent_probe")
+    assert dev_positive_record["decision"] is True
+    assert dev_positive_record["threshold_id"] == threshold_record["threshold_id"]
+    assert calibration_negative_record["decision"] is False
+    assert calibration_negative_record["threshold_id"] is None
+
+
+@pytest.mark.unit
 def test_runtime_splits_shrink_to_manifest_available_splits() -> None:
     """Validate runner uses only dataset-manifest splits that actually exist.
 

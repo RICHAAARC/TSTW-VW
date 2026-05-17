@@ -20,6 +20,9 @@ from main.core.schema import (
 from main.methods.temporal_tubelet_watermark.method import build_method_from_config
 from main.protocol.calibrator import ThresholdCalibrator
 from main.protocol.event_builder import EventPlanEntry
+from main.protocol.threshold_decision_materialization import (
+    materialize_threshold_decisions,
+)
 
 
 @dataclass(frozen=True)
@@ -218,6 +221,16 @@ class ProtocolRunner:
             calibration_records,
         )
         threshold_calibration_seconds = perf_counter() - threshold_start
+        dev_records = materialize_threshold_decisions(
+            dev_records,
+            threshold_record,
+            attach_threshold_id=True,
+        )
+        calibration_records = materialize_threshold_decisions(
+            calibration_records,
+            threshold_record,
+            attach_threshold_id=False,
+        )
         test_records, test_profile = self._run_event_subset(
             run_id,
             event_plan,
@@ -227,6 +240,11 @@ class ProtocolRunner:
             allowed_splits={"test"},
             allowed_sample_roles=SAMPLE_ROLES,
             threshold_record=threshold_record,
+        )
+        test_records = materialize_threshold_decisions(
+            test_records,
+            threshold_record,
+            attach_threshold_id=True,
         )
         split_profiles = (dev_profile, calibration_profile, test_profile)
         variant_runtime_profile = MethodVariantRuntimeProfile(

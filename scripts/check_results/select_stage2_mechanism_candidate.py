@@ -1009,10 +1009,27 @@ def _find_variant_record(
 
 def _resolve_projection_support_weight(event_record: dict[str, Any]) -> float:
     mechanism_trace = event_record.get("mechanism_trace", {})
+    if not isinstance(mechanism_trace, dict):
+        mechanism_trace = {}
     field_value = mechanism_trace.get("embedding_projection_support_weight")
     if not isinstance(field_value, (int, float)):
+        parsed_value = _parse_projection_support_weight_from_variant_name(
+            str(event_record.get("method_variant", ""))
+        )
+        if parsed_value is not None:
+            return parsed_value
         return 0.45
     return round(float(field_value), 6)
+
+
+def _parse_projection_support_weight_from_variant_name(
+    method_variant: str,
+) -> float | None:
+    variant_tokens = method_variant.split("_")
+    for token in variant_tokens:
+        if token.startswith("w") and token[1:].isdigit():
+            return round(int(token[1:]) / 100.0, 6)
+    return None
 
 
 def _resolve_sync_confidence_config(event_record: dict[str, Any]) -> dict[str, float | int]:

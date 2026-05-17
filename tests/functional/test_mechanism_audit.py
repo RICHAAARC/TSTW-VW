@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 from pathlib import Path
 
 import pytest
 
 from experiments.real_video_vae_latent_probe.mechanism_audit import (
+    build_stage2_mechanism_audit_rows,
     run_stage2_mechanism_audit,
 )
 from experiments.real_video_vae_latent_probe.output_layout import (
@@ -21,6 +23,103 @@ from experiments.real_video_vae_latent_probe.output_layout import (
 
 
 pytestmark = pytest.mark.quick
+
+
+def test_stage2_mechanism_audit_rows_recompute_missing_threshold_decisions() -> None:
+    """Validate dev and calibration rows recompute TPR from resolved thresholds.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    threshold_records = [
+        {
+            "threshold_id": "threshold:tubelet_only_anchor",
+            "method_variant": "tubelet_only_anchor",
+            "target_fpr": 0.001,
+            "threshold_value": 0.3,
+        }
+    ]
+    event_records = [
+        _build_event_record(
+            split_name="dev",
+            method_variant="tubelet_only_anchor",
+            base_method_variant="tubelet_only",
+            attack_name="no_attack",
+            sample_role="clean_negative",
+            decision=False,
+            s_tubelet=0.1,
+            s_sync=None,
+            s_final=0.1,
+        ),
+        _build_event_record(
+            split_name="dev",
+            method_variant="tubelet_only_anchor",
+            base_method_variant="tubelet_only",
+            attack_name="no_attack",
+            sample_role="watermarked_positive",
+            decision=False,
+            s_tubelet=0.6,
+            s_sync=None,
+            s_final=0.6,
+            quality_psnr=float("inf"),
+            quality_ssim=1.0,
+        ),
+        _build_event_record(
+            split_name="calibration",
+            method_variant="tubelet_only_anchor",
+            base_method_variant="tubelet_only",
+            attack_name="no_attack",
+            sample_role="clean_negative",
+            decision=False,
+            s_tubelet=0.05,
+            s_sync=None,
+            s_final=0.05,
+        ),
+        _build_event_record(
+            split_name="calibration",
+            method_variant="tubelet_only_anchor",
+            base_method_variant="tubelet_only",
+            attack_name="no_attack",
+            sample_role="watermarked_positive",
+            decision=False,
+            s_tubelet=0.5,
+            s_sync=None,
+            s_final=0.5,
+            quality_psnr=float("inf"),
+            quality_ssim=1.0,
+        ),
+    ]
+
+    audit_rows = build_stage2_mechanism_audit_rows(
+        event_records,
+        threshold_records,
+        allowed_splits={"dev", "calibration"},
+    )
+
+    no_attack_positive_row = next(
+        row
+        for row in audit_rows
+        if row["method_variant"] == "tubelet_only_anchor"
+        and row["attack_name"] == "no_attack"
+        and row["sample_role"] == "watermarked_positive"
+    )
+    no_attack_negative_row = next(
+        row
+        for row in audit_rows
+        if row["method_variant"] == "tubelet_only_anchor"
+        and row["attack_name"] == "no_attack"
+        and row["sample_role"] == "clean_negative"
+    )
+
+    assert no_attack_positive_row["decision_rate"] == 1.0
+    assert no_attack_positive_row["clean_positive_TPR"] == 1.0
+    assert math.isinf(float(no_attack_positive_row["quality_psnr_mean"]))
+    assert no_attack_positive_row["quality_ssim_mean"] == 1.0
+    assert no_attack_negative_row["decision_rate"] == 0.0
+    assert no_attack_negative_row["clean_negative_FPR"] == 0.0
 
 
 def test_stage2_mechanism_audit_writes_expected_artifacts(tmp_path: Path) -> None:
@@ -231,17 +330,22 @@ def _build_event_record(
     s_tubelet: float,
     s_sync: float | None,
     s_final: float,
+    split_name: str = "test",
+    threshold_id: str | None = None,
+    quality_psnr: float = 28.0,
+    quality_ssim: float = 0.8,
 ) -> dict[str, object]:
     return {
         "run_id": "real_video_vae_latent_probe_formal",
         "event_id": f"{method_variant}:{attack_name}:{sample_role}",
         "sample_id": f"sample:{method_variant}:{attack_name}:{sample_role}",
-        "split": "test",
+        "split": split_name,
         "sample_role": sample_role,
         "method_variant": method_variant,
         "base_method_variant": base_method_variant,
         "attack_name": attack_name,
         "decision": decision,
+        "threshold_id": threshold_id,
         "target_fpr": 0.001,
         "evidence_scores": {
             "S_tubelet": s_tubelet,
@@ -250,8 +354,8 @@ def _build_event_record(
             "S_final": s_final,
         },
         "quality_metrics": {
-            "watermarked_video_psnr": 28.0,
-            "watermarked_video_ssim": 0.8,
+            "watermarked_video_psnr": quality_psnr,
+            "watermarked_video_ssim": quality_ssim,
             "watermarked_video_lpips": 0.1 if method_variant == "tubelet_sync" else None,
             "clip_similarity_score": None,
             "lpips_failure_reason": None if method_variant == "tubelet_sync" else "lpips_disabled_by_config",

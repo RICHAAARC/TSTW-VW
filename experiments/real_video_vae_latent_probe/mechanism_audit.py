@@ -168,8 +168,8 @@ def build_stage2_mechanism_audit_rows(
     Returns:
         Stage-two mechanism audit table rows.
     """
-    del threshold_records
     rows: list[dict[str, Any]] = []
+    threshold_index = _build_threshold_index(threshold_records)
     selected_records = _filter_records_by_splits(event_score_records, allowed_splits)
     grouped_keys = sorted(
         {
@@ -209,15 +209,49 @@ def build_stage2_mechanism_audit_rows(
                 "S_sync_std": _std_record_score(grouped_records, "S_sync"),
                 "S_final_mean": _mean_record_score(grouped_records, "S_final"),
                 "S_final_std": _std_record_score(grouped_records, "S_final"),
-                "decision_rate": _decision_rate(grouped_records),
-                "clean_negative_FPR": _decision_rate_for_role(selected_records, method_variant, attack_name, "clean_negative"),
-                "attacked_negative_FPR": _decision_rate_for_role(selected_records, method_variant, attack_name, "attacked_negative"),
-                "clean_positive_TPR": _decision_rate_for_role(selected_records, method_variant, attack_name, "watermarked_positive"),
-                "attacked_positive_TPR": _decision_rate_for_role(selected_records, method_variant, attack_name, "attacked_positive"),
-                "local_clip_TPR": _local_clip_tpr(selected_records, method_variant, attack_name),
+                "decision_rate": _decision_rate(grouped_records, threshold_index),
+                "clean_negative_FPR": _decision_rate_for_role(
+                    selected_records,
+                    method_variant,
+                    attack_name,
+                    "clean_negative",
+                    threshold_index,
+                ),
+                "attacked_negative_FPR": _decision_rate_for_role(
+                    selected_records,
+                    method_variant,
+                    attack_name,
+                    "attacked_negative",
+                    threshold_index,
+                ),
+                "clean_positive_TPR": _decision_rate_for_role(
+                    selected_records,
+                    method_variant,
+                    attack_name,
+                    "watermarked_positive",
+                    threshold_index,
+                ),
+                "attacked_positive_TPR": _decision_rate_for_role(
+                    selected_records,
+                    method_variant,
+                    attack_name,
+                    "attacked_positive",
+                    threshold_index,
+                ),
+                "local_clip_TPR": _local_clip_tpr(
+                    selected_records,
+                    method_variant,
+                    attack_name,
+                    threshold_index,
+                ),
                 "sync_alignment_error_mean": _mean_mechanism_trace_value(grouped_records, "sync_alignment_error"),
                 "sync_peak_rank_median": _median_mechanism_trace_value(grouped_records, "sync_peak_rank"),
-                "quality_psnr_mean": _mean_payload_value(grouped_records, "quality_metrics", "watermarked_video_psnr"),
+                "quality_psnr_mean": _mean_payload_value(
+                    grouped_records,
+                    "quality_metrics",
+                    "watermarked_video_psnr",
+                    allow_positive_infinity=True,
+                ),
                 "quality_ssim_mean": _mean_payload_value(grouped_records, "quality_metrics", "watermarked_video_ssim"),
                 "temporal_consistency_score_mean": _mean_payload_value(grouped_records, "temporal_metrics", "temporal_consistency_score"),
                 "flicker_score_mean": _mean_payload_value(grouped_records, "temporal_metrics", "flicker_score"),
@@ -399,7 +433,6 @@ def build_stage2_mechanism_decision(
     target_fpr: float | None,
 ) -> dict[str, Any]:
     """Build the stage-two mechanism gate decision from governed records."""
-    del threshold_records
     implementation_decision = str(
         governance_summary_row.get("real_video_vae_latent_decision", "INCONCLUSIVE")
     )
@@ -513,7 +546,12 @@ def build_stage2_mechanism_decision(
         if str(record.get("sample_role")) in {"watermarked_positive", "attacked_positive"}
         and str(record.get("method_variant")) in set(required_variants)
     ]
-    mean_psnr = _mean_payload_value(positive_quality_records, "quality_metrics", "watermarked_video_psnr")
+    mean_psnr = _mean_payload_value(
+        positive_quality_records,
+        "quality_metrics",
+        "watermarked_video_psnr",
+        allow_positive_infinity=True,
+    )
     mean_ssim = _mean_payload_value(positive_quality_records, "quality_metrics", "watermarked_video_ssim")
     if require_quality_not_collapsed and (
         mean_psnr is None
@@ -688,10 +726,28 @@ def _values_for_score(records: list[dict[str, Any]], score_name: str) -> list[fl
     return values
 
 
-def _mean(values: list[float | None]) -> float | None:
-    filtered_values = [float(value) for value in values if value is not None and math.isfinite(float(value))]
+def _mean(
+    values: list[float | None],
+    *,
+    allow_positive_infinity: bool = False,
+) -> float | None:
+    filtered_values: list[float] = []
+    positive_infinity_present = False
+    for value in values:
+        if value is None:
+            continue
+        numeric_value = float(value)
+        if math.isfinite(numeric_value):
+            filtered_values.append(numeric_value)
+            continue
+        if allow_positive_infinity and math.isinf(numeric_value) and numeric_value > 0:
+            positive_infinity_present = True
     if not filtered_values:
+        if positive_infinity_present:
+            return math.inf
         return None
+    if positive_infinity_present:
+        return math.inf
     return round(statistics.fmean(filtered_values), 6)
 
 
@@ -720,10 +776,103 @@ def _safe_float(value: Any) -> float | None:
         return None
 
 
-def _decision_rate(records: list[dict[str, Any]]) -> float | None:
+def _build_threshold_index(threshold_records: list[dict[str, Any]]) -> dict[str, Any]:
+    by_id: dict[str, dict[str, Any]] = {}
+    by_variant: dict[str, list[dict[str, Any]]] = {}
+    for threshold_record in threshold_records:
+        threshold_id = threshold_record.get("threshold_id")
+        if isinstance(threshold_id, str) and threshold_id:
+            by_id[threshold_id] = threshold_record
+        method_variant = threshold_record.get("method_variant")
+        if isinstance(method_variant, str) and method_variant:
+            by_variant.setdefault(method_variant, []).append(threshold_record)
+    return {
+        "by_id": by_id,
+        "by_variant": by_variant,
+    }
+
+
+def _resolve_threshold_value(
+    record: dict[str, Any],
+    threshold_index: dict[str, Any] | None,
+) -> float | None:
+    if not isinstance(threshold_index, dict):
+        return None
+    by_id = threshold_index.get("by_id")
+    by_variant = threshold_index.get("by_variant")
+    threshold_id = record.get("threshold_id")
+    if isinstance(by_id, dict) and isinstance(threshold_id, str) and threshold_id:
+        threshold_record = by_id.get(threshold_id)
+        if isinstance(threshold_record, dict):
+            threshold_value = _safe_float(threshold_record.get("threshold_value"))
+            if threshold_value is not None:
+                return threshold_value
+
+    method_variant = str(record.get("method_variant", ""))
+    if not isinstance(by_variant, dict) or not method_variant:
+        return None
+    variant_threshold_records = by_variant.get(method_variant, [])
+    if not isinstance(variant_threshold_records, list) or not variant_threshold_records:
+        return None
+
+    target_fpr = _safe_float(record.get("target_fpr"))
+    if target_fpr is not None:
+        matched_threshold_value = _resolve_unique_threshold_value(
+            [
+                threshold_record
+                for threshold_record in variant_threshold_records
+                if _target_fpr_matches(_safe_float(threshold_record.get("target_fpr")), target_fpr)
+            ]
+        )
+        if matched_threshold_value is not None:
+            return matched_threshold_value
+    return _resolve_unique_threshold_value(variant_threshold_records)
+
+
+def _resolve_unique_threshold_value(threshold_records: list[dict[str, Any]]) -> float | None:
+    numeric_values = {
+        float(threshold_value)
+        for threshold_record in threshold_records
+        for threshold_value in [_safe_float(threshold_record.get("threshold_value"))]
+        if threshold_value is not None
+    }
+    if len(numeric_values) != 1:
+        return None
+    return next(iter(numeric_values))
+
+
+def _target_fpr_matches(left_value: float | None, right_value: float) -> bool:
+    if left_value is None:
+        return False
+    return math.isclose(float(left_value), float(right_value), rel_tol=1e-9, abs_tol=1e-12)
+
+
+def _resolved_decision_value(
+    record: dict[str, Any],
+    threshold_index: dict[str, Any] | None,
+) -> float:
+    threshold_value = _resolve_threshold_value(record, threshold_index)
+    if threshold_value is not None:
+        evidence_scores = record.get("evidence_scores", {})
+        final_score = None
+        if isinstance(evidence_scores, dict):
+            final_score = _safe_float(evidence_scores.get("S_final"))
+        if final_score is None:
+            return 0.0
+        return 1.0 if float(final_score) >= float(threshold_value) else 0.0
+    return 1.0 if bool(record.get("decision")) else 0.0
+
+
+def _decision_rate(
+    records: list[dict[str, Any]],
+    threshold_index: dict[str, Any] | None = None,
+) -> float | None:
     if not records:
         return None
-    decision_values = [1.0 if bool(record.get("decision")) else 0.0 for record in records]
+    decision_values = [
+        _resolved_decision_value(record, threshold_index)
+        for record in records
+    ]
     return _mean(decision_values)
 
 
@@ -732,6 +881,7 @@ def _decision_rate_for_role(
     method_variant: str,
     attack_name: str,
     sample_role: str,
+    threshold_index: dict[str, Any] | None = None,
 ) -> float | None:
     matched_records = [
         record
@@ -740,13 +890,24 @@ def _decision_rate_for_role(
         and str(record.get("attack_name")) == attack_name
         and str(record.get("sample_role")) == sample_role
     ]
-    return _decision_rate(matched_records)
+    return _decision_rate(matched_records, threshold_index)
 
 
-def _local_clip_tpr(records: list[dict[str, Any]], method_variant: str, attack_name: str) -> float | None:
+def _local_clip_tpr(
+    records: list[dict[str, Any]],
+    method_variant: str,
+    attack_name: str,
+    threshold_index: dict[str, Any] | None = None,
+) -> float | None:
     if attack_name != "local_clip":
         return None
-    return _decision_rate_for_role(records, method_variant, attack_name, "attacked_positive")
+    return _decision_rate_for_role(
+        records,
+        method_variant,
+        attack_name,
+        "attacked_positive",
+        threshold_index,
+    )
 
 
 def _mean_record_score(records: list[dict[str, Any]], score_name: str) -> float | None:
@@ -775,8 +936,17 @@ def _median_mechanism_trace_value(records: list[dict[str, Any]], value_key: str)
     return _median(values)
 
 
-def _mean_payload_value(records: list[dict[str, Any]], payload_key: str, value_key: str) -> float | None:
-    return _mean(_values_for_payload(records, payload_key, value_key))
+def _mean_payload_value(
+    records: list[dict[str, Any]],
+    payload_key: str,
+    value_key: str,
+    *,
+    allow_positive_infinity: bool = False,
+) -> float | None:
+    return _mean(
+        _values_for_payload(records, payload_key, value_key),
+        allow_positive_infinity=allow_positive_infinity,
+    )
 
 
 def _relevant_positive_role(attack_name: str) -> str:

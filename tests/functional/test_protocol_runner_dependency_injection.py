@@ -96,6 +96,15 @@ def _build_minimal_event_plan() -> list[EventPlanEntry]:
             attack_object=attack_object,
         ),
         EventPlanEntry(
+            event_id="event_dev_watermarked_positive",
+            sample_id="sample_dev_watermarked_positive_000001",
+            split="dev",
+            sample_role="watermarked_positive",
+            attack_name=attack_object.attack_name,
+            attack_params=attack_object.attack_params,
+            attack_object=attack_object,
+        ),
+        EventPlanEntry(
             event_id="event_calibration_clean_negative",
             sample_id="sample_calibration_clean_negative_000001",
             split="calibration",
@@ -213,6 +222,80 @@ def test_protocol_runner_supports_fake_backend() -> None:
     assert {record["input_artifact_trace"]["backend_name"] for record in event_score_records} == {
         "fake_latent_backend"
     }
+
+
+def test_protocol_runner_materializes_dev_decisions_without_calibration_threshold_id_leakage() -> None:
+    """Validate ProtocolRunner stamps dev decisions after calibration without leaking threshold_id to calibration.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = ProtocolRunner(
+        latent_backend=FakeLatentBackend(),
+        method_factory=lambda _: FakeWatermarkMethod(),
+    )
+    method_config = {
+        "method_family": "generic_probe_family",
+        "method_variant": "empty_watermark_method_placeholder",
+        "method_status": "placeholder",
+        "enabled_evidence": {
+            "tubelet": False,
+            "sync": False,
+            "trajectory": False,
+        },
+        "fusion_rule": "constant_zero_fusion_placeholder",
+    }
+    protocol_config = load_json_config(
+        ROOT
+        / "experiments"
+        / "protocol_skeleton"
+        / "configs"
+        / "protocol"
+        / "protocol_skeleton.json"
+    )
+
+    class _FakeThresholdCalibrator:
+        def calibrate(
+            self,
+            run_id: str,
+            method_config: dict[str, object],
+            protocol_config: dict[str, object],
+            calibration_event_records: list[dict[str, object]],
+        ) -> dict[str, object]:
+            del run_id, method_config, protocol_config, calibration_event_records
+            return {
+                "threshold_id": "fixed_low_fpr_calibrated_detection:S_final:empty_watermark_method_placeholder",
+                "threshold_value": 0.5,
+            }
+
+    runner._threshold_calibrator = _FakeThresholdCalibrator()
+
+    event_score_records, threshold_record = runner.run_method_variant(
+        "protocol_runner_materialized_decision_run",
+        _build_minimal_event_plan(),
+        method_config,
+        protocol_config,
+    )
+
+    dev_positive_record = next(
+        record
+        for record in event_score_records
+        if record["split"] == "dev" and record["sample_role"] == "watermarked_positive"
+    )
+    calibration_negative_record = next(
+        record
+        for record in event_score_records
+        if record["split"] == "calibration" and record["sample_role"] == "clean_negative"
+    )
+
+    assert threshold_record["threshold_id"]
+    assert dev_positive_record["decision"] is True
+    assert dev_positive_record["threshold_id"] == threshold_record["threshold_id"]
+    assert calibration_negative_record["decision"] is False
+    assert calibration_negative_record["threshold_id"] is None
 
 
 def test_protocol_runner_supports_fake_method_factory_and_dynamic_method_family() -> None:
