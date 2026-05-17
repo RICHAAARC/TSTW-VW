@@ -140,6 +140,9 @@ def select_stage2_mechanism_candidate(
     sync_scan_seed = None
     tubelet_sync_rows: list[dict[str, Any]] = []
     selected_tubelet_sync_candidate = None
+    selection_completion_status = "complete"
+    selection_blocking_reason = None
+    selection_blocking_details = None
     if selection_scope == "tubelet_only":
         selected_candidate = _select_tubelet_only_candidate(
             tubelet_only_rows,
@@ -162,10 +165,18 @@ def select_stage2_mechanism_candidate(
             mechanism_config,
             selected_candidate=selected_candidate,
         )
-        selected_tubelet_sync_candidate = _select_tubelet_sync_candidate(
-            tubelet_sync_rows,
-            mechanism_config,
-        )
+        if tubelet_sync_rows:
+            selected_tubelet_sync_candidate = _select_tubelet_sync_candidate(
+                tubelet_sync_rows,
+                mechanism_config,
+            )
+        else:
+            selection_completion_status = "incomplete_no_compatible_tubelet_sync_rows"
+            selection_blocking_reason = "selected_anchor_not_covered_by_sync_stage_records"
+            selection_blocking_details = _build_sync_stage_blocking_details(
+                event_score_records,
+                selected_candidate,
+            )
         calibration_rows = list(tubelet_sync_rows)
     else:
         selected_candidate = _select_tubelet_only_candidate(
@@ -182,10 +193,18 @@ def select_stage2_mechanism_candidate(
             mechanism_config,
             selected_candidate=selected_candidate,
         )
-        selected_tubelet_sync_candidate = _select_tubelet_sync_candidate(
-            tubelet_sync_rows,
-            mechanism_config,
-        )
+        if tubelet_sync_rows:
+            selected_tubelet_sync_candidate = _select_tubelet_sync_candidate(
+                tubelet_sync_rows,
+                mechanism_config,
+            )
+        else:
+            selection_completion_status = "incomplete_no_compatible_tubelet_sync_rows"
+            selection_blocking_reason = "selected_anchor_not_covered_by_sync_stage_records"
+            selection_blocking_details = _build_sync_stage_blocking_details(
+                event_score_records,
+                selected_candidate,
+            )
         calibration_rows = [*tubelet_only_rows, *tubelet_sync_rows]
     observed_splits = sorted({str(record.get("split")) for record in event_score_records})
     observed_forbidden_splits = sorted(set(observed_splits) & set(forbidden_splits))
@@ -205,6 +224,9 @@ def select_stage2_mechanism_candidate(
         "observed_splits": observed_splits,
         "observed_forbidden_splits": observed_forbidden_splits,
         "selection_scope": selection_scope,
+        "selection_completion_status": selection_completion_status,
+        "selection_blocking_reason": selection_blocking_reason,
+        "selection_blocking_details": selection_blocking_details,
         "top_candidate_limit": resolved_top_candidate_limit,
         "selection_metrics": _read_string_list(grid_config, "selection_metrics"),
         "selected_tubelet_only_candidate": selected_candidate,
@@ -832,6 +854,63 @@ def _select_tubelet_sync_candidate(
     }
 
 
+def _build_sync_stage_blocking_details(
+    event_score_records: list[dict[str, Any]],
+    selected_candidate: dict[str, Any],
+) -> dict[str, Any]:
+    selected_signature = {
+        "tubelet_length": int(selected_candidate["tubelet_length"]),
+        "spatial_patch_size": list(
+            selected_candidate["tubelet_partition"]["spatial_patch_size"]
+        ),
+        "embedding_projection_support_weight": round(
+            float(
+                selected_candidate["score_calibration"][
+                    "embedding_projection_support_weight"
+                ]
+            ),
+            6,
+        ),
+    }
+    observed_sync_signatures = sorted(
+        {
+            (
+                int(record.get("tubelet_length", 1)),
+                json.dumps(
+                    record.get("mechanism_trace", {}).get("spatial_patch_size", [4, 4]),
+                    ensure_ascii=False,
+                ),
+                round(float(_resolve_projection_support_weight(record) or 0.0), 6),
+            )
+            for record in event_score_records
+            if str(record.get("base_method_variant", record.get("method_variant")))
+            == "tubelet_sync"
+        }
+    )
+    normalized_signatures = [
+        {
+            "tubelet_length": signature[0],
+            "spatial_patch_size": json.loads(signature[1]),
+            "embedding_projection_support_weight": signature[2],
+        }
+        for signature in observed_sync_signatures
+    ]
+    matching_signature_count = sum(
+        1
+        for signature in normalized_signatures
+        if int(signature["tubelet_length"]) == int(selected_signature["tubelet_length"])
+        and list(signature["spatial_patch_size"]) == list(selected_signature["spatial_patch_size"])
+        and round(float(signature["embedding_projection_support_weight"]), 6)
+        == round(float(selected_signature["embedding_projection_support_weight"]), 6)
+    )
+    return {
+        "selected_anchor_signature": selected_signature,
+        "observed_sync_stage_signature_count": len(normalized_signatures),
+        "observed_sync_stage_signatures": normalized_signatures,
+        "matching_sync_stage_signature_count": matching_signature_count,
+    }
+
+
 def _build_tubelet_sync_scan_seed(
     selected_candidate: dict[str, Any],
     grid_config: dict[str, Any],
@@ -1350,6 +1429,16 @@ def _write_text_report(
                 f"- no_attack_clean_positive_tpr: {selected_candidate['metrics']['no_attack_clean_positive_tpr']}",
                 f"- max_attacked_negative_fpr: {selected_candidate['metrics']['max_attacked_negative_fpr']}",
                 f"- parameter_interval_summary: {interval_summary.get('tubelet_only')}",
+            ]
+        )
+    if candidate_payload.get("selection_completion_status") != "complete":
+        lines.extend(
+            [
+                "",
+                "## Selection Completion",
+                f"- selection_completion_status: {candidate_payload.get('selection_completion_status')}",
+                f"- selection_blocking_reason: {candidate_payload.get('selection_blocking_reason')}",
+                f"- selection_blocking_details: {candidate_payload.get('selection_blocking_details')}",
             ]
         )
     if selected_tubelet_sync_candidate is not None:

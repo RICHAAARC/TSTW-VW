@@ -239,15 +239,28 @@ def _run_flat_mechanism_calibration(
         grid_config_path=grid_config_file,
         mechanism_config_path=mechanism_config_file,
     )
-    candidate_method_config = _build_tubelet_sync_candidate_method_config(
-        tubelet_sync_template=tubelet_sync_template,
-        candidate_payload=selected_candidate_payload,
-    )
-    _write_json(output_method_config_file, candidate_method_config)
+    generated_candidate_config_path: str | None = None
+    if selected_candidate_payload.get("selected_tubelet_sync_candidate") is not None:
+        candidate_method_config = _build_tubelet_sync_candidate_method_config(
+            tubelet_sync_template=tubelet_sync_template,
+            candidate_payload=selected_candidate_payload,
+        )
+        _write_json(output_method_config_file, candidate_method_config)
+        generated_candidate_config_path = str(output_method_config_file)
     return {
         "run_root": str(run_root_path),
         "runtime_profile": runtime_profile,
         "campaign_mode": "flat_grid",
+        "calibration_completion_status": selected_candidate_payload.get(
+            "selection_completion_status",
+            "complete",
+        ),
+        "calibration_blocking_reason": selected_candidate_payload.get(
+            "selection_blocking_reason"
+        ),
+        "calibration_blocking_details": selected_candidate_payload.get(
+            "selection_blocking_details"
+        ),
         "allowed_splits": _read_string_list(grid_config, "allowed_splits"),
         "forbidden_splits": _read_string_list(grid_config, "forbidden_splits"),
         "grid_config_path": str(grid_config_file),
@@ -265,7 +278,7 @@ def _run_flat_mechanism_calibration(
             "selected_tubelet_sync_candidate"
         ],
         "tubelet_sync_scan_seed": selected_candidate_payload["tubelet_sync_scan_seed"],
-        "generated_tubelet_sync_candidate_config_path": str(output_method_config_file),
+        "generated_tubelet_sync_candidate_config_path": generated_candidate_config_path,
     }
 
 
@@ -298,6 +311,10 @@ def _run_staged_mechanism_calibration(
     selected_tubelet_only_candidate: dict[str, Any] | None = None
     selected_tubelet_sync_candidate: dict[str, Any] | None = None
     final_stage_selection_payload: dict[str, Any] | None = None
+    search_terminated_early = False
+    termination_reason = None
+    termination_details = None
+    terminated_before_stage_name = None
     search_stage_plan_path = (
         calibration_workspace_root / "stage2_mechanism_calibration_search_stage_plan.json"
     )
@@ -314,6 +331,7 @@ def _run_staged_mechanism_calibration(
         stage_name = str(stage_config["stage_name"])
         selection_scope = str(stage_config["selection_scope"])
         stage_workspace_root = calibration_workspace_root / stage_name
+        stage_workspace_root.mkdir(parents=True, exist_ok=True)
         stage_method_config_root = stage_workspace_root / "method_configs"
         stage_method_config_root.mkdir(parents=True, exist_ok=True)
         stage_ablation_config_path = (
@@ -408,6 +426,15 @@ def _run_staged_mechanism_calibration(
                 "selected_tubelet_sync_candidate": stage_selection_payload.get(
                     "selected_tubelet_sync_candidate"
                 ),
+                "selection_completion_status": stage_selection_payload.get(
+                    "selection_completion_status"
+                ),
+                "selection_blocking_reason": stage_selection_payload.get(
+                    "selection_blocking_reason"
+                ),
+                "selection_blocking_details": stage_selection_payload.get(
+                    "selection_blocking_details"
+                ),
                 "top_tubelet_only_candidates": stage_selection_payload.get(
                     "top_tubelet_only_candidates",
                     [],
@@ -422,21 +449,67 @@ def _run_staged_mechanism_calibration(
                 ),
             }
         )
+        if (
+            selection_scope == "tubelet_sync"
+            and stage_selection_payload.get("selected_tubelet_sync_candidate") is None
+        ):
+            next_required_sync_stage = _resolve_next_required_sync_stage_name(
+                search_stages,
+                stage_index,
+            )
+            if next_required_sync_stage is not None:
+                search_terminated_early = True
+                termination_reason = stage_selection_payload.get(
+                    "selection_blocking_reason",
+                    "selected_tubelet_sync_candidate_unavailable",
+                )
+                termination_details = stage_selection_payload.get(
+                    "selection_blocking_details"
+                )
+                terminated_before_stage_name = next_required_sync_stage
+                break
 
-    if selected_tubelet_sync_candidate is None or final_stage_selection_payload is None:
-        raise ValueError("staged mechanism calibration must produce a tubelet-sync candidate")
+    if final_stage_selection_payload is None:
+        raise ValueError("staged mechanism calibration must produce at least one stage summary")
 
-    candidate_method_config = _build_tubelet_sync_candidate_method_config(
-        tubelet_sync_template=tubelet_sync_template,
-        candidate_payload={
-            "selected_tubelet_sync_candidate": selected_tubelet_sync_candidate,
-        },
+    generated_candidate_config_path: str | None = None
+    calibration_completion_status = final_stage_selection_payload.get(
+        "selection_completion_status",
+        "complete",
     )
-    _write_json(output_method_config_file, candidate_method_config)
+    calibration_blocking_reason = final_stage_selection_payload.get(
+        "selection_blocking_reason"
+    )
+    calibration_blocking_details = final_stage_selection_payload.get(
+        "selection_blocking_details"
+    )
+    if selected_tubelet_sync_candidate is not None:
+        candidate_method_config = _build_tubelet_sync_candidate_method_config(
+            tubelet_sync_template=tubelet_sync_template,
+            candidate_payload={
+                "selected_tubelet_sync_candidate": selected_tubelet_sync_candidate,
+            },
+        )
+        _write_json(output_method_config_file, candidate_method_config)
+        generated_candidate_config_path = str(output_method_config_file)
+    else:
+        calibration_completion_status = "anchor_only_partial_selection"
+        calibration_blocking_reason = (
+            termination_reason
+            or calibration_blocking_reason
+            or "staged_search_missing_tubelet_sync_candidate"
+        )
+        calibration_blocking_details = termination_details or calibration_blocking_details
+
     return {
         "run_root": str(run_root_path),
         "runtime_profile": runtime_profile,
         "campaign_mode": "staged_search",
+        "calibration_completion_status": calibration_completion_status,
+        "calibration_blocking_reason": calibration_blocking_reason,
+        "calibration_blocking_details": calibration_blocking_details,
+        "search_terminated_early": search_terminated_early,
+        "terminated_before_stage_name": terminated_before_stage_name,
         "search_stage_count": len(stage_summaries),
         "search_stage_plan_path": str(search_stage_plan_path),
         "search_stage_summaries": stage_summaries,
@@ -453,8 +526,23 @@ def _run_staged_mechanism_calibration(
         "selected_tubelet_only_candidate": selected_tubelet_only_candidate,
         "selected_tubelet_sync_candidate": selected_tubelet_sync_candidate,
         "tubelet_sync_scan_seed": final_stage_selection_payload.get("tubelet_sync_scan_seed"),
-        "generated_tubelet_sync_candidate_config_path": str(output_method_config_file),
+        "generated_tubelet_sync_candidate_config_path": generated_candidate_config_path,
     }
+
+
+def _resolve_next_required_sync_stage_name(
+    search_stages: list[dict[str, Any]],
+    completed_stage_index: int,
+) -> str | None:
+    for stage_config in search_stages[completed_stage_index:]:
+        if str(stage_config.get("selection_scope")) != "tubelet_sync":
+            continue
+        candidate_source = str(
+            stage_config.get("candidate_source", "selected_tubelet_only_candidate")
+        )
+        if candidate_source == "selected_tubelet_sync_candidate":
+            return str(stage_config["stage_name"])
+    return None
 
 
 def _read_search_stages(grid_config: dict[str, Any]) -> list[dict[str, Any]]:

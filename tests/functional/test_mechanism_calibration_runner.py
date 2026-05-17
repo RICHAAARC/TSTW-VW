@@ -348,3 +348,146 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
         "method_variant"
     ]
     assert summary["selected_tubelet_sync_candidate"]["method_variant"] == "tubelet_sync_real_video_vae_candidate"
+
+
+@pytest.mark.unit
+def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate staged search returns a governed partial summary when sync wide rows are incompatible with the anchor.
+
+    Args:
+        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    captured_runner_calls: list[dict[str, object]] = []
+
+    class _FakeRunner:
+        def __init__(self, repository_root: str | Path) -> None:
+            self._repository_root = str(repository_root)
+
+        def run(self, **kwargs: object) -> dict[str, object]:
+            captured_runner_calls.append(
+                {
+                    "repository_root": self._repository_root,
+                    "kwargs": dict(kwargs),
+                }
+            )
+            return {"status": "ok"}
+
+    monkeypatch.setattr(calibration_runner_module, "RealVideoVaeLatentRunner", _FakeRunner)
+
+    anchor_candidate = {
+        "candidate_status": "best_effort_candidate_selected",
+        "method_variant": "tubelet_only_cal_tl04_sp04x04_w075",
+        "tubelet_length": 4,
+        "tubelet_partition": {"spatial_patch_size": [4, 4]},
+        "score_calibration": {"embedding_projection_support_weight": 0.75},
+        "metrics": {
+            "no_attack_clean_negative_fpr": 0.0,
+            "no_attack_clean_positive_tpr": 1.0,
+            "max_attacked_negative_fpr": 0.5,
+            "temporal_crop_attacked_positive_tpr": 1.0,
+            "frame_dropping_attacked_positive_tpr": 1.0,
+            "local_clip_attacked_positive_tpr": 1.0,
+        },
+    }
+
+    def _fake_select_stage2_mechanism_candidate(**kwargs: object) -> dict[str, object]:
+        stage_name = Path(str(kwargs["run_root"])).name
+        if stage_name == "anchor_tubelet_only_wide":
+            return {
+                "selection_scope": "tubelet_only",
+                "selection_completion_status": "complete",
+                "selection_blocking_reason": None,
+                "selection_blocking_details": None,
+                "output_path": str(tmp_path / f"{stage_name}_selected_candidate.json"),
+                "report_path": str(tmp_path / f"{stage_name}_selected_candidate.md"),
+                "grid_output_path": str(tmp_path / f"{stage_name}_selected_candidate.csv"),
+                "selected_tubelet_only_candidate": anchor_candidate,
+                "selected_tubelet_sync_candidate": None,
+                "tubelet_sync_scan_seed": None,
+                "top_tubelet_only_candidates": [anchor_candidate],
+                "top_tubelet_sync_candidates": [],
+                "parameter_interval_summary": {"tubelet_only": {}, "tubelet_sync": {}},
+            }
+        return {
+            "selection_scope": "tubelet_sync",
+            "selection_completion_status": "incomplete_no_compatible_tubelet_sync_rows",
+            "selection_blocking_reason": "selected_anchor_not_covered_by_sync_stage_records",
+            "selection_blocking_details": {
+                "selected_anchor_signature": {
+                    "tubelet_length": 4,
+                    "spatial_patch_size": [4, 4],
+                    "embedding_projection_support_weight": 0.75,
+                },
+                "observed_sync_stage_signature_count": 1,
+                "observed_sync_stage_signatures": [
+                    {
+                        "tubelet_length": 1,
+                        "spatial_patch_size": [4, 4],
+                        "embedding_projection_support_weight": 0.45,
+                    }
+                ],
+                "matching_sync_stage_signature_count": 0,
+            },
+            "output_path": str(tmp_path / f"{stage_name}_selected_candidate.json"),
+            "report_path": str(tmp_path / f"{stage_name}_selected_candidate.md"),
+            "grid_output_path": str(tmp_path / f"{stage_name}_selected_candidate.csv"),
+            "selected_tubelet_only_candidate": anchor_candidate,
+            "selected_tubelet_sync_candidate": None,
+            "tubelet_sync_scan_seed": {
+                "base_method_variant": "tubelet_sync",
+                "recommended_method_variant": "tubelet_sync_real_video_vae_candidate",
+                "parameter_scan": {
+                    "fusion_rule": ["sync_rescue_fusion"],
+                    "lambda_sync": [0.0, 0.025, 0.05, 0.1],
+                    "sync_search_radius": [4, 8, 12],
+                    "min_sync_positive_margin": [0.0, 0.05, 0.12],
+                    "min_sync_alignment_coverage_ratio": [0.125, 0.25, 0.5],
+                    "min_sync_alignment_matched_count": [1, 2, 4],
+                },
+            },
+            "top_tubelet_only_candidates": [],
+            "top_tubelet_sync_candidates": [],
+            "parameter_interval_summary": {"tubelet_only": {}, "tubelet_sync": {}},
+        }
+
+    monkeypatch.setattr(
+        calibration_runner_module,
+        "select_stage2_mechanism_candidate",
+        _fake_select_stage2_mechanism_candidate,
+    )
+
+    candidate_method_config_path = tmp_path / "candidate.json"
+    summary = run_stage2_mechanism_calibration(
+        run_root=tmp_path / "mcal_partial",
+        runtime_profile="formal",
+        samples_per_role=2,
+        batch_size_frames=8,
+        output_method_config_path=candidate_method_config_path,
+    )
+
+    assert len(captured_runner_calls) == 2
+    assert [Path(call["kwargs"]["output_root"]).name for call in captured_runner_calls] == [
+        "anchor_tubelet_only_wide",
+        "sync_wide_scan",
+    ]
+    assert summary["calibration_completion_status"] == "anchor_only_partial_selection"
+    assert summary["calibration_blocking_reason"] == "selected_anchor_not_covered_by_sync_stage_records"
+    assert summary["search_terminated_early"] is True
+    assert summary["terminated_before_stage_name"] == "sync_refine_scan"
+    assert summary["selected_tubelet_only_candidate"]["method_variant"] == anchor_candidate[
+        "method_variant"
+    ]
+    assert summary["selected_tubelet_sync_candidate"] is None
+    assert summary["generated_tubelet_sync_candidate_config_path"] is None
+    assert not candidate_method_config_path.exists()
+    assert summary["search_stage_count"] == 2
+    assert summary["search_stage_summaries"][1]["selection_completion_status"] == (
+        "incomplete_no_compatible_tubelet_sync_rows"
+    )

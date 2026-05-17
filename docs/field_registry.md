@@ -288,6 +288,14 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | SyncAbsoluteRescueStatus | governance | none | false | false | false | Stage-two sync absolute-rescue status summarizing which governed attacks achieve the configured absolute rescue TPR threshold. |
 | SyncIncrementalGainStatus | governance | none | false | false | false | Stage-two sync incremental-gain status summarizing whether governed attacks show positive gain, saturated no-gain, no gain, or negative gain against the anchor. |
 | SyncNegativeLeakageStatus | governance | none | false | false | false | Stage-two sync negative-leakage status summarizing whether attacked-negative leakage is controlled, at risk, or exceeded. |
+| selection_completion_status | governance | none | false | false | false | Selector summary status recording whether the requested stage completed or ended as an anchor-only partial result due to missing compatible sync rows. |
+| selection_blocking_reason | governance | none | false | false | false | Selector summary reason explaining why a requested stage ended without a selected tubelet-sync candidate. |
+| selection_blocking_details | governance | none | false | false | false | Selector summary payload recording the selected anchor signature and observed sync-stage signatures when compatibility filtering yields no rows. |
+| calibration_completion_status | governance | none | false | false | false | Calibration runner summary status recording whether a flat or staged search completed with a final sync candidate or only an anchor-level partial conclusion. |
+| calibration_blocking_reason | governance | none | false | false | false | Calibration runner summary reason explaining why a staged or flat search ended without a final sync candidate. |
+| calibration_blocking_details | governance | none | false | false | false | Calibration runner summary payload forwarding the selector-side blocking details for incomplete staged or flat conclusions. |
+| search_terminated_early | governance | none | false | false | false | Calibration runner boolean indicating that staged search stopped before all configured stages because a required sync candidate was unavailable. |
+| terminated_before_stage_name | governance | none | false | false | false | Calibration runner field recording which downstream stage was skipped after staged search terminated early. |
 | NextAllowedStageByImplementation | governance | none | false | false | false | Next-stage recommendation implied by the implementation-completion decision. |
 | NextAllowedStageByMechanism | governance | none | false | false | false | Next-stage recommendation implied by the mechanism-evidence decision. |
 | RecommendedNextAction | governance | none | false | false | false | Human-facing recommended next action emitted by the stage-two mechanism audit. |
