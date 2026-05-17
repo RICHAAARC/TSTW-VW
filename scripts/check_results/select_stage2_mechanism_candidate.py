@@ -106,10 +106,14 @@ def select_stage2_mechanism_candidate(
     event_score_records = record_writer.read_event_score_records()
     if not event_score_records:
         raise ValueError("event_score_records must not be empty")
+    try:
+        threshold_records = record_writer.read_threshold_records()
+    except FileNotFoundError:
+        threshold_records = []
 
     audit_rows = build_stage2_mechanism_audit_rows(
         event_score_records,
-        [],
+        threshold_records,
         allowed_splits=set(allowed_splits),
     )
     tubelet_only_rows = _build_tubelet_only_calibration_grid_rows(
@@ -632,6 +636,49 @@ def _select_tubelet_sync_candidate(
     if not calibration_rows:
         raise ValueError("tubelet_sync calibration rows must not be empty")
     selected_row = calibration_rows[0]
+    parsed_payload = _parse_tubelet_sync_variant_name(
+        str(selected_row.get("method_variant", ""))
+    )
+    resolved_sync_search_radius = selected_row.get("sync_search_radius")
+    if not isinstance(resolved_sync_search_radius, int):
+        parsed_sync_search_radius = parsed_payload.get("sync_search_radius")
+        resolved_sync_search_radius = (
+            int(parsed_sync_search_radius)
+            if isinstance(parsed_sync_search_radius, int)
+            else 0
+        )
+    resolved_min_sync_positive_margin = selected_row.get("min_sync_positive_margin")
+    if not isinstance(resolved_min_sync_positive_margin, (int, float)):
+        parsed_min_sync_positive_margin = parsed_payload.get("min_sync_positive_margin")
+        resolved_min_sync_positive_margin = (
+            float(parsed_min_sync_positive_margin)
+            if isinstance(parsed_min_sync_positive_margin, (int, float))
+            else 0.0
+        )
+    resolved_min_sync_alignment_coverage_ratio = selected_row.get(
+        "min_sync_alignment_coverage_ratio"
+    )
+    if not isinstance(resolved_min_sync_alignment_coverage_ratio, (int, float)):
+        parsed_min_sync_alignment_coverage_ratio = parsed_payload.get(
+            "min_sync_alignment_coverage_ratio"
+        )
+        resolved_min_sync_alignment_coverage_ratio = (
+            float(parsed_min_sync_alignment_coverage_ratio)
+            if isinstance(parsed_min_sync_alignment_coverage_ratio, (int, float))
+            else 0.5
+        )
+    resolved_min_sync_alignment_matched_count = selected_row.get(
+        "min_sync_alignment_matched_count"
+    )
+    if not isinstance(resolved_min_sync_alignment_matched_count, int):
+        parsed_min_sync_alignment_matched_count = parsed_payload.get(
+            "min_sync_alignment_matched_count"
+        )
+        resolved_min_sync_alignment_matched_count = (
+            int(parsed_min_sync_alignment_matched_count)
+            if isinstance(parsed_min_sync_alignment_matched_count, int)
+            else 1
+        )
     return {
         "candidate_status": (
             "sync_gain_candidate_selected"
@@ -652,16 +699,16 @@ def _select_tubelet_sync_candidate(
         "fusion_rule": str(selected_row["fusion_rule"]),
         "lambda_sync": float(selected_row["lambda_sync"]),
         "sync_search": {
-            "offset_search_min": -int(selected_row["sync_search_radius"]),
-            "offset_search_max": int(selected_row["sync_search_radius"]),
+            "offset_search_min": -resolved_sync_search_radius,
+            "offset_search_max": resolved_sync_search_radius,
             "min_sync_positive_margin": float(
-                selected_row["min_sync_positive_margin"]
+                resolved_min_sync_positive_margin
             ),
             "min_sync_alignment_coverage_ratio": float(
-                selected_row["min_sync_alignment_coverage_ratio"]
+                resolved_min_sync_alignment_coverage_ratio
             ),
             "min_sync_alignment_matched_count": int(
-                selected_row["min_sync_alignment_matched_count"]
+                resolved_min_sync_alignment_matched_count
             ),
         },
         "metrics": {

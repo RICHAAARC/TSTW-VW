@@ -475,6 +475,47 @@ def test_mechanism_candidate_selector_uses_dev_and_calibration_only(
         "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
         encoding="utf-8",
     )
+    output_paths.thresholds_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.thresholds_path.write_text(
+        json.dumps(
+            [
+                {
+                    "threshold_id": "threshold:tubelet_only",
+                    "method_variant": "tubelet_only",
+                    "target_fpr": 0.001,
+                    "threshold_value": 0.5,
+                },
+                {
+                    "threshold_id": "threshold:tubelet_only_lt01",
+                    "method_variant": "tubelet_only_lt01",
+                    "target_fpr": 0.001,
+                    "threshold_value": 0.4,
+                },
+                {
+                    "threshold_id": "threshold:tubelet_sync",
+                    "method_variant": "tubelet_sync",
+                    "target_fpr": 0.001,
+                    "threshold_value": 0.5,
+                },
+                {
+                    "threshold_id": "threshold:tubelet_sync_cal_tl01_sp04x04_w045_sr04_ls000_frsync_rescue",
+                    "method_variant": "tubelet_sync_cal_tl01_sp04x04_w045_sr04_ls000_frsync_rescue",
+                    "target_fpr": 0.001,
+                    "threshold_value": 0.4,
+                },
+                {
+                    "threshold_id": "threshold:tubelet_sync_cal_tl01_sp04x04_w045_sr08_ls100_frcal_sync",
+                    "method_variant": "tubelet_sync_cal_tl01_sp04x04_w045_sr08_ls100_frcal_sync",
+                    "target_fpr": 0.001,
+                    "threshold_value": 0.5,
+                },
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
     result = select_stage2_mechanism_candidate(
         run_root=run_root,
