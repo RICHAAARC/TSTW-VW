@@ -143,6 +143,11 @@ def test_stage2_mechanism_audit_writes_expected_artifacts(tmp_path: Path) -> Non
     assert result["Stage2ImplementationDecision"] == "PASS"
     assert result["Stage2MechanismDecision"] == "INCONCLUSIVE"
     assert "sample_count_insufficient" in result["Stage2MechanismBlockingReasons"]
+    assert result["SyncRescueDecision"] == "PASS"
+    assert result["SyncLeakageDecision"] == "FAIL"
+    assert result["SyncCandidateSelectionStatus"] == "rescue_with_leakage"
+    assert result["SyncAbsoluteRescueStatus"] == "multi_attack_absolute_success"
+    assert result["SyncNegativeLeakageStatus"] == "leakage_exceeded"
 
     with output_paths.stage2_sync_gain_table_path.open("r", encoding="utf-8", newline="") as handle:
         sync_rows = list(csv.DictReader(handle))

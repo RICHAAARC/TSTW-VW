@@ -282,6 +282,12 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | Stage2MechanismDecision | governance | none | false | false | false | Mechanism-evidence decision emitted by the stage-two mechanism audit and family summaries. |
 | Stage2MechanismBlockingReasons | governance | none | false | false | false | Ordered blocking-reason list explaining why the stage-two mechanism decision is not PASS. |
 | Stage2MechanismWarnings | governance | none | false | false | false | Ordered warning list emitted by the stage-two mechanism audit when optional metrics or gates are not fully enabled. |
+| SyncRescueDecision | governance | none | false | false | false | Separate stage-two rescue decision recording whether governed sync rescue evidence passes independently of leakage control. |
+| SyncLeakageDecision | governance | none | false | false | false | Separate stage-two leakage decision recording whether governed sync leakage remains PASS, RISK, or FAIL independently of rescue evidence. |
+| SyncCandidateSelectionStatus | governance | none | false | false | false | Stage-two sync selection status summarizing whether the observed sync behavior is eligible, rescue_with_leakage, saturated_anchor_no_increment, or insufficient_signal. |
+| SyncAbsoluteRescueStatus | governance | none | false | false | false | Stage-two sync absolute-rescue status summarizing which governed attacks achieve the configured absolute rescue TPR threshold. |
+| SyncIncrementalGainStatus | governance | none | false | false | false | Stage-two sync incremental-gain status summarizing whether governed attacks show positive gain, saturated no-gain, no gain, or negative gain against the anchor. |
+| SyncNegativeLeakageStatus | governance | none | false | false | false | Stage-two sync negative-leakage status summarizing whether attacked-negative leakage is controlled, at risk, or exceeded. |
 | NextAllowedStageByImplementation | governance | none | false | false | false | Next-stage recommendation implied by the implementation-completion decision. |
 | NextAllowedStageByMechanism | governance | none | false | false | false | Next-stage recommendation implied by the mechanism-evidence decision. |
 | RecommendedNextAction | governance | none | false | false | false | Human-facing recommended next action emitted by the stage-two mechanism audit. |
@@ -293,12 +299,19 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | minimum_negative_count_per_key | governance | none | true | false | false | Mechanism-gate minimum required negative sample count for each `(method_variant, attack_name)` key. |
 | required_main_variants | governance | none | true | false | false | Ordered primary method variants that must be present before the stage-two mechanism gate can PASS. |
 | required_mechanism_attacks | governance | none | true | false | false | Ordered attack roster that must be covered before the stage-two mechanism gate can PASS. |
+| sync_gain_policy | governance | none | true | false | false | Governed sync-gain aggregation policy used to interpret required sync rescue attacks as all-of, any-of, or any-of plus mean floor. |
+| required_sync_gain_attacks | governance | none | true | false | false | Ordered governed attack subset used when evaluating sync rescue gain and saturation semantics. |
+| min_required_sync_gain_attack_count | governance | none | true | false | false | Minimum number of governed sync rescue attacks that must show positive gain under the configured sync_gain_policy. |
 | max_clean_negative_fpr | governance | none | true | false | false | Maximum allowed clean-negative FPR used by the stage-two mechanism gate. |
 | max_attacked_negative_fpr | governance | none | true | false | false | Maximum allowed attacked-negative FPR used by the stage-two mechanism gate. |
+| min_mean_temporal_sync_gain | governance | none | true | false | false | Optional governed mean temporal sync-gain floor that may complement any-of-k sync rescue gating. |
 | min_no_attack_clean_positive_tpr | governance | none | true | false | false | Minimum required no-attack clean-positive TPR used by the stage-two mechanism gate. |
 | min_tubelet_only_gain_over_frame_prc | governance | none | true | false | false | Minimum required gain of `tubelet_only` over `frame_prc` used by the stage-two mechanism gate. |
 | min_tubelet_sync_gain_over_tubelet_only_temporal | governance | none | true | false | false | Minimum required temporal gain of `tubelet_sync` over `tubelet_only` used by the stage-two mechanism gate. |
 | min_sync_positive_negative_score_gap | governance | none | true | false | false | Minimum required positive-negative `S_sync` score gap used by the stage-two mechanism gate. |
+| sync_gain_saturation_threshold | governance | none | true | false | false | Governed attacked-positive TPR threshold used to classify an anchor as saturated for sync incremental-gain semantics. |
+| absolute_rescue_tpr_threshold | governance | none | true | false | false | Governed attacked-positive TPR threshold used to declare absolute rescue success for sync semantics. |
+| leakage_exceeded_multiplier | governance | none | true | false | false | Governed multiplier above max_attacked_negative_fpr used to distinguish leakage_risk from leakage_exceeded. |
 | require_quality_not_collapsed | governance | none | true | false | false | Boolean mechanism-gate flag requiring stage-two quality metrics to stay above configured floors. |
 | min_watermarked_video_psnr | governance | none | true | false | false | Minimum watermarked-video PSNR floor used by the stage-two mechanism gate. |
 | min_watermarked_video_ssim | governance | none | true | false | false | Minimum watermarked-video SSIM floor used by the stage-two mechanism gate. |

@@ -15,12 +15,22 @@
     "local_clip",
     "h264_compression"
   ],
+  "sync_gain_policy": "any_required_temporal_attack",
+  "required_sync_gain_attacks": [
+    "temporal_crop",
+    "local_clip"
+  ],
+  "min_required_sync_gain_attack_count": 1,
   "max_clean_negative_fpr": 0.05,
   "max_attacked_negative_fpr": 0.1,
+  "min_mean_temporal_sync_gain": 0.05,
   "min_no_attack_clean_positive_tpr": 0.5,
   "min_tubelet_only_gain_over_frame_prc": 0.0,
   "min_tubelet_sync_gain_over_tubelet_only_temporal": 0.1,
   "min_sync_positive_negative_score_gap": 0.05,
+  "sync_gain_saturation_threshold": 1.0,
+  "absolute_rescue_tpr_threshold": 1.0,
+  "leakage_exceeded_multiplier": 2.0,
   "require_quality_not_collapsed": true,
   "min_watermarked_video_psnr": 20.0,
   "min_watermarked_video_ssim": 0.5

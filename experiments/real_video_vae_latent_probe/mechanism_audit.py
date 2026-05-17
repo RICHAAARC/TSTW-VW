@@ -13,6 +13,9 @@ import statistics
 from pathlib import Path
 from typing import Any
 
+from experiments.real_video_vae_latent_probe.mechanism_semantics import (
+    build_sync_gain_assessment,
+)
 from experiments.real_video_vae_latent_probe.output_layout import (
     build_real_video_vae_latent_output_paths,
 )
@@ -519,15 +522,34 @@ def build_stage2_mechanism_decision(
         blocking_reasons.append("tubelet_only_not_above_frame_prc")
 
     temporal_attacks = [attack_name for attack_name in required_attacks if attack_name in TEMPORAL_ATTACKS]
-    min_sync_temporal_gain = _safe_float(
-        mechanism_config.get("min_tubelet_sync_gain_over_tubelet_only_temporal")
-    )
     sync_temporal_gain = _aggregate_positive_rate(test_records, "tubelet_sync", temporal_attacks) - _aggregate_positive_rate(
         test_records,
         "tubelet_only",
         temporal_attacks,
     )
-    if temporal_attacks and min_sync_temporal_gain is not None and sync_temporal_gain < min_sync_temporal_gain:
+    sync_semantics = build_sync_gain_assessment(
+        absolute_tprs={
+            attack_name: _relevant_positive_rate(test_records, "tubelet_sync", attack_name)
+            for attack_name in temporal_attacks
+        },
+        sync_gains={
+            attack_name: _difference(
+                _relevant_positive_rate(test_records, "tubelet_sync", attack_name),
+                _relevant_positive_rate(test_records, "tubelet_only", attack_name),
+            )
+            for attack_name in temporal_attacks
+        },
+        mean_temporal_sync_gain=sync_temporal_gain,
+        clean_negative_fpr=_relevant_negative_rate(test_records, "tubelet_sync", "no_attack"),
+        max_attacked_negative_fpr=_max_numeric_value(
+            [
+                _relevant_negative_rate(test_records, "tubelet_sync", attack_name)
+                for attack_name in temporal_attacks
+            ]
+        ),
+        mechanism_config=mechanism_config,
+    )
+    if sync_semantics["sync_rescue_decision"] == "FAIL":
         blocking_reasons.append("tubelet_sync_not_above_tubelet_only_temporal")
 
     min_sync_gap = _safe_float(mechanism_config.get("min_sync_positive_negative_score_gap"))
@@ -620,10 +642,19 @@ def build_stage2_mechanism_decision(
         "mechanism_metrics": {
             "tubelet_only_gain_over_frame_prc": _round_or_none(tubelet_only_gain),
             "tubelet_sync_gain_over_tubelet_only_temporal": _round_or_none(sync_temporal_gain),
+            "tubelet_sync_required_attack_gain_count": sync_semantics[
+                "positive_gain_attack_count"
+            ],
             "sync_positive_negative_score_gap": _round_or_none(mean_sync_gap),
             "mean_watermarked_video_psnr": _round_or_none(mean_psnr),
             "mean_watermarked_video_ssim": _round_or_none(mean_ssim),
         },
+        "SyncRescueDecision": sync_semantics["sync_rescue_decision"],
+        "SyncLeakageDecision": sync_semantics["sync_leakage_decision"],
+        "SyncCandidateSelectionStatus": sync_semantics["candidate_selection_status"],
+        "SyncAbsoluteRescueStatus": sync_semantics["absolute_rescue_status"],
+        "SyncIncrementalGainStatus": sync_semantics["incremental_gain_status"],
+        "SyncNegativeLeakageStatus": sync_semantics["negative_leakage_status"],
     }
 
 
@@ -649,6 +680,12 @@ def build_stage2_mechanism_report_text(
             f"- NextAllowedStageByImplementation: {decision_payload['NextAllowedStageByImplementation']}",
             f"- NextAllowedStageByMechanism: {decision_payload['NextAllowedStageByMechanism']}",
             f"- RecommendedNextAction: {decision_payload['RecommendedNextAction']}",
+            f"- SyncRescueDecision: {decision_payload['SyncRescueDecision']}",
+            f"- SyncLeakageDecision: {decision_payload['SyncLeakageDecision']}",
+            f"- SyncCandidateSelectionStatus: {decision_payload['SyncCandidateSelectionStatus']}",
+            f"- SyncAbsoluteRescueStatus: {decision_payload['SyncAbsoluteRescueStatus']}",
+            f"- SyncIncrementalGainStatus: {decision_payload['SyncIncrementalGainStatus']}",
+            f"- SyncNegativeLeakageStatus: {decision_payload['SyncNegativeLeakageStatus']}",
             "",
             "## Metric Enablement",
             f"- quality_metrics_enabled: {json.dumps(decision_payload['quality_metrics_enabled'], ensure_ascii=False)}",
@@ -749,6 +786,13 @@ def _mean(
     if positive_infinity_present:
         return math.inf
     return round(statistics.fmean(filtered_values), 6)
+
+
+def _max_numeric_value(values: list[float | None]) -> float | None:
+    filtered_values = [float(value) for value in values if value is not None]
+    if not filtered_values:
+        return None
+    return round(max(filtered_values), 6)
 
 
 def _std(values: list[float | None]) -> float | None:

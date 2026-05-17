@@ -15,6 +15,9 @@ from typing import Any
 from experiments.real_video_vae_latent_probe.mechanism_audit import (
     build_stage2_mechanism_audit_rows,
 )
+from experiments.real_video_vae_latent_probe.mechanism_semantics import (
+    build_sync_gain_assessment,
+)
 from main.core.records import RecordWriter
 from main.core.registry import load_json_config
 
@@ -51,6 +54,18 @@ CALIBRATION_GRID_COLUMNS = [
     "frame_dropping_sync_gain",
     "local_clip_sync_gain",
     "mean_temporal_sync_gain",
+    "temporal_crop_absolute_tpr",
+    "local_clip_absolute_tpr",
+    "temporal_crop_anchor_headroom",
+    "local_clip_anchor_headroom",
+    "temporal_crop_saturated_anchor",
+    "local_clip_saturated_anchor",
+    "absolute_rescue_status",
+    "incremental_gain_status",
+    "negative_leakage_status",
+    "sync_rescue_decision",
+    "sync_leakage_decision",
+    "candidate_selection_status",
     "fpr_controlled",
     "quality_not_collapsed",
     "candidate_eligible",
@@ -492,6 +507,20 @@ def _build_tubelet_sync_calibration_grid_rows(
         no_attack_clean_positive_tpr = _safe_float(
             no_attack_positive_row.get("clean_positive_TPR")
         )
+        sync_semantics = build_sync_gain_assessment(
+            absolute_tprs={
+                "temporal_crop": temporal_crop_positive_tpr,
+                "local_clip": local_clip_positive_tpr,
+            },
+            sync_gains={
+                "temporal_crop": temporal_crop_sync_gain,
+                "local_clip": local_clip_sync_gain,
+            },
+            mean_temporal_sync_gain=mean_temporal_sync_gain,
+            clean_negative_fpr=clean_negative_fpr,
+            max_attacked_negative_fpr=max_attacked_negative_fpr,
+            mechanism_config=mechanism_config,
+        )
         rows.append(
             {
                 "selection_scope": "tubelet_sync",
@@ -532,6 +561,26 @@ def _build_tubelet_sync_calibration_grid_rows(
                 "frame_dropping_sync_gain": frame_dropping_sync_gain,
                 "local_clip_sync_gain": local_clip_sync_gain,
                 "mean_temporal_sync_gain": mean_temporal_sync_gain,
+                "temporal_crop_absolute_tpr": temporal_crop_positive_tpr,
+                "local_clip_absolute_tpr": local_clip_positive_tpr,
+                "temporal_crop_anchor_headroom": _attack_headroom(
+                    _safe_float(tubelet_only_metrics.get("temporal_crop_attacked_positive_tpr")),
+                ),
+                "local_clip_anchor_headroom": _attack_headroom(
+                    _safe_float(tubelet_only_metrics.get("local_clip_attacked_positive_tpr")),
+                ),
+                "temporal_crop_saturated_anchor": _is_saturated_attack(
+                    _safe_float(tubelet_only_metrics.get("temporal_crop_attacked_positive_tpr")),
+                ),
+                "local_clip_saturated_anchor": _is_saturated_attack(
+                    _safe_float(tubelet_only_metrics.get("local_clip_attacked_positive_tpr")),
+                ),
+                "absolute_rescue_status": sync_semantics["absolute_rescue_status"],
+                "incremental_gain_status": sync_semantics["incremental_gain_status"],
+                "negative_leakage_status": sync_semantics["negative_leakage_status"],
+                "sync_rescue_decision": sync_semantics["sync_rescue_decision"],
+                "sync_leakage_decision": sync_semantics["sync_leakage_decision"],
+                "candidate_selection_status": sync_semantics["candidate_selection_status"],
                 "fpr_controlled": _is_fpr_controlled(
                     clean_negative_fpr,
                     max_attacked_negative_fpr,
@@ -562,7 +611,7 @@ def _build_tubelet_sync_calibration_grid_rows(
         )
     rows.sort(
         key=lambda row: (
-            0 if bool(row.get("candidate_eligible")) else 1,
+            _sync_candidate_status_rank(str(row.get("candidate_selection_status") or "")),
             0 if bool(row.get("fpr_controlled")) else 1,
             -float(row.get("selection_score") or 0.0),
             float(row.get("lambda_sync") or 0.0),
@@ -738,7 +787,27 @@ def _select_tubelet_sync_candidate(
             ],
             "local_clip_sync_gain": selected_row["local_clip_sync_gain"],
             "mean_temporal_sync_gain": selected_row["mean_temporal_sync_gain"],
+            "temporal_crop_absolute_tpr": selected_row["temporal_crop_absolute_tpr"],
+            "local_clip_absolute_tpr": selected_row["local_clip_absolute_tpr"],
+            "temporal_crop_anchor_headroom": selected_row[
+                "temporal_crop_anchor_headroom"
+            ],
+            "local_clip_anchor_headroom": selected_row[
+                "local_clip_anchor_headroom"
+            ],
+            "temporal_crop_saturated_anchor": selected_row[
+                "temporal_crop_saturated_anchor"
+            ],
+            "local_clip_saturated_anchor": selected_row[
+                "local_clip_saturated_anchor"
+            ],
         },
+        "absolute_rescue_status": selected_row["absolute_rescue_status"],
+        "incremental_gain_status": selected_row["incremental_gain_status"],
+        "negative_leakage_status": selected_row["negative_leakage_status"],
+        "sync_rescue_decision": selected_row["sync_rescue_decision"],
+        "sync_leakage_decision": selected_row["sync_leakage_decision"],
+        "candidate_selection_status": selected_row["candidate_selection_status"],
         "selection_gate": {
             "max_clean_negative_fpr": mechanism_config.get("max_clean_negative_fpr"),
             "max_attacked_negative_fpr": mechanism_config.get(
@@ -872,9 +941,6 @@ def _is_tubelet_sync_candidate_eligible(
     mean_temporal_sync_gain: float | None,
     mechanism_config: dict[str, Any],
 ) -> bool:
-    min_sync_gain = _safe_float(
-        mechanism_config.get("min_tubelet_sync_gain_over_tubelet_only_temporal")
-    )
     if not _is_tubelet_only_candidate_eligible(
         clean_negative_fpr,
         no_attack_clean_positive_tpr,
@@ -884,15 +950,43 @@ def _is_tubelet_sync_candidate_eligible(
         mechanism_config,
     ):
         return False
-    if temporal_crop_sync_gain is None or temporal_crop_sync_gain <= 0.0:
+    sync_semantics = build_sync_gain_assessment(
+        absolute_tprs={
+            "temporal_crop": None,
+            "local_clip": None,
+        },
+        sync_gains={
+            "temporal_crop": temporal_crop_sync_gain,
+            "local_clip": local_clip_sync_gain,
+        },
+        mean_temporal_sync_gain=mean_temporal_sync_gain,
+        clean_negative_fpr=clean_negative_fpr,
+        max_attacked_negative_fpr=max_attacked_negative_fpr,
+        mechanism_config=mechanism_config,
+    )
+    return sync_semantics["candidate_selection_status"] == "eligible"
+
+
+def _attack_headroom(attack_positive_tpr: float | None) -> float | None:
+    if attack_positive_tpr is None:
+        return None
+    return round(max(0.0, 1.0 - float(attack_positive_tpr)), 6)
+
+
+def _is_saturated_attack(attack_positive_tpr: float | None) -> bool:
+    if attack_positive_tpr is None:
         return False
-    if local_clip_sync_gain is None or local_clip_sync_gain <= 0.0:
-        return False
-    if min_sync_gain is not None and (
-        mean_temporal_sync_gain is None or mean_temporal_sync_gain < min_sync_gain
-    ):
-        return False
-    return True
+    return float(attack_positive_tpr) >= 1.0
+
+
+def _sync_candidate_status_rank(candidate_selection_status: str) -> int:
+    return {
+        "eligible": 0,
+        "rescue_with_leakage": 1,
+        "saturated_anchor_no_increment": 2,
+        "insufficient_signal": 3,
+        "anchor_incompatible": 4,
+    }.get(candidate_selection_status, 5)
 
 
 def _is_quality_not_collapsed(
@@ -1264,6 +1358,12 @@ def _write_text_report(
                 "",
                 "## Selected Tubelet-sync Candidate",
                 f"- candidate_status: {selected_tubelet_sync_candidate['candidate_status']}",
+                f"- candidate_selection_status: {selected_tubelet_sync_candidate['candidate_selection_status']}",
+                f"- absolute_rescue_status: {selected_tubelet_sync_candidate['absolute_rescue_status']}",
+                f"- incremental_gain_status: {selected_tubelet_sync_candidate['incremental_gain_status']}",
+                f"- negative_leakage_status: {selected_tubelet_sync_candidate['negative_leakage_status']}",
+                f"- sync_rescue_decision: {selected_tubelet_sync_candidate['sync_rescue_decision']}",
+                f"- sync_leakage_decision: {selected_tubelet_sync_candidate['sync_leakage_decision']}",
                 f"- method_variant: {selected_tubelet_sync_candidate['method_variant']}",
                 f"- fusion_rule: {selected_tubelet_sync_candidate['fusion_rule']}",
                 f"- lambda_sync: {selected_tubelet_sync_candidate['lambda_sync']}",
