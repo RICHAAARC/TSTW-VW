@@ -1,5 +1,5 @@
 """
-文件用途：验证 stage2 mechanism calibration runner 的 orchestration 行为。
+文件用途：验证 real_video_vae_latent_probe mechanism calibration runner 的 orchestration 行为。
 File purpose: Validate orchestration behavior of the stage-two mechanism calibration runner.
 Module type: General module
 """

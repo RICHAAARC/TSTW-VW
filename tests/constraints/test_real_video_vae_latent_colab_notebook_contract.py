@@ -215,6 +215,15 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TSTW_LOCAL_RUNTIME_ROOT" in notebook_text
     assert "TSTW_MODEL_ID" in notebook_text
     assert "TSTW_BATCH_SIZE_FRAMES" in notebook_text
+    assert "cross_event_vae_batching_enabled" in notebook_text
+    assert "cross_event_vae_decode_batch_size" in notebook_text
+    assert "cross_event_vae_encode_batch_size" in notebook_text
+    assert "TSTW_CROSS_EVENT_VAE_BATCHING_ENABLED" in notebook_text
+    assert "TSTW_CROSS_EVENT_VAE_DECODE_BATCH_SIZE" in notebook_text
+    assert "TSTW_CROSS_EVENT_VAE_ENCODE_BATCH_SIZE" in notebook_text
+    assert "'cross_event_vae_batching_enabled': False" in notebook_text
+    assert "cross_event_vae_batching_enabled=CROSS_EVENT_VAE_BATCHING_ENABLED" in notebook_text
+    assert "cross_event_vae_batching_summary.json" in notebook_text
     assert "TSTW_SHARD_COUNT" in notebook_text
     assert "TSTW_SHARD_INDEX" in notebook_text
     assert "TSTW_WORKER_COUNT" in notebook_text

@@ -123,6 +123,8 @@ class DiffusersAutoencoderKLFramewiseBackend(VAEBackend):
             Latent tensor in `[F, C, H_lat, W_lat]`.
         """
         del config
+        if isinstance(video_batch, np.ndarray) and video_batch.ndim >= 1 and video_batch.shape[0] < 1:
+            raise ValueError("encode_video requires at least one frame after cross-event concatenation")
         normalized_video = ensure_video_batch(video_batch)
         if self._runtime_impl == "diffusers_autoencoder_kl":
             return self._encode_with_diffusers(normalized_video)
@@ -146,6 +148,8 @@ class DiffusersAutoencoderKLFramewiseBackend(VAEBackend):
             Video frames in `[F, H, W, 3]`.
         """
         decode_config = config or {}
+        if isinstance(latent_batch, np.ndarray) and latent_batch.ndim >= 1 and latent_batch.shape[0] < 1:
+            raise ValueError("decode_video requires at least one latent frame after cross-event concatenation")
         normalized_latent = ensure_latent_batch(latent_batch)
         if self._runtime_impl == "diffusers_autoencoder_kl":
             return self._decode_with_diffusers(normalized_latent)
@@ -181,6 +185,11 @@ class DiffusersAutoencoderKLFramewiseBackend(VAEBackend):
             "batch_size_frames": self._batch_size_frames,
             "runtime_impl": self._runtime_impl,
             "deterministic_encode": True,
+            "supports_cross_event_frame_batching": True,
+            "frame_batch_axis": 0,
+            "cross_event_batching_semantics": (
+                "caller_may_concatenate_same_shape_video_or_latent_frames"
+            ),
         }
 
     def _encode_with_mock(self, video_batch: np.ndarray) -> np.ndarray:
@@ -246,7 +255,7 @@ class DiffusersAutoencoderKLFramewiseBackend(VAEBackend):
                 latents = latents * scaling_factor
             latent_batches.append(latents.detach().float().cpu().numpy())
         if not latent_batches:
-            raise RuntimeError("encode_video requires at least one frame")
+            raise RuntimeError("encode_video requires at least one frame after cross-event concatenation")
         return np.concatenate(latent_batches, axis=0)
 
     def _decode_with_diffusers(self, latent_batch: np.ndarray) -> np.ndarray:
@@ -267,6 +276,6 @@ class DiffusersAutoencoderKLFramewiseBackend(VAEBackend):
                 decoded = self._vae_model.decode(tensor / scaling_factor).sample
             decoded_batches.append(decoded.detach().float().cpu().numpy())
         if not decoded_batches:
-            raise RuntimeError("decode_video requires at least one latent frame")
+            raise RuntimeError("decode_video requires at least one latent frame after cross-event concatenation")
         decoded_np = np.concatenate(decoded_batches, axis=0)
         return nchw_minus1_1_to_rgb_video(decoded_np)

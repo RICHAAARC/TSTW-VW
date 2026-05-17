@@ -36,6 +36,18 @@ from experiments.real_video_vae_latent_probe.output_layout import (
     RealVideoVaeLatentOutputPaths,
     build_real_video_vae_latent_output_paths,
 )
+from experiments.real_video_vae_latent_probe.vae_batching import (
+    CrossEventVaeBatchingConfig,
+    DecodeRequest,
+    DecodeResult,
+    EncodeRequest,
+    EncodeResult,
+    group_decode_requests,
+    group_encode_requests,
+    resolve_cross_event_vae_batching_config,
+    run_decode_request_batch,
+    run_encode_request_batch,
+)
 from main.analysis.real_video_quality_metrics import (
     build_real_video_quality_metrics_payload_from_frames,
 )
@@ -106,6 +118,35 @@ class RealVideoVaeLatentRunResult:
     run_manifest: dict[str, Any]
 
 
+@dataclass
+class EventRuntimeContext:
+    """功能：保存 batched 路径中单条 event 的中间运行状态。"""
+
+    event_plan_entry: EventPlanEntry
+    source_sample: LatentSample
+    working_sample: LatentSample
+    attacked_sample: LatentSample
+    watermarked_latent_metadata: dict[str, str] | None
+    event_artifact_digest: str
+    decoded_artifact_digest: str
+    decoded_video_relpath: Path
+    attacked_video_relpath: Path
+    reencoded_latent_relpath: Path
+    video_fps: int
+    video_resolution: tuple[int, int]
+    decoded_cache_key: tuple[str, str, str]
+    materialized_attack_params: dict[str, Any]
+    decoded_video_metadata: dict[str, Any] | None = None
+    decoded_video_frames: np.ndarray | None = None
+    attacked_video_metadata: dict[str, Any] | None = None
+    attacked_video_frames: np.ndarray | None = None
+    reencoded_latent_metadata: dict[str, str] | None = None
+    decode_effective_batch_size: int = 1
+    encode_effective_batch_size: int = 1
+    batching_fallback_count: int = 0
+    batching_fallback_reason: str | None = None
+
+
 class RealVideoVaeLatentRunner:
     """功能：执行阶段 2 受治理协议闭环。
 
@@ -133,6 +174,9 @@ class RealVideoVaeLatentRunner:
         self._runtime_event_tag_lock = threading.Lock()
         self._current_runtime_event_tag = "unlabeled"
         self._event_worker_count = 1
+        self._runtime_profile = "unresolved"
+        self._cross_event_vae_batching_config = resolve_cross_event_vae_batching_config({})
+        self._cross_event_vae_batching_trace: list[dict[str, Any]] = []
 
     def run(
         self,
@@ -151,6 +195,10 @@ class RealVideoVaeLatentRunner:
         ablation_config_path: str | Path | None = None,
         dataset_manifest_path: str | Path | None = None,
         runtime_config_path: str | Path | None = None,
+        cross_event_vae_batching_enabled: bool | None = None,
+        cross_event_vae_decode_batch_size: int | None = None,
+        cross_event_vae_encode_batch_size: int | None = None,
+        cross_event_vae_batch_fallback_on_oom: bool | None = None,
     ) -> RealVideoVaeLatentRunResult:
         """功能：运行阶段 2 受治理协议并写出 records、tables 与 manifests。
 
@@ -172,6 +220,10 @@ class RealVideoVaeLatentRunner:
             ablation_config_path: Optional ablation config path.
             dataset_manifest_path: Optional dataset manifest path.
             runtime_config_path: Optional runtime-config override path.
+            cross_event_vae_batching_enabled: Optional cross-event VAE batching enable override.
+            cross_event_vae_decode_batch_size: Optional cross-event decode request batch size.
+            cross_event_vae_encode_batch_size: Optional cross-event encode request batch size.
+            cross_event_vae_batch_fallback_on_oom: Optional CUDA OOM fallback override.
 
         Returns:
             A `RealVideoVaeLatentRunResult` instance.
@@ -208,6 +260,27 @@ class RealVideoVaeLatentRunner:
             runtime_config_overrides["shard_index"] = int(shard_index)
         if worker_count is not None:
             runtime_config_overrides["worker_count"] = int(worker_count)
+        if cross_event_vae_batching_enabled is not None:
+            runtime_config_overrides["cross_event_vae_batching_enabled"] = bool(
+                cross_event_vae_batching_enabled
+            )
+        if cross_event_vae_decode_batch_size is not None:
+            runtime_config_overrides["cross_event_vae_decode_batch_size"] = int(
+                cross_event_vae_decode_batch_size
+            )
+        if cross_event_vae_encode_batch_size is not None:
+            runtime_config_overrides["cross_event_vae_encode_batch_size"] = int(
+                cross_event_vae_encode_batch_size
+            )
+        if cross_event_vae_batch_fallback_on_oom is not None:
+            runtime_config_overrides["cross_event_vae_batch_fallback_on_oom"] = bool(
+                cross_event_vae_batch_fallback_on_oom
+            )
+        self._runtime_profile = runtime_profile
+        self._cross_event_vae_batching_config = resolve_cross_event_vae_batching_config(
+            runtime_config_overrides
+        )
+        self._cross_event_vae_batching_trace = []
         if dataset_manifest_path is None and any(
             key in runtime_config_overrides
             for key in ("local_dataset_root", "dataset_manifest_path")
@@ -260,6 +333,14 @@ class RealVideoVaeLatentRunner:
             runtime_config_overrides.get("worker_count", 1),
             field_name="worker_count",
         )
+        if self._cross_event_vae_batching_config.enabled and self._event_worker_count != 1:
+            raise ValueError(
+                "cross-event VAE batching requires worker_count == 1 in the first governed implementation"
+            )
+        if self._cross_event_vae_batching_config.enabled and not self._video_mp4_runtime_available():
+            raise RuntimeError(
+                "cross-event VAE batching requires mp4 runtime support via imageio_ffmpeg"
+            )
         dataset_summary = summarize_dataset_manifest(dataset_manifest)
         backend_config["dataset_manifest_path"] = str(dataset_manifest_file)
         if "local_dataset_root" in runtime_config_overrides:
@@ -360,6 +441,12 @@ class RealVideoVaeLatentRunner:
                 "dataset_manifest_path": str(dataset_manifest_file),
                 "target_fpr": protocol_config["threshold_protocol"]["target_fpr_placeholder"],
                 "method_variants": [method_config["method_variant"] for method_config in runtime_method_configs],
+                "cross_event_vae_batching_enabled": self._cross_event_vae_batching_config.enabled,
+                "cross_event_vae_decode_batch_size": self._cross_event_vae_batching_config.decode_batch_size,
+                "cross_event_vae_encode_batch_size": self._cross_event_vae_batching_config.encode_batch_size,
+                "cross_event_vae_batch_grouping": self._cross_event_vae_batching_config.grouping,
+                "cross_event_vae_batch_fallback_on_oom": self._cross_event_vae_batching_config.fallback_on_oom,
+                "cross_event_vae_batch_write_trace": self._cross_event_vae_batching_config.write_trace,
             }
         )
         self._write_json(output_paths.runtime_config_path, runtime_config_payload)
@@ -388,6 +475,14 @@ class RealVideoVaeLatentRunner:
             ),
             "dataset_summary": dataset_summary,
             "vae_metadata": vae_metadata,
+            "cross_event_vae_batching": {
+                "enabled": self._cross_event_vae_batching_config.enabled,
+                "decode_batch_size": self._cross_event_vae_batching_config.decode_batch_size,
+                "encode_batch_size": self._cross_event_vae_batching_config.encode_batch_size,
+                "grouping": self._cross_event_vae_batching_config.grouping,
+                "fallback_on_oom": self._cross_event_vae_batching_config.fallback_on_oom,
+                "write_trace": self._cross_event_vae_batching_config.write_trace,
+            },
         }
         runtime_manifest_overrides = runtime_config_overrides.get("runtime_manifest_overrides")
         if runtime_manifest_overrides is None:
@@ -422,6 +517,7 @@ class RealVideoVaeLatentRunner:
             "random_fields": ["latent_generation_seed_random"],
         }
         self._write_json(output_paths.run_manifest_path, run_manifest)
+        self._write_cross_event_vae_batching_outputs(output_root_path)
         del artifact_paths
         return RealVideoVaeLatentRunResult(
             run_id=run_id,
@@ -661,6 +757,46 @@ class RealVideoVaeLatentRunner:
         return worker_records
 
     def _process_event_plan_entries(
+        self,
+        *,
+        run_id: str,
+        output_root: Path,
+        event_plan_entries: list[EventPlanEntry],
+        method: Any,
+        method_config: dict[str, Any],
+        target_fpr: float,
+        threshold_record: dict[str, Any] | None,
+        latent_backend: RealVideoVAELatentBackend,
+        vae_runtime_backend: Any,
+        vae_metadata: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        if self._cross_event_vae_batching_config.enabled:
+            return self._process_event_plan_entries_with_cross_event_vae_batching(
+                run_id=run_id,
+                output_root=output_root,
+                event_plan_entries=event_plan_entries,
+                method=method,
+                method_config=method_config,
+                target_fpr=target_fpr,
+                threshold_record=threshold_record,
+                latent_backend=latent_backend,
+                vae_runtime_backend=vae_runtime_backend,
+                vae_metadata=vae_metadata,
+            )
+        return self._process_event_plan_entries_sequential(
+            run_id=run_id,
+            output_root=output_root,
+            event_plan_entries=event_plan_entries,
+            method=method,
+            method_config=method_config,
+            target_fpr=target_fpr,
+            threshold_record=threshold_record,
+            latent_backend=latent_backend,
+            vae_runtime_backend=vae_runtime_backend,
+            vae_metadata=vae_metadata,
+        )
+
+    def _process_event_plan_entries_sequential(
         self,
         *,
         run_id: str,
@@ -1017,6 +1153,7 @@ class RealVideoVaeLatentRunner:
                     "attack_name": event_plan_entry.attack_name,
                     "reencoded_latent_relpath": reencoded_latent_metadata["latent_relpath"],
                     "reencoded_latent_digest": reencoded_latent_metadata["latent_digest"],
+                    "cross_event_vae_batching_enabled": False,
                 }
             )
             record_random_fields = list(
@@ -1066,6 +1203,579 @@ class RealVideoVaeLatentRunner:
             }
             validate_event_score_record(event_score_record)
             event_score_records.append(event_score_record)
+        return event_score_records
+
+    def _process_event_plan_entries_with_cross_event_vae_batching(
+        self,
+        *,
+        run_id: str,
+        output_root: Path,
+        event_plan_entries: list[EventPlanEntry],
+        method: Any,
+        method_config: dict[str, Any],
+        target_fpr: float,
+        threshold_record: dict[str, Any] | None,
+        latent_backend: RealVideoVAELatentBackend,
+        vae_runtime_backend: Any,
+        vae_metadata: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        event_score_records: list[dict[str, Any]] = []
+        source_sample_cache: dict[tuple[str, str, str], LatentSample] = {}
+        embedded_sample_cache: dict[tuple[str, str, str, str], LatentSample] = {}
+        decoded_video_cache: dict[tuple[str, str, str], dict[str, Any]] = {}
+        attacked_video_cache: dict[tuple[str, str], dict[str, Any]] = {}
+        decoded_video_tensor_cache: dict[tuple[str, str, str], np.ndarray] = {}
+        attacked_video_tensor_cache: dict[tuple[str, str], np.ndarray] = {}
+        latent_copy_cache: dict[tuple[str, str], dict[str, str]] = {}
+        reencoded_cache: dict[tuple[str, str], dict[str, str]] = {}
+        contexts: list[EventRuntimeContext] = []
+
+        for event_plan_entry in event_plan_entries:
+            source_sample_id, source_sample_role = self._resolve_source_identity(
+                event_plan_entry.sample_id,
+                event_plan_entry.sample_role,
+            )
+            source_key = (event_plan_entry.split, source_sample_role, source_sample_id)
+            source_sample = source_sample_cache.get(source_key)
+            if source_sample is None:
+                with self._runner_substage(
+                    "runner_build_source_sample",
+                    method_variant=method_config["method_variant"],
+                    split=event_plan_entry.split,
+                ):
+                    source_sample = latent_backend.build_sample(
+                        source_sample_id,
+                        event_plan_entry.split,
+                        source_sample_role,
+                    )
+                source_sample_cache[source_key] = source_sample
+
+            working_sample = source_sample
+            watermarked_latent_metadata: dict[str, str] | None = None
+            event_artifact_digest = compute_object_digest(
+                {
+                    "sample_id": event_plan_entry.sample_id,
+                    "sample_role": event_plan_entry.sample_role,
+                    "split": event_plan_entry.split,
+                    "method_variant": method_config["method_variant"],
+                    "attack_name": event_plan_entry.attack_name,
+                }
+            )[:24]
+            decoded_artifact_digest = compute_object_digest(
+                {
+                    "source_sample_id": source_sample_id,
+                    "source_sample_role": source_sample_role,
+                    "split": event_plan_entry.split,
+                    "method_variant": method_config["method_variant"],
+                    "latent_digest": working_sample.latent_tensor_digest_random,
+                }
+            )[:24]
+            embedded_key = (
+                event_plan_entry.split,
+                source_sample_role,
+                source_sample_id,
+                method_config["method_variant"],
+            )
+            if event_plan_entry.sample_role in {"watermarked_positive", "attacked_positive"}:
+                working_sample = embedded_sample_cache.get(embedded_key)
+                if working_sample is None:
+                    with self._runner_substage(
+                        "runner_embed_latent",
+                        method_variant=method_config["method_variant"],
+                        split=event_plan_entry.split,
+                    ):
+                        working_sample = method.embed(
+                            source_sample,
+                            {
+                                "event_sample_id": event_plan_entry.sample_id,
+                                "event_sample_role": event_plan_entry.sample_role,
+                            },
+                        )
+                    embedded_sample_cache[embedded_key] = working_sample
+                watermarked_latent_relpath = (
+                    Path("artifacts")
+                    / "latents"
+                    / "watermarked"
+                    / method_config["method_variant"]
+                    / f"{event_artifact_digest}.npy"
+                )
+                watermarked_latent_metadata = self._cached_latent_copy(
+                    latent_copy_cache,
+                    working_sample,
+                    output_root,
+                    watermarked_latent_relpath,
+                )
+
+            if str(source_sample.mechanism_trace.get("video_container")) != "mp4":
+                raise RuntimeError(
+                    "cross-event VAE batching currently supports only mp4 video runtime"
+                )
+            video_artifact_suffix = ".mp4"
+            video_fps = int(source_sample.mechanism_trace["video_fps"])
+            video_resolution = tuple(source_sample.mechanism_trace["video_resolution"])
+            decoded_video_cache_key = self._build_decoded_video_cache_key(
+                working_sample,
+                video_fps,
+                video_resolution,
+            )
+            decoded_video_relpath = (
+                Path("artifacts")
+                / "videos"
+                / "decoded"
+                / method_config["method_variant"]
+                / f"{decoded_artifact_digest}{video_artifact_suffix}"
+            )
+            materialized_attack_params = self._materialize_attack_params(
+                working_sample,
+                event_plan_entry.attack_object,
+                event_plan_entry.attack_name,
+                event_plan_entry.attack_params,
+            )
+            attacked_sample = self._build_video_attack_sample(
+                working_sample,
+                event_plan_entry.attack_name,
+                materialized_attack_params,
+            )
+            attacked_video_relpath = (
+                Path("artifacts")
+                / "videos"
+                / "attacked"
+                / event_plan_entry.attack_name
+                / f"{event_artifact_digest}{video_artifact_suffix}"
+            )
+            reencoded_latent_relpath = (
+                Path("artifacts")
+                / "latents"
+                / "reencoded"
+                / event_plan_entry.attack_name
+                / f"{event_artifact_digest}.npy"
+            )
+            contexts.append(
+                EventRuntimeContext(
+                    event_plan_entry=event_plan_entry,
+                    source_sample=source_sample,
+                    working_sample=working_sample,
+                    attacked_sample=attacked_sample,
+                    watermarked_latent_metadata=watermarked_latent_metadata,
+                    event_artifact_digest=event_artifact_digest,
+                    decoded_artifact_digest=decoded_artifact_digest,
+                    decoded_video_relpath=decoded_video_relpath,
+                    attacked_video_relpath=attacked_video_relpath,
+                    reencoded_latent_relpath=reencoded_latent_relpath,
+                    video_fps=video_fps,
+                    video_resolution=(int(video_resolution[0]), int(video_resolution[1])),
+                    decoded_cache_key=decoded_video_cache_key,
+                    materialized_attack_params=materialized_attack_params,
+                )
+            )
+
+        decode_requests: list[DecodeRequest] = []
+        decode_request_id_by_cache_key: dict[tuple[str, str, str], str] = {}
+        decode_contexts_by_request_id: dict[str, list[EventRuntimeContext]] = {}
+        for context in contexts:
+            cached_metadata = decoded_video_cache.get(context.decoded_cache_key)
+            if cached_metadata is not None:
+                context.decoded_video_metadata = cached_metadata
+                context.decoded_video_frames = self._get_cached_video_tensor(
+                    decoded_video_tensor_cache,
+                    context.decoded_cache_key,
+                    output_root / cached_metadata["video_relpath"],
+                )
+                continue
+
+            output_path = output_root / context.decoded_video_relpath
+            if output_path.exists():
+                metadata = self._build_video_artifact_metadata_from_path(
+                    output_path,
+                    context.decoded_video_relpath,
+                    context.video_fps,
+                )
+                decoded_video_cache[context.decoded_cache_key] = metadata
+                context.decoded_video_metadata = metadata
+                context.decoded_video_frames = self._get_cached_video_tensor(
+                    decoded_video_tensor_cache,
+                    context.decoded_cache_key,
+                    output_path,
+                )
+                continue
+
+            pending_request_id = decode_request_id_by_cache_key.get(context.decoded_cache_key)
+            if pending_request_id is not None:
+                decode_contexts_by_request_id[pending_request_id].append(context)
+                continue
+
+            with self._runner_substage(
+                "runner_load_decode_latent",
+                method_variant=method_config["method_variant"],
+                split=context.event_plan_entry.split,
+            ):
+                latent_tensor = self._load_latent_tensor(context.working_sample)
+            request_id = f"{method_config['method_variant']}:{context.event_plan_entry.event_id}"
+            decode_request_id_by_cache_key[context.decoded_cache_key] = request_id
+            decode_contexts_by_request_id[request_id] = [context]
+            decode_requests.append(
+                DecodeRequest(
+                    request_id=request_id,
+                    cache_key=context.decoded_cache_key,
+                    sample=context.working_sample,
+                    latent_tensor=latent_tensor,
+                    output_relpath=context.decoded_video_relpath,
+                    fps=context.video_fps,
+                    target_resolution=context.video_resolution,
+                    method_variant=method_config["method_variant"],
+                    split=context.event_plan_entry.split,
+                    event_id=context.event_plan_entry.event_id,
+                )
+            )
+
+        for decode_group in group_decode_requests(decode_requests, vae_metadata=vae_metadata):
+            with self._runner_substage(
+                "runner_cross_event_decode_video",
+                method_variant=method_config["method_variant"],
+            ):
+                decode_results = run_decode_request_batch(
+                    decode_group,
+                    vae_runtime_backend=vae_runtime_backend,
+                    config=self._cross_event_vae_batching_config,
+                )
+            self._record_cross_event_vae_batching_result_trace(
+                "decode",
+                decode_results,
+                method_variant=method_config["method_variant"],
+            )
+            for decode_result in decode_results:
+                metadata = self._write_video_artifact(
+                    decode_result.video_frames,
+                    output_root,
+                    decode_result.output_relpath,
+                    decode_result.fps,
+                )
+                decoded_video_cache[decode_result.cache_key] = metadata
+                decoded_video_tensor_cache[decode_result.cache_key] = decode_result.video_frames
+                for context in decode_contexts_by_request_id[decode_result.request_id]:
+                    context.decoded_video_metadata = metadata
+                    context.decoded_video_frames = decode_result.video_frames
+                    context.decode_effective_batch_size = decode_result.effective_batch_size
+                    context.batching_fallback_count += decode_result.fallback_count
+                    if decode_result.fallback_reason is not None:
+                        context.batching_fallback_reason = decode_result.fallback_reason
+
+        for context in contexts:
+            if context.decoded_video_metadata is None or context.decoded_video_frames is None:
+                raise RuntimeError("decoded video materialization is incomplete")
+            event_plan_entry = context.event_plan_entry
+            if event_plan_entry.attack_name == "no_attack":
+                context.attacked_video_metadata = context.decoded_video_metadata
+                context.attacked_video_frames = context.decoded_video_frames
+                continue
+
+            with self._runner_substage(
+                "runner_attack_materialization",
+                method_variant=method_config["method_variant"],
+                attack_name=event_plan_entry.attack_name,
+                split=event_plan_entry.split,
+            ):
+                if context.decoded_video_metadata["container"] != "mp4":
+                    raise RuntimeError(
+                        "cross-event VAE batching attack materialization requires mp4 decoded videos"
+                    )
+                attacked_video_cache_key = self._build_attacked_video_cache_key(
+                    context.decoded_video_metadata,
+                    event_plan_entry.attack_name,
+                    context.attacked_sample,
+                    context.attacked_video_relpath,
+                )
+                attacked_video_metadata = self._cached_attacked_video_artifact(
+                    attacked_video_cache,
+                    context.decoded_video_metadata,
+                    context.attacked_sample,
+                    event_plan_entry.attack_name,
+                    event_plan_entry.attack_object,
+                    output_root,
+                    context.attacked_video_relpath,
+                    context.video_fps,
+                    context.video_resolution,
+                    {
+                        "run_id": run_id,
+                        "sample_id": event_plan_entry.sample_id,
+                    },
+                    source_video_frames=context.decoded_video_frames,
+                    tensor_cache=attacked_video_tensor_cache,
+                )
+                attacked_video_frames = self._get_cached_video_tensor(
+                    attacked_video_tensor_cache,
+                    attacked_video_cache_key,
+                    output_root / attacked_video_metadata["video_relpath"],
+                )
+            context.attacked_video_metadata = attacked_video_metadata
+            context.attacked_video_frames = attacked_video_frames
+
+        encode_requests: list[EncodeRequest] = []
+        encode_request_id_by_cache_key: dict[tuple[str, str], str] = {}
+        encode_contexts_by_request_id: dict[str, list[EventRuntimeContext]] = {}
+        for context in contexts:
+            if context.attacked_video_metadata is None or context.attacked_video_frames is None:
+                raise RuntimeError("attacked video materialization is incomplete")
+            cache_key = (
+                context.attacked_video_metadata["video_digest"],
+                context.reencoded_latent_relpath.as_posix(),
+            )
+            cached_metadata = reencoded_cache.get(cache_key)
+            if cached_metadata is not None:
+                context.reencoded_latent_metadata = cached_metadata
+                continue
+
+            output_path = output_root / context.reencoded_latent_relpath
+            if output_path.exists():
+                metadata = {
+                    "latent_relpath": context.reencoded_latent_relpath.as_posix(),
+                    "latent_digest": compute_file_digest(output_path),
+                }
+                reencoded_cache[cache_key] = metadata
+                context.reencoded_latent_metadata = metadata
+                continue
+
+            pending_request_id = encode_request_id_by_cache_key.get(cache_key)
+            if pending_request_id is not None:
+                encode_contexts_by_request_id[pending_request_id].append(context)
+                continue
+
+            request_id = f"{method_config['method_variant']}:{context.event_plan_entry.event_id}"
+            encode_request_id_by_cache_key[cache_key] = request_id
+            encode_contexts_by_request_id[request_id] = [context]
+            encode_requests.append(
+                EncodeRequest(
+                    request_id=request_id,
+                    cache_key=cache_key,
+                    reference_sample=context.attacked_sample,
+                    video_frames=context.attacked_video_frames,
+                    output_relpath=context.reencoded_latent_relpath,
+                    method_variant=method_config["method_variant"],
+                    attack_name=context.event_plan_entry.attack_name,
+                    split=context.event_plan_entry.split,
+                    event_id=context.event_plan_entry.event_id,
+                )
+            )
+
+        for encode_group in group_encode_requests(encode_requests, vae_metadata=vae_metadata):
+            with self._runner_substage(
+                "runner_cross_event_reencode_latent",
+                method_variant=method_config["method_variant"],
+            ):
+                encode_results = run_encode_request_batch(
+                    encode_group,
+                    vae_runtime_backend=vae_runtime_backend,
+                    config=self._cross_event_vae_batching_config,
+                )
+            self._record_cross_event_vae_batching_result_trace(
+                "encode",
+                encode_results,
+                method_variant=method_config["method_variant"],
+            )
+            for encode_result in encode_results:
+                output_path = output_root / encode_result.output_relpath
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                write_float_tensor_npy(
+                    output_path,
+                    (
+                        int(encode_result.latent_tensor.shape[0]),
+                        int(encode_result.latent_tensor.shape[1]),
+                        int(encode_result.latent_tensor.shape[2]),
+                        int(encode_result.latent_tensor.shape[3]),
+                    ),
+                    array("f", encode_result.latent_tensor.reshape(-1).tolist()),
+                )
+                metadata = {
+                    "latent_relpath": encode_result.output_relpath.as_posix(),
+                    "latent_digest": compute_file_digest(output_path),
+                }
+                reencoded_cache[encode_result.cache_key] = metadata
+                for context in encode_contexts_by_request_id[encode_result.request_id]:
+                    context.reencoded_latent_metadata = metadata
+                    context.encode_effective_batch_size = encode_result.effective_batch_size
+                    context.batching_fallback_count += encode_result.fallback_count
+                    if encode_result.fallback_reason is not None:
+                        context.batching_fallback_reason = encode_result.fallback_reason
+
+        for context in contexts:
+            event_plan_entry = context.event_plan_entry
+            if (
+                context.decoded_video_metadata is None
+                or context.decoded_video_frames is None
+                or context.attacked_video_metadata is None
+                or context.attacked_video_frames is None
+                or context.reencoded_latent_metadata is None
+            ):
+                raise RuntimeError("cross-event VAE batching context is incomplete")
+            detection_sample = self._build_reencoded_sample(
+                context.attacked_sample,
+                context.reencoded_latent_metadata,
+            )
+            with self._runner_substage(
+                "runner_detect",
+                method_variant=method_config["method_variant"],
+                attack_name=event_plan_entry.attack_name,
+                split=event_plan_entry.split,
+            ):
+                detection_result = method.detect(detection_sample, threshold_record)
+            reference_video_path = output_root / context.decoded_video_metadata["video_relpath"]
+            comparison_video_path = output_root / context.attacked_video_metadata["video_relpath"]
+            with self._runner_substage(
+                "runner_load_metric_frames",
+                method_variant=method_config["method_variant"],
+                attack_name=event_plan_entry.attack_name,
+                split=event_plan_entry.split,
+            ):
+                reference_frames, comparison_frames = self._load_metric_frame_pair(
+                    reference_video_path,
+                    comparison_video_path,
+                    reference_frames=context.decoded_video_frames,
+                    comparison_frames=context.attacked_video_frames,
+                )
+            with self._runner_substage(
+                "runner_quality_metrics",
+                method_variant=method_config["method_variant"],
+                attack_name=event_plan_entry.attack_name,
+                split=event_plan_entry.split,
+            ):
+                if self._should_compute_quality_metrics(event_plan_entry):
+                    quality_metrics = build_real_video_quality_metrics_payload_from_frames(
+                        reference_frames,
+                        comparison_frames,
+                        runtime_config=dict(self._runtime_config_overrides),
+                    )
+                else:
+                    quality_metrics = self._build_skipped_quality_metrics_payload(
+                        reason="quality_metrics_skipped_by_runtime_policy"
+                    )
+            with self._runner_substage(
+                "runner_temporal_metrics",
+                method_variant=method_config["method_variant"],
+                attack_name=event_plan_entry.attack_name,
+                split=event_plan_entry.split,
+            ):
+                if self._should_compute_temporal_metrics(event_plan_entry):
+                    temporal_metrics = build_real_video_temporal_metrics_payload_from_frames(
+                        reference_frames,
+                        comparison_frames,
+                        runtime_config=dict(self._runtime_config_overrides),
+                    )
+                else:
+                    temporal_metrics = self._build_skipped_temporal_metrics_payload(
+                        reason="temporal_metrics_skipped_by_runtime_policy"
+                    )
+            mechanism_trace = dict(detection_sample.mechanism_trace or {})
+            mechanism_trace.update(detection_result.mechanism_trace or {})
+            mechanism_trace.update(
+                {
+                    "construction_phase": "real_video_vae_latent_probe",
+                    "latent_backend_name": detection_sample.latent_backend_name,
+                    "latent_backend_status": detection_sample.latent_backend_status,
+                    "vae_backend_name": vae_metadata["vae_backend_name"],
+                    "vae_backend_version": vae_metadata["vae_backend_version"],
+                    "vae_config_digest": context.source_sample.mechanism_trace["vae_config_digest"],
+                    "vae_encode_mode": vae_metadata["vae_encode_mode"],
+                    "vae_decode_mode": vae_metadata["vae_decode_mode"],
+                    "video_source_id": context.source_sample.mechanism_trace["video_source_id"],
+                    "video_source_relpath": context.source_sample.mechanism_trace["video_source_relpath"],
+                    "video_source_digest": context.source_sample.mechanism_trace["video_source_digest"],
+                    "video_frame_count": context.source_sample.mechanism_trace["video_frame_count"],
+                    "video_fps": context.source_sample.mechanism_trace["video_fps"],
+                    "video_resolution": context.source_sample.mechanism_trace["video_resolution"],
+                    "source_video_container": context.source_sample.mechanism_trace.get("video_container"),
+                    "video_runtime_status": (
+                        "real_mp4_runtime"
+                        if context.attacked_video_metadata["container"] == "mp4"
+                        else context.source_sample.mechanism_trace.get("video_runtime_status")
+                    ),
+                    "video_container": context.attacked_video_metadata["container"],
+                    "decoded_video_container": context.decoded_video_metadata["container"],
+                    "attacked_video_container": context.attacked_video_metadata["container"],
+                    "encoded_latent_relpath": context.source_sample.mechanism_trace["encoded_latent_relpath"],
+                    "encoded_latent_digest": context.source_sample.mechanism_trace["encoded_latent_digest"],
+                    "watermarked_latent_relpath": (
+                        None
+                        if context.watermarked_latent_metadata is None
+                        else context.watermarked_latent_metadata["latent_relpath"]
+                    ),
+                    "watermarked_latent_digest": (
+                        None
+                        if context.watermarked_latent_metadata is None
+                        else context.watermarked_latent_metadata["latent_digest"]
+                    ),
+                    "decoded_video_relpath": context.decoded_video_metadata["video_relpath"],
+                    "decoded_video_digest": context.decoded_video_metadata["video_digest"],
+                    "attacked_video_relpath": context.attacked_video_metadata["video_relpath"],
+                    "attacked_video_digest": context.attacked_video_metadata["video_digest"],
+                    "quality_metrics_runtime": quality_metrics.get("quality_metrics_runtime"),
+                    "temporal_metrics_runtime": temporal_metrics.get("temporal_metrics_runtime"),
+                    "reencode_source": (
+                        "attacked_video_mp4"
+                        if context.attacked_video_metadata["container"] == "mp4"
+                        else "attacked_video_tensor"
+                    ),
+                    "codec": context.attacked_video_metadata.get("codec"),
+                    "attack_name": event_plan_entry.attack_name,
+                    "reencoded_latent_relpath": context.reencoded_latent_metadata["latent_relpath"],
+                    "reencoded_latent_digest": context.reencoded_latent_metadata["latent_digest"],
+                    "cross_event_vae_batching_enabled": True,
+                    "cross_event_vae_decode_effective_batch_size": context.decode_effective_batch_size,
+                    "cross_event_vae_encode_effective_batch_size": context.encode_effective_batch_size,
+                    "cross_event_vae_batching_fallback_count": context.batching_fallback_count,
+                    "cross_event_vae_batching_fallback_reason": context.batching_fallback_reason,
+                }
+            )
+            record_random_fields = list(
+                dict.fromkeys(
+                    [
+                        "latent_generation_seed_random",
+                        "latent_tensor_digest_random",
+                        *detection_result.random_fields,
+                    ]
+                )
+            )
+            base_method_variant = str(
+                method_config.get("base_method_variant", method_config["method_variant"])
+            )
+            derived_variant = base_method_variant != method_config["method_variant"]
+            tubelet_length = int(method_config.get("tubelet_length", 1))
+            event_score_record = {
+                "run_id": run_id,
+                "event_id": f"{method_config['method_variant']}:{event_plan_entry.event_id}",
+                "sample_id": event_plan_entry.sample_id,
+                "split": event_plan_entry.split,
+                "sample_role": event_plan_entry.sample_role,
+                "method_family": method_config["method_family"],
+                "method_variant": method_config["method_variant"],
+                "base_method_variant": base_method_variant,
+                "derived_variant": derived_variant,
+                "ablation_axis": "tubelet_length" if derived_variant else None,
+                "tubelet_length": tubelet_length,
+                "attack_name": event_plan_entry.attack_name,
+                "attack_params": (
+                    context.attacked_sample.applied_attack_params
+                    or context.materialized_attack_params
+                ),
+                "target_fpr": target_fpr,
+                "threshold_id": None if threshold_record is None else threshold_record["threshold_id"],
+                "input_artifact_trace": build_input_artifact_trace(detection_sample),
+                "latent_backend_name": detection_sample.latent_backend_name,
+                "latent_backend_status": detection_sample.latent_backend_status,
+                "latent_tensor_digest_random": detection_sample.latent_tensor_digest_random,
+                "latent_generation_seed_random": detection_sample.latent_generation_seed_random,
+                "evidence_scores": detection_result.evidence_scores,
+                "disabled_evidence": detection_result.disabled_evidence,
+                "decision": detection_result.decision,
+                "failure_reason": detection_result.failure_reason,
+                "mechanism_trace": mechanism_trace,
+                "placeholder_fields": detection_result.placeholder_fields,
+                "random_fields": record_random_fields,
+                "quality_metrics": quality_metrics,
+                "temporal_metrics": temporal_metrics,
+            }
+            validate_event_score_record(event_score_record)
+            event_score_records.append(event_score_record)
+        event_score_records.sort(key=lambda record: str(record.get("event_id", "")))
         return event_score_records
 
     def _group_event_plan_entries_by_source(
@@ -2033,6 +2743,77 @@ class RealVideoVaeLatentRunner:
         }
         return [dict(runtime_map[method_variant]) for method_variant in method_variants]
 
+    def _record_cross_event_vae_batching_result_trace(
+        self,
+        operation: str,
+        results: list[DecodeResult] | list[EncodeResult],
+        *,
+        method_variant: str,
+    ) -> None:
+        """功能：把批处理结果压缩为批次级 runtime trace。"""
+        if not self._cross_event_vae_batching_config.write_trace:
+            return
+        seen_group_ids: set[str] = set()
+        for result in results:
+            if result.batch_group_id in seen_group_ids:
+                continue
+            seen_group_ids.add(result.batch_group_id)
+            self._cross_event_vae_batching_trace.append(
+                {
+                    "operation": operation,
+                    "batch_group_id": result.batch_group_id,
+                    "request_count": result.batch_request_count,
+                    "effective_batch_size": result.effective_batch_size,
+                    "fallback_count": result.fallback_count,
+                    "fallback_reason": result.fallback_reason,
+                    "method_variant": method_variant,
+                    "split": result.split,
+                    "runtime_profile": self._runtime_profile,
+                }
+            )
+
+    def _write_cross_event_vae_batching_outputs(self, output_root: Path) -> None:
+        """功能：写出跨事件 VAE batching 的执行侧诊断产物。"""
+        runtime_profile_root = output_root / "runtime_profile"
+        runtime_profile_root.mkdir(parents=True, exist_ok=True)
+        trace_path = runtime_profile_root / "cross_event_vae_batching_trace.jsonl"
+        summary_path = runtime_profile_root / "cross_event_vae_batching_summary.json"
+        if self._cross_event_vae_batching_config.enabled and self._cross_event_vae_batching_config.write_trace:
+            with trace_path.open("w", encoding="utf-8") as handle:
+                for trace_entry in self._cross_event_vae_batching_trace:
+                    handle.write(json.dumps(trace_entry, ensure_ascii=False) + "\n")
+        elif trace_path.exists():
+            trace_path.unlink()
+
+        decode_entries = [
+            entry for entry in self._cross_event_vae_batching_trace if entry["operation"] == "decode"
+        ]
+        encode_entries = [
+            entry for entry in self._cross_event_vae_batching_trace if entry["operation"] == "encode"
+        ]
+        summary_payload = {
+            "enabled": self._cross_event_vae_batching_config.enabled,
+            "decode_request_count": sum(int(entry["request_count"]) for entry in decode_entries),
+            "encode_request_count": sum(int(entry["request_count"]) for entry in encode_entries),
+            "decode_batch_count": len(decode_entries),
+            "encode_batch_count": len(encode_entries),
+            "decode_fallback_count": sum(int(entry["fallback_count"]) for entry in decode_entries),
+            "encode_fallback_count": sum(int(entry["fallback_count"]) for entry in encode_entries),
+            "max_decode_effective_batch_size": (
+                max(int(entry["effective_batch_size"]) for entry in decode_entries)
+                if decode_entries
+                else 0
+            ),
+            "max_encode_effective_batch_size": (
+                max(int(entry["effective_batch_size"]) for entry in encode_entries)
+                if encode_entries
+                else 0
+            ),
+        }
+        if not self._cross_event_vae_batching_config.enabled:
+            summary_payload["reason"] = "cross_event_vae_batching_disabled"
+        self._write_json(summary_path, summary_payload)
+
     def _build_artifact_manifest(self, event_score_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
         artifact_entries: dict[tuple[str, str], dict[str, Any]] = {}
         for event_score_record in event_score_records:
@@ -2074,6 +2855,15 @@ class RealVideoVaeLatentRunner:
         )
 
 
+def _parse_cli_bool(value: str) -> bool:
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise argparse.ArgumentTypeError("boolean value must be true or false")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="Run the governed stage-two real-video VAE latent probe runtime.",
@@ -2093,6 +2883,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--dataset-manifest", default=None)
     parser.add_argument("--runtime-config", default=None)
     parser.add_argument("--method-variants", nargs="+", default=None)
+    parser.add_argument("--cross-event-vae-batching-enabled", type=_parse_cli_bool, default=None)
+    parser.add_argument("--cross-event-vae-decode-batch-size", type=int, default=None)
+    parser.add_argument("--cross-event-vae-encode-batch-size", type=int, default=None)
+    parser.add_argument("--cross-event-vae-batch-fallback-on-oom", type=_parse_cli_bool, default=None)
     args = parser.parse_args(argv)
     RealVideoVaeLatentRunner(ROOT).run(
         output_root=args.run_root,
@@ -2110,6 +2904,10 @@ def main(argv: list[str] | None = None) -> None:
         ablation_config_path=args.ablation_config,
         dataset_manifest_path=args.dataset_manifest,
         runtime_config_path=args.runtime_config,
+        cross_event_vae_batching_enabled=args.cross_event_vae_batching_enabled,
+        cross_event_vae_decode_batch_size=args.cross_event_vae_decode_batch_size,
+        cross_event_vae_encode_batch_size=args.cross_event_vae_encode_batch_size,
+        cross_event_vae_batch_fallback_on_oom=args.cross_event_vae_batch_fallback_on_oom,
     )
 
 

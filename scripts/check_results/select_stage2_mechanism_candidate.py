@@ -723,6 +723,9 @@ def _build_tubelet_sync_scan_seed(
     grid = grid_config.get("grid", {})
     if not isinstance(grid, dict):
         raise TypeError("grid must be a dictionary")
+    selected_candidate_sync_defaults = _resolve_selected_candidate_sync_defaults(
+        selected_candidate
+    )
     return {
         "base_method_variant": "tubelet_sync",
         "recommended_method_variant": "tubelet_sync_real_video_vae_candidate",
@@ -740,23 +743,35 @@ def _build_tubelet_sync_scan_seed(
             },
         },
         "parameter_scan": {
-            "fusion_rule": _read_grid_string_list(grid, "fusion_rule"),
-            "lambda_sync": _read_grid_numeric_list(grid, "lambda_sync"),
-            "sync_search_radius": _read_grid_integer_list(grid, "sync_search_radius"),
+            "fusion_rule": _read_optional_grid_string_list(
+                grid,
+                "fusion_rule",
+                [selected_candidate_sync_defaults["fusion_rule"]],
+            ),
+            "lambda_sync": _read_optional_grid_numeric_list(
+                grid,
+                "lambda_sync",
+                [selected_candidate_sync_defaults["lambda_sync"]],
+            ),
+            "sync_search_radius": _read_optional_grid_integer_list(
+                grid,
+                "sync_search_radius",
+                [selected_candidate_sync_defaults["sync_search_radius"]],
+            ),
             "min_sync_positive_margin": _read_optional_grid_numeric_list(
                 grid,
                 "min_sync_positive_margin",
-                [0.0],
+                [selected_candidate_sync_defaults["min_sync_positive_margin"]],
             ),
             "min_sync_alignment_coverage_ratio": _read_optional_grid_numeric_list(
                 grid,
                 "min_sync_alignment_coverage_ratio",
-                [0.5],
+                [selected_candidate_sync_defaults["min_sync_alignment_coverage_ratio"]],
             ),
             "min_sync_alignment_matched_count": _read_optional_grid_integer_list(
                 grid,
                 "min_sync_alignment_matched_count",
-                [1],
+                [selected_candidate_sync_defaults["min_sync_alignment_matched_count"]],
             ),
         },
         "rationale": [
@@ -918,6 +933,68 @@ def _parse_tubelet_sync_variant_name(method_variant: str) -> dict[str, Any]:
                 fusion_rule_token,
             )
     return parsed_payload
+
+def _resolve_selected_candidate_sync_defaults(
+    selected_candidate: dict[str, Any],
+) -> dict[str, Any]:
+    sync_search = selected_candidate.get("sync_search", {})
+    if not isinstance(sync_search, dict):
+        sync_search = {}
+
+    fusion_rule = selected_candidate.get("fusion_rule")
+    if isinstance(fusion_rule, str) and fusion_rule:
+        default_fusion_rule = fusion_rule
+    else:
+        default_fusion_rule = "sync_rescue_fusion"
+
+    lambda_sync = selected_candidate.get("lambda_sync", 0.0)
+    default_lambda_sync = (
+        round(float(lambda_sync), 6)
+        if isinstance(lambda_sync, (int, float))
+        else 0.0
+    )
+
+    offset_search_min = sync_search.get("offset_search_min")
+    offset_search_max = sync_search.get("offset_search_max")
+    default_sync_search_radius = 0
+    if isinstance(offset_search_min, int) and isinstance(offset_search_max, int):
+        default_sync_search_radius = max(
+            abs(int(offset_search_min)),
+            abs(int(offset_search_max)),
+        )
+
+    min_sync_positive_margin = sync_search.get("min_sync_positive_margin", 0.0)
+    default_min_sync_positive_margin = (
+        round(float(min_sync_positive_margin), 6)
+        if isinstance(min_sync_positive_margin, (int, float))
+        else 0.0
+    )
+    min_sync_alignment_coverage_ratio = sync_search.get(
+        "min_sync_alignment_coverage_ratio",
+        0.5,
+    )
+    default_min_sync_alignment_coverage_ratio = (
+        round(float(min_sync_alignment_coverage_ratio), 6)
+        if isinstance(min_sync_alignment_coverage_ratio, (int, float))
+        else 0.5
+    )
+    min_sync_alignment_matched_count = sync_search.get(
+        "min_sync_alignment_matched_count",
+        1,
+    )
+    default_min_sync_alignment_matched_count = (
+        int(min_sync_alignment_matched_count)
+        if isinstance(min_sync_alignment_matched_count, int)
+        else 1
+    )
+    return {
+        "fusion_rule": default_fusion_rule,
+        "lambda_sync": default_lambda_sync,
+        "sync_search_radius": default_sync_search_radius,
+        "min_sync_positive_margin": default_min_sync_positive_margin,
+        "min_sync_alignment_coverage_ratio": default_min_sync_alignment_coverage_ratio,
+        "min_sync_alignment_matched_count": default_min_sync_alignment_matched_count,
+    }
 
 
 def _find_variant_record(
@@ -1170,6 +1247,20 @@ def _read_string_list(payload: dict[str, Any], field_name: str) -> list[str]:
 
 def _read_grid_string_list(payload: dict[str, Any], field_name: str) -> list[str]:
     field_value = payload.get(field_name, [])
+    if not isinstance(field_value, list) or not field_value:
+        raise ValueError(f"grid field {field_name} must be a non-empty list")
+    resolved_values = [str(item) for item in field_value if isinstance(item, str) and item]
+    if not resolved_values:
+        raise ValueError(f"grid field {field_name} must contain non-empty strings")
+    return resolved_values
+
+
+def _read_optional_grid_string_list(
+    payload: dict[str, Any],
+    field_name: str,
+    default_values: list[str],
+) -> list[str]:
+    field_value = payload.get(field_name, default_values)
     if not isinstance(field_value, list) or not field_value:
         raise ValueError(f"grid field {field_name} must be a non-empty list")
     resolved_values = [str(item) for item in field_value if isinstance(item, str) and item]

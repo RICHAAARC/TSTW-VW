@@ -49,6 +49,15 @@
 - 受治理的执行顺序必须固定为两步：先用 `shard_count` 决定总任务切成几片，再用 `shard_index` 选中当前运行的 outer shard；只有在选中这一片之后，才允许用 `worker_count` 把该 shard 内部的 events 分给本地 worker 并行处理。
 - `shard_count` / `shard_index` 属于 shard 级并行语义，`worker_count` 属于 shard 内并行语义；governed notebook、workflow helper、harness audit 与约束测试不得将两者混用或互相重解释。
 
+### `cross_event_vae_batching` 调度语义
+
+- `cross_event_vae_batching_enabled` 表示是否启用跨 event VAE batching。该开关默认关闭，只有 runtime config 或 CLI 显式开启时才允许改变 VAE 调度方式。
+- `cross_event_vae_decode_batch_size` 表示一次 decode 调度中最多聚合多少条同构 event request；它不同于 backend 内部的 `batch_size_frames`。
+- `cross_event_vae_encode_batch_size` 表示一次 encode 调度中最多聚合多少条同构 event request；它不同于 backend 内部的 `batch_size_frames`。
+- 第一版 cross-event VAE batching 只能改变 VAE decode / encode 调度，不得改变 video attack、detection、record、threshold、table rebuild 或 mechanism audit 语义。
+- 第一版 cross-event VAE batching 与 `worker_count > 1` 不得同时启用；启用 batching 时必须使用 `worker_count == 1`，避免多个线程共享同一个 VAE backend 造成不可审计的 GPU 调度行为。
+- batching trace 与 summary 必须写入 `runtime_profile/`，只能用于运行诊断，不得作为方法证据进入 records、thresholds 或 tables。
+
 ## 四、允许与禁止
 
 允许的运行优化：

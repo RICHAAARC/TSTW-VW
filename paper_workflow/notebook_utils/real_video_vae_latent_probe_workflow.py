@@ -303,6 +303,9 @@ def run_probe_runner(
     shard_index: int | None = None,
     worker_count: int | None = None,
     method_variants: list[str] | None = None,
+    cross_event_vae_batching_enabled: bool | None = None,
+    cross_event_vae_decode_batch_size: int | None = None,
+    cross_event_vae_encode_batch_size: int | None = None,
     python_executable: str = sys.executable,
 ) -> None:
     """Run the governed probe runner module.
@@ -323,6 +326,9 @@ def run_probe_runner(
         shard_index: Optional selected event-shard index override.
         worker_count: Optional in-shard worker count override.
         method_variants: Optional governed method-variant allowlist for legacy method-variant splits.
+        cross_event_vae_batching_enabled: Optional cross-event VAE batching enable override.
+        cross_event_vae_decode_batch_size: Optional cross-event decode request batch size.
+        cross_event_vae_encode_batch_size: Optional cross-event encode request batch size.
         python_executable: Python executable used for the subprocess.
 
     Returns:
@@ -345,6 +351,9 @@ def run_probe_runner(
         shard_index=shard_index,
         worker_count=worker_count,
         method_variants=method_variants,
+        cross_event_vae_batching_enabled=cross_event_vae_batching_enabled,
+        cross_event_vae_decode_batch_size=cross_event_vae_decode_batch_size,
+        cross_event_vae_encode_batch_size=cross_event_vae_encode_batch_size,
         python_executable=python_executable,
     )
     runner_env = _build_probe_runner_environment(repository_root)
@@ -392,6 +401,9 @@ def _build_probe_runner_command(
     shard_index: int | None,
     worker_count: int | None,
     method_variants: list[str] | None,
+    cross_event_vae_batching_enabled: bool | None,
+    cross_event_vae_decode_batch_size: int | None,
+    cross_event_vae_encode_batch_size: int | None,
     python_executable: str,
 ) -> list[str]:
     """Build the governed runner command line.
@@ -412,6 +424,9 @@ def _build_probe_runner_command(
         shard_index: Optional selected event-shard index override.
         worker_count: Optional in-shard worker count override.
         method_variants: Optional method-variant allowlist for legacy method-variant splits.
+        cross_event_vae_batching_enabled: Optional cross-event VAE batching enable override.
+        cross_event_vae_decode_batch_size: Optional cross-event decode request batch size.
+        cross_event_vae_encode_batch_size: Optional cross-event encode request batch size.
         python_executable: Python executable used for the subprocess.
 
     Returns:
@@ -455,6 +470,21 @@ def _build_probe_runner_command(
         if not normalized_method_variants or any(not value for value in normalized_method_variants):
             raise ValueError("method_variants must contain non-empty values")
         runner_command.extend(["--method-variants", *normalized_method_variants])
+    if cross_event_vae_batching_enabled is not None:
+        runner_command.extend(
+            [
+                "--cross-event-vae-batching-enabled",
+                "true" if cross_event_vae_batching_enabled else "false",
+            ]
+        )
+    if cross_event_vae_decode_batch_size is not None:
+        runner_command.extend(
+            ["--cross-event-vae-decode-batch-size", str(int(cross_event_vae_decode_batch_size))]
+        )
+    if cross_event_vae_encode_batch_size is not None:
+        runner_command.extend(
+            ["--cross-event-vae-encode-batch-size", str(int(cross_event_vae_encode_batch_size))]
+        )
     return runner_command
 
 
@@ -496,6 +526,9 @@ def run_probe_method_variant_splits(
     batch_size_frames: int | None = None,
     method_variants: list[str] | None = None,
     method_variant_split_count: int = 2,
+    cross_event_vae_batching_enabled: bool | None = None,
+    cross_event_vae_decode_batch_size: int | None = None,
+    cross_event_vae_encode_batch_size: int | None = None,
     python_executable: str = sys.executable,
 ) -> dict[str, Any]:
     """Run the governed probe runner as legacy method-variant splits and merge outputs.
@@ -514,6 +547,9 @@ def run_probe_method_variant_splits(
         batch_size_frames: Optional frame-batch override.
         method_variants: Optional method-variant allowlist.
         method_variant_split_count: Requested legacy method-variant split count.
+        cross_event_vae_batching_enabled: Optional cross-event VAE batching enable override.
+        cross_event_vae_decode_batch_size: Optional cross-event decode request batch size.
+        cross_event_vae_encode_batch_size: Optional cross-event encode request batch size.
         python_executable: Python executable used for subprocesses.
 
     Returns:
@@ -524,6 +560,10 @@ def run_probe_method_variant_splits(
     resolved_method_variant_split_count = int(method_variant_split_count)
     if resolved_method_variant_split_count < 1:
         raise ValueError("method_variant_split_count must be a positive integer")
+    if cross_event_vae_batching_enabled and resolved_method_variant_split_count > 1:
+        raise ValueError(
+            "cross-event VAE batching requires method_variant_split_count == 1 in the first governed helper implementation"
+        )
 
     resolved_method_variants = _resolve_probe_runtime_method_variants(
         repository_root=repository_root,
@@ -552,6 +592,9 @@ def run_probe_method_variant_splits(
             shard_index=None,
             worker_count=None,
             method_variants=resolved_method_variants,
+            cross_event_vae_batching_enabled=cross_event_vae_batching_enabled,
+            cross_event_vae_decode_batch_size=cross_event_vae_decode_batch_size,
+            cross_event_vae_encode_batch_size=cross_event_vae_encode_batch_size,
             python_executable=python_executable,
         )
         return {
@@ -589,6 +632,9 @@ def run_probe_method_variant_splits(
             shard_index=None,
             worker_count=None,
             method_variants=split_entry["method_variants"],
+            cross_event_vae_batching_enabled=cross_event_vae_batching_enabled,
+            cross_event_vae_decode_batch_size=cross_event_vae_decode_batch_size,
+            cross_event_vae_encode_batch_size=cross_event_vae_encode_batch_size,
             python_executable=python_executable,
         )
         process = subprocess.Popen(

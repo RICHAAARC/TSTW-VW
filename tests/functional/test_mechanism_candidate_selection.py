@@ -1,5 +1,5 @@
 """
-文件用途：验证 stage2 mechanism calibration candidate selector 的 quick 行为。
+文件用途：验证 real_video_vae_latent_probe mechanism calibration candidate selector 的 quick 行为。
 File purpose: Validate quick behavior of the stage-two mechanism calibration candidate selector.
 Module type: General module
 """
@@ -15,11 +15,49 @@ from experiments.real_video_vae_latent_probe.output_layout import (
     build_real_video_vae_latent_output_paths,
 )
 from scripts.check_results.select_stage2_mechanism_candidate import (
+    _build_tubelet_sync_scan_seed,
     select_stage2_mechanism_candidate,
 )
 
 
 pytestmark = pytest.mark.quick
+
+
+def test_tubelet_sync_scan_seed_uses_selected_candidate_defaults_for_missing_stage_grid_fields() -> None:
+    """Validate tubelet_sync scan seed tolerates stage-local refine grids.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    selected_candidate = {
+        "tubelet_length": 1,
+        "tubelet_partition": {
+            "spatial_patch_size": [4, 4],
+        },
+        "score_calibration": {
+            "embedding_projection_support_weight": 0.45,
+        },
+    }
+
+    seed_payload = _build_tubelet_sync_scan_seed(
+        selected_candidate,
+        {
+            "grid": {
+                "lambda_sync": [0.0, 0.025],
+                "sync_search_radius": [6, 8],
+            }
+        },
+    )
+
+    assert seed_payload["parameter_scan"]["fusion_rule"] == ["sync_rescue_fusion"]
+    assert seed_payload["parameter_scan"]["lambda_sync"] == [0.0, 0.025]
+    assert seed_payload["parameter_scan"]["sync_search_radius"] == [6, 8]
+    assert seed_payload["parameter_scan"]["min_sync_positive_margin"] == [0.0]
+    assert seed_payload["parameter_scan"]["min_sync_alignment_coverage_ratio"] == [0.5]
+    assert seed_payload["parameter_scan"]["min_sync_alignment_matched_count"] == [1]
 
 
 def test_mechanism_candidate_selector_uses_dev_and_calibration_only(

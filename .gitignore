@@ -8,3 +8,4 @@ build/
 *.pyc
 .tmp*
 tmp*
+temp*

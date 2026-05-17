@@ -212,6 +212,11 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | attacked_video_digest | trace | none | true | false | false | Digest of the attacked placeholder video artifact in the real_video_vae_latent_probe scaffold. |
 | reencoded_latent_relpath | artifact_layout | none | true | false | false | Relative path to the re-encoded latent artifact in the real_video_vae_latent_probe scaffold. |
 | reencoded_latent_digest | trace | none | true | false | false | Digest of the re-encoded latent artifact in the real_video_vae_latent_probe scaffold. |
+| cross_event_vae_batching_enabled | protocol | none | true | false | false | Boolean mechanism-trace field indicating whether the runner used cross-event VAE batching for decode and encode scheduling. |
+| cross_event_vae_decode_effective_batch_size | protocol | none | true | false | false | Per-record diagnostic field recording the effective decode request batch size used by cross-event VAE batching. |
+| cross_event_vae_encode_effective_batch_size | protocol | none | true | false | false | Per-record diagnostic field recording the effective encode request batch size used by cross-event VAE batching. |
+| cross_event_vae_batching_fallback_count | protocol | none | true | false | false | Per-record diagnostic count of CUDA OOM fallback steps used by cross-event VAE batching. |
+| cross_event_vae_batching_fallback_reason | protocol | none | true | false | false | Nullable per-record diagnostic reason for cross-event VAE batching fallback; it is not method evidence. |
 | quality_metrics | protocol | none | true | false | false | Top-level real_video_vae_latent_probe quality-metrics payload written into event records. |
 | temporal_metrics | protocol | none | true | false | false | Top-level real_video_vae_latent_probe temporal-metrics payload written into event records. |
 | vae_reconstruction_psnr | protocol | none | true | false | false | Placeholder-derived PSNR summary used by the real_video_vae_latent_probe scaffold quality payload. |
