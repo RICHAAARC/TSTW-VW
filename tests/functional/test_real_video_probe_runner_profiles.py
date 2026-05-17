@@ -9,6 +9,7 @@ from __future__ import annotations
 import experiments.real_video_vae_latent_probe.runner as real_video_runner_module
 
 import types
+from array import array
 from pathlib import Path
 
 import numpy as np
@@ -19,6 +20,8 @@ pytestmark = pytest.mark.quick
 from experiments.real_video_vae_latent_probe.runner import RealVideoVaeLatentRunner
 from main.attacks.real_video_attack_registry import build_real_video_attack_registry
 from main.core.registry import load_json_config
+from main.core.schema import LatentSample
+from main.core.tensor_artifact import write_float_tensor_npy
 from main.protocol.calibrator import ThresholdCalibrator
 
 
@@ -604,6 +607,66 @@ def test_cached_reencoded_latent_artifact_uses_supplied_video_tensor(
 
     assert metadata["latent_relpath"] == "artifacts/latents/reencoded/no_attack/sample.npy"
     assert np.array_equal(captured_video_tensor["value"], expected_video_tensor)
+
+
+@pytest.mark.unit
+def test_runner_preserves_reference_latent_shape_across_attack_and_reencode(
+    tmp_path: Path,
+) -> None:
+    """Validate attack and reencode helpers keep the original reference latent shape trace.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    run_root = tmp_path / "run"
+    reencoded_relpath = "artifacts/latents/reencoded/local_clip/sample.npy"
+    write_float_tensor_npy(
+        run_root / reencoded_relpath,
+        (18, 4, 4, 4),
+        array("f", [0.0] * (18 * 4 * 4 * 4)),
+    )
+    attacked_source_sample = LatentSample(
+        sample_id="sample_test_attacked_positive_000001",
+        split="test",
+        sample_role="attacked_positive",
+        latent_shape=(20, 4, 4, 4),
+        latent_tensor_digest_random="latent-digest",
+        latent_generation_seed_random=20260517,
+        latent_backend_name="real_video_vae_latent",
+        latent_backend_status="video_vae_tensor_runtime",
+        latent_artifact_relpath="artifacts/latents/watermarked/sample.npy",
+        latent_artifact_path=str(run_root / "artifacts/latents/watermarked/sample.npy"),
+        latent_artifact_digest="watermarked-digest",
+        run_root_path=str(run_root),
+        mechanism_trace={
+            "reference_latent_shape": [32, 4, 4, 4],
+            "latent_shape": [20, 4, 4, 4],
+        },
+    )
+
+    attacked_sample = runner._build_video_attack_sample(
+        attacked_source_sample,
+        "local_clip",
+        {"clip_length": 20},
+    )
+    detection_sample = runner._build_reencoded_sample(
+        attacked_sample,
+        {
+            "latent_relpath": reencoded_relpath,
+            "latent_digest": "reencoded-digest",
+        },
+    )
+
+    assert attacked_sample.mechanism_trace["reference_latent_shape"] == [32, 4, 4, 4]
+    assert attacked_sample.mechanism_trace["attack_name"] == "local_clip"
+    assert attacked_sample.mechanism_trace["clip_length"] == 20
+    assert detection_sample.mechanism_trace["reference_latent_shape"] == [32, 4, 4, 4]
+    assert detection_sample.mechanism_trace["latent_shape"] == [18, 4, 4, 4]
+    assert detection_sample.latent_shape == (18, 4, 4, 4)
 
 
 @pytest.mark.unit

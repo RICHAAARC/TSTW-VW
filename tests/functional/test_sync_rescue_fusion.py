@@ -5,6 +5,7 @@ Module type: General module
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 import pytest
@@ -187,6 +188,36 @@ def test_reliable_offset_alignment_can_create_payload_rescue_gain(tmp_path: Path
     assert mechanism_trace["sync_alignment_coverage_ratio"] >= 0.5
     assert mechanism_trace["sync_candidate_score_penalized"] <= mechanism_trace["sync_candidate_score_raw"]
     assert sync_result.evidence_scores["S_final"] > mechanism_trace["S_payload_unaligned"]
+
+
+@pytest.mark.unit
+def test_low_confidence_sync_blocks_positive_sync_bonus_on_detect_path(tmp_path: Path) -> None:
+    """Validate observable sync gate blocks both rescue gain and positive sync bonus.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    low_confidence_config = copy.deepcopy(TUBELET_SYNC_CONFIG)
+    low_confidence_config["sync_search"]["min_sync_alignment_matched_count"] = 999
+
+    cropped_sample = _build_sync_embedded_crop(tmp_path)
+    detection_result = build_method_from_config(low_confidence_config).detect(
+        cropped_sample,
+        threshold_record=None,
+    )
+    mechanism_trace = detection_result.mechanism_trace
+
+    assert detection_result.evidence_scores["S_sync"] > 0.0
+    assert mechanism_trace["S_payload_rescue_gain"] > 0.0
+    assert mechanism_trace["sync_confident"] is False
+    assert "sync_matched_count_below_gate" in str(
+        mechanism_trace["sync_confidence_failure_reason"]
+    )
+    assert mechanism_trace["sync_rescue_applied"] is False
+    assert detection_result.evidence_scores["S_final"] == mechanism_trace["S_payload_unaligned"]
 
 
 @pytest.mark.unit
