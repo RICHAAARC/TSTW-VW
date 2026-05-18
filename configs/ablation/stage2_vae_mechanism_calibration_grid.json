@@ -126,27 +126,31 @@
       "top_candidate_limit": 8,
       "grid": {
         "lambda_sync": [
-          0.0,
-          0.0125,
-          0.025
+          0.025,
+          0.05,
+          0.075,
+          0.1
         ],
         "sync_search_radius": [
-          6,
           8,
-          12
+          12,
+          16
         ],
         "min_sync_positive_margin": [
+          0.0,
+          0.03,
+          0.06,
           0.09,
-          0.1,
           0.12
         ],
         "min_sync_alignment_coverage_ratio": [
+          0.0625,
           0.125,
           0.2,
-          0.25,
           0.3
         ],
         "min_sync_alignment_matched_count": [
+          1,
           2,
           3
         ]
