@@ -1,0 +1,73 @@
+{
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "construction_phase": "trajectory_statistic_probe",
+  "target_construction_phase": "trajectory_statistic_probe",
+  "protocol_name": "fixed_low_fpr_calibrated_detection",
+  "splits": [
+    "dev",
+    "calibration",
+    "test"
+  ],
+  "sample_roles": [
+    "clean_negative",
+    "attacked_negative",
+    "watermarked_positive",
+    "attacked_positive"
+  ],
+  "threshold_protocol": {
+    "score_name": "S_final",
+    "target_fpr_placeholder": 0.001,
+    "validation_target_fpr_by_profile": {
+      "smoke": 0.25,
+      "formal": 0.001
+    },
+    "calibration_split": "calibration",
+    "calibration_negative_roles": [
+      "clean_negative",
+      "attacked_negative"
+    ],
+    "threshold_quantile_rule": "upper_tail",
+    "test_split": "test",
+    "test_threshold_update_allowed": false,
+    "allow_attack_specific_threshold": false
+  },
+  "latent_backend_name": "synthetic_video_latent",
+  "runtime_profile": "smoke",
+  "latent_distribution": "standard_normal",
+  "latent_shape": {
+    "frames": 16,
+    "channels": 4,
+    "height": 16,
+    "width": 16
+  },
+  "formal_latent_shape": {
+    "frames": 32,
+    "channels": 4,
+    "height": 32,
+    "width": 32
+  },
+  "proof_latent_shape": {
+    "frames": 16,
+    "channels": 4,
+    "height": 16,
+    "width": 16
+  },
+  "tiny_latent_shape": {
+    "frames": 8,
+    "channels": 2,
+    "height": 8,
+    "width": 8
+  },
+  "latent_generation_seed": 20260507,
+  "latent_storage": "npy_artifact",
+  "attack_matrix_name": "trajectory_probe_attack_matrix",
+  "required_method_variants": [
+    "tubelet_only",
+    "tubelet_sync",
+    "traj_only",
+    "tubelet_traj",
+    "tubelet_sync_trajectory_fusion"
+  ],
+  "allow_stage2_incomplete_scaffold": true,
+  "require_frozen_stage2_baseline_for_formal": true
+}

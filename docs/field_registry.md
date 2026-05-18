@@ -326,6 +326,58 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | video_vae_backend_placeholder | placeholder | _placeholder | true | false | true | Placeholder VAE backend field reserved while the repository remains under synthetic_tubelet_sync_probe governance. |
 | clip_similarity_placeholder | placeholder | _placeholder | true | false | true | Placeholder field representing disabled CLIP-similarity support in the real_video_vae_latent_probe scaffold. |
 | motion_consistency_placeholder | placeholder | _placeholder | true | false | true | Placeholder field representing disabled motion-consistency support in the real_video_vae_latent_probe scaffold. |
+| trajectory_backend_name | protocol | none | true | false | false | Stage-three trajectory backend identifier used by the surrogate reconstruction support config and runtime config manifest. |
+| trajectory_source_kind | protocol | none | true | false | false | Stage-three trajectory source identifier recorded in method configs and mechanism traces. |
+| trajectory_statistic_kind | protocol | none | true | false | false | Stage-three trajectory statistic identifier recorded in method configs and mechanism traces. |
+| trajectory_control_kind | protocol | none | true | false | false | Governed trajectory control identifier recorded in method configs and mechanism traces. |
+| trajectory_time_grid | protocol | none | true | false | false | Ordered interpolation time grid used by stage-three surrogate trajectory reconstruction and recorded in mechanism traces. |
+| trajectory_weight | protocol | none | true | false | false | Linear fusion weight applied to `S_traj` when baseline evidence remains enabled. |
+| allow_stage2_incomplete_scaffold | governance | none | true | false | false | Boolean protocol guard allowing the stage-three scaffold to run while stage-two formal closure remains incomplete. |
+| require_frozen_stage2_baseline_for_formal | governance | none | true | false | false | Boolean protocol guard requiring frozen stage-two baselines before any stage-three formal promotion. |
+| record_runtime_breakdown | governance | none | true | false | false | Boolean trajectory-backend support field enabling per-record runtime breakdown persistence. |
+| fail_on_positive_only_artifact_access | governance | none | true | false | false | Boolean trajectory-backend support field forbidding reconstruction paths that depend on positive-only artifacts. |
+| S_traj | protocol | none | true | false | false | Stage-three trajectory evidence score written into `evidence_scores`; larger indicates stronger trajectory evidence. |
+| trajectory_valid_segment_ratio | protocol | none | true | false | false | Ratio of valid consecutive trajectory segments contributing to the stage-three statistic. |
+| trajectory_projection_count | protocol | none | true | false | false | Count of projection evaluations contributing to the stage-three trajectory statistic. |
+| S_traj_velocity | protocol | none | true | false | false | Velocity-projection component of the stage-three trajectory statistic; larger indicates stronger evidence. |
+| S_traj_displacement | protocol | none | true | false | false | Displacement component of the stage-three trajectory statistic recorded for auditability. |
+| trajectory_curvature_residual | protocol | none | true | false | false | Curvature residual summary recorded for auditability of non-linear surrogate motion. |
+| trajectory_backend_status | protocol | none | true | false | false | Stage-three trajectory backend status recorded in `mechanism_trace`. |
+| trajectory_fail_reason | protocol | none | true | false | false | Nullable stage-three trajectory failure reason recorded in `mechanism_trace` when reconstruction or scoring is unavailable. |
+| trajectory_control_scores | protocol | none | true | false | false | Mapping from governed control kinds to control trajectory scores for stage-three auditability. |
+| trajectory_runtime_ms | protocol | none | true | false | false | End-to-end stage-three trajectory runtime in milliseconds recorded per event. |
+| trajectory_reconstruction_ms | protocol | none | true | false | false | Trajectory reconstruction runtime in milliseconds recorded per event. |
+| trajectory_scoring_ms | protocol | none | true | false | false | Trajectory scoring runtime in milliseconds recorded per event. |
+| trajectory_ablation_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-three trajectory ablation table. |
+| score_correlation_matrix_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-three score-correlation matrix table. |
+| trajectory_gain_by_attack_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-three trajectory gain-by-attack table. |
+| trajectory_control_table_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-three trajectory control table. |
+| runtime_breakdown_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-three trajectory runtime-breakdown table. |
+| trajectory_probe_report_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-three trajectory probe report. |
+| trajectory_mechanism_decision_path | artifact_layout | none | false | false | false | Relative layout path for the persisted stage-three trajectory mechanism-decision artifact. |
+| left_score_name | protocol | none | false | false | false | Left score identifier used by rebuilt stage-three score-correlation rows. |
+| right_score_name | protocol | none | false | false | false | Right score identifier used by rebuilt stage-three score-correlation rows. |
+| correlation_value | protocol | none | false | false | false | Correlation summary value emitted by rebuilt stage-three score-correlation rows. |
+| record_count | protocol | none | false | false | false | Count of records contributing to a rebuilt stage-three summary row. |
+| baseline_attacked_positive_TPR | protocol | none | false | false | false | Baseline attacked-positive TPR used by rebuilt stage-three trajectory gain rows. |
+| delta_traj | protocol | none | false | false | false | Incremental attacked-positive TPR gain contributed by a trajectory-enabled variant over its baseline. |
+| Stage3ImplementationDecision | governance | none | false | false | false | Implementation-completion decision emitted by the stage-three trajectory mechanism audit. |
+| Stage3MechanismDecision | governance | none | false | false | false | Mechanism-evidence decision emitted by the stage-three trajectory mechanism audit. |
+| Stage2DependencyStatus | governance | none | false | false | false | Stage-three mechanism-audit field recording whether the prerequisite stage-two gate has passed. |
+| TrajectoryLeakageSummary | governance | none | false | false | false | Stage-three mechanism-audit summary container for negative leakage rates. |
+| TrajectoryGainSummary | governance | none | false | false | false | Stage-three mechanism-audit summary container for trajectory incremental gain. |
+| TrajectoryCorrelationSummary | governance | none | false | false | false | Stage-three mechanism-audit summary container for control-score magnitude and enabled-variant coverage. |
+| TrajectoryControlSummary | governance | none | false | false | false | Stage-three mechanism-audit summary container for control-score audit coverage. |
+| TrajectoryRuntimeOverheadSummary | governance | none | false | false | false | Stage-three mechanism-audit summary container for runtime overhead. |
+| NextAllowedStageByTrajectory | governance | none | false | false | false | Next-stage recommendation implied by the stage-three trajectory mechanism audit. |
+| max_delta_traj | governance | none | false | false | false | Maximum observed stage-three trajectory gain across rebuilt comparison rows. |
+| mean_delta_traj | governance | none | false | false | false | Mean stage-three trajectory gain across rebuilt comparison rows. |
+| mean_abs_control_score | governance | none | false | false | false | Mean absolute control-score magnitude reported by the stage-three mechanism audit. |
+| trajectory_enabled_variant_count | governance | none | false | false | false | Count of trajectory-enabled method variants included in the stage-three mechanism audit. |
+| control_score_count | governance | none | false | false | false | Count of control-score observations summarized by the stage-three mechanism audit. |
+| max_abs_control_score | governance | none | false | false | false | Maximum absolute control-score magnitude reported by the stage-three mechanism audit. |
+| mean_trajectory_runtime_ms | governance | none | false | false | false | Mean per-event trajectory runtime reported by the stage-three mechanism audit. |
+| runtime_record_count | governance | none | false | false | false | Count of runtime observations summarized by the stage-three mechanism audit. |
 
 ## Notes
 

@@ -1,0 +1,37 @@
+{
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "construction_phase": "trajectory_statistic_probe",
+  "attack_matrix_name": "trajectory_probe_attack_matrix",
+  "attacks": [
+    {
+      "attack_name": "no_attack",
+      "attack_params": {}
+    },
+    {
+      "attack_name": "temporal_crop",
+      "attack_params": {
+        "crop_start_candidates": [4, 8, 12],
+        "crop_length": 20
+      }
+    },
+    {
+      "attack_name": "frame_dropping",
+      "attack_params": {
+        "drop_rate": 0.25,
+        "drop_policy": "deterministic_keyed"
+      }
+    },
+    {
+      "attack_name": "local_clip",
+      "attack_params": {
+        "clip_lengths": [4, 8, 12, 16]
+      }
+    },
+    {
+      "attack_name": "latent_gaussian_noise",
+      "attack_params": {
+        "sigma": 0.05
+      }
+    }
+  ]
+}
