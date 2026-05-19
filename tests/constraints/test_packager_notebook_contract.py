@@ -45,7 +45,9 @@ def test_real_video_tar_zst_packager_notebook_contract() -> None:
     zip_packager_text = zip_packager_path.read_text(encoding="utf-8")
     tar_packager_text = tar_packager_path.read_text(encoding="utf-8")
 
+    assert "probe_workflow.package_probe_non_formal_audit_bundle(" in notebook_text
     assert "probe_workflow.package_probe_family_results(" in notebook_text
+    assert "TSTW_PACKAGE_NON_FORMAL_AUDIT_BUNDLE" in notebook_text
     assert (
         "from scripts.package_results.package_real_video_vae_latent_tar_zst import"
         in workflow_text

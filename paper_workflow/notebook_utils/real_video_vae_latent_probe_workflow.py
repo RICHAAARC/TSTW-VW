@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -1310,6 +1311,363 @@ def _filter_local_clip_sync_rows_for_method_variant(
     if filtered_rows:
         return filtered_rows, True
     return rows, False
+
+
+def package_probe_non_formal_audit_bundle(
+    *,
+    family_root: str | Path,
+    notebook_run_root: str | Path,
+    calibration_run_root: str | Path | None = None,
+    calibration_summary: dict[str, Any] | None = None,
+    diagnostics_csv_path: str | Path | None = None,
+    bundle_name: str = "real_video_vae_latent_probe_non_formal_audit",
+) -> dict[str, Any]:
+    """功能：为非 formal 运行打审计归档包。
+
+    Package the minimal governed audit artifacts for a non-formal notebook run
+    without writing family registry entries.
+
+    Args:
+        family_root: Family-result root path used as the audit bundle destination.
+        notebook_run_root: Notebook primary run root.
+        calibration_run_root: Optional stage-two calibration run root.
+        calibration_summary: Optional in-memory calibration summary payload.
+        diagnostics_csv_path: Optional diagnostics CSV path produced by notebook forensics.
+        bundle_name: Audit bundle name.
+
+    Returns:
+        A summary payload describing the emitted audit archive.
+
+    Raises:
+        ValueError: Raised when bundle_name is empty or no audit files are available.
+        FileNotFoundError: Raised when an explicit calibration summary is required but
+            the expected summary file is missing.
+    """
+    normalized_bundle_name = str(bundle_name).strip()
+    if not normalized_bundle_name:
+        raise ValueError("bundle_name must not be empty")
+
+    resolved_family_root = Path(family_root)
+    resolved_notebook_run_root = Path(notebook_run_root)
+    resolved_calibration_run_root = (
+        None if calibration_run_root is None else Path(calibration_run_root)
+    )
+    resolved_diagnostics_csv_path = (
+        None if diagnostics_csv_path is None else Path(diagnostics_csv_path)
+    )
+
+    calibration_summary_payload: dict[str, Any] | None = None
+    calibration_summary_path: Path | None = None
+    if resolved_calibration_run_root is not None:
+        calibration_summary_path = (
+            resolved_calibration_run_root
+            / "artifacts"
+            / "stage2_mechanism_calibration_summary.json"
+        )
+        calibration_summary_payload = _resolve_stage2_mechanism_calibration_summary(
+            calibration_summary=calibration_summary,
+            calibration_summary_path=calibration_summary_path,
+        )
+
+    bundle_root = resolved_family_root / "audit_bundles" / normalized_bundle_name
+    packages_root = bundle_root / "packages"
+    packages_root.mkdir(parents=True, exist_ok=True)
+    archive_path = packages_root / f"{normalized_bundle_name}.zip"
+    manifest_path = bundle_root / "audit_bundle_manifest.json"
+    summary_path = bundle_root / "audit_bundle_summary.json"
+
+    bundle_entries = _build_non_formal_audit_bundle_entries(
+        notebook_run_root=resolved_notebook_run_root,
+        calibration_run_root=resolved_calibration_run_root,
+        calibration_summary_payload=calibration_summary_payload,
+        diagnostics_csv_path=resolved_diagnostics_csv_path,
+    )
+    if not bundle_entries:
+        raise ValueError("no non-formal audit files were found to package")
+
+    _write_non_formal_audit_bundle_archive(
+        archive_path=archive_path,
+        bundle_entries=bundle_entries,
+    )
+
+    included_file_paths = [entry["source_path"] for entry in bundle_entries]
+    included_sections = sorted(
+        {str(entry["archive_path"]).split("/", 1)[0] for entry in bundle_entries}
+    )
+    selected_stage_summary = None
+    if calibration_summary_payload is not None:
+        selected_stage_summary = _resolve_non_formal_audit_stage_summary(
+            calibration_summary_payload=calibration_summary_payload,
+        )
+
+    summary_payload = {
+        "bundle_name": normalized_bundle_name,
+        "bundle_kind": "non_formal_audit",
+        "family_root": str(resolved_family_root),
+        "bundle_root": str(bundle_root),
+        "archive_format": "zip",
+        "archive_path": str(archive_path),
+        "manifest_path": str(manifest_path),
+        "summary_path": str(summary_path),
+        "notebook_run_root": str(resolved_notebook_run_root),
+        "calibration_run_root": (
+            None
+            if resolved_calibration_run_root is None
+            else str(resolved_calibration_run_root)
+        ),
+        "calibration_summary_path": (
+            None if calibration_summary_path is None else str(calibration_summary_path)
+        ),
+        "diagnostics_csv_path": (
+            None
+            if resolved_diagnostics_csv_path is None
+            else str(resolved_diagnostics_csv_path)
+        ),
+        "selected_stage_name": (
+            None
+            if selected_stage_summary is None
+            else str(selected_stage_summary.get("stage_name"))
+        ),
+        "included_file_count": len(bundle_entries),
+        "included_sections": included_sections,
+        "included_paths_digest": compute_path_collection_digest(included_file_paths),
+    }
+    manifest_payload = {
+        **summary_payload,
+        "generated_at_utc": iso_timestamp_utc(),
+        "included_entries": [
+            {
+                "source_path": str(entry["source_path"]),
+                "archive_path": str(entry["archive_path"]),
+                "size_bytes": int(entry["size_bytes"]),
+            }
+            for entry in bundle_entries
+        ],
+    }
+    manifest_path.write_text(
+        json.dumps(manifest_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    summary_path.write_text(
+        json.dumps(summary_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return _json_safe(summary_payload)
+
+
+def _build_non_formal_audit_bundle_entries(
+    *,
+    notebook_run_root: Path,
+    calibration_run_root: Path | None,
+    calibration_summary_payload: dict[str, Any] | None,
+    diagnostics_csv_path: Path | None,
+) -> list[dict[str, Any]]:
+    bundle_entries: list[dict[str, Any]] = []
+    seen_source_paths: set[Path] = set()
+
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=notebook_run_root / "artifacts" / "runtime_config.json",
+        archive_prefix="notebook_run/artifacts/runtime_config.json",
+    )
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=notebook_run_root / "artifacts" / "session_model_manifest.json",
+        archive_prefix="notebook_run/artifacts/session_model_manifest.json",
+    )
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=notebook_run_root / "runtime_profile",
+        archive_prefix="notebook_run/runtime_profile",
+    )
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=notebook_run_root / "logs",
+        archive_prefix="notebook_run/logs",
+    )
+
+    if calibration_run_root is None:
+        return bundle_entries
+
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=calibration_run_root / "artifacts" / "stage2_mechanism_calibration_summary.json",
+        archive_prefix="calibration_run/artifacts/stage2_mechanism_calibration_summary.json",
+    )
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=calibration_run_root / "artifacts" / "tubelet_sync_real_video_vae_candidate.json",
+        archive_prefix="calibration_run/artifacts/tubelet_sync_real_video_vae_candidate.json",
+    )
+    if diagnostics_csv_path is not None:
+        _append_non_formal_audit_bundle_entries(
+            bundle_entries=bundle_entries,
+            seen_source_paths=seen_source_paths,
+            source_path=diagnostics_csv_path,
+            archive_prefix="calibration_run/artifacts/selected_candidate_local_clip_sync_diagnostics.csv",
+        )
+
+    if calibration_summary_payload is None:
+        return bundle_entries
+
+    for summary_key in (
+        "protocol_config_path",
+        "runtime_config_path",
+        "ablation_config_path",
+        "search_stage_plan_path",
+        "selected_candidate_output_path",
+        "selected_report_path",
+        "selected_grid_output_path",
+        "generated_tubelet_sync_candidate_config_path",
+    ):
+        summary_path = calibration_summary_payload.get(summary_key)
+        if summary_path is None:
+            continue
+        _append_non_formal_audit_bundle_entries(
+            bundle_entries=bundle_entries,
+            seen_source_paths=seen_source_paths,
+            source_path=Path(summary_path),
+            archive_prefix=_build_non_formal_audit_archive_prefix(
+                source_path=Path(summary_path),
+                notebook_run_root=notebook_run_root,
+                calibration_run_root=calibration_run_root,
+            ),
+        )
+
+    selected_stage_summary = _resolve_non_formal_audit_stage_summary(
+        calibration_summary_payload=calibration_summary_payload,
+    )
+    if selected_stage_summary is None:
+        return bundle_entries
+
+    selected_stage_run_root = Path(selected_stage_summary["run_root"])
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=selected_stage_run_root / "records" / "event_scores.jsonl",
+        archive_prefix="selected_stage/records/event_scores.jsonl",
+    )
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=selected_stage_run_root / "thresholds",
+        archive_prefix="selected_stage/thresholds",
+    )
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=selected_stage_run_root / "artifacts",
+        archive_prefix="selected_stage/artifacts",
+    )
+    return bundle_entries
+
+
+def _resolve_non_formal_audit_stage_summary(
+    *,
+    calibration_summary_payload: dict[str, Any],
+) -> dict[str, Any] | None:
+    stage_summaries = calibration_summary_payload.get("search_stage_summaries", [])
+    if not isinstance(stage_summaries, list):
+        raise ValueError("search_stage_summaries must be a list")
+
+    selected_candidate = calibration_summary_payload.get("selected_tubelet_sync_candidate")
+    if isinstance(selected_candidate, dict):
+        selected_method_variant = str(selected_candidate.get("method_variant", "")).strip()
+        if selected_method_variant:
+            try:
+                return _resolve_selected_tubelet_sync_stage_summary(
+                    calibration_summary_payload=calibration_summary_payload,
+                    selected_method_variant=selected_method_variant,
+                )
+            except ValueError:
+                pass
+
+    for stage_summary in reversed(stage_summaries):
+        if isinstance(stage_summary, dict):
+            return stage_summary
+    return None
+
+
+def _append_non_formal_audit_bundle_entries(
+    *,
+    bundle_entries: list[dict[str, Any]],
+    seen_source_paths: set[Path],
+    source_path: Path,
+    archive_prefix: str,
+) -> None:
+    if not source_path.exists():
+        return
+    if source_path.is_file():
+        resolved_source_path = source_path.resolve()
+        if resolved_source_path in seen_source_paths:
+            return
+        seen_source_paths.add(resolved_source_path)
+        bundle_entries.append(
+            {
+                "source_path": resolved_source_path,
+                "archive_path": archive_prefix,
+                "size_bytes": resolved_source_path.stat().st_size,
+            }
+        )
+        return
+    for file_path in sorted(path for path in source_path.rglob("*") if path.is_file()):
+        resolved_file_path = file_path.resolve()
+        if resolved_file_path in seen_source_paths:
+            continue
+        seen_source_paths.add(resolved_file_path)
+        bundle_entries.append(
+            {
+                "source_path": resolved_file_path,
+                "archive_path": (
+                    f"{archive_prefix}/{file_path.relative_to(source_path).as_posix()}"
+                ),
+                "size_bytes": resolved_file_path.stat().st_size,
+            }
+        )
+
+
+def _build_non_formal_audit_archive_prefix(
+    *,
+    source_path: Path,
+    notebook_run_root: Path,
+    calibration_run_root: Path,
+) -> str:
+    resolved_source_path = source_path.resolve()
+    for archive_root, root_path in (
+        ("notebook_run", notebook_run_root.resolve()),
+        ("calibration_run", calibration_run_root.resolve()),
+    ):
+        try:
+            relative_path = resolved_source_path.relative_to(root_path)
+        except ValueError:
+            continue
+        return f"{archive_root}/{relative_path.as_posix()}"
+    return f"extra/{resolved_source_path.name}"
+
+
+def _write_non_formal_audit_bundle_archive(
+    *,
+    archive_path: Path,
+    bundle_entries: list[dict[str, Any]],
+) -> None:
+    if archive_path.exists():
+        archive_path.unlink()
+    with zipfile.ZipFile(
+        archive_path,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as archive:
+        for bundle_entry in bundle_entries:
+            archive.write(
+                bundle_entry["source_path"],
+                arcname=str(bundle_entry["archive_path"]),
+            )
 
 
 def package_probe_family_results(

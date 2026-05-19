@@ -7,9 +7,10 @@ Module type: General module
 from __future__ import annotations
 
 import csv
-import os
 import json
+import os
 import shutil
+import zipfile
 from io import StringIO
 from pathlib import Path
 
@@ -21,6 +22,7 @@ import paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow as wor
 
 from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
     merge_probe_method_variant_split_outputs,
+    package_probe_non_formal_audit_bundle,
     prepare_probe_runtime_workspace,
     run_probe_stage2_mechanism_calibration,
     run_probe_method_variant_splits,
@@ -755,6 +757,180 @@ def test_write_probe_stage2_local_clip_sync_diagnostics_falls_back_to_stage_rows
     with Path(summary["output_csv_path"]).open("r", encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert rows[0]["method_variant"] == "tubelet_sync_cal_generated_variant"
+
+
+@pytest.mark.unit
+def test_package_probe_non_formal_audit_bundle_persists_selected_audit_files(
+    tmp_path: Path,
+) -> None:
+    """Validate non-formal audit bundle packaging lands a zip without registry writes.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    family_root = tmp_path / "family_root"
+    notebook_run_root = tmp_path / "notebook_run"
+    calibration_run_root = tmp_path / "calibration_run"
+    selected_stage_run_root = calibration_run_root / "stages" / "sync_refine_scan"
+
+    (notebook_run_root / "artifacts").mkdir(parents=True, exist_ok=True)
+    (notebook_run_root / "runtime_profile").mkdir(parents=True, exist_ok=True)
+    (calibration_run_root / "artifacts").mkdir(parents=True, exist_ok=True)
+    (selected_stage_run_root / "records").mkdir(parents=True, exist_ok=True)
+    (selected_stage_run_root / "thresholds").mkdir(parents=True, exist_ok=True)
+    (selected_stage_run_root / "artifacts").mkdir(parents=True, exist_ok=True)
+
+    notebook_runtime_config_path = notebook_run_root / "artifacts" / "runtime_config.json"
+    notebook_runtime_config_path.write_text(
+        json.dumps({"run_mode": "formal"}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    session_model_manifest_path = notebook_run_root / "artifacts" / "session_model_manifest.json"
+    session_model_manifest_path.write_text(
+        json.dumps({"models": []}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    runtime_profile_plan_path = (
+        notebook_run_root / "runtime_profile" / "runtime_profile_plan.json"
+    )
+    runtime_profile_plan_path.write_text(
+        json.dumps({"execution_runtime_profile": "l4_formal"}, ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+
+    candidate_config_path = (
+        calibration_run_root / "artifacts" / "tubelet_sync_real_video_vae_candidate.json"
+    )
+    candidate_config_path.write_text(
+        json.dumps({"method_variant": "tubelet_sync_real_video_vae_candidate"}, ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+    diagnostics_csv_path = (
+        calibration_run_root / "artifacts" / "selected_candidate_local_clip_sync_diagnostics.csv"
+    )
+    diagnostics_csv_path.write_text(
+        "event_id,sample_id\nlocal_clip_event,sample_001\n",
+        encoding="utf-8",
+    )
+    protocol_config_path = calibration_run_root / "artifacts" / "protocol_config.json"
+    protocol_config_path.write_text(
+        json.dumps({"splits": ["dev", "calibration"]}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    runtime_config_path = calibration_run_root / "artifacts" / "runtime_config.json"
+    runtime_config_path.write_text(
+        json.dumps({"batch_size_frames": 256}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    search_stage_plan_path = calibration_run_root / "artifacts" / "search_stage_plan.json"
+    search_stage_plan_path.write_text(
+        json.dumps({"search_stage_count": 3}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    selected_candidate_output_path = (
+        calibration_run_root / "artifacts" / "selected_candidate_output.json"
+    )
+    selected_candidate_output_path.write_text(
+        json.dumps({"candidate_status": "insufficient_signal"}, ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+    selected_report_path = calibration_run_root / "artifacts" / "selected_report.json"
+    selected_report_path.write_text(
+        json.dumps({"report_status": "ok"}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    selected_grid_output_path = calibration_run_root / "artifacts" / "selected_grid_output.json"
+    selected_grid_output_path.write_text(
+        json.dumps({"grid_status": "ok"}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    event_scores_path = selected_stage_run_root / "records" / "event_scores.jsonl"
+    event_scores_path.write_text(
+        json.dumps({"event_id": "local_clip_event"}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    selected_stage_threshold_path = selected_stage_run_root / "thresholds" / "thresholds.json"
+    selected_stage_threshold_path.write_text(
+        json.dumps({"threshold": 1.1}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    selected_stage_artifact_path = selected_stage_run_root / "artifacts" / "selector_trace.json"
+    selected_stage_artifact_path.write_text(
+        json.dumps({"trace": "ok"}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    calibration_summary_path = (
+        calibration_run_root / "artifacts" / "stage2_mechanism_calibration_summary.json"
+    )
+    calibration_summary_path.write_text(
+        json.dumps(
+            {
+                "protocol_config_path": str(protocol_config_path),
+                "runtime_config_path": str(runtime_config_path),
+                "search_stage_plan_path": str(search_stage_plan_path),
+                "selected_candidate_output_path": str(selected_candidate_output_path),
+                "selected_report_path": str(selected_report_path),
+                "selected_grid_output_path": str(selected_grid_output_path),
+                "generated_tubelet_sync_candidate_config_path": str(candidate_config_path),
+                "selected_tubelet_sync_candidate": {
+                    "method_variant": "tubelet_sync_real_video_vae_candidate",
+                },
+                "search_stage_summaries": [
+                    {
+                        "stage_name": "sync_refine_scan",
+                        "selection_scope": "tubelet_sync",
+                        "run_root": str(selected_stage_run_root),
+                        "selected_tubelet_sync_candidate": {
+                            "method_variant": "tubelet_sync_real_video_vae_candidate",
+                        },
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = package_probe_non_formal_audit_bundle(
+        family_root=family_root,
+        notebook_run_root=notebook_run_root,
+        calibration_run_root=calibration_run_root,
+        diagnostics_csv_path=diagnostics_csv_path,
+        bundle_name="stage2_mechanism_calibration_audit",
+    )
+
+    archive_path = Path(summary["archive_path"])
+    manifest_path = Path(summary["manifest_path"])
+    summary_path = Path(summary["summary_path"])
+    assert archive_path.exists()
+    assert manifest_path.exists()
+    assert summary_path.exists()
+    assert summary["bundle_kind"] == "non_formal_audit"
+    assert summary["selected_stage_name"] == "sync_refine_scan"
+    assert summary["included_file_count"] >= 9
+    assert "notebook_run" in summary["included_sections"]
+    assert "calibration_run" in summary["included_sections"]
+    assert "selected_stage" in summary["included_sections"]
+
+    with zipfile.ZipFile(archive_path, mode="r") as archive:
+        archive_names = set(archive.namelist())
+    assert "notebook_run/artifacts/runtime_config.json" in archive_names
+    assert "calibration_run/artifacts/stage2_mechanism_calibration_summary.json" in archive_names
+    assert (
+        "calibration_run/artifacts/selected_candidate_local_clip_sync_diagnostics.csv"
+        in archive_names
+    )
+    assert "selected_stage/records/event_scores.jsonl" in archive_names
+    assert "selected_stage/thresholds/thresholds.json" in archive_names
 
 
 @pytest.mark.unit

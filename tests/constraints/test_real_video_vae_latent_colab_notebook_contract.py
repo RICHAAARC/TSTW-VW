@@ -189,6 +189,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "probe_workflow.check_probe_outputs" in notebook_text
     assert "probe_workflow.run_probe_stage2_mechanism_audit" in notebook_text
     assert "probe_workflow.run_probe_stage2_mechanism_calibration" in notebook_text
+    assert "probe_workflow.package_probe_non_formal_audit_bundle" in notebook_text
     assert "probe_workflow.package_probe_family_results" in notebook_text
     assert "FAMILY_ID_TEMPLATE" in notebook_text
     assert "PROCESSED_DATASET_MANIFEST" in notebook_text
@@ -230,6 +231,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TSTW_REQUIRE_LPIPS_EVIDENCE" in notebook_text
     assert "TSTW_SAMPLES_PER_ROLE_OVERRIDE" in notebook_text
     assert "TSTW_RUN_MAIN_FORMAL" in notebook_text
+    assert "TSTW_PACKAGE_NON_FORMAL_AUDIT_BUNDLE" in notebook_text
     assert "run_timer = run_timing_workflow.start_run_timing(" in notebook_text
     assert "runtime_profile_workflow.capture_colab_environment(" in notebook_text
     assert "runtime_profile_workflow.profile_drive_io(" in notebook_text
@@ -247,6 +249,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "with run_timer.event('formal_checker'" in notebook_text
     assert "with run_timer.event('stage2_mechanism_audit'" in notebook_text
     assert "with run_timer.event('stage2_mechanism_calibration'" in notebook_text
+    assert "with run_timer.event('audit_bundle_packaging'" in notebook_text
     assert "with run_timer.event('result_packaging'" in notebook_text
     assert "run_main_formal_disabled" in notebook_text
     assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
@@ -273,6 +276,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "shard_index=SHARD_INDEX" in notebook_text
     assert "worker_count=WORKER_COUNT" in notebook_text
     assert "lpips_evidence_summary" in notebook_text
+    assert "non_formal_audit_bundle_summary" in notebook_text
     assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
     assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
     summarize_run_timing_call = "run_timing_summary = run_timing_workflow.summarize_run_timing("
