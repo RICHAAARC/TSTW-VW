@@ -5,6 +5,7 @@ Module type: Notebook workflow helper
 
 from __future__ import annotations
 
+import csv
 import datetime as dt
 import json
 import os
@@ -1087,6 +1088,228 @@ def run_probe_stage2_mechanism_calibration(
             output_method_config_path=output_method_config_path,
         )
     )
+
+
+def write_probe_stage2_local_clip_sync_diagnostics(
+    *,
+    run_root: str | Path,
+    calibration_summary: dict[str, Any] | None = None,
+    output_csv_path: str | Path | None = None,
+    sample_roles: tuple[str, ...] = ("attacked_positive", "attacked_negative"),
+) -> dict[str, Any]:
+    """功能：写出阶段 2 calibration 的 local_clip sync diagnostics 表。
+
+    Persist a selected-candidate local-clip sync diagnostics table for a stage-two
+    calibration run.
+
+    Args:
+        run_root: Calibration run root.
+        calibration_summary: Optional in-memory calibration summary payload.
+        output_csv_path: Optional CSV output path override.
+        sample_roles: Sample roles retained in the diagnostics table.
+
+    Returns:
+        A summary payload describing the selected stage, event-score source, and
+        emitted CSV path.
+
+    Raises:
+        FileNotFoundError: Raised when the calibration summary or selected-stage
+            event-score records are missing.
+        ValueError: Raised when the calibration summary does not resolve a selected
+            tubelet-sync candidate or when no qualifying local-clip rows are found.
+    """
+    resolved_run_root = Path(run_root)
+    calibration_summary_path = resolved_run_root / "artifacts" / "stage2_mechanism_calibration_summary.json"
+    calibration_summary_payload = _resolve_stage2_mechanism_calibration_summary(
+        calibration_summary=calibration_summary,
+        calibration_summary_path=calibration_summary_path,
+    )
+    selected_candidate = calibration_summary_payload.get("selected_tubelet_sync_candidate")
+    if not isinstance(selected_candidate, dict):
+        raise ValueError(
+            "selected_tubelet_sync_candidate must be available before writing local-clip sync diagnostics"
+        )
+    selected_method_variant = str(selected_candidate.get("method_variant", "")).strip()
+    if not selected_method_variant:
+        raise ValueError(
+            "selected_tubelet_sync_candidate.method_variant must be available before writing local-clip sync diagnostics"
+        )
+
+    selected_stage_summary = _resolve_selected_tubelet_sync_stage_summary(
+        calibration_summary_payload=calibration_summary_payload,
+        selected_method_variant=selected_method_variant,
+    )
+    selected_stage_name = str(selected_stage_summary.get("stage_name", "")).strip()
+    selected_stage_run_root = Path(selected_stage_summary["run_root"])
+    event_scores_path = selected_stage_run_root / "records" / "event_scores.jsonl"
+    if not event_scores_path.exists():
+        raise FileNotFoundError(event_scores_path)
+
+    candidate_rows = _extract_local_clip_sync_diagnostic_rows(
+        event_scores_path=event_scores_path,
+        sample_roles=sample_roles,
+    )
+    output_rows, method_variant_filter_applied = _filter_local_clip_sync_rows_for_method_variant(
+        candidate_rows,
+        selected_method_variant=selected_method_variant,
+    )
+    if not output_rows:
+        raise ValueError(
+            "no local_clip sync diagnostic rows were found for the selected calibration stage"
+        )
+
+    output_csv_file = Path(output_csv_path) if output_csv_path is not None else (
+        resolved_run_root / "artifacts" / "selected_candidate_local_clip_sync_diagnostics.csv"
+    )
+    output_csv_file.parent.mkdir(parents=True, exist_ok=True)
+    with output_csv_file.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(output_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(output_rows)
+
+    return _json_safe(
+        {
+            "run_root": resolved_run_root,
+            "calibration_summary_path": calibration_summary_path,
+            "selected_stage_name": selected_stage_name,
+            "selected_stage_run_root": selected_stage_run_root,
+            "event_scores_path": event_scores_path,
+            "output_csv_path": output_csv_file,
+            "selected_method_variant": selected_method_variant,
+            "method_variant_filter_applied": method_variant_filter_applied,
+            "record_count": len(output_rows),
+            "sample_roles": sorted({str(row["sample_role"]) for row in output_rows}),
+            "clip_lengths": sorted(
+                {
+                    int(row["clip_length"])
+                    for row in output_rows
+                    if isinstance(row.get("clip_length"), (int, float))
+                }
+            ),
+            "diagnostic_columns": list(output_rows[0].keys()),
+        }
+    )
+
+
+def _resolve_stage2_mechanism_calibration_summary(
+    *,
+    calibration_summary: dict[str, Any] | None,
+    calibration_summary_path: Path,
+) -> dict[str, Any]:
+    if calibration_summary is not None:
+        return dict(calibration_summary)
+    if not calibration_summary_path.exists():
+        raise FileNotFoundError(calibration_summary_path)
+    summary_payload = json.loads(calibration_summary_path.read_text(encoding="utf-8"))
+    if not isinstance(summary_payload, dict):
+        raise ValueError("stage2_mechanism_calibration_summary.json must contain a JSON object")
+    return summary_payload
+
+
+def _resolve_selected_tubelet_sync_stage_summary(
+    *,
+    calibration_summary_payload: dict[str, Any],
+    selected_method_variant: str,
+) -> dict[str, Any]:
+    stage_summaries = calibration_summary_payload.get("search_stage_summaries", [])
+    if not isinstance(stage_summaries, list):
+        raise ValueError("search_stage_summaries must be a list")
+
+    tubelet_sync_stage_summaries = [
+        stage_summary
+        for stage_summary in stage_summaries
+        if isinstance(stage_summary, dict)
+        and str(stage_summary.get("selection_scope", "")).strip() == "tubelet_sync"
+    ]
+    if not tubelet_sync_stage_summaries:
+        raise ValueError("search_stage_summaries must contain at least one tubelet_sync stage")
+
+    for stage_summary in reversed(tubelet_sync_stage_summaries):
+        stage_candidate = stage_summary.get("selected_tubelet_sync_candidate")
+        if not isinstance(stage_candidate, dict):
+            continue
+        stage_method_variant = str(stage_candidate.get("method_variant", "")).strip()
+        if stage_method_variant == selected_method_variant:
+            return stage_summary
+    return tubelet_sync_stage_summaries[-1]
+
+
+def _extract_local_clip_sync_diagnostic_rows(
+    *,
+    event_scores_path: Path,
+    sample_roles: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    diagnostic_rows: list[dict[str, Any]] = []
+    allowed_sample_roles = {str(sample_role) for sample_role in sample_roles}
+    with event_scores_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if str(record.get("attack_name", "")).strip() != "local_clip":
+                continue
+            sample_role = str(record.get("sample_role", "")).strip()
+            if allowed_sample_roles and sample_role not in allowed_sample_roles:
+                continue
+            mechanism_trace = record.get("mechanism_trace", {})
+            if not isinstance(mechanism_trace, dict):
+                continue
+            attack_params = record.get("attack_params", {})
+            clip_length = None
+            if isinstance(attack_params, dict):
+                clip_length = attack_params.get("clip_length")
+            if clip_length is None:
+                clip_length = mechanism_trace.get("clip_length")
+            diagnostic_rows.append(
+                {
+                    "event_id": str(record.get("event_id", "")),
+                    "sample_id": str(record.get("sample_id", "")),
+                    "split": str(record.get("split", "")),
+                    "sample_role": sample_role,
+                    "method_variant": str(record.get("method_variant", "")),
+                    "attack_name": "local_clip",
+                    "clip_length": clip_length,
+                    "sync_confident": mechanism_trace.get("sync_confident"),
+                    "S_sync_peak_margin": mechanism_trace.get("S_sync_peak_margin"),
+                    "sync_alignment_matched_count": mechanism_trace.get(
+                        "sync_alignment_matched_count"
+                    ),
+                    "sync_alignment_coverage_ratio": mechanism_trace.get(
+                        "sync_alignment_coverage_ratio"
+                    ),
+                    "sync_estimated_offset": mechanism_trace.get("sync_estimated_offset"),
+                    "sync_ground_truth_offset": mechanism_trace.get(
+                        "sync_ground_truth_offset"
+                    ),
+                    "sync_candidate_score_raw": mechanism_trace.get(
+                        "sync_candidate_score_raw"
+                    ),
+                    "sync_candidate_score_penalized": mechanism_trace.get(
+                        "sync_candidate_score_penalized"
+                    ),
+                }
+            )
+    diagnostic_rows.sort(
+        key=lambda row: (
+            str(row.get("sample_role", "")),
+            str(row.get("sample_id", "")),
+            str(row.get("event_id", "")),
+        )
+    )
+    return diagnostic_rows
+
+
+def _filter_local_clip_sync_rows_for_method_variant(
+    rows: list[dict[str, Any]],
+    *,
+    selected_method_variant: str,
+) -> tuple[list[dict[str, Any]], bool]:
+    filtered_rows = [
+        row for row in rows if str(row.get("method_variant", "")).strip() == selected_method_variant
+    ]
+    if filtered_rows:
+        return filtered_rows, True
+    return rows, False
 
 
 def package_probe_family_results(

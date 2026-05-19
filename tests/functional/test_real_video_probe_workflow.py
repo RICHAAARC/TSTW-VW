@@ -6,6 +6,7 @@ Module type: General module
 
 from __future__ import annotations
 
+import csv
 import os
 import json
 import shutil
@@ -24,6 +25,7 @@ from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
     run_probe_stage2_mechanism_calibration,
     run_probe_method_variant_splits,
     run_probe_runner,
+    write_probe_stage2_local_clip_sync_diagnostics,
     write_probe_runtime_config,
 )
 from scripts.prepare_models.prepare_session_autoencoder_kl import (
@@ -517,6 +519,242 @@ def test_run_probe_stage2_mechanism_calibration_forwards_governed_arguments(
     assert summary["generated_tubelet_sync_candidate_config_path"] == str(
         tmp_path / "tubelet_sync_real_video_vae_candidate.json"
     )
+
+
+@pytest.mark.unit
+def test_write_probe_stage2_local_clip_sync_diagnostics_persists_selected_candidate_rows(
+    tmp_path: Path,
+) -> None:
+    """Validate local-clip diagnostics emit a CSV for the selected sync candidate.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "stage2_calibration"
+    artifacts_root = run_root / "artifacts"
+    stage_run_root = run_root / "stages" / "sync_refine_scan"
+    records_root = stage_run_root / "records"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    records_root.mkdir(parents=True, exist_ok=True)
+
+    selected_method_variant = "tubelet_sync_cal_ls025_sr08_pm000_cov062_mc1"
+    calibration_summary_path = artifacts_root / "stage2_mechanism_calibration_summary.json"
+    calibration_summary_path.write_text(
+        json.dumps(
+            {
+                "selected_tubelet_sync_candidate": {
+                    "method_variant": selected_method_variant,
+                },
+                "search_stage_summaries": [
+                    {
+                        "stage_name": "sync_refine_scan",
+                        "selection_scope": "tubelet_sync",
+                        "run_root": str(stage_run_root),
+                        "selected_tubelet_sync_candidate": {
+                            "method_variant": selected_method_variant,
+                        },
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    event_scores_path = records_root / "event_scores.jsonl"
+    event_scores_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "event_id": "selected:sample_a:local_clip_len_04",
+                        "sample_id": "sample_a",
+                        "split": "calibration",
+                        "sample_role": "attacked_positive",
+                        "method_variant": selected_method_variant,
+                        "attack_name": "local_clip",
+                        "attack_params": {"clip_length": 4},
+                        "mechanism_trace": {
+                            "sync_confident": False,
+                            "S_sync_peak_margin": -0.02,
+                            "sync_alignment_matched_count": 1,
+                            "sync_alignment_coverage_ratio": 0.0625,
+                            "sync_estimated_offset": -3,
+                            "sync_ground_truth_offset": -4,
+                            "sync_candidate_score_raw": 0.19,
+                            "sync_candidate_score_penalized": 0.04,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "event_id": "selected:sample_b:local_clip_len_08",
+                        "sample_id": "sample_b",
+                        "split": "calibration",
+                        "sample_role": "attacked_negative",
+                        "method_variant": selected_method_variant,
+                        "attack_name": "local_clip",
+                        "attack_params": {"clip_length": 8},
+                        "mechanism_trace": {
+                            "sync_confident": False,
+                            "S_sync_peak_margin": 0.0,
+                            "sync_alignment_matched_count": 1,
+                            "sync_alignment_coverage_ratio": 0.125,
+                            "sync_estimated_offset": -6,
+                            "sync_ground_truth_offset": -6,
+                            "sync_candidate_score_raw": 0.12,
+                            "sync_candidate_score_penalized": 0.03,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "event_id": "other:sample_c:local_clip_len_12",
+                        "sample_id": "sample_c",
+                        "split": "calibration",
+                        "sample_role": "attacked_positive",
+                        "method_variant": "tubelet_sync_cal_other_variant",
+                        "attack_name": "local_clip",
+                        "attack_params": {"clip_length": 12},
+                        "mechanism_trace": {
+                            "sync_confident": True,
+                            "S_sync_peak_margin": 0.2,
+                            "sync_alignment_matched_count": 4,
+                            "sync_alignment_coverage_ratio": 0.5,
+                            "sync_estimated_offset": -2,
+                            "sync_ground_truth_offset": -2,
+                            "sync_candidate_score_raw": 0.41,
+                            "sync_candidate_score_penalized": 0.33,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "event_id": "selected:sample_d:no_attack",
+                        "sample_id": "sample_d",
+                        "split": "calibration",
+                        "sample_role": "watermarked_positive",
+                        "method_variant": selected_method_variant,
+                        "attack_name": "no_attack",
+                        "attack_params": {},
+                        "mechanism_trace": {},
+                    },
+                    ensure_ascii=False,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = write_probe_stage2_local_clip_sync_diagnostics(run_root=run_root)
+
+    assert summary["selected_stage_name"] == "sync_refine_scan"
+    assert summary["selected_method_variant"] == selected_method_variant
+    assert summary["method_variant_filter_applied"] is True
+    assert summary["record_count"] == 2
+    assert summary["clip_lengths"] == [4, 8]
+
+    output_csv_path = Path(summary["output_csv_path"])
+    assert output_csv_path == artifacts_root / "selected_candidate_local_clip_sync_diagnostics.csv"
+    assert output_csv_path.exists()
+    with output_csv_path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert [row["event_id"] for row in rows] == [
+        "selected:sample_b:local_clip_len_08",
+        "selected:sample_a:local_clip_len_04",
+    ]
+    assert rows[0]["sync_candidate_score_raw"] == "0.12"
+    assert rows[0]["sync_candidate_score_penalized"] == "0.03"
+
+
+@pytest.mark.unit
+def test_write_probe_stage2_local_clip_sync_diagnostics_falls_back_to_stage_rows(
+    tmp_path: Path,
+) -> None:
+    """Validate diagnostics still land when the selected summary variant is normalized.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "stage2_calibration"
+    artifacts_root = run_root / "artifacts"
+    stage_run_root = run_root / "stages" / "sync_refine_scan"
+    records_root = stage_run_root / "records"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    records_root.mkdir(parents=True, exist_ok=True)
+
+    calibration_summary_path = artifacts_root / "stage2_mechanism_calibration_summary.json"
+    calibration_summary_path.write_text(
+        json.dumps(
+            {
+                "selected_tubelet_sync_candidate": {
+                    "method_variant": "tubelet_sync_real_video_vae_candidate",
+                },
+                "search_stage_summaries": [
+                    {
+                        "stage_name": "sync_refine_scan",
+                        "selection_scope": "tubelet_sync",
+                        "run_root": str(stage_run_root),
+                        "selected_tubelet_sync_candidate": {
+                            "method_variant": "tubelet_sync_real_video_vae_candidate",
+                        },
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    event_scores_path = records_root / "event_scores.jsonl"
+    event_scores_path.write_text(
+        json.dumps(
+            {
+                "event_id": "generated:sample_a:local_clip_len_04",
+                "sample_id": "sample_a",
+                "split": "calibration",
+                "sample_role": "attacked_positive",
+                "method_variant": "tubelet_sync_cal_generated_variant",
+                "attack_name": "local_clip",
+                "attack_params": {"clip_length": 4},
+                "mechanism_trace": {
+                    "sync_confident": False,
+                    "S_sync_peak_margin": -0.01,
+                    "sync_alignment_matched_count": 1,
+                    "sync_alignment_coverage_ratio": 0.0625,
+                    "sync_estimated_offset": -5,
+                    "sync_ground_truth_offset": -4,
+                    "sync_candidate_score_raw": 0.15,
+                    "sync_candidate_score_penalized": 0.02,
+                },
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = write_probe_stage2_local_clip_sync_diagnostics(run_root=run_root)
+
+    assert summary["method_variant_filter_applied"] is False
+    assert summary["record_count"] == 1
+    with Path(summary["output_csv_path"]).open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert rows[0]["method_variant"] == "tubelet_sync_cal_generated_variant"
 
 
 @pytest.mark.unit
