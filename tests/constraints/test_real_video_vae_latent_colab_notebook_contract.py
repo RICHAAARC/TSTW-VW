@@ -208,6 +208,16 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "BATCH_SIZE_FRAMES = 8" in notebook_text
     assert "NOTEBOOK_MANUAL_CONFIG" in notebook_text
     assert "NOTEBOOK_MANUAL_ENV_MAP" in notebook_text
+    assert "仓库 bootstrap 相关变量在该配置单元内解析为唯一来源" in notebook_text
+    assert "REPO_URL = os.environ.get('TSTW_REPO_URL', 'https://github.com/RICHAAARC/TSTW-VW.git')" not in notebook_text
+    assert "REPO_BRANCH = os.environ.get('TSTW_REPO_BRANCH', 'main')" not in notebook_text
+    assert "REPO_ROOT = Path(os.environ.get('TSTW_REPO_ROOT', '/content/TSTW-VW'))" not in notebook_text
+    assert "_resolve_required_environment_text('TSTW_REPO_URL')" in notebook_text
+    assert "_resolve_required_environment_text('TSTW_REPO_BRANCH')" in notebook_text
+    assert "_resolve_required_environment_text('TSTW_REPO_ROOT')" in notebook_text
+    assert "repository bootstrap failed during git clone." in notebook_text
+    assert "git_clone_stdout=" in notebook_text
+    assert "git_clone_stderr=" in notebook_text
     assert "TSTW_WORKFLOW_KEY" in notebook_text
     assert "TSTW_STEP_KEY" in notebook_text
     assert "TSTW_FAMILY_ID_TEMPLATE" in notebook_text
