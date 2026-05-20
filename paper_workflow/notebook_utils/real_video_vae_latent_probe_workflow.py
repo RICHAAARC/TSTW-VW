@@ -32,6 +32,8 @@ from experiments.real_video_vae_latent_probe.output_layout import (
 from experiments.real_video_vae_latent_probe.runner import RealVideoVaeLatentRunner
 from main.core.digest import compute_object_digest, compute_path_collection_digest
 from main.core.records import RecordWriter
+from main.core.schema import LatentSample
+from main.methods.temporal_tubelet_watermark.method import build_method_from_config
 from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check
 from main.video.dataset_manifest import load_dataset_manifest, resolve_manifest_samples
 from scripts.check_results.check_real_video_vae_latent_outputs import (
@@ -1146,12 +1148,19 @@ def write_probe_stage2_local_clip_sync_diagnostics(
     if not event_scores_path.exists():
         raise FileNotFoundError(event_scores_path)
 
-    candidate_rows = _extract_local_clip_sync_diagnostic_rows(
+    candidate_records = _extract_local_clip_sync_diagnostic_records(
         event_scores_path=event_scores_path,
         sample_roles=sample_roles,
     )
+    candidate_rows = [
+        _build_local_clip_sync_diagnostic_row(record) for record in candidate_records
+    ]
     output_rows, method_variant_filter_applied = _filter_local_clip_sync_rows_for_method_variant(
         candidate_rows,
+        selected_method_variant=selected_method_variant,
+    )
+    output_records, _ = _filter_local_clip_sync_records_for_method_variant(
+        candidate_records,
         selected_method_variant=selected_method_variant,
     )
     if not output_rows:
@@ -1167,6 +1176,33 @@ def write_probe_stage2_local_clip_sync_diagnostics(
         writer = csv.DictWriter(handle, fieldnames=list(output_rows[0].keys()))
         writer.writeheader()
         writer.writerows(output_rows)
+
+    surface_summary: dict[str, Any] = {
+        "surface_export_status": "skipped",
+        "surface_export_failure_reason": "selected_tubelet_sync_candidate_config_missing",
+        "output_surface_csv_path": None,
+        "output_surface_summary_path": None,
+        "surface_row_count": 0,
+        "surface_event_count": 0,
+    }
+    try:
+        surface_summary = _write_local_clip_sync_candidate_surface_forensics(
+            run_root=resolved_run_root,
+            calibration_summary_payload=calibration_summary_payload,
+            selected_stage_name=selected_stage_name,
+            selected_stage_run_root=selected_stage_run_root,
+            selected_method_variant=selected_method_variant,
+            selected_records=output_records,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        surface_summary = {
+            "surface_export_status": "skipped",
+            "surface_export_failure_reason": str(exc),
+            "output_surface_csv_path": None,
+            "output_surface_summary_path": None,
+            "surface_row_count": 0,
+            "surface_event_count": 0,
+        }
 
     return _json_safe(
         {
@@ -1188,6 +1224,7 @@ def write_probe_stage2_local_clip_sync_diagnostics(
                 }
             ),
             "diagnostic_columns": list(output_rows[0].keys()),
+            **surface_summary,
         }
     )
 
@@ -1240,7 +1277,21 @@ def _extract_local_clip_sync_diagnostic_rows(
     event_scores_path: Path,
     sample_roles: tuple[str, ...],
 ) -> list[dict[str, Any]]:
-    diagnostic_rows: list[dict[str, Any]] = []
+    return [
+        _build_local_clip_sync_diagnostic_row(record)
+        for record in _extract_local_clip_sync_diagnostic_records(
+            event_scores_path=event_scores_path,
+            sample_roles=sample_roles,
+        )
+    ]
+
+
+def _extract_local_clip_sync_diagnostic_records(
+    *,
+    event_scores_path: Path,
+    sample_roles: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    diagnostic_records: list[dict[str, Any]] = []
     allowed_sample_roles = {str(sample_role) for sample_role in sample_roles}
     with event_scores_path.open("r", encoding="utf-8") as handle:
         for line in handle:
@@ -1255,49 +1306,48 @@ def _extract_local_clip_sync_diagnostic_rows(
             mechanism_trace = record.get("mechanism_trace", {})
             if not isinstance(mechanism_trace, dict):
                 continue
-            attack_params = record.get("attack_params", {})
-            clip_length = None
-            if isinstance(attack_params, dict):
-                clip_length = attack_params.get("clip_length")
-            if clip_length is None:
-                clip_length = mechanism_trace.get("clip_length")
-            diagnostic_rows.append(
-                {
-                    "event_id": str(record.get("event_id", "")),
-                    "sample_id": str(record.get("sample_id", "")),
-                    "split": str(record.get("split", "")),
-                    "sample_role": sample_role,
-                    "method_variant": str(record.get("method_variant", "")),
-                    "attack_name": "local_clip",
-                    "clip_length": clip_length,
-                    "sync_confident": mechanism_trace.get("sync_confident"),
-                    "S_sync_peak_margin": mechanism_trace.get("S_sync_peak_margin"),
-                    "sync_alignment_matched_count": mechanism_trace.get(
-                        "sync_alignment_matched_count"
-                    ),
-                    "sync_alignment_coverage_ratio": mechanism_trace.get(
-                        "sync_alignment_coverage_ratio"
-                    ),
-                    "sync_estimated_offset": mechanism_trace.get("sync_estimated_offset"),
-                    "sync_ground_truth_offset": mechanism_trace.get(
-                        "sync_ground_truth_offset"
-                    ),
-                    "sync_candidate_score_raw": mechanism_trace.get(
-                        "sync_candidate_score_raw"
-                    ),
-                    "sync_candidate_score_penalized": mechanism_trace.get(
-                        "sync_candidate_score_penalized"
-                    ),
-                }
-            )
-    diagnostic_rows.sort(
-        key=lambda row: (
-            str(row.get("sample_role", "")),
-            str(row.get("sample_id", "")),
-            str(row.get("event_id", "")),
+            diagnostic_records.append(record)
+    diagnostic_records.sort(
+        key=lambda record: (
+            str(record.get("sample_role", "")),
+            str(record.get("sample_id", "")),
+            str(record.get("event_id", "")),
         )
     )
-    return diagnostic_rows
+    return diagnostic_records
+
+
+def _build_local_clip_sync_diagnostic_row(record: dict[str, Any]) -> dict[str, Any]:
+    attack_params = record.get("attack_params", {})
+    mechanism_trace = record.get("mechanism_trace", {})
+    clip_length = None
+    if isinstance(attack_params, dict):
+        clip_length = attack_params.get("clip_length")
+    if clip_length is None and isinstance(mechanism_trace, dict):
+        clip_length = mechanism_trace.get("clip_length")
+    return {
+        "event_id": str(record.get("event_id", "")),
+        "sample_id": str(record.get("sample_id", "")),
+        "split": str(record.get("split", "")),
+        "sample_role": str(record.get("sample_role", "")),
+        "method_variant": str(record.get("method_variant", "")),
+        "attack_name": "local_clip",
+        "clip_length": clip_length,
+        "sync_confident": mechanism_trace.get("sync_confident"),
+        "S_sync_peak_margin": mechanism_trace.get("S_sync_peak_margin"),
+        "sync_alignment_matched_count": mechanism_trace.get(
+            "sync_alignment_matched_count"
+        ),
+        "sync_alignment_coverage_ratio": mechanism_trace.get(
+            "sync_alignment_coverage_ratio"
+        ),
+        "sync_estimated_offset": mechanism_trace.get("sync_estimated_offset"),
+        "sync_ground_truth_offset": mechanism_trace.get("sync_ground_truth_offset"),
+        "sync_candidate_score_raw": mechanism_trace.get("sync_candidate_score_raw"),
+        "sync_candidate_score_penalized": mechanism_trace.get(
+            "sync_candidate_score_penalized"
+        ),
+    }
 
 
 def _filter_local_clip_sync_rows_for_method_variant(
@@ -1311,6 +1361,388 @@ def _filter_local_clip_sync_rows_for_method_variant(
     if filtered_rows:
         return filtered_rows, True
     return rows, False
+
+
+def _filter_local_clip_sync_records_for_method_variant(
+    records: list[dict[str, Any]],
+    *,
+    selected_method_variant: str,
+) -> tuple[list[dict[str, Any]], bool]:
+    filtered_records = [
+        record
+        for record in records
+        if str(record.get("method_variant", "")).strip() == selected_method_variant
+    ]
+    if filtered_records:
+        return filtered_records, True
+    return records, False
+
+
+def _write_local_clip_sync_candidate_surface_forensics(
+    *,
+    run_root: Path,
+    calibration_summary_payload: dict[str, Any],
+    selected_stage_name: str,
+    selected_stage_run_root: Path,
+    selected_method_variant: str,
+    selected_records: list[dict[str, Any]],
+    output_surface_csv_path: str | Path | None = None,
+    output_surface_summary_path: str | Path | None = None,
+) -> dict[str, Any]:
+    method_config_path_value = str(
+        calibration_summary_payload.get("generated_tubelet_sync_candidate_config_path", "")
+    ).strip()
+    if not method_config_path_value:
+        raise ValueError(
+            "generated_tubelet_sync_candidate_config_path is required for local_clip surface export"
+        )
+    method_config_path = Path(method_config_path_value)
+    if not method_config_path.exists():
+        raise FileNotFoundError(method_config_path)
+
+    method_config_payload = json.loads(method_config_path.read_text(encoding="utf-8"))
+    if not isinstance(method_config_payload, dict):
+        raise ValueError("selected_tubelet_sync_candidate config must contain a JSON object")
+    method_instance = build_method_from_config(method_config_payload)
+    evidence_extractor = getattr(method_instance, "_evidence_extractor", None)
+    if evidence_extractor is None or not hasattr(
+        evidence_extractor,
+        "build_sync_candidate_surface",
+    ):
+        raise ValueError(
+            "selected_tubelet_sync_candidate method must expose build_sync_candidate_surface"
+        )
+
+    output_surface_csv_file = (
+        Path(output_surface_csv_path)
+        if output_surface_csv_path is not None
+        else run_root / "artifacts" / "selected_candidate_local_clip_sync_candidate_surface.csv"
+    )
+    output_surface_summary_file = (
+        Path(output_surface_summary_path)
+        if output_surface_summary_path is not None
+        else run_root
+        / "artifacts"
+        / "selected_candidate_local_clip_sync_candidate_surface_summary.json"
+    )
+    output_surface_csv_file.parent.mkdir(parents=True, exist_ok=True)
+    output_surface_summary_file.parent.mkdir(parents=True, exist_ok=True)
+
+    surface_rows: list[dict[str, Any]] = []
+    event_summaries: list[dict[str, Any]] = []
+    for record in selected_records:
+        forensics_sample = _build_local_clip_sync_forensics_sample(
+            record=record,
+            selected_stage_run_root=selected_stage_run_root,
+        )
+        surface_payload = evidence_extractor.build_sync_candidate_surface(forensics_sample)
+        surface_rows.extend(
+            _build_local_clip_sync_surface_rows(
+                record=record,
+                surface_payload=surface_payload,
+                selected_stage_name=selected_stage_name,
+                selected_method_variant=selected_method_variant,
+            )
+        )
+        event_summaries.append(
+            _build_local_clip_sync_surface_summary_entry(
+                record=record,
+                surface_payload=surface_payload,
+                selected_stage_name=selected_stage_name,
+                selected_method_variant=selected_method_variant,
+            )
+        )
+
+    if not surface_rows:
+        raise ValueError("no local_clip sync candidate surface rows were generated")
+
+    with output_surface_csv_file.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(surface_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(surface_rows)
+
+    summary_payload = {
+        "selected_stage_name": selected_stage_name,
+        "selected_method_variant": selected_method_variant,
+        "method_config_path": str(method_config_path),
+        "surface_event_count": len(event_summaries),
+        "surface_row_count": len(surface_rows),
+        "ranking_rule_names": [
+            "penalized_prior",
+            "penalized_no_prior",
+            "raw_prior",
+            "raw_no_prior",
+        ],
+        "events": event_summaries,
+    }
+    output_surface_summary_file.write_text(
+        json.dumps(summary_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    return {
+        "surface_export_status": "ok",
+        "surface_export_failure_reason": None,
+        "output_surface_csv_path": output_surface_csv_file,
+        "output_surface_summary_path": output_surface_summary_file,
+        "surface_row_count": len(surface_rows),
+        "surface_event_count": len(event_summaries),
+    }
+
+
+def _build_local_clip_sync_forensics_sample(
+    *,
+    record: dict[str, Any],
+    selected_stage_run_root: Path,
+) -> LatentSample:
+    mechanism_trace = record.get("mechanism_trace", {})
+    if not isinstance(mechanism_trace, dict):
+        raise ValueError("local_clip sync forensics record must include mechanism_trace")
+    latent_relpath = str(
+        mechanism_trace.get("reencoded_latent_relpath")
+        or mechanism_trace.get("latent_artifact_relpath")
+        or ""
+    ).strip()
+    if not latent_relpath:
+        raise ValueError("local_clip sync forensics record must include reencoded_latent_relpath")
+    latent_artifact_path = selected_stage_run_root / Path(latent_relpath)
+    if not latent_artifact_path.exists():
+        raise FileNotFoundError(latent_artifact_path)
+
+    latent_shape = _coerce_local_clip_sync_latent_shape(
+        mechanism_trace.get("latent_shape"),
+        field_name="mechanism_trace.latent_shape",
+    )
+    input_artifact_trace = record.get("input_artifact_trace", {})
+    latent_artifact_digest = str(
+        mechanism_trace.get("reencoded_latent_digest")
+        or mechanism_trace.get("latent_artifact_digest")
+        or (
+            input_artifact_trace.get("artifact_digest")
+            if isinstance(input_artifact_trace, dict)
+            else ""
+        )
+        or ""
+    ).strip()
+    if not latent_artifact_digest:
+        raise ValueError("local_clip sync forensics record must include latent artifact digest")
+    latent_generation_seed_random = record.get("latent_generation_seed_random")
+    if not isinstance(latent_generation_seed_random, int):
+        raise ValueError(
+            "local_clip sync forensics record must include latent_generation_seed_random"
+        )
+    attack_params = record.get("attack_params", {})
+    if attack_params is None:
+        attack_params = {}
+    if not isinstance(attack_params, dict):
+        raise ValueError("attack_params must be a dictionary for local_clip surface export")
+
+    return LatentSample(
+        sample_id=str(record.get("sample_id", "")),
+        split=str(record.get("split", "")),
+        sample_role=str(record.get("sample_role", "")),
+        latent_shape=latent_shape,
+        latent_tensor_digest_random=str(
+            record.get("latent_tensor_digest_random") or latent_artifact_digest
+        ),
+        latent_generation_seed_random=latent_generation_seed_random,
+        latent_backend_name=str(record.get("latent_backend_name", "")),
+        latent_backend_status=str(record.get("latent_backend_status", "")),
+        latent_artifact_relpath=latent_relpath,
+        latent_artifact_path=str(latent_artifact_path),
+        latent_artifact_digest=latent_artifact_digest,
+        run_root_path=str(selected_stage_run_root),
+        mechanism_trace=dict(mechanism_trace),
+        applied_attack_params=dict(attack_params),
+    )
+
+
+def _coerce_local_clip_sync_latent_shape(
+    latent_shape_value: Any,
+    *,
+    field_name: str,
+) -> tuple[int, int, int, int]:
+    if not isinstance(latent_shape_value, (list, tuple)) or len(latent_shape_value) != 4:
+        raise ValueError(f"{field_name} must be a 4-element shape")
+    normalized_shape: list[int] = []
+    for shape_item in latent_shape_value:
+        if not isinstance(shape_item, int) or shape_item < 1:
+            raise ValueError(f"{field_name} must contain positive integers")
+        normalized_shape.append(int(shape_item))
+    return tuple(normalized_shape)  # type: ignore[return-value]
+
+
+def _build_local_clip_sync_surface_rows(
+    *,
+    record: dict[str, Any],
+    surface_payload: dict[str, Any],
+    selected_stage_name: str,
+    selected_method_variant: str,
+) -> list[dict[str, Any]]:
+    mechanism_trace = record.get("mechanism_trace", {})
+    attack_params = record.get("attack_params", {})
+    clip_length = None
+    if isinstance(attack_params, dict):
+        clip_length = attack_params.get("clip_length")
+    if clip_length is None and isinstance(mechanism_trace, dict):
+        clip_length = mechanism_trace.get("clip_length")
+    recomputed_matches_recorded_selection = _local_clip_sync_selection_matches_record(
+        record_mechanism_trace=mechanism_trace,
+        sync_result=surface_payload["sync_result"],
+    )
+    surface_rows: list[dict[str, Any]] = []
+    for candidate_row in surface_payload["candidate_rows"]:
+        surface_rows.append(
+            {
+                "selected_stage_name": selected_stage_name,
+                "selected_method_variant": selected_method_variant,
+                "event_id": str(record.get("event_id", "")),
+                "sample_id": str(record.get("sample_id", "")),
+                "split": str(record.get("split", "")),
+                "sample_role": str(record.get("sample_role", "")),
+                "attack_name": str(record.get("attack_name", "")),
+                "clip_length": clip_length,
+                "recorded_sync_confident": mechanism_trace.get("sync_confident"),
+                "recorded_sync_confidence_failure_reason": mechanism_trace.get(
+                    "sync_confidence_failure_reason"
+                ),
+                "recorded_sync_estimated_offset": mechanism_trace.get(
+                    "sync_estimated_offset"
+                ),
+                "recorded_sync_estimated_scale": mechanism_trace.get("sync_estimated_scale"),
+                "recorded_sync_peak_rank": mechanism_trace.get("sync_peak_rank"),
+                "recorded_S_sync_peak_margin": mechanism_trace.get("S_sync_peak_margin"),
+                "ground_truth_offset": mechanism_trace.get("sync_ground_truth_offset"),
+                "ground_truth_scale": mechanism_trace.get("sync_ground_truth_scale"),
+                "coverage_penalty_enabled": surface_payload["coverage_penalty_enabled"],
+                "recomputed_matches_recorded_selection": (
+                    recomputed_matches_recorded_selection
+                ),
+                **candidate_row,
+            }
+        )
+    return surface_rows
+
+
+def _build_local_clip_sync_surface_summary_entry(
+    *,
+    record: dict[str, Any],
+    surface_payload: dict[str, Any],
+    selected_stage_name: str,
+    selected_method_variant: str,
+) -> dict[str, Any]:
+    mechanism_trace = record.get("mechanism_trace", {})
+    attack_params = record.get("attack_params", {})
+    clip_length = None
+    if isinstance(attack_params, dict):
+        clip_length = attack_params.get("clip_length")
+    if clip_length is None and isinstance(mechanism_trace, dict):
+        clip_length = mechanism_trace.get("clip_length")
+    sync_result = surface_payload["sync_result"]
+    ranking_summaries = {
+        rule_name: {
+            "score_field": rule_summary["score_field"],
+            "center_prior_enabled": rule_summary["center_prior_enabled"],
+            "winner": {
+                "offset_candidate": rule_summary["winner"]["offset_candidate"],
+                "scale_candidate": rule_summary["winner"]["scale_candidate"],
+                "sync_candidate_score_raw": rule_summary["winner"]["sync_candidate_score_raw"],
+                "sync_candidate_score_penalized": rule_summary["winner"][
+                    "sync_candidate_score_penalized"
+                ],
+                "sync_alignment_coverage_ratio": rule_summary["winner"][
+                    "sync_alignment_coverage_ratio"
+                ],
+                "sync_alignment_matched_count": rule_summary["winner"][
+                    "sync_alignment_matched_count"
+                ],
+                "is_ground_truth_candidate": rule_summary["winner"][
+                    "is_ground_truth_candidate"
+                ],
+            },
+            "winner_margin_to_second": rule_summary["winner_margin_to_second"],
+            "winner_tie_count": rule_summary["winner_tie_count"],
+            "ground_truth_rank": rule_summary["ground_truth_rank"],
+        }
+        for rule_name, rule_summary in surface_payload["ranking_summaries"].items()
+    }
+    ground_truth_candidate = surface_payload.get("ground_truth_candidate")
+    return {
+        "selected_stage_name": selected_stage_name,
+        "selected_method_variant": selected_method_variant,
+        "event_id": str(record.get("event_id", "")),
+        "sample_id": str(record.get("sample_id", "")),
+        "split": str(record.get("split", "")),
+        "sample_role": str(record.get("sample_role", "")),
+        "attack_name": str(record.get("attack_name", "")),
+        "clip_length": clip_length,
+        "candidate_count": len(surface_payload["candidate_rows"]),
+        "coverage_penalty_enabled": surface_payload["coverage_penalty_enabled"],
+        "recorded_sync_confident": mechanism_trace.get("sync_confident"),
+        "recorded_sync_confidence_failure_reason": mechanism_trace.get(
+            "sync_confidence_failure_reason"
+        ),
+        "recorded_selected_candidate": {
+            "offset_candidate": mechanism_trace.get("sync_estimated_offset"),
+            "scale_candidate": mechanism_trace.get("sync_estimated_scale"),
+            "sync_peak_rank": mechanism_trace.get("sync_peak_rank"),
+            "S_sync_peak_margin": mechanism_trace.get("S_sync_peak_margin"),
+            "sync_candidate_score_raw": mechanism_trace.get("sync_candidate_score_raw"),
+            "sync_candidate_score_penalized": mechanism_trace.get(
+                "sync_candidate_score_penalized"
+            ),
+        },
+        "recomputed_selected_candidate": {
+            "offset_candidate": sync_result.get("sync_estimated_offset"),
+            "scale_candidate": sync_result.get("sync_estimated_scale"),
+            "sync_peak_rank": sync_result.get("sync_peak_rank"),
+            "S_sync_peak_margin": sync_result.get("S_sync_peak_margin"),
+        },
+        "recomputed_matches_recorded_selection": _local_clip_sync_selection_matches_record(
+            record_mechanism_trace=mechanism_trace,
+            sync_result=sync_result,
+        ),
+        "ground_truth_candidate": (
+            None
+            if ground_truth_candidate is None
+            else {
+                "offset_candidate": ground_truth_candidate["offset_candidate"],
+                "scale_candidate": ground_truth_candidate["scale_candidate"],
+                "sync_candidate_score_raw": ground_truth_candidate["sync_candidate_score_raw"],
+                "sync_candidate_score_penalized": ground_truth_candidate[
+                    "sync_candidate_score_penalized"
+                ],
+                "sync_alignment_coverage_ratio": ground_truth_candidate[
+                    "sync_alignment_coverage_ratio"
+                ],
+                "sync_alignment_matched_count": ground_truth_candidate[
+                    "sync_alignment_matched_count"
+                ],
+            }
+        ),
+        "ranking_summaries": ranking_summaries,
+    }
+
+
+def _local_clip_sync_selection_matches_record(
+    *,
+    record_mechanism_trace: dict[str, Any],
+    sync_result: dict[str, Any],
+) -> bool:
+    recorded_offset = record_mechanism_trace.get("sync_estimated_offset")
+    recomputed_offset = sync_result.get("sync_estimated_offset")
+    recorded_scale = record_mechanism_trace.get("sync_estimated_scale")
+    recomputed_scale = sync_result.get("sync_estimated_scale")
+    if recorded_offset != recomputed_offset:
+        return False
+    if recorded_scale is None or recomputed_scale is None:
+        return recorded_scale == recomputed_scale
+    if not isinstance(recorded_scale, (int, float)) or not isinstance(
+        recomputed_scale,
+        (int, float),
+    ):
+        return False
+    return abs(float(recorded_scale) - float(recomputed_scale)) <= 1e-6
 
 
 def package_probe_non_formal_audit_bundle(
@@ -1512,6 +1944,30 @@ def _build_non_formal_audit_bundle_entries(
             source_path=diagnostics_csv_path,
             archive_prefix="calibration_run/artifacts/selected_candidate_local_clip_sync_diagnostics.csv",
         )
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=(
+            calibration_run_root
+            / "artifacts"
+            / "selected_candidate_local_clip_sync_candidate_surface.csv"
+        ),
+        archive_prefix=(
+            "calibration_run/artifacts/selected_candidate_local_clip_sync_candidate_surface.csv"
+        ),
+    )
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=(
+            calibration_run_root
+            / "artifacts"
+            / "selected_candidate_local_clip_sync_candidate_surface_summary.json"
+        ),
+        archive_prefix=(
+            "calibration_run/artifacts/selected_candidate_local_clip_sync_candidate_surface_summary.json"
+        ),
+    )
 
     if calibration_summary_payload is None:
         return bundle_entries

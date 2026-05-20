@@ -302,6 +302,120 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         validate_evidence_scores(evidence_scores)
         return evidence_scores, mechanism_trace
 
+    def build_sync_candidate_surface(self, sample: LatentSample) -> dict[str, object]:
+        """功能：重建单个样本的 sync candidate surface 以供离线取证。
+
+        Rebuild the synchronization candidate surface for a single governed sample.
+
+        Args:
+            sample: Input latent sample carrying the persisted detection artifact.
+
+        Returns:
+            A dictionary containing candidate rows, ranking-rule summaries, and
+            the governed sync-selection trace.
+
+        Raises:
+            TypeError: Raised when sample is not a `LatentSample` instance.
+            ValueError: Raised when sync evidence is disabled or the latent artifact
+                path is unavailable.
+        """
+        if not isinstance(sample, LatentSample):
+            raise TypeError("sample must be a LatentSample instance")
+        if not self._enabled_evidence.get("sync", False):
+            raise ValueError("sync candidate surface requires sync evidence to be enabled")
+        if sample.latent_artifact_path is None:
+            raise ValueError("sample must carry latent_artifact_path")
+
+        tensor_artifact = read_float_tensor_npy(sample.latent_artifact_path)
+        partition_config = build_partition_config_from_method_config(self._method_config)
+        descriptors = build_tubelet_descriptors(sample.latent_shape, partition_config)
+        (
+            _payload_coded_projections,
+            codebook,
+            reference_descriptor_map,
+            reference_shape_trace,
+        ) = self._build_payload_coded_projections(
+            sample,
+            tensor_artifact,
+            descriptors,
+            partition_config,
+        )
+        mechanism_trace = dict(sample.mechanism_trace or {})
+        mechanism_trace.update(reference_shape_trace)
+        alignment_scores, alignment_candidate_metrics = self._build_alignment_candidate_scores(
+            descriptors,
+            tensor_artifact,
+            reference_descriptor_map,
+            codebook,
+            sample,
+        )
+        sync_result = self._build_sync_search_result(
+            alignment_scores,
+            mechanism_trace,
+            sample,
+        )
+        current_selected_key = (
+            int(sync_result["sync_estimated_offset"]),
+            round(float(sync_result["sync_estimated_scale"]), 6),
+        )
+        ground_truth_key = self._resolve_ground_truth_candidate_key(
+            mechanism_trace,
+            sample,
+        )
+        candidate_rows = self._build_sync_candidate_surface_rows(
+            alignment_candidate_metrics,
+            current_selected_key=current_selected_key,
+            ground_truth_key=ground_truth_key,
+        )
+
+        ranking_specs = (
+            ("penalized_prior", "sync_candidate_score_penalized", True),
+            ("penalized_no_prior", "sync_candidate_score_penalized", False),
+            ("raw_prior", "sync_candidate_score_raw", True),
+            ("raw_no_prior", "sync_candidate_score_raw", False),
+        )
+        ranking_summaries: dict[str, dict[str, object]] = {}
+        for rule_name, score_field, center_prior_enabled in ranking_specs:
+            ranking_summary, rank_map, winner_key = self._build_alignment_candidate_ranking(
+                candidate_rows,
+                score_field=score_field,
+                center_prior_enabled=center_prior_enabled,
+                ground_truth_key=ground_truth_key,
+            )
+            ranking_summaries[rule_name] = ranking_summary
+            for candidate_row in candidate_rows:
+                candidate_key = (
+                    int(candidate_row["offset_candidate"]),
+                    round(float(candidate_row["scale_candidate"]), 6),
+                )
+                candidate_row[f"rank_{rule_name}"] = rank_map[candidate_key]
+                candidate_row[f"selected_{rule_name}"] = candidate_key == winner_key
+
+        selected_candidate_row = next(
+            row for row in candidate_rows if bool(row["selected_penalized_prior"])
+        )
+        ground_truth_candidate_row = None
+        if ground_truth_key is not None:
+            ground_truth_candidate_row = next(
+                (
+                    row
+                    for row in candidate_rows
+                    if bool(row["is_ground_truth_candidate"])
+                ),
+                None,
+            )
+
+        return {
+            "sync_result": dict(sync_result),
+            "coverage_penalty_enabled": self._coverage_penalty_enabled(),
+            "candidate_rows": candidate_rows,
+            "selected_candidate": dict(selected_candidate_row),
+            "ground_truth_candidate": (
+                None if ground_truth_candidate_row is None else dict(ground_truth_candidate_row)
+            ),
+            "ranking_summaries": ranking_summaries,
+        }
+
     def _build_payload_coded_projections(
         self,
         sample: LatentSample,
@@ -381,6 +495,125 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             reference_descriptor_map,
             reference_shape_trace,
         )
+
+    def _build_sync_candidate_surface_rows(
+        self,
+        alignment_candidate_metrics: dict[tuple[int, float], dict[str, float | int]],
+        *,
+        current_selected_key: tuple[int, float],
+        ground_truth_key: tuple[int, float] | None,
+    ) -> list[dict[str, float | int | bool]]:
+        candidate_rows: list[dict[str, float | int | bool]] = []
+        for candidate_key, candidate_metrics in sorted(
+            alignment_candidate_metrics.items(),
+            key=lambda item: (int(item[0][0]), float(item[0][1])),
+        ):
+            offset_candidate = int(candidate_key[0])
+            scale_candidate = round(float(candidate_key[1]), 6)
+            candidate_rows.append(
+                {
+                    "offset_candidate": offset_candidate,
+                    "scale_candidate": scale_candidate,
+                    "sync_alignment_matched_count": int(
+                        candidate_metrics["sync_alignment_matched_count"]
+                    ),
+                    "sync_alignment_candidate_count": int(
+                        candidate_metrics["sync_alignment_candidate_count"]
+                    ),
+                    "sync_alignment_coverage_ratio": round(
+                        float(candidate_metrics["sync_alignment_coverage_ratio"]),
+                        6,
+                    ),
+                    "sync_candidate_score_raw": round(
+                        float(candidate_metrics["sync_candidate_score_raw"]),
+                        6,
+                    ),
+                    "sync_candidate_score_penalized": round(
+                        float(candidate_metrics["sync_candidate_score_penalized"]),
+                        6,
+                    ),
+                    "is_current_selected_candidate": (
+                        offset_candidate == int(current_selected_key[0])
+                        and abs(scale_candidate - float(current_selected_key[1])) <= 1e-6
+                    ),
+                    "is_ground_truth_candidate": (
+                        ground_truth_key is not None
+                        and offset_candidate == int(ground_truth_key[0])
+                        and abs(scale_candidate - float(ground_truth_key[1])) <= 1e-6
+                    ),
+                }
+            )
+        return candidate_rows
+
+    def _build_alignment_candidate_ranking(
+        self,
+        candidate_rows: list[dict[str, float | int | bool]],
+        *,
+        score_field: str,
+        center_prior_enabled: bool,
+        ground_truth_key: tuple[int, float] | None,
+    ) -> tuple[dict[str, object], dict[tuple[int, float], int], tuple[int, float]]:
+        ranked_rows = sorted(
+            candidate_rows,
+            key=lambda row: (
+                -float(row[score_field]),
+                abs(int(row["offset_candidate"])) if center_prior_enabled else 0,
+                (
+                    abs(float(row["scale_candidate"]) - 1.0)
+                    if center_prior_enabled
+                    else 0.0
+                ),
+                int(row["offset_candidate"]),
+                float(row["scale_candidate"]),
+            ),
+        )
+        rank_map = {
+            (
+                int(candidate_row["offset_candidate"]),
+                round(float(candidate_row["scale_candidate"]), 6),
+            ): rank
+            for rank, candidate_row in enumerate(ranked_rows, start=1)
+        }
+        winner_row = ranked_rows[0]
+        winner_key = (
+            int(winner_row["offset_candidate"]),
+            round(float(winner_row["scale_candidate"]), 6),
+        )
+        winner_score = round(float(winner_row[score_field]), 6)
+        second_score = winner_score
+        if len(ranked_rows) > 1:
+            second_score = round(float(ranked_rows[1][score_field]), 6)
+        winner_tie_count = sum(
+            1
+            for candidate_row in ranked_rows
+            if abs(float(candidate_row[score_field]) - winner_score) <= 1e-9
+        )
+        summary = {
+            "score_field": score_field,
+            "center_prior_enabled": center_prior_enabled,
+            "winner": dict(winner_row),
+            "winner_margin_to_second": round(winner_score - second_score, 6),
+            "winner_tie_count": winner_tie_count,
+            "ground_truth_rank": None,
+        }
+        if ground_truth_key is not None:
+            summary["ground_truth_rank"] = rank_map.get(ground_truth_key)
+        return summary, rank_map, winner_key
+
+    def _resolve_ground_truth_candidate_key(
+        self,
+        mechanism_trace: dict[str, object],
+        sample: LatentSample,
+    ) -> tuple[int, float] | None:
+        ground_truth_offset = mechanism_trace.get("sync_ground_truth_offset")
+        if not isinstance(ground_truth_offset, int):
+            return None
+        if self._scale_search_enabled(sample):
+            ground_truth_scale = self._resolve_ground_truth_scale(sample)
+            if ground_truth_scale is None:
+                return None
+            return (int(ground_truth_offset), round(float(ground_truth_scale), 6))
+        return (int(ground_truth_offset), 1.0)
 
     def _build_reference_descriptor_map(
         self,

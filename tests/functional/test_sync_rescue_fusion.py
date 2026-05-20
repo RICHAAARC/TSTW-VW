@@ -16,6 +16,7 @@ from main.attacks.temporal import TemporalAttackPlaceholder
 from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
     SyntheticVideoLatentPlaceholder,
 )
+from main.core.schema import LatentSample
 from main.core.tensor_artifact import read_float_tensor_npy
 from main.methods.temporal_tubelet_watermark.codebook import (
     build_codebook_config,
@@ -167,6 +168,119 @@ def test_positive_tubelet_score_is_not_coverage_penalized_for_partial_clip() -> 
 
     assert saturated_partial_score == 1.0
     assert full_coverage_score == 1.0
+
+
+@pytest.mark.unit
+def test_sync_candidate_surface_compares_penalized_and_raw_rankings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate sync candidate surface exposes ranking-rule differences.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    extractor = SyntheticProbeEvidenceExtractor(
+        method_variant="tubelet_sync",
+        method_config=TUBELET_SYNC_CONFIG,
+        enabled_evidence={"tubelet": True, "sync": True, "trajectory": False},
+        fusion_rule="sync_rescue_fusion",
+    )
+    sample = LatentSample(
+        sample_id="sample_test_surface_000001",
+        split="test",
+        sample_role="attacked_positive",
+        latent_shape=(8, 4, 4, 4),
+        latent_tensor_digest_random="digest_surface",
+        latent_generation_seed_random=11,
+        latent_backend_name="synthetic_backend",
+        latent_backend_status="ok",
+        latent_artifact_relpath="artifacts/latents/sample.npy",
+        latent_artifact_path="artifacts/latents/sample.npy",
+        mechanism_trace={
+            "reference_latent_shape": [8, 4, 4, 4],
+            "sync_ground_truth_offset": -2,
+        },
+        applied_attack_params={"clip_length": 4},
+    )
+
+    monkeypatch.setattr(
+        "main.methods.temporal_tubelet_watermark.evidence.read_float_tensor_npy",
+        lambda _: object(),
+    )
+    monkeypatch.setattr(
+        "main.methods.temporal_tubelet_watermark.evidence.build_tubelet_descriptors",
+        lambda latent_shape, partition_config: [
+            {
+                "latent_shape": latent_shape,
+                "partition_config": partition_config,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        extractor,
+        "_build_payload_coded_projections",
+        lambda sample, tensor_artifact, descriptors, partition_config: (
+            [0.25],
+            object(),
+            {(0, 0, 0): object()},
+            {
+                "reference_latent_shape": [8, 4, 4, 4],
+                "tubelet_projection_coverage_ratio": 1.0,
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        extractor,
+        "_build_alignment_candidate_scores",
+        lambda descriptors, tensor_artifact, reference_descriptor_map, codebook, sample: (
+            {
+                (0, 1.0): 0.4,
+                (-2, 1.0): 0.25,
+                (2, 1.0): 0.39,
+            },
+            {
+                (0, 1.0): {
+                    "sync_alignment_matched_count": 4,
+                    "sync_alignment_candidate_count": 8,
+                    "sync_alignment_coverage_ratio": 0.5,
+                    "sync_candidate_score_raw": 0.4,
+                    "sync_candidate_score_penalized": 0.4,
+                },
+                (-2, 1.0): {
+                    "sync_alignment_matched_count": 2,
+                    "sync_alignment_candidate_count": 8,
+                    "sync_alignment_coverage_ratio": 0.25,
+                    "sync_candidate_score_raw": 0.5,
+                    "sync_candidate_score_penalized": 0.25,
+                },
+                (2, 1.0): {
+                    "sync_alignment_matched_count": 6,
+                    "sync_alignment_candidate_count": 8,
+                    "sync_alignment_coverage_ratio": 0.75,
+                    "sync_candidate_score_raw": 0.39,
+                    "sync_candidate_score_penalized": 0.39,
+                },
+            },
+        ),
+    )
+
+    candidate_surface = extractor.build_sync_candidate_surface(sample)
+    candidate_rows = candidate_surface["candidate_rows"]
+    penalized_winner = candidate_surface["ranking_summaries"]["penalized_prior"]["winner"]
+    raw_winner = candidate_surface["ranking_summaries"]["raw_prior"]["winner"]
+    ground_truth_row = candidate_surface["ground_truth_candidate"]
+
+    assert candidate_surface["sync_result"]["sync_estimated_offset"] == 0
+    assert penalized_winner["offset_candidate"] == 0
+    assert raw_winner["offset_candidate"] == -2
+    assert ground_truth_row["offset_candidate"] == -2
+    assert candidate_surface["ranking_summaries"]["penalized_prior"]["ground_truth_rank"] == 3
+    assert candidate_surface["ranking_summaries"]["raw_prior"]["ground_truth_rank"] == 1
+    assert any(bool(row["selected_penalized_prior"]) for row in candidate_rows)
+    assert any(bool(row["selected_raw_prior"]) for row in candidate_rows)
 
 
 @pytest.mark.unit

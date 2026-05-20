@@ -18,6 +18,12 @@ import pytest
 
 pytestmark = pytest.mark.quick
 
+from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
+    SyntheticVideoLatentPlaceholder,
+)
+from main.attacks.temporal import TemporalAttackPlaceholder
+from main.methods.temporal_tubelet_watermark.method import build_method_from_config
+
 import paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow as workflow_module
 
 from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
@@ -664,6 +670,7 @@ def test_write_probe_stage2_local_clip_sync_diagnostics_persists_selected_candid
     assert summary["method_variant_filter_applied"] is True
     assert summary["record_count"] == 2
     assert summary["clip_lengths"] == [4, 8]
+    assert summary["surface_export_status"] == "skipped"
 
     output_csv_path = Path(summary["output_csv_path"])
     assert output_csv_path == artifacts_root / "selected_candidate_local_clip_sync_diagnostics.csv"
@@ -754,9 +761,162 @@ def test_write_probe_stage2_local_clip_sync_diagnostics_falls_back_to_stage_rows
 
     assert summary["method_variant_filter_applied"] is False
     assert summary["record_count"] == 1
+    assert summary["surface_export_status"] == "skipped"
     with Path(summary["output_csv_path"]).open("r", encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert rows[0]["method_variant"] == "tubelet_sync_cal_generated_variant"
+
+
+@pytest.mark.unit
+def test_write_probe_stage2_local_clip_sync_diagnostics_persists_candidate_surface_artifacts(
+    tmp_path: Path,
+) -> None:
+    """Validate local-clip diagnostics also emit candidate-surface forensics.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "stage2_calibration"
+    artifacts_root = run_root / "artifacts"
+    stage_run_root = run_root / "stages" / "sync_refine_scan"
+    records_root = stage_run_root / "records"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    records_root.mkdir(parents=True, exist_ok=True)
+
+    selected_method_variant = "tubelet_sync_cal_surface_probe"
+    candidate_config = {
+        "method_family": "temporal_tubelet_watermark",
+        "method_variant": selected_method_variant,
+        "base_method_variant": "tubelet_sync",
+        "method_status": "stage2_mechanism_calibration_candidate",
+        "enable_frame_prc": False,
+        "enable_tubelet": True,
+        "enable_sync": True,
+        "enable_trajectory": False,
+        "tubelet_length": 4,
+        "score_calibration": {
+            "embedding_projection_support_weight": 0.45,
+        },
+        "sync_search": {
+            "offset_search_min": -8,
+            "offset_search_max": 8,
+            "enable_scale_search": False,
+            "coverage_penalty_enabled": True,
+            "min_sync_positive_margin": 0.0,
+            "min_sync_alignment_coverage_ratio": 0.0625,
+            "min_sync_alignment_matched_count": 1,
+        },
+        "lambda_sync": 0.1,
+        "fusion_rule": "sync_rescue_fusion",
+    }
+    candidate_config_path = artifacts_root / "tubelet_sync_real_video_vae_candidate.json"
+    candidate_config_path.write_text(
+        json.dumps(candidate_config, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    calibration_summary_path = artifacts_root / "stage2_mechanism_calibration_summary.json"
+    calibration_summary_path.write_text(
+        json.dumps(
+            {
+                "selected_tubelet_sync_candidate": {
+                    "method_variant": selected_method_variant,
+                },
+                "generated_tubelet_sync_candidate_config_path": str(candidate_config_path),
+                "search_stage_summaries": [
+                    {
+                        "stage_name": "sync_refine_scan",
+                        "selection_scope": "tubelet_sync",
+                        "run_root": str(stage_run_root),
+                        "selected_tubelet_sync_candidate": {
+                            "method_variant": selected_method_variant,
+                        },
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    backend = SyntheticVideoLatentPlaceholder(latent_shape=(32, 4, 16, 16))
+    backend.set_output_root(stage_run_root)
+    base_sample = backend.build_sample(
+        "sample_surface_probe_000001",
+        "calibration",
+        "watermarked_positive",
+    )
+    watermark_method = build_method_from_config(candidate_config)
+    watermarked_sample = watermark_method.embed(base_sample, {})
+    clipped_sample = TemporalAttackPlaceholder(
+        "local_clip",
+        {"clip_length": 4},
+    ).apply(watermarked_sample)
+    detection_result = watermark_method.detect(clipped_sample, threshold_record=None)
+
+    mechanism_trace = dict(detection_result.mechanism_trace or {})
+    mechanism_trace.update(
+        {
+            "latent_shape": list(clipped_sample.latent_shape),
+            "latent_artifact_relpath": clipped_sample.latent_artifact_relpath,
+            "latent_artifact_digest": clipped_sample.latent_artifact_digest,
+            "reencoded_latent_relpath": clipped_sample.latent_artifact_relpath,
+            "reencoded_latent_digest": clipped_sample.latent_artifact_digest,
+        }
+    )
+    event_scores_path = records_root / "event_scores.jsonl"
+    event_scores_path.write_text(
+        json.dumps(
+            {
+                "event_id": f"{selected_method_variant}:sample_surface_probe_000001:local_clip",
+                "sample_id": clipped_sample.sample_id,
+                "split": clipped_sample.split,
+                "sample_role": "attacked_positive",
+                "method_variant": selected_method_variant,
+                "attack_name": "local_clip",
+                "attack_params": clipped_sample.applied_attack_params,
+                "latent_backend_name": clipped_sample.latent_backend_name,
+                "latent_backend_status": clipped_sample.latent_backend_status,
+                "latent_tensor_digest_random": clipped_sample.latent_tensor_digest_random,
+                "latent_generation_seed_random": clipped_sample.latent_generation_seed_random,
+                "mechanism_trace": mechanism_trace,
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = write_probe_stage2_local_clip_sync_diagnostics(run_root=run_root)
+
+    assert summary["surface_export_status"] == "ok"
+    assert summary["surface_event_count"] == 1
+    assert summary["surface_row_count"] > 1
+
+    surface_csv_path = Path(summary["output_surface_csv_path"])
+    surface_summary_path = Path(summary["output_surface_summary_path"])
+    assert surface_csv_path.exists()
+    assert surface_summary_path.exists()
+
+    with surface_csv_path.open("r", encoding="utf-8", newline="") as handle:
+        surface_rows = list(csv.DictReader(handle))
+    assert any(row["selected_penalized_prior"] == "True" for row in surface_rows)
+    assert any(row["is_ground_truth_candidate"] == "True" for row in surface_rows)
+
+    surface_summary_payload = json.loads(surface_summary_path.read_text(encoding="utf-8"))
+    assert surface_summary_payload["surface_event_count"] == 1
+    assert surface_summary_payload["events"][0]["recomputed_matches_recorded_selection"] is True
+    assert (
+        surface_summary_payload["events"][0]["ranking_summaries"]["penalized_prior"][
+            "winner"
+        ]["offset_candidate"]
+        == detection_result.mechanism_trace["sync_estimated_offset"]
+    )
 
 
 @pytest.mark.unit
@@ -815,6 +975,24 @@ def test_package_probe_non_formal_audit_bundle_persists_selected_audit_files(
     )
     diagnostics_csv_path.write_text(
         "event_id,sample_id\nlocal_clip_event,sample_001\n",
+        encoding="utf-8",
+    )
+    diagnostics_surface_csv_path = (
+        calibration_run_root
+        / "artifacts"
+        / "selected_candidate_local_clip_sync_candidate_surface.csv"
+    )
+    diagnostics_surface_csv_path.write_text(
+        "event_id,offset_candidate\nlocal_clip_event,-8\n",
+        encoding="utf-8",
+    )
+    diagnostics_surface_summary_path = (
+        calibration_run_root
+        / "artifacts"
+        / "selected_candidate_local_clip_sync_candidate_surface_summary.json"
+    )
+    diagnostics_surface_summary_path.write_text(
+        json.dumps({"surface_event_count": 1}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     protocol_config_path = calibration_run_root / "artifacts" / "protocol_config.json"
@@ -927,6 +1105,14 @@ def test_package_probe_non_formal_audit_bundle_persists_selected_audit_files(
     assert "calibration_run/artifacts/stage2_mechanism_calibration_summary.json" in archive_names
     assert (
         "calibration_run/artifacts/selected_candidate_local_clip_sync_diagnostics.csv"
+        in archive_names
+    )
+    assert (
+        "calibration_run/artifacts/selected_candidate_local_clip_sync_candidate_surface.csv"
+        in archive_names
+    )
+    assert (
+        "calibration_run/artifacts/selected_candidate_local_clip_sync_candidate_surface_summary.json"
         in archive_names
     )
     assert "selected_stage/records/event_scores.jsonl" in archive_names
