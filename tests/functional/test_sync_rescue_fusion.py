@@ -144,7 +144,7 @@ def test_positive_sync_score_is_gated_with_rescue() -> None:
 
 
 @pytest.mark.unit
-def test_positive_tubelet_score_is_coverage_penalized_for_partial_clip() -> None:
+def test_positive_tubelet_score_is_not_coverage_penalized_for_partial_clip() -> None:
     extractor = SyntheticProbeEvidenceExtractor(
         method_variant="tubelet_only",
         method_config=TUBELET_ONLY_CONFIG,
@@ -165,7 +165,7 @@ def test_positive_tubelet_score_is_coverage_penalized_for_partial_clip() -> None
         coverage_ratio=1.0,
     )
 
-    assert saturated_partial_score == 0.125
+    assert saturated_partial_score == 1.0
     assert full_coverage_score == 1.0
 
 
@@ -360,12 +360,9 @@ def _score_payload_projections(
     embedding_support: float,
     coverage_ratio: float,
 ) -> float:
+    del coverage_ratio
     base_score = sum(projections) / len(projections)
     support_score = embedding_support * 0.45
-    if base_score > 0.0:
-        base_score *= coverage_ratio
-    if support_score > 0.0:
-        support_score *= coverage_ratio
     return _clip_score(base_score + support_score)
 
 

@@ -640,12 +640,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             "embedding_projection_support_weight",
         )
         support_score = float(embedding_support) * projection_support_weight
-        if self._coverage_penalty_enabled():
-            normalized_coverage_ratio = max(0.0, min(1.0, float(coverage_ratio)))
-            if base_score > 0.0:
-                base_score *= normalized_coverage_ratio
-            if support_score > 0.0:
-                support_score *= normalized_coverage_ratio
+        del coverage_ratio
         return self._clip_score(base_score + support_score)
 
     def _resolve_score_calibration_value(self, field_name: str) -> float:

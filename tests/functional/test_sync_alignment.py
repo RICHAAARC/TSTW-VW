@@ -214,3 +214,66 @@ def test_sync_search_range_does_not_expand_from_ground_truth() -> None:
     assert sync_result["sync_alignment_error"] == abs(
         sync_result["sync_estimated_offset"] - (-8)
     )
+
+
+def test_short_local_clip_coverage_penalty_does_not_double_scale_payload_scores(
+    tmp_path: Path,
+) -> None:
+    """Validate short local clips keep coverage penalty in alignment scoring only.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    backend = SyntheticVideoLatentPlaceholder(latent_shape=(32, 4, 16, 16))
+    backend.set_output_root(tmp_path)
+    base_sample = backend.build_sample(
+        "sample_test_watermarked_positive_local_clip_penalty_000001",
+        "test",
+        "watermarked_positive",
+    )
+    local_clip_config = {
+        **TUBELET_SYNC_CONFIG,
+        "sync_search": {
+            **TUBELET_SYNC_CONFIG["sync_search"],
+            "offset_search_min": -8,
+            "offset_search_max": 8,
+            "enable_scale_search": False,
+        },
+    }
+    penalty_disabled_config = {
+        **local_clip_config,
+        "sync_search": {
+            **local_clip_config["sync_search"],
+            "coverage_penalty_enabled": False,
+        },
+    }
+    watermarked_sample = build_method_from_config(local_clip_config).embed(base_sample, {})
+    seeded_sample = replace(
+        watermarked_sample,
+        latent_generation_seed_random=42,
+    )
+    local_clip = TemporalAttackPlaceholder("local_clip", {"clip_length": 4})
+    clipped_sample = local_clip.apply(seeded_sample)
+
+    penalty_enabled_result = build_method_from_config(local_clip_config).detect(
+        clipped_sample,
+        threshold_record=None,
+    )
+    penalty_disabled_result = build_method_from_config(penalty_disabled_config).detect(
+        clipped_sample,
+        threshold_record=None,
+    )
+
+    enabled_trace = penalty_enabled_result.mechanism_trace
+    disabled_trace = penalty_disabled_result.mechanism_trace
+
+    assert enabled_trace["sync_estimated_offset"] == -24
+    assert disabled_trace["sync_estimated_offset"] == -24
+    assert enabled_trace["sync_candidate_score_penalized"] < enabled_trace["sync_candidate_score_raw"]
+    assert disabled_trace["sync_candidate_score_penalized"] == disabled_trace["sync_candidate_score_raw"]
+    assert penalty_enabled_result.evidence_scores["S_tubelet"] == penalty_disabled_result.evidence_scores["S_tubelet"]
+    assert enabled_trace["S_payload_aligned"] == disabled_trace["S_payload_aligned"]
+    assert enabled_trace["S_payload_rescue_gain"] == disabled_trace["S_payload_rescue_gain"]
