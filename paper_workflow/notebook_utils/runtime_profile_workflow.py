@@ -961,6 +961,79 @@ def summarize_gpu_runtime_profile(*, run_root: str | Path) -> dict[str, Any]:
     )
 
 
+def write_gpu_runtime_audit_record(
+    *,
+    run_root: str | Path,
+    profiling_mode: str,
+    profiling_expected: bool,
+) -> dict[str, Any]:
+    """功能：写出 GPU runtime 审计记录。
+
+    Persist a GPU runtime audit record for packaging and review.
+
+    Args:
+        run_root: Run-root path.
+        profiling_mode: Human-readable profiling mode label.
+        profiling_expected: Whether the current notebook mode expected GPU profiling.
+
+    Returns:
+        The persisted GPU audit payload.
+    """
+    runtime_profile_dir = _runtime_profile_dir(run_root)
+    trace_path = runtime_profile_dir / "gpu_runtime_trace.csv"
+    summary_path = runtime_profile_dir / "gpu_runtime_summary.json"
+    report_path = runtime_profile_dir / "gpu_runtime_report.md"
+    audit_record_path = runtime_profile_dir / "gpu_runtime_audit_record.json"
+    session_path = _gpu_profiler_session_path(run_root)
+    session_payload = _read_gpu_profiler_session(run_root)
+
+    summary_payload: dict[str, Any] | None = None
+    if trace_path.exists():
+        summary_payload = summarize_gpu_runtime_profile(run_root=run_root)
+    elif summary_path.exists():
+        try:
+            loaded_summary = read_json_file(summary_path)
+        except Exception:
+            loaded_summary = None
+        if isinstance(loaded_summary, dict):
+            summary_payload = loaded_summary
+
+    if summary_payload is None:
+        record_status = "skipped"
+        if profiling_expected:
+            if session_payload.get("process_started") is False:
+                skip_reason = "gpu_runtime_profile_start_failed"
+            elif session_path.exists():
+                skip_reason = "gpu_runtime_trace_not_available"
+            else:
+                skip_reason = "gpu_runtime_profile_not_run"
+        else:
+            skip_reason = "gpu_runtime_profile_not_requested"
+    else:
+        record_status = "available"
+        skip_reason = None
+
+    audit_payload = {
+        "generated_at_utc": iso_timestamp_utc(),
+        "record_status": record_status,
+        "profiling_mode": str(profiling_mode).strip() or "unspecified",
+        "profiling_expected": bool(profiling_expected),
+        "trace_path": str(trace_path),
+        "trace_exists": trace_path.exists(),
+        "summary_path": str(summary_path),
+        "summary_exists": summary_path.exists(),
+        "report_path": str(report_path),
+        "report_exists": report_path.exists(),
+        "profiler_session_path": str(session_path),
+        "profiler_session_exists": session_path.exists(),
+        "profiler_session": session_payload,
+        "skip_reason": skip_reason,
+        "gpu_runtime_summary": summary_payload,
+    }
+    write_json_file(audit_record_path, audit_payload)
+    return audit_payload
+
+
 def watch_real_video_vae_latent_progress(*, run_root: str | Path) -> dict[str, Any]:
     """功能：生成当前进度快照。
 

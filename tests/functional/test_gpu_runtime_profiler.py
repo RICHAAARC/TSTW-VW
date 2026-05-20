@@ -216,6 +216,77 @@ def test_runtime_profile_workflow_records_warnings_for_forced_profiler_shutdown(
     assert payload["warnings"][1]["warning_type"] == "gpu_runtime_profiler_force_kill"
 
 
+def test_runtime_profile_workflow_writes_skipped_gpu_audit_record_without_trace(
+    tmp_path: Path,
+) -> None:
+    """Validate a skipped GPU audit record is still persisted without trace output.
+
+    Args:
+        tmp_path: Temporary run root.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "run_root"
+
+    payload = runtime_profile_workflow.write_gpu_runtime_audit_record(
+        run_root=run_root,
+        profiling_mode="notebook_setup_only",
+        profiling_expected=False,
+    )
+    audit_path = run_root / "runtime_profile" / "gpu_runtime_audit_record.json"
+
+    assert audit_path.exists()
+    assert payload["record_status"] == "skipped"
+    assert payload["skip_reason"] == "gpu_runtime_profile_not_requested"
+    assert payload["trace_exists"] is False
+    assert payload["summary_exists"] is False
+    assert payload["gpu_runtime_summary"] is None
+
+
+def test_runtime_profile_workflow_writes_available_gpu_audit_record_from_trace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate GPU audit record materializes summary payload when trace exists.
+
+    Args:
+        tmp_path: Temporary run root.
+        monkeypatch: Pytest monkeypatch helper.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "run_root"
+    stop_file = run_root / "runtime_profile" / "gpu_profile_stop.flag"
+    trace_path = run_root / "runtime_profile" / "gpu_runtime_trace.csv"
+
+    monkeypatch.setattr(gpu_profile_module.shutil, "which", lambda command_name: None)
+    gpu_profile_module.profile_gpu_runtime(
+        run_root=run_root,
+        interval_seconds=0.01,
+        output_csv=trace_path,
+        stop_file=stop_file,
+    )
+
+    payload = runtime_profile_workflow.write_gpu_runtime_audit_record(
+        run_root=run_root,
+        profiling_mode="stage2_mechanism_calibration",
+        profiling_expected=True,
+    )
+    audit_path = run_root / "runtime_profile" / "gpu_runtime_audit_record.json"
+    summary_path = run_root / "runtime_profile" / "gpu_runtime_summary.json"
+
+    assert audit_path.exists()
+    assert summary_path.exists()
+    assert payload["record_status"] == "available"
+    assert payload["skip_reason"] is None
+    assert payload["trace_exists"] is True
+    assert payload["summary_exists"] is True
+    assert isinstance(payload["gpu_runtime_summary"], dict)
+    assert payload["gpu_runtime_summary"]["trace_available"] is True
+
+
 def test_runtime_profile_workflow_loads_governed_profile_config() -> None:
     """Validate the notebook helper loads a governed runtime-profile config.
 
