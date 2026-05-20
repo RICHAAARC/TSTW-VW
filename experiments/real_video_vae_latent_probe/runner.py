@@ -869,15 +869,14 @@ class RealVideoVaeLatentRunner:
                     "attack_name": event_plan_entry.attack_name,
                 }
             )[:24]
-            decoded_artifact_digest = compute_object_digest(
-                {
-                    "source_sample_id": source_sample_id,
-                    "source_sample_role": source_sample_role,
-                    "split": event_plan_entry.split,
-                    "method_variant": method_config["method_variant"],
-                    "latent_digest": working_sample.latent_tensor_digest_random,
-                }
-            )[:24]
+            decoded_artifact_digest = self._build_decoded_video_artifact_digest(
+                source_sample_id=source_sample_id,
+                source_sample_role=source_sample_role,
+                sample_role=event_plan_entry.sample_role,
+                split=event_plan_entry.split,
+                method_variant=method_config["method_variant"],
+                latent_digest=working_sample.latent_tensor_digest_random,
+            )
             embedded_key = (
                 event_plan_entry.split,
                 source_sample_role,
@@ -927,12 +926,11 @@ class RealVideoVaeLatentRunner:
                 video_resolution,
             )
 
-            decoded_video_relpath = (
-                Path("artifacts")
-                / "videos"
-                / "decoded"
-                / method_config["method_variant"]
-                / f"{decoded_artifact_digest}{video_artifact_suffix}"
+            decoded_video_relpath = self._build_decoded_video_artifact_relpath(
+                sample_role=event_plan_entry.sample_role,
+                method_variant=method_config["method_variant"],
+                artifact_digest=decoded_artifact_digest,
+                video_artifact_suffix=video_artifact_suffix,
             )
             with self._runner_substage(
                 "runner_decode_video",
@@ -973,12 +971,17 @@ class RealVideoVaeLatentRunner:
                     event_plan_entry.attack_name,
                     materialized_attack_params,
                 )
+            attack_artifact_digest = self._build_attack_case_artifact_digest(
+                event_plan_entry=event_plan_entry,
+                method_variant=method_config["method_variant"],
+                attack_params=materialized_attack_params,
+            )
             attacked_video_relpath = (
                 Path("artifacts")
                 / "videos"
                 / "attacked"
                 / event_plan_entry.attack_name
-                / f"{event_artifact_digest}{video_artifact_suffix}"
+                / f"{attack_artifact_digest}{video_artifact_suffix}"
             )
             if event_plan_entry.attack_name == "no_attack":
                 attacked_video_metadata = decoded_video_metadata
@@ -1051,7 +1054,7 @@ class RealVideoVaeLatentRunner:
                 / "latents"
                 / "reencoded"
                 / event_plan_entry.attack_name
-                / f"{event_artifact_digest}.npy"
+                / f"{attack_artifact_digest}.npy"
             )
             with self._runner_substage(
                 "runner_reencode_latent",
@@ -1279,15 +1282,14 @@ class RealVideoVaeLatentRunner:
                     "attack_name": event_plan_entry.attack_name,
                 }
             )[:24]
-            decoded_artifact_digest = compute_object_digest(
-                {
-                    "source_sample_id": source_sample_id,
-                    "source_sample_role": source_sample_role,
-                    "split": event_plan_entry.split,
-                    "method_variant": method_config["method_variant"],
-                    "latent_digest": working_sample.latent_tensor_digest_random,
-                }
-            )[:24]
+            decoded_artifact_digest = self._build_decoded_video_artifact_digest(
+                source_sample_id=source_sample_id,
+                source_sample_role=source_sample_role,
+                sample_role=event_plan_entry.sample_role,
+                split=event_plan_entry.split,
+                method_variant=method_config["method_variant"],
+                latent_digest=working_sample.latent_tensor_digest_random,
+            )
             embedded_key = (
                 event_plan_entry.split,
                 source_sample_role,
@@ -1336,12 +1338,11 @@ class RealVideoVaeLatentRunner:
                 video_fps,
                 video_resolution,
             )
-            decoded_video_relpath = (
-                Path("artifacts")
-                / "videos"
-                / "decoded"
-                / method_config["method_variant"]
-                / f"{decoded_artifact_digest}{video_artifact_suffix}"
+            decoded_video_relpath = self._build_decoded_video_artifact_relpath(
+                sample_role=event_plan_entry.sample_role,
+                method_variant=method_config["method_variant"],
+                artifact_digest=decoded_artifact_digest,
+                video_artifact_suffix=video_artifact_suffix,
             )
             materialized_attack_params = self._materialize_attack_params(
                 working_sample,
@@ -1354,19 +1355,24 @@ class RealVideoVaeLatentRunner:
                 event_plan_entry.attack_name,
                 materialized_attack_params,
             )
+            attack_artifact_digest = self._build_attack_case_artifact_digest(
+                event_plan_entry=event_plan_entry,
+                method_variant=method_config["method_variant"],
+                attack_params=materialized_attack_params,
+            )
             attacked_video_relpath = (
                 Path("artifacts")
                 / "videos"
                 / "attacked"
                 / event_plan_entry.attack_name
-                / f"{event_artifact_digest}{video_artifact_suffix}"
+                / f"{attack_artifact_digest}{video_artifact_suffix}"
             )
             reencoded_latent_relpath = (
                 Path("artifacts")
                 / "latents"
                 / "reencoded"
                 / event_plan_entry.attack_name
-                / f"{event_artifact_digest}.npy"
+                / f"{attack_artifact_digest}.npy"
             )
             contexts.append(
                 EventRuntimeContext(
@@ -1918,6 +1924,71 @@ class RealVideoVaeLatentRunner:
             str(fps),
             f"{int(target_resolution[0])}x{int(target_resolution[1])}",
         )
+
+    def _sample_role_requires_method_scoped_artifacts(self, sample_role: str) -> bool:
+        return sample_role in {"watermarked_positive", "attacked_positive"}
+
+    def _build_decoded_video_artifact_digest(
+        self,
+        *,
+        source_sample_id: str,
+        source_sample_role: str,
+        sample_role: str,
+        split: str,
+        method_variant: str,
+        latent_digest: str,
+    ) -> str:
+        digest_payload = {
+            "source_sample_id": source_sample_id,
+            "source_sample_role": source_sample_role,
+            "split": split,
+            "latent_digest": latent_digest,
+        }
+        if self._sample_role_requires_method_scoped_artifacts(sample_role):
+            digest_payload["method_variant"] = method_variant
+        return compute_object_digest(digest_payload)[:24]
+
+    def _build_decoded_video_artifact_relpath(
+        self,
+        *,
+        sample_role: str,
+        method_variant: str,
+        artifact_digest: str,
+        video_artifact_suffix: str,
+    ) -> Path:
+        artifact_scope = (
+            method_variant
+            if self._sample_role_requires_method_scoped_artifacts(sample_role)
+            else "negative_shared"
+        )
+        return (
+            Path("artifacts")
+            / "videos"
+            / "decoded"
+            / artifact_scope
+            / f"{artifact_digest}{video_artifact_suffix}"
+        )
+
+    def _build_attack_case_artifact_digest(
+        self,
+        *,
+        event_plan_entry: EventPlanEntry,
+        method_variant: str,
+        attack_params: dict[str, Any],
+    ) -> str:
+        digest_payload = {
+            "event_id": event_plan_entry.event_id,
+            "sample_id": event_plan_entry.sample_id,
+            "sample_role": event_plan_entry.sample_role,
+            "split": event_plan_entry.split,
+            "attack_name": event_plan_entry.attack_name,
+            "attack_params": dict(attack_params),
+        }
+        if self._sample_role_requires_method_scoped_artifacts(
+            event_plan_entry.sample_role
+        ):
+            digest_payload["method_variant"] = method_variant
+        return compute_object_digest(digest_payload)[:24]
 
     def _build_attacked_video_cache_key(
         self,

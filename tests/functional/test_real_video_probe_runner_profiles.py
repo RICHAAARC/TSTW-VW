@@ -703,6 +703,171 @@ def test_load_metric_frame_pair_uses_supplied_frames_without_artifact_reads(
 
 
 @pytest.mark.unit
+def test_attack_case_artifact_digest_distinguishes_local_clip_variants() -> None:
+    """Validate per-attack artifacts separate local-clip cases by materialized params.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    event_plan_entry = types.SimpleNamespace(
+        event_id="sample_dev_attacked_positive_000001:local_clip",
+        sample_id="sample_dev_attacked_positive_000001",
+        split="dev",
+        sample_role="attacked_positive",
+        attack_name="local_clip",
+    )
+
+    short_digest = runner._build_attack_case_artifact_digest(
+        event_plan_entry=event_plan_entry,
+        method_variant="tubelet_sync",
+        attack_params={
+            "clip_start": 8,
+            "clip_length": 4,
+            "original_frame_count": 32,
+            "observed_frame_count": 4,
+            "ground_truth_offset": -8,
+            "ground_truth_scale": 1.0,
+        },
+    )
+    long_digest = runner._build_attack_case_artifact_digest(
+        event_plan_entry=event_plan_entry,
+        method_variant="tubelet_sync",
+        attack_params={
+            "clip_start": 8,
+            "clip_length": 12,
+            "original_frame_count": 32,
+            "observed_frame_count": 12,
+            "ground_truth_offset": -8,
+            "ground_truth_scale": 1.0,
+        },
+    )
+
+    assert short_digest != long_digest
+    assert (
+        Path("artifacts") / "latents" / "reencoded" / "local_clip" / f"{short_digest}.npy"
+        != Path("artifacts") / "latents" / "reencoded" / "local_clip" / f"{long_digest}.npy"
+    )
+
+
+@pytest.mark.unit
+def test_attack_case_artifact_digest_reuses_negative_artifacts_across_methods() -> None:
+    """Validate negative attacked artifacts can be reused across method variants.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    event_plan_entry = types.SimpleNamespace(
+        event_id="sample_dev_attacked_negative_000001:local_clip",
+        sample_id="sample_dev_attacked_negative_000001",
+        split="dev",
+        sample_role="attacked_negative",
+        attack_name="local_clip",
+    )
+    attack_params = {
+        "clip_start": 8,
+        "clip_length": 4,
+        "original_frame_count": 32,
+        "observed_frame_count": 4,
+        "ground_truth_offset": -8,
+        "ground_truth_scale": 1.0,
+    }
+
+    frame_prc_digest = runner._build_attack_case_artifact_digest(
+        event_plan_entry=event_plan_entry,
+        method_variant="frame_prc",
+        attack_params=attack_params,
+    )
+    tubelet_sync_digest = runner._build_attack_case_artifact_digest(
+        event_plan_entry=event_plan_entry,
+        method_variant="tubelet_sync",
+        attack_params=attack_params,
+    )
+
+    assert frame_prc_digest == tubelet_sync_digest
+
+
+@pytest.mark.unit
+def test_decoded_video_artifact_scope_shares_negative_and_keeps_positive_isolated() -> None:
+    """Validate decoded-video artifacts share negative scope and isolate positives.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+
+    negative_frame_prc_digest = runner._build_decoded_video_artifact_digest(
+        source_sample_id="sample_dev_clean_negative_000001",
+        source_sample_role="clean_negative",
+        sample_role="attacked_negative",
+        split="dev",
+        method_variant="frame_prc",
+        latent_digest="negative_latent_digest",
+    )
+    negative_tubelet_sync_digest = runner._build_decoded_video_artifact_digest(
+        source_sample_id="sample_dev_clean_negative_000001",
+        source_sample_role="clean_negative",
+        sample_role="attacked_negative",
+        split="dev",
+        method_variant="tubelet_sync",
+        latent_digest="negative_latent_digest",
+    )
+    positive_frame_prc_digest = runner._build_decoded_video_artifact_digest(
+        source_sample_id="sample_dev_watermarked_positive_000001",
+        source_sample_role="watermarked_positive",
+        sample_role="attacked_positive",
+        split="dev",
+        method_variant="frame_prc",
+        latent_digest="positive_latent_digest",
+    )
+    positive_tubelet_sync_digest = runner._build_decoded_video_artifact_digest(
+        source_sample_id="sample_dev_watermarked_positive_000001",
+        source_sample_role="watermarked_positive",
+        sample_role="attacked_positive",
+        split="dev",
+        method_variant="tubelet_sync",
+        latent_digest="positive_latent_digest",
+    )
+
+    assert negative_frame_prc_digest == negative_tubelet_sync_digest
+    assert positive_frame_prc_digest != positive_tubelet_sync_digest
+    assert runner._build_decoded_video_artifact_relpath(
+        sample_role="attacked_negative",
+        method_variant="tubelet_sync",
+        artifact_digest=negative_frame_prc_digest,
+        video_artifact_suffix=".mp4",
+    ) == (
+        Path("artifacts")
+        / "videos"
+        / "decoded"
+        / "negative_shared"
+        / f"{negative_frame_prc_digest}.mp4"
+    )
+    assert runner._build_decoded_video_artifact_relpath(
+        sample_role="attacked_positive",
+        method_variant="tubelet_sync",
+        artifact_digest=positive_tubelet_sync_digest,
+        video_artifact_suffix=".mp4",
+    ) == (
+        Path("artifacts")
+        / "videos"
+        / "decoded"
+        / "tubelet_sync"
+        / f"{positive_tubelet_sync_digest}.mp4"
+    )
+
+
+@pytest.mark.unit
 def test_quality_metric_policy_can_limit_execution_to_selected_attack_and_role() -> None:
     """Validate quality metrics can be scoped to specific attacks and sample roles.
 
