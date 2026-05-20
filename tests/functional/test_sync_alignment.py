@@ -6,6 +6,8 @@ Module type: General module
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 pytestmark = pytest.mark.quick
@@ -144,6 +146,50 @@ def test_negative_sample_uses_same_sync_search_configuration(tmp_path: Path) -> 
 
     assert detection_result.mechanism_trace["sync_search_enabled"] is True
     assert detection_result.mechanism_trace["sync_ground_truth_offset"] == -8
+
+
+def test_sync_alignment_expands_offset_range_for_short_local_clip(tmp_path: Path) -> None:
+    """Validate short local clips can search the full observable negative offset range.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    backend = SyntheticVideoLatentPlaceholder(latent_shape=(32, 4, 16, 16))
+    backend.set_output_root(tmp_path)
+    base_sample = backend.build_sample(
+        "sample_test_watermarked_positive_local_clip_000001",
+        "test",
+        "watermarked_positive",
+    )
+    local_clip_config = {
+        **TUBELET_SYNC_CONFIG,
+        "sync_search": {
+            **TUBELET_SYNC_CONFIG["sync_search"],
+            "offset_search_min": -8,
+            "offset_search_max": 8,
+            "enable_scale_search": False,
+        },
+    }
+    watermark_method = build_method_from_config(local_clip_config)
+    watermarked_sample = watermark_method.embed(base_sample, {})
+    seeded_sample = replace(
+        watermarked_sample,
+        latent_generation_seed_random=42,
+    )
+    local_clip = TemporalAttackPlaceholder("local_clip", {"clip_length": 4})
+    clipped_sample = local_clip.apply(seeded_sample)
+
+    assert clipped_sample.applied_attack_params["ground_truth_offset"] == -24
+
+    detection_result = watermark_method.detect(clipped_sample, threshold_record=None)
+
+    assert detection_result.mechanism_trace["sync_estimated_offset"] == -24
+    assert detection_result.mechanism_trace["sync_ground_truth_offset"] == -24
+    assert detection_result.mechanism_trace["sync_alignment_error"] == 0
+    assert detection_result.mechanism_trace["sync_peak_rank"] == 1
 
 
 def test_sync_search_range_does_not_expand_from_ground_truth() -> None:

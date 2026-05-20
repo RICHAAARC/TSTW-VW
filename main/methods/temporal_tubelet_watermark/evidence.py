@@ -444,7 +444,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
     ) -> tuple[dict[tuple[int, float], float], dict[tuple[int, float], dict[str, float | int]]]:
         alignment_scores: dict[tuple[int, float], float] = {}
         alignment_candidate_metrics: dict[tuple[int, float], dict[str, float | int]] = {}
-        for offset_candidate in self._resolve_offset_candidates():
+        for offset_candidate in self._resolve_offset_candidates(sample):
             for scale_candidate in self._resolve_scale_candidates(sample):
                 candidate_key = (offset_candidate, scale_candidate)
                 candidate_metrics = self._score_alignment_candidate(
@@ -700,13 +700,58 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             return [-1.0]
         return aligned_projections
 
-    def _resolve_offset_candidates(self) -> list[int]:
+    def _resolve_offset_candidates(self, sample: LatentSample | None = None) -> list[int]:
         sync_search_config = self._resolve_sync_search_config()
         offset_min = int(sync_search_config.get("offset_search_min", -16))
         offset_max = int(sync_search_config.get("offset_search_max", 16))
         if offset_min > offset_max:
             raise ValueError("sync_search offset_search_min must not exceed offset_search_max")
+        if sample is not None and not self._scale_search_enabled(sample):
+            reference_frame_count = self._resolve_reference_frame_count_for_sync_search(sample)
+            observed_frame_count = self._resolve_observed_frame_count_for_sync_search(sample)
+            if (
+                reference_frame_count is not None
+                and observed_frame_count is not None
+                and reference_frame_count > observed_frame_count
+            ):
+                offset_min = min(
+                    offset_min,
+                    int(observed_frame_count) - int(reference_frame_count),
+                )
         return list(range(offset_min, offset_max + 1))
+
+    def _resolve_reference_frame_count_for_sync_search(
+        self,
+        sample: LatentSample,
+    ) -> int | None:
+        mechanism_trace = sample.mechanism_trace or {}
+        reference_latent_shape = mechanism_trace.get("reference_latent_shape")
+        if (
+            isinstance(reference_latent_shape, (list, tuple))
+            and reference_latent_shape
+            and isinstance(reference_latent_shape[0], int)
+            and int(reference_latent_shape[0]) > 0
+        ):
+            return int(reference_latent_shape[0])
+        applied_attack_params = sample.applied_attack_params or {}
+        original_frame_count = applied_attack_params.get("original_frame_count")
+        if isinstance(original_frame_count, int) and original_frame_count > 0:
+            return int(original_frame_count)
+        return self._resolve_observed_frame_count_for_sync_search(sample)
+
+    def _resolve_observed_frame_count_for_sync_search(
+        self,
+        sample: LatentSample,
+    ) -> int | None:
+        if sample.latent_shape and isinstance(sample.latent_shape[0], int):
+            observed_frame_count = int(sample.latent_shape[0])
+            if observed_frame_count > 0:
+                return observed_frame_count
+        applied_attack_params = sample.applied_attack_params or {}
+        observed_frame_count = applied_attack_params.get("observed_frame_count")
+        if isinstance(observed_frame_count, int) and observed_frame_count > 0:
+            return int(observed_frame_count)
+        return None
 
     def _resolve_scale_candidates(self, sample: LatentSample | None = None) -> list[float]:
         if not self._scale_search_enabled(sample):
