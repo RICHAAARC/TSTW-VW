@@ -70,6 +70,8 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     }
     wide_sync_candidate = {
         "candidate_status": "sync_gain_candidate_selected",
+        "candidate_selection_status": "rescue_with_leakage",
+        "negative_leakage_status": "leakage_risk",
         "method_variant": "tubelet_sync_real_video_vae_wide_candidate",
         "base_method_variant": "tubelet_sync",
         "tubelet_length": 1,
@@ -101,6 +103,8 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     }
     refined_sync_candidate = {
         "candidate_status": "sync_gain_candidate_selected",
+        "candidate_selection_status": "eligible",
+        "negative_leakage_status": "controlled",
         "method_variant": "tubelet_sync_real_video_vae_candidate",
         "base_method_variant": "tubelet_sync",
         "tubelet_length": 1,
@@ -348,6 +352,13 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
         "method_variant"
     ]
     assert summary["selected_tubelet_sync_candidate"]["method_variant"] == "tubelet_sync_real_video_vae_candidate"
+    assert summary["selection_completion_status"] == "complete"
+    assert summary["selection_blocking_reason"] is None
+    assert summary["selected_sync_method_variant"] == "tubelet_sync_real_video_vae_candidate"
+    assert summary["selected_sync_candidate_status"] == "eligible"
+    assert summary["selected_sync_negative_leakage_status"] == "controlled"
+    assert summary["selected_sync_local_clip_gain"] == 0.1
+    assert summary["selected_sync_max_attacked_negative_fpr"] == 0.0
     assert Path(summary["timing_summary_path"]).exists()
     assert Path(summary["calibration_runtime_profile_summary_path"]).exists()
     assert Path(summary["calibration_runtime_profile_report_path"]).exists()
@@ -501,6 +512,13 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
         "method_variant"
     ]
     assert summary["selected_tubelet_sync_candidate"] is None
+    assert summary["selection_completion_status"] == "incomplete_no_compatible_tubelet_sync_rows"
+    assert summary["selection_blocking_reason"] == "selected_anchor_not_covered_by_sync_stage_records"
+    assert summary["selected_sync_method_variant"] is None
+    assert summary["selected_sync_candidate_status"] is None
+    assert summary["selected_sync_negative_leakage_status"] is None
+    assert summary["selected_sync_local_clip_gain"] is None
+    assert summary["selected_sync_max_attacked_negative_fpr"] is None
     assert summary["generated_tubelet_sync_candidate_config_path"] is None
     assert Path(summary["timing_summary_path"]).exists()
     assert not candidate_method_config_path.exists()

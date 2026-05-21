@@ -213,6 +213,10 @@ def run_stage2_mechanism_calibration(
             calibration_runtime_profile_report_path
         ),
     }
+    calibration_summary = {
+        **calibration_summary,
+        **_build_calibration_summary_selection_fields(calibration_summary),
+    }
     _write_json(calibration_summary_path, calibration_summary)
     return {
         **calibration_summary,
@@ -331,6 +335,16 @@ def _run_flat_mechanism_calibration(
             "selection_blocking_reason"
         ),
         "calibration_blocking_details": selected_candidate_payload.get(
+            "selection_blocking_details"
+        ),
+        "selection_completion_status": selected_candidate_payload.get(
+            "selection_completion_status",
+            "complete",
+        ),
+        "selection_blocking_reason": selected_candidate_payload.get(
+            "selection_blocking_reason"
+        ),
+        "selection_blocking_details": selected_candidate_payload.get(
             "selection_blocking_details"
         ),
         "allowed_splits": _read_string_list(grid_config, "allowed_splits"),
@@ -616,6 +630,16 @@ def _run_staged_mechanism_calibration(
         "calibration_completion_status": calibration_completion_status,
         "calibration_blocking_reason": calibration_blocking_reason,
         "calibration_blocking_details": calibration_blocking_details,
+        "selection_completion_status": final_stage_selection_payload.get(
+            "selection_completion_status",
+            "complete",
+        ),
+        "selection_blocking_reason": final_stage_selection_payload.get(
+            "selection_blocking_reason"
+        ),
+        "selection_blocking_details": final_stage_selection_payload.get(
+            "selection_blocking_details"
+        ),
         "search_terminated_early": search_terminated_early,
         "terminated_before_stage_name": terminated_before_stage_name,
         "search_stage_count": len(stage_summaries),
@@ -651,6 +675,58 @@ def _summarize_run_timing_artifacts(
         output_md=report_path,
     )
     return summary, summary_path, report_path
+
+
+def _build_calibration_summary_selection_fields(
+    calibration_summary: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(calibration_summary, dict):
+        raise TypeError("calibration_summary must be a dictionary")
+
+    selection_completion_status = calibration_summary.get("selection_completion_status")
+    selection_blocking_reason = calibration_summary.get("selection_blocking_reason")
+    selection_blocking_details = calibration_summary.get("selection_blocking_details")
+    selected_tubelet_sync_candidate = calibration_summary.get(
+        "selected_tubelet_sync_candidate"
+    )
+    if not isinstance(selected_tubelet_sync_candidate, dict):
+        return {
+            "selection_completion_status": selection_completion_status,
+            "selection_blocking_reason": selection_blocking_reason,
+            "selection_blocking_details": selection_blocking_details,
+            "selected_sync_method_variant": None,
+            "selected_sync_candidate_status": None,
+            "selected_sync_negative_leakage_status": None,
+            "selected_sync_local_clip_gain": None,
+            "selected_sync_max_attacked_negative_fpr": None,
+        }
+
+    selected_metrics = selected_tubelet_sync_candidate.get("metrics")
+    if not isinstance(selected_metrics, dict):
+        selected_metrics = {}
+    selected_sync_candidate_status = selected_tubelet_sync_candidate.get(
+        "candidate_selection_status"
+    )
+    if selected_sync_candidate_status is None:
+        selected_sync_candidate_status = selected_tubelet_sync_candidate.get(
+            "candidate_status"
+        )
+    return {
+        "selection_completion_status": selection_completion_status,
+        "selection_blocking_reason": selection_blocking_reason,
+        "selection_blocking_details": selection_blocking_details,
+        "selected_sync_method_variant": selected_tubelet_sync_candidate.get(
+            "method_variant"
+        ),
+        "selected_sync_candidate_status": selected_sync_candidate_status,
+        "selected_sync_negative_leakage_status": selected_tubelet_sync_candidate.get(
+            "negative_leakage_status"
+        ),
+        "selected_sync_local_clip_gain": selected_metrics.get("local_clip_sync_gain"),
+        "selected_sync_max_attacked_negative_fpr": selected_metrics.get(
+            "max_attacked_negative_fpr"
+        ),
+    }
 
 
 def _build_runtime_timing_snapshot(
