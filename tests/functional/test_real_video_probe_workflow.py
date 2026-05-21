@@ -908,14 +908,38 @@ def test_write_probe_stage2_local_clip_sync_diagnostics_persists_candidate_surfa
         surface_rows = list(csv.DictReader(handle))
     assert any(row["is_current_selected_candidate"] == "True" for row in surface_rows)
     assert any(row["is_ground_truth_candidate"] == "True" for row in surface_rows)
+    assert "rank_hybrid_no_prior" in surface_rows[0]
+    assert "selected_hybrid_no_prior" in surface_rows[0]
 
     surface_summary_payload = json.loads(surface_summary_path.read_text(encoding="utf-8"))
     assert surface_summary_payload["surface_event_count"] == 1
+    assert surface_summary_payload["ranking_rule_names"] == [
+        "penalized_prior",
+        "penalized_no_prior",
+        "hybrid_prior",
+        "hybrid_no_prior",
+        "raw_prior",
+        "raw_no_prior",
+    ]
+    assert surface_summary_payload["events"][0]["search_score_rule"] == "hybrid_no_prior"
+    assert surface_summary_payload["events"][0]["selected_candidate"][
+        "selected_hybrid_no_prior"
+    ] is True
+    assert surface_summary_payload["events"][0]["selected_candidate"][
+        "is_current_selected_candidate"
+    ] is True
+    assert "sync_candidate_score_hybrid" in surface_summary_payload["events"][0][
+        "ranking_summaries"
+    ]["hybrid_no_prior"]["winner"]
     assert surface_summary_payload["events"][0]["recomputed_matches_recorded_selection"] is True
     assert (
         surface_summary_payload["events"][0]["recomputed_selected_candidate"][
             "offset_candidate"
         ]
+        == detection_result.mechanism_trace["sync_estimated_offset"]
+    )
+    assert (
+        surface_summary_payload["events"][0]["sync_result"]["sync_estimated_offset"]
         == detection_result.mechanism_trace["sync_estimated_offset"]
     )
 

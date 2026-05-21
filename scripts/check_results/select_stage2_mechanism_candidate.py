@@ -42,6 +42,7 @@ CALIBRATION_GRID_COLUMNS = [
     "min_sync_positive_margin",
     "min_sync_alignment_coverage_ratio",
     "min_sync_alignment_matched_count",
+    "min_sync_candidate_score",
     "no_attack_clean_negative_fpr",
     "no_attack_clean_positive_tpr",
     "max_attacked_negative_fpr",
@@ -605,6 +606,9 @@ def _build_tubelet_sync_calibration_grid_rows(
                 "min_sync_alignment_matched_count": sync_confidence_config[
                     "min_sync_alignment_matched_count"
                 ],
+                "min_sync_candidate_score": sync_confidence_config[
+                    "min_sync_candidate_score"
+                ],
                 "no_attack_clean_negative_fpr": clean_negative_fpr,
                 "no_attack_clean_positive_tpr": no_attack_clean_positive_tpr,
                 "max_attacked_negative_fpr": max_attacked_negative_fpr,
@@ -803,6 +807,14 @@ def _select_tubelet_sync_candidate(
             if isinstance(parsed_min_sync_alignment_matched_count, int)
             else 1
         )
+    resolved_min_sync_candidate_score = selected_row.get("min_sync_candidate_score")
+    if not isinstance(resolved_min_sync_candidate_score, (int, float)):
+        parsed_min_sync_candidate_score = parsed_payload.get("min_sync_candidate_score")
+        resolved_min_sync_candidate_score = (
+            float(parsed_min_sync_candidate_score)
+            if isinstance(parsed_min_sync_candidate_score, (int, float))
+            else 0.0
+        )
     return {
         "candidate_status": (
             "sync_gain_candidate_selected"
@@ -834,6 +846,7 @@ def _select_tubelet_sync_candidate(
             "min_sync_alignment_matched_count": int(
                 resolved_min_sync_alignment_matched_count
             ),
+            "min_sync_candidate_score": float(resolved_min_sync_candidate_score),
         },
         "metrics": {
             "no_attack_clean_negative_fpr": selected_row[
@@ -1020,6 +1033,11 @@ def _build_tubelet_sync_scan_seed(
                 grid,
                 "min_sync_alignment_matched_count",
                 [selected_candidate_sync_defaults["min_sync_alignment_matched_count"]],
+            ),
+            "min_sync_candidate_score": _read_optional_grid_numeric_list(
+                grid,
+                "min_sync_candidate_score",
+                [selected_candidate_sync_defaults["min_sync_candidate_score"]],
             ),
         },
         "rationale": [
@@ -1211,6 +1229,11 @@ def _parse_tubelet_sync_variant_name(method_variant: str) -> dict[str, Any]:
             )
         elif token.startswith("mc") and token[2:].isdigit():
             parsed_payload["min_sync_alignment_matched_count"] = int(token[2:])
+        elif token.startswith("cs") and token[2:].isdigit():
+            parsed_payload["min_sync_candidate_score"] = round(
+                int(token[2:]) / 1000.0,
+                6,
+            )
         elif token.startswith("fr"):
             fusion_rule_token = token[2:]
             if fusion_rule_token == "sync":
@@ -1278,6 +1301,12 @@ def _resolve_selected_candidate_sync_defaults(
         if isinstance(min_sync_alignment_matched_count, int)
         else 1
     )
+    min_sync_candidate_score = sync_search.get("min_sync_candidate_score", 0.0)
+    default_min_sync_candidate_score = (
+        round(float(min_sync_candidate_score), 6)
+        if isinstance(min_sync_candidate_score, (int, float))
+        else 0.0
+    )
     return {
         "fusion_rule": default_fusion_rule,
         "lambda_sync": default_lambda_sync,
@@ -1285,6 +1314,7 @@ def _resolve_selected_candidate_sync_defaults(
         "min_sync_positive_margin": default_min_sync_positive_margin,
         "min_sync_alignment_coverage_ratio": default_min_sync_alignment_coverage_ratio,
         "min_sync_alignment_matched_count": default_min_sync_alignment_matched_count,
+        "min_sync_candidate_score": default_min_sync_candidate_score,
     }
 
 
@@ -1351,10 +1381,18 @@ def _resolve_sync_confidence_config(event_record: dict[str, Any]) -> dict[str, f
         parsed_field_name="min_sync_alignment_matched_count",
         default_value=1,
     )
+    min_candidate_score = _resolve_numeric_sync_confidence_value(
+        mechanism_trace,
+        parsed_payload,
+        trace_field_name="sync_confidence_min_candidate_score",
+        parsed_field_name="min_sync_candidate_score",
+        default_value=0.0,
+    )
     return {
         "min_sync_positive_margin": min_margin,
         "min_sync_alignment_coverage_ratio": min_coverage_ratio,
         "min_sync_alignment_matched_count": min_matched_count,
+        "min_sync_candidate_score": min_candidate_score,
     }
 
 
@@ -1545,6 +1583,7 @@ def _write_text_report(
                 f"- min_sync_positive_margin: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['min_sync_positive_margin']}",
                 f"- min_sync_alignment_coverage_ratio: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['min_sync_alignment_coverage_ratio']}",
                 f"- min_sync_alignment_matched_count: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['min_sync_alignment_matched_count']}",
+                f"- min_sync_candidate_score: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['min_sync_candidate_score']}",
             ]
         )
     file_path.parent.mkdir(parents=True, exist_ok=True)

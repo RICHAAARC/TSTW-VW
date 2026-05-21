@@ -78,6 +78,7 @@ def test_tubelet_sync_scan_seed_uses_selected_candidate_defaults_for_missing_sta
     assert seed_payload["parameter_scan"]["min_sync_positive_margin"] == [0.0]
     assert seed_payload["parameter_scan"]["min_sync_alignment_coverage_ratio"] == [0.5]
     assert seed_payload["parameter_scan"]["min_sync_alignment_matched_count"] == [1]
+    assert seed_payload["parameter_scan"]["min_sync_candidate_score"] == [0.0]
 
 
 def test_mechanism_candidate_selector_uses_dev_and_calibration_only(
@@ -529,6 +530,7 @@ def test_mechanism_candidate_selector_uses_dev_and_calibration_only(
     assert result["tubelet_sync_scan_seed"]["seed_method_config"]["tubelet_length"] == 1
     assert result["tubelet_sync_scan_seed"]["parameter_scan"]["lambda_sync"] == [0.0, 0.1]
     assert result["tubelet_sync_scan_seed"]["parameter_scan"]["min_sync_positive_margin"] == [0.0, 0.12]
+    assert result["tubelet_sync_scan_seed"]["parameter_scan"]["min_sync_candidate_score"] == [0.0]
     assert (
         result["selected_tubelet_sync_candidate"]["method_variant"]
         == "tubelet_sync_cal_tl01_sp04x04_w045_sr04_ls000_frsync_rescue"
@@ -539,6 +541,7 @@ def test_mechanism_candidate_selector_uses_dev_and_calibration_only(
     assert result["selected_tubelet_sync_candidate"]["sync_search"]["min_sync_positive_margin"] == 0.12
     assert result["selected_tubelet_sync_candidate"]["sync_search"]["min_sync_alignment_coverage_ratio"] == 0.125
     assert result["selected_tubelet_sync_candidate"]["sync_search"]["min_sync_alignment_matched_count"] == 4
+    assert result["selected_tubelet_sync_candidate"]["sync_search"]["min_sync_candidate_score"] == 0.0
     assert result["selected_tubelet_sync_candidate"]["metrics"]["local_clip_sync_gain"] == 1.0
     assert Path(result["grid_output_path"]).exists()
     assert Path(result["report_path"]).exists()

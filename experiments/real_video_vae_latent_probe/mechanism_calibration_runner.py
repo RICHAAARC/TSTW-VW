@@ -1070,6 +1070,11 @@ def _build_stage_generated_method_configs(
         "min_sync_alignment_matched_count",
         [seed_sync_defaults["min_sync_alignment_matched_count"]],
     )
+    min_sync_candidate_scores = _read_optional_grid_numeric_list(
+        stage_grid,
+        "min_sync_candidate_score",
+        [seed_sync_defaults["min_sync_candidate_score"]],
+    )
     for (
         lambda_sync,
         sync_search_radius,
@@ -1077,6 +1082,7 @@ def _build_stage_generated_method_configs(
         min_sync_margin,
         min_sync_coverage_ratio,
         min_sync_matched_count,
+        min_sync_candidate_score,
     ) in itertools.product(
         lambda_sync_values,
         sync_search_radii,
@@ -1084,6 +1090,7 @@ def _build_stage_generated_method_configs(
         min_sync_margins,
         min_sync_coverage_ratios,
         min_sync_matched_counts,
+        min_sync_candidate_scores,
     ):
         generated_method_configs.append(
             _build_tubelet_sync_calibration_config(
@@ -1097,6 +1104,7 @@ def _build_stage_generated_method_configs(
                 min_sync_margin=min_sync_margin,
                 min_sync_coverage_ratio=min_sync_coverage_ratio,
                 min_sync_matched_count=min_sync_matched_count,
+                min_sync_candidate_score=min_sync_candidate_score,
             )
         )
     return generated_method_configs
@@ -1170,6 +1178,15 @@ def _resolve_seed_sync_defaults(
         ),
         "min_sync_alignment_matched_count": int(
             candidate_sync_search.get("min_sync_alignment_matched_count", template_sync_search.get("min_sync_alignment_matched_count", 1))
+        ),
+        "min_sync_candidate_score": round(
+            float(
+                candidate_sync_search.get(
+                    "min_sync_candidate_score",
+                    template_sync_search.get("min_sync_candidate_score", 0.0),
+                )
+            ),
+            6,
         ),
     }
 
@@ -1259,6 +1276,11 @@ def _build_generated_method_configs(
         "min_sync_alignment_matched_count",
         [1],
     )
+    min_sync_candidate_scores = _read_optional_grid_numeric_list(
+        grid_payload,
+        "min_sync_candidate_score",
+        [0.0],
+    )
 
     generated_method_configs: list[dict[str, Any]] = [
         _build_frame_prc_baseline_config(frame_prc_template)
@@ -1283,6 +1305,7 @@ def _build_generated_method_configs(
             min_sync_margin,
             min_sync_coverage_ratio,
             min_sync_matched_count,
+            min_sync_candidate_score,
         ) in itertools.product(
             lambda_sync_values,
             sync_search_radii,
@@ -1290,6 +1313,7 @@ def _build_generated_method_configs(
             min_sync_margins,
             min_sync_coverage_ratios,
             min_sync_matched_counts,
+            min_sync_candidate_scores,
         ):
             generated_method_configs.append(
                 _build_tubelet_sync_calibration_config(
@@ -1303,6 +1327,7 @@ def _build_generated_method_configs(
                     min_sync_margin=min_sync_margin,
                     min_sync_coverage_ratio=min_sync_coverage_ratio,
                     min_sync_matched_count=min_sync_matched_count,
+                    min_sync_candidate_score=min_sync_candidate_score,
                 )
             )
     return generated_method_configs
@@ -1396,6 +1421,7 @@ def _build_tubelet_sync_calibration_config(
     min_sync_margin: float,
     min_sync_coverage_ratio: float,
     min_sync_matched_count: int,
+    min_sync_candidate_score: float,
 ) -> dict[str, Any]:
     calibration_config = copy.deepcopy(tubelet_sync_template)
     calibration_config["target_construction_phase"] = "real_video_vae_latent_probe"
@@ -1411,6 +1437,7 @@ def _build_tubelet_sync_calibration_config(
         min_sync_margin=min_sync_margin,
         min_sync_coverage_ratio=min_sync_coverage_ratio,
         min_sync_matched_count=min_sync_matched_count,
+        min_sync_candidate_score=min_sync_candidate_score,
     )
     calibration_config["tubelet_length"] = int(tubelet_length)
     calibration_config["tubelet_partition"] = {
@@ -1434,6 +1461,10 @@ def _build_tubelet_sync_calibration_config(
     )
     calibration_config["sync_search"]["min_sync_alignment_matched_count"] = int(
         min_sync_matched_count
+    )
+    calibration_config["sync_search"]["min_sync_candidate_score"] = round(
+        float(min_sync_candidate_score),
+        6,
     )
     calibration_config["lambda_sync"] = round(float(lambda_sync), 6)
     calibration_config["fusion_rule"] = str(fusion_rule)
@@ -1465,6 +1496,7 @@ def _build_tubelet_sync_variant_name(
     min_sync_margin: float,
     min_sync_coverage_ratio: float,
     min_sync_matched_count: int,
+    min_sync_candidate_score: float,
 ) -> str:
     fusion_rule_token_map = {
         "sync_rescue_fusion": "sync_rescue",
@@ -1474,6 +1506,11 @@ def _build_tubelet_sync_variant_name(
         str(fusion_rule),
         str(fusion_rule).replace("_fusion", "")[:12],
     )
+    candidate_score_token = ""
+    if float(min_sync_candidate_score) > 0.0:
+        candidate_score_token = (
+            f"cs{int(round(float(min_sync_candidate_score) * 1000)):03d}_"
+        )
     return (
         "tubelet_sync_cal_"
         f"tl{int(tubelet_length):02d}_"
@@ -1484,6 +1521,7 @@ def _build_tubelet_sync_variant_name(
         f"mg{int(round(float(min_sync_margin) * 1000)):03d}_"
         f"cv{int(round(float(min_sync_coverage_ratio) * 1000)):03d}_"
         f"mc{int(min_sync_matched_count):02d}_"
+        f"{candidate_score_token}"
         f"fr{fusion_rule_token}"
     )
 
@@ -1523,6 +1561,7 @@ def _build_tubelet_sync_candidate_method_config(
         "min_sync_positive_margin",
         "min_sync_alignment_coverage_ratio",
         "min_sync_alignment_matched_count",
+        "min_sync_candidate_score",
     ):
         if field_name in selected_candidate["sync_search"]:
             calibration_config["sync_search"][field_name] = selected_candidate[

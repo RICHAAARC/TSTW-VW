@@ -273,11 +273,14 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                     "sync_alignment_coverage_ratio": None,
                     "sync_candidate_score_raw": None,
                     "sync_candidate_score_penalized": None,
+                    "sync_candidate_score_hybrid": None,
                     "sync_confident": False,
                     "sync_confidence_failure_reason": "sync_disabled",
                     "sync_confidence_min_margin": None,
                     "sync_confidence_min_coverage_ratio": None,
                     "sync_confidence_min_matched_count": None,
+                    "sync_confidence_min_candidate_score": None,
+                    "sync_confidence_score_field": None,
                 }
             )
         if self._enabled_evidence.get("tubelet", False):
@@ -877,9 +880,18 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         min_matched_count = int(
             self._resolve_sync_confidence_value("min_sync_alignment_matched_count", 1.0)
         )
+        min_candidate_score = self._resolve_sync_confidence_value(
+            "min_sync_candidate_score",
+            0.0,
+        )
+        search_score_rule = str(
+            sync_result.get("sync_search_score_rule") or "penalized_prior"
+        )
+        score_field = self._resolve_sync_search_score_field(search_score_rule)
         positive_margin = float(sync_result.get("S_sync_positive_margin") or 0.0)
         coverage_ratio = float(sync_result.get("sync_alignment_coverage_ratio") or 0.0)
         matched_count = int(sync_result.get("sync_alignment_matched_count") or 0)
+        candidate_score = float(sync_result.get(score_field) or 0.0)
         failure_reasons: list[str] = []
         if positive_margin <= float(min_margin):
             failure_reasons.append("sync_margin_below_gate")
@@ -887,12 +899,16 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             failure_reasons.append("sync_coverage_below_gate")
         if matched_count < min_matched_count:
             failure_reasons.append("sync_matched_count_below_gate")
+        if candidate_score < float(min_candidate_score):
+            failure_reasons.append("sync_candidate_score_below_gate")
         return {
             "sync_confident": not failure_reasons,
             "sync_confidence_failure_reason": ";".join(failure_reasons) or None,
             "sync_confidence_min_margin": round(float(min_margin), 6),
             "sync_confidence_min_coverage_ratio": round(float(min_coverage_ratio), 6),
             "sync_confidence_min_matched_count": min_matched_count,
+            "sync_confidence_min_candidate_score": round(float(min_candidate_score), 6),
+            "sync_confidence_score_field": score_field,
         }
 
     def _build_sync_search_result(

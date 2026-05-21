@@ -54,6 +54,9 @@
       1,
       2,
       4
+    ],
+    "min_sync_candidate_score": [
+      0.0
     ]
   },
   "search_stages": [
@@ -115,6 +118,9 @@
           1,
           2,
           4
+        ],
+        "min_sync_candidate_score": [
+          0.0
         ]
       }
     },
@@ -153,6 +159,11 @@
           1,
           2,
           3
+        ],
+        "min_sync_candidate_score": [
+          0.0,
+          0.55,
+          0.6
         ]
       }
     }

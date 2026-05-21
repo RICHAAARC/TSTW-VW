@@ -425,6 +425,61 @@ def test_local_clip_sync_search_defaults_to_hybrid_no_prior_runtime_selection(
 
 
 @pytest.mark.unit
+def test_sync_confidence_can_gate_on_minimum_candidate_score() -> None:
+    """Validate sync confidence can require a minimum selected candidate score.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    gated_config = copy.deepcopy(TUBELET_SYNC_CONFIG)
+    gated_config["sync_search"] = {
+        **gated_config["sync_search"],
+        "min_sync_positive_margin": 0.12,
+        "min_sync_alignment_coverage_ratio": 0.25,
+        "min_sync_alignment_matched_count": 3,
+        "min_sync_candidate_score": 0.55,
+    }
+
+    extractor = SyntheticProbeEvidenceExtractor(
+        method_variant="tubelet_sync",
+        method_config=gated_config,
+        enabled_evidence={"tubelet": True, "sync": True, "trajectory": False},
+        fusion_rule="sync_rescue_fusion",
+    )
+
+    leaking_like_trace = extractor._build_sync_confidence_trace(
+        {
+            "sync_search_score_rule": "hybrid_no_prior",
+            "S_sync_positive_margin": 0.233373,
+            "sync_alignment_coverage_ratio": 0.375,
+            "sync_alignment_matched_count": 6,
+            "sync_candidate_score_hybrid": 0.532451,
+        }
+    )
+    rescued_positive_trace = extractor._build_sync_confidence_trace(
+        {
+            "sync_search_score_rule": "hybrid_no_prior",
+            "S_sync_positive_margin": 0.139795,
+            "sync_alignment_coverage_ratio": 0.25,
+            "sync_alignment_matched_count": 4,
+            "sync_candidate_score_hybrid": 0.639795,
+        }
+    )
+
+    assert leaking_like_trace["sync_confident"] is False
+    assert (
+        leaking_like_trace["sync_confidence_failure_reason"]
+        == "sync_candidate_score_below_gate"
+    )
+    assert leaking_like_trace["sync_confidence_min_candidate_score"] == 0.55
+    assert leaking_like_trace["sync_confidence_score_field"] == "sync_candidate_score_hybrid"
+    assert rescued_positive_trace["sync_confident"] is True
+
+
+@pytest.mark.unit
 def test_reliable_offset_alignment_can_create_payload_rescue_gain(tmp_path: Path) -> None:
     cropped_sample = _build_sync_embedded_crop(tmp_path)
     sync_result = build_method_from_config(TUBELET_SYNC_CONFIG).detect(

@@ -1430,12 +1430,19 @@ def _write_local_clip_sync_candidate_surface_forensics(
 
     surface_rows: list[dict[str, Any]] = []
     event_summaries: list[dict[str, Any]] = []
+    ranking_rule_names: list[str] = []
     for record in selected_records:
         forensics_sample = _build_local_clip_sync_forensics_sample(
             record=record,
             selected_stage_run_root=selected_stage_run_root,
         )
         surface_payload = evidence_extractor.build_sync_candidate_surface(forensics_sample)
+        surface_ranking_summaries = surface_payload.get("ranking_summaries", {})
+        if isinstance(surface_ranking_summaries, dict):
+            for rule_name in surface_ranking_summaries.keys():
+                normalized_rule_name = str(rule_name)
+                if normalized_rule_name not in ranking_rule_names:
+                    ranking_rule_names.append(normalized_rule_name)
         surface_rows.extend(
             _build_local_clip_sync_surface_rows(
                 record=record,
@@ -1467,12 +1474,7 @@ def _write_local_clip_sync_candidate_surface_forensics(
         "method_config_path": str(method_config_path),
         "surface_event_count": len(event_summaries),
         "surface_row_count": len(surface_rows),
-        "ranking_rule_names": [
-            "penalized_prior",
-            "penalized_no_prior",
-            "raw_prior",
-            "raw_no_prior",
-        ],
+        "ranking_rule_names": ranking_rule_names,
         "events": event_summaries,
     }
     output_surface_summary_file.write_text(
@@ -1666,6 +1668,7 @@ def _build_local_clip_sync_surface_summary_entry(
     if clip_length is None and isinstance(mechanism_trace, dict):
         clip_length = mechanism_trace.get("clip_length")
     sync_result = surface_payload["sync_result"]
+    selected_candidate = surface_payload.get("selected_candidate")
     ranking_summaries = {
         rule_name: {
             "score_field": rule_summary["score_field"],
@@ -1677,6 +1680,9 @@ def _build_local_clip_sync_surface_summary_entry(
                 "sync_candidate_score_penalized": rule_summary["winner"][
                     "sync_candidate_score_penalized"
                 ],
+                "sync_candidate_score_hybrid": rule_summary["winner"].get(
+                    "sync_candidate_score_hybrid"
+                ),
                 "sync_alignment_coverage_ratio": rule_summary["winner"][
                     "sync_alignment_coverage_ratio"
                 ],
@@ -1703,6 +1709,7 @@ def _build_local_clip_sync_surface_summary_entry(
         "sample_role": str(record.get("sample_role", "")),
         "attack_name": str(record.get("attack_name", "")),
         "clip_length": clip_length,
+        "search_score_rule": surface_payload.get("search_score_rule"),
         "candidate_count": len(surface_payload["candidate_rows"]),
         "coverage_penalty_enabled": surface_payload["coverage_penalty_enabled"],
         "recorded_sync_confident": mechanism_trace.get("sync_confident"),
@@ -1718,7 +1725,14 @@ def _build_local_clip_sync_surface_summary_entry(
             "sync_candidate_score_penalized": mechanism_trace.get(
                 "sync_candidate_score_penalized"
             ),
+            "sync_candidate_score_hybrid": mechanism_trace.get(
+                "sync_candidate_score_hybrid"
+            ),
         },
+        "selected_candidate": (
+            None if not isinstance(selected_candidate, dict) else dict(selected_candidate)
+        ),
+        "sync_result": dict(sync_result),
         "recomputed_selected_candidate": {
             "offset_candidate": sync_result.get("sync_estimated_offset"),
             "scale_candidate": sync_result.get("sync_estimated_scale"),
@@ -1739,6 +1753,9 @@ def _build_local_clip_sync_surface_summary_entry(
                 "sync_candidate_score_penalized": ground_truth_candidate[
                     "sync_candidate_score_penalized"
                 ],
+                "sync_candidate_score_hybrid": ground_truth_candidate.get(
+                    "sync_candidate_score_hybrid"
+                ),
                 "sync_alignment_coverage_ratio": ground_truth_candidate[
                     "sync_alignment_coverage_ratio"
                 ],
