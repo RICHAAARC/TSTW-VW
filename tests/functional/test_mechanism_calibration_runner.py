@@ -348,6 +348,22 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
         "method_variant"
     ]
     assert summary["selected_tubelet_sync_candidate"]["method_variant"] == "tubelet_sync_real_video_vae_candidate"
+    assert Path(summary["timing_summary_path"]).exists()
+    assert Path(summary["calibration_runtime_profile_summary_path"]).exists()
+    assert Path(summary["calibration_runtime_profile_report_path"]).exists()
+    for stage_summary in summary["search_stage_summaries"]:
+        assert Path(stage_summary["runtime_timing_summary_path"]).exists()
+        assert Path(stage_summary["runtime_timing_report_path"]).exists()
+        assert stage_summary["runtime_timing_summary"]["total_recorded_seconds"] >= 0.0
+
+    timing_summary_payload = json.loads(
+        Path(summary["timing_summary_path"]).read_text(encoding="utf-8")
+    )
+    assert timing_summary_payload["search_stage_count"] == 3
+    assert timing_summary_payload["stage_timing_summaries"][0]["stage_name"] == (
+        "anchor_tubelet_only_wide"
+    )
+    assert timing_summary_payload["calibration_timing_summary"]["event_count"] >= 7
 
 
 @pytest.mark.unit
@@ -486,6 +502,7 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
     ]
     assert summary["selected_tubelet_sync_candidate"] is None
     assert summary["generated_tubelet_sync_candidate_config_path"] is None
+    assert Path(summary["timing_summary_path"]).exists()
     assert not candidate_method_config_path.exists()
     assert summary["search_stage_count"] == 2
     assert summary["search_stage_summaries"][1]["selection_completion_status"] == (

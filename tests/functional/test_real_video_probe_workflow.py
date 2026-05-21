@@ -1028,6 +1028,30 @@ def test_package_probe_non_formal_audit_bundle_persists_selected_audit_files(
         json.dumps({"grid_status": "ok"}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    timing_summary_path = (
+        calibration_run_root / "artifacts" / "stage2_mechanism_calibration_timing_summary.json"
+    )
+    timing_summary_path.write_text(
+        json.dumps(
+            {
+                "stage_timing_summaries": [
+                    {
+                        "stage_name": "sync_refine_scan",
+                        "top_timing_events": [
+                            {
+                                "event_name": "runner_attack_video",
+                                "elapsed_seconds": 12.0,
+                            }
+                        ],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     event_scores_path = selected_stage_run_root / "records" / "event_scores.jsonl"
     event_scores_path.write_text(
         json.dumps({"event_id": "local_clip_event"}, ensure_ascii=False) + "\n",
@@ -1056,6 +1080,7 @@ def test_package_probe_non_formal_audit_bundle_persists_selected_audit_files(
                 "selected_candidate_output_path": str(selected_candidate_output_path),
                 "selected_report_path": str(selected_report_path),
                 "selected_grid_output_path": str(selected_grid_output_path),
+                "timing_summary_path": str(timing_summary_path),
                 "generated_tubelet_sync_candidate_config_path": str(candidate_config_path),
                 "selected_tubelet_sync_candidate": {
                     "method_variant": "tubelet_sync_real_video_vae_candidate",
@@ -1103,6 +1128,7 @@ def test_package_probe_non_formal_audit_bundle_persists_selected_audit_files(
         archive_names = set(archive.namelist())
     assert "notebook_run/artifacts/runtime_config.json" in archive_names
     assert "calibration_run/artifacts/stage2_mechanism_calibration_summary.json" in archive_names
+    assert "calibration_run/artifacts/stage2_mechanism_calibration_timing_summary.json" in archive_names
     assert (
         "calibration_run/artifacts/selected_candidate_local_clip_sync_diagnostics.csv"
         in archive_names

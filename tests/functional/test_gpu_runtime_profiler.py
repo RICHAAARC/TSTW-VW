@@ -363,6 +363,13 @@ def test_run_timing_summary_reports_runner_substage_totals(tmp_path: Path) -> No
     assert summary["video_attack_seconds"] == 3.0
     assert summary["vae_reencode_seconds"] == 5.0
     assert summary["quality_metrics_seconds"] == 7.0
+    assert summary["events_by_group"]["runner_substage"] == 15.0
+    assert summary["event_counts_by_group"]["runner_substage"] == 3
+    assert summary["runner_preparation_seconds"] == 0.0
+    assert summary["threshold_calibration_seconds"] == 0.0
+    assert summary["record_persistence_seconds"] == 0.0
+    assert summary["top_timing_events"][0]["event_name"] == "runner_quality_metrics"
+    assert summary["top_timing_events"][0]["elapsed_seconds"] == 7.0
     assert summary["runner_substage_counts"]["runner_reencode_latent"] == 4
 
 

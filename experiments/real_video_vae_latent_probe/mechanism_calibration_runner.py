@@ -19,6 +19,8 @@ from main.core.registry import load_json_config
 from scripts.check_results.select_stage2_mechanism_candidate import (
     select_stage2_mechanism_candidate,
 )
+from scripts.profile_runtime.profile_run_timing import RunTimingRecorder
+from scripts.profile_runtime.summarize_run_timing import summarize_run_timing
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -113,17 +115,30 @@ def run_stage2_mechanism_calibration(
     calibration_summary_path = (
         run_root_path / "artifacts" / "stage2_mechanism_calibration_summary.json"
     )
-
-    calibration_protocol_config = _build_calibration_protocol_config(
-        protocol_config=protocol_config,
-        runtime_profile=runtime_profile,
-        allowed_splits=allowed_splits,
-    )
-    calibration_workspace_root.mkdir(parents=True, exist_ok=True)
-    _write_json(temp_protocol_config_path, calibration_protocol_config)
-    calibration_runtime_config = _build_calibration_runtime_config(runtime_config_file)
-    _write_json(temp_runtime_config_path, calibration_runtime_config)
     search_stages = _read_search_stages(grid_config)
+    campaign_mode = "staged_search" if search_stages else "flat_grid"
+    calibration_timing_root = (
+        run_root_path / "artifacts" / "stage2_mechanism_calibration_timing_context"
+    )
+    calibration_timing_recorder = RunTimingRecorder(
+        calibration_timing_root,
+        run_id=run_root_path.name,
+    )
+    with calibration_timing_recorder.event(
+        "stage2_calibration_prepare_configs",
+        event_group="stage2_mechanism_calibration",
+        campaign_mode=campaign_mode,
+        runtime_profile=runtime_profile,
+    ):
+        calibration_protocol_config = _build_calibration_protocol_config(
+            protocol_config=protocol_config,
+            runtime_profile=runtime_profile,
+            allowed_splits=allowed_splits,
+        )
+        calibration_workspace_root.mkdir(parents=True, exist_ok=True)
+        _write_json(temp_protocol_config_path, calibration_protocol_config)
+        calibration_runtime_config = _build_calibration_runtime_config(runtime_config_file)
+        _write_json(temp_runtime_config_path, calibration_runtime_config)
     if search_stages:
         calibration_summary = _run_staged_mechanism_calibration(
             run_root_path=run_root_path,
@@ -146,6 +161,7 @@ def run_stage2_mechanism_calibration(
             calibration_workspace_root=calibration_workspace_root,
             protocol_config_path=temp_protocol_config_path,
             search_stages=search_stages,
+            calibration_timing_recorder=calibration_timing_recorder,
         )
     else:
         calibration_summary = _run_flat_mechanism_calibration(
@@ -168,7 +184,35 @@ def run_stage2_mechanism_calibration(
             output_method_config_file=output_method_config_file,
             calibration_workspace_root=calibration_workspace_root,
             protocol_config_path=temp_protocol_config_path,
+            calibration_timing_recorder=calibration_timing_recorder,
         )
+    calibration_runtime_profile_summary, calibration_runtime_profile_summary_path, calibration_runtime_profile_report_path = (
+        _summarize_run_timing_artifacts(calibration_timing_root)
+    )
+    timing_summary_path = (
+        run_root_path / "artifacts" / "stage2_mechanism_calibration_timing_summary.json"
+    )
+    _write_json(
+        timing_summary_path,
+        _build_stage2_mechanism_calibration_timing_summary(
+            calibration_summary=calibration_summary,
+            calibration_timing_root=calibration_timing_root,
+            calibration_runtime_profile_summary=calibration_runtime_profile_summary,
+            calibration_runtime_profile_summary_path=calibration_runtime_profile_summary_path,
+            calibration_runtime_profile_report_path=calibration_runtime_profile_report_path,
+        ),
+    )
+    calibration_summary = {
+        **calibration_summary,
+        "timing_summary_path": str(timing_summary_path),
+        "calibration_timing_context_root": str(calibration_timing_root),
+        "calibration_runtime_profile_summary_path": str(
+            calibration_runtime_profile_summary_path
+        ),
+        "calibration_runtime_profile_report_path": str(
+            calibration_runtime_profile_report_path
+        ),
+    }
     _write_json(calibration_summary_path, calibration_summary)
     return {
         **calibration_summary,
@@ -198,55 +242,83 @@ def _run_flat_mechanism_calibration(
     output_method_config_file: Path,
     calibration_workspace_root: Path,
     protocol_config_path: Path,
+    calibration_timing_recorder: RunTimingRecorder,
 ) -> dict[str, Any]:
     method_config_root = calibration_workspace_root / "method_configs"
     method_config_root.mkdir(parents=True, exist_ok=True)
     temp_ablation_config_path = (
         calibration_workspace_root / "real_video_vae_mechanism_calibration_ablation.json"
     )
-    generated_method_configs = _build_generated_method_configs(
-        grid_config=grid_config,
-        frame_prc_template=frame_prc_template,
-        tubelet_only_template=tubelet_only_template,
-        tubelet_sync_template=tubelet_sync_template,
-    )
-    calibration_ablation_config = _build_calibration_ablation_config(
-        base_ablation_config=base_ablation_config,
-        runtime_profile=runtime_profile,
-        generated_method_configs=generated_method_configs,
-        method_config_root=method_config_root,
-    )
-    _write_json(temp_ablation_config_path, calibration_ablation_config)
+    with calibration_timing_recorder.event(
+        "stage2_calibration_prepare__flat_grid",
+        event_group="stage2_mechanism_calibration",
+        stage_name="flat_grid",
+        selection_scope="combined",
+    ):
+        generated_method_configs = _build_generated_method_configs(
+            grid_config=grid_config,
+            frame_prc_template=frame_prc_template,
+            tubelet_only_template=tubelet_only_template,
+            tubelet_sync_template=tubelet_sync_template,
+        )
+        calibration_ablation_config = _build_calibration_ablation_config(
+            base_ablation_config=base_ablation_config,
+            runtime_profile=runtime_profile,
+            generated_method_configs=generated_method_configs,
+            method_config_root=method_config_root,
+        )
+        _write_json(temp_ablation_config_path, calibration_ablation_config)
 
     runner = RealVideoVaeLatentRunner(ROOT)
-    runner.run(
-        output_root=run_root_path,
-        run_mode=run_mode,
-        samples_per_role=samples_per_role,
-        batch_size_frames=batch_size_frames,
-        runtime_profile_override=runtime_profile,
-        method_variants=None,
-        protocol_config_path=protocol_config_path,
-        backend_config_path=backend_config_file,
-        attack_matrix_path=attack_matrix_file,
-        ablation_config_path=temp_ablation_config_path,
-        dataset_manifest_path=dataset_manifest_file,
-        runtime_config_path=runtime_config_file,
+    with calibration_timing_recorder.event(
+        "stage2_calibration_runner__flat_grid",
+        event_group="stage2_mechanism_calibration",
+        stage_name="flat_grid",
+        selection_scope="combined",
+    ):
+        runner.run(
+            output_root=run_root_path,
+            run_mode=run_mode,
+            samples_per_role=samples_per_role,
+            batch_size_frames=batch_size_frames,
+            runtime_profile_override=runtime_profile,
+            method_variants=None,
+            protocol_config_path=protocol_config_path,
+            backend_config_path=backend_config_file,
+            attack_matrix_path=attack_matrix_file,
+            ablation_config_path=temp_ablation_config_path,
+            dataset_manifest_path=dataset_manifest_file,
+            runtime_config_path=runtime_config_file,
+        )
+    runtime_timing_summary, runtime_timing_summary_path, runtime_timing_report_path = (
+        _summarize_run_timing_artifacts(run_root_path)
     )
 
-    selected_candidate_payload = select_stage2_mechanism_candidate(
-        run_root=run_root_path,
-        grid_config_path=grid_config_file,
-        mechanism_config_path=mechanism_config_file,
-    )
+    with calibration_timing_recorder.event(
+        "stage2_calibration_selector__flat_grid",
+        event_group="stage2_mechanism_calibration",
+        stage_name="flat_grid",
+        selection_scope="combined",
+    ):
+        selected_candidate_payload = select_stage2_mechanism_candidate(
+            run_root=run_root_path,
+            grid_config_path=grid_config_file,
+            mechanism_config_path=mechanism_config_file,
+        )
     generated_candidate_config_path: str | None = None
     if selected_candidate_payload.get("selected_tubelet_sync_candidate") is not None:
-        candidate_method_config = _build_tubelet_sync_candidate_method_config(
-            tubelet_sync_template=tubelet_sync_template,
-            candidate_payload=selected_candidate_payload,
-        )
-        _write_json(output_method_config_file, candidate_method_config)
-        generated_candidate_config_path = str(output_method_config_file)
+        with calibration_timing_recorder.event(
+            "stage2_calibration_candidate_write",
+            event_group="stage2_mechanism_calibration",
+            stage_name="flat_grid",
+            selection_scope="combined",
+        ):
+            candidate_method_config = _build_tubelet_sync_candidate_method_config(
+                tubelet_sync_template=tubelet_sync_template,
+                candidate_payload=selected_candidate_payload,
+            )
+            _write_json(output_method_config_file, candidate_method_config)
+            generated_candidate_config_path = str(output_method_config_file)
     return {
         "run_root": str(run_root_path),
         "runtime_profile": runtime_profile,
@@ -279,6 +351,9 @@ def _run_flat_mechanism_calibration(
         ],
         "tubelet_sync_scan_seed": selected_candidate_payload["tubelet_sync_scan_seed"],
         "generated_tubelet_sync_candidate_config_path": generated_candidate_config_path,
+        "runtime_timing_summary_path": str(runtime_timing_summary_path),
+        "runtime_timing_report_path": str(runtime_timing_report_path),
+        "runtime_timing_summary": _build_runtime_timing_snapshot(runtime_timing_summary),
     }
 
 
@@ -304,6 +379,7 @@ def _run_staged_mechanism_calibration(
     calibration_workspace_root: Path,
     protocol_config_path: Path,
     search_stages: list[dict[str, Any]],
+    calibration_timing_recorder: RunTimingRecorder,
 ) -> dict[str, Any]:
     runner = RealVideoVaeLatentRunner(ROOT)
     stage_summaries: list[dict[str, Any]] = []
@@ -344,39 +420,54 @@ def _run_staged_mechanism_calibration(
             selected_tubelet_only_candidate=selected_tubelet_only_candidate,
             selected_tubelet_sync_candidate=selected_tubelet_sync_candidate,
         )
-        generated_method_configs = _build_stage_generated_method_configs(
-            stage_config=stage_config,
-            frame_prc_template=frame_prc_template,
-            tubelet_only_template=tubelet_only_template,
-            tubelet_sync_template=tubelet_sync_template,
-            stage_seed_candidate=stage_seed_candidate,
-        )
-        stage_grid_config = _build_stage_grid_config(
-            grid_config=grid_config,
-            stage_config=stage_config,
-        )
-        calibration_ablation_config = _build_calibration_ablation_config(
-            base_ablation_config=base_ablation_config,
-            runtime_profile=runtime_profile,
-            generated_method_configs=generated_method_configs,
-            method_config_root=stage_method_config_root,
-        )
-        _write_json(stage_grid_config_path, stage_grid_config)
-        _write_json(stage_ablation_config_path, calibration_ablation_config)
+        with calibration_timing_recorder.event(
+            f"stage2_calibration_prepare__{stage_name}",
+            event_group="stage2_mechanism_calibration",
+            stage_name=stage_name,
+            selection_scope=selection_scope,
+        ):
+            generated_method_configs = _build_stage_generated_method_configs(
+                stage_config=stage_config,
+                frame_prc_template=frame_prc_template,
+                tubelet_only_template=tubelet_only_template,
+                tubelet_sync_template=tubelet_sync_template,
+                stage_seed_candidate=stage_seed_candidate,
+            )
+            stage_grid_config = _build_stage_grid_config(
+                grid_config=grid_config,
+                stage_config=stage_config,
+            )
+            calibration_ablation_config = _build_calibration_ablation_config(
+                base_ablation_config=base_ablation_config,
+                runtime_profile=runtime_profile,
+                generated_method_configs=generated_method_configs,
+                method_config_root=stage_method_config_root,
+            )
+            _write_json(stage_grid_config_path, stage_grid_config)
+            _write_json(stage_ablation_config_path, calibration_ablation_config)
 
-        runner.run(
-            output_root=stage_run_root,
-            run_mode=run_mode,
-            samples_per_role=samples_per_role,
-            batch_size_frames=batch_size_frames,
-            runtime_profile_override=runtime_profile,
-            method_variants=None,
-            protocol_config_path=protocol_config_path,
-            backend_config_path=backend_config_file,
-            attack_matrix_path=attack_matrix_file,
-            ablation_config_path=stage_ablation_config_path,
-            dataset_manifest_path=dataset_manifest_file,
-            runtime_config_path=runtime_config_file,
+        with calibration_timing_recorder.event(
+            f"stage2_calibration_runner__{stage_name}",
+            event_group="stage2_mechanism_calibration",
+            stage_name=stage_name,
+            selection_scope=selection_scope,
+        ):
+            runner.run(
+                output_root=stage_run_root,
+                run_mode=run_mode,
+                samples_per_role=samples_per_role,
+                batch_size_frames=batch_size_frames,
+                runtime_profile_override=runtime_profile,
+                method_variants=None,
+                protocol_config_path=protocol_config_path,
+                backend_config_path=backend_config_file,
+                attack_matrix_path=attack_matrix_file,
+                ablation_config_path=stage_ablation_config_path,
+                dataset_manifest_path=dataset_manifest_file,
+                runtime_config_path=runtime_config_file,
+            )
+        stage_runtime_timing_summary, stage_runtime_timing_summary_path, stage_runtime_timing_report_path = (
+            _summarize_run_timing_artifacts(stage_run_root)
         )
 
         selector_kwargs: dict[str, Any] = {
@@ -395,7 +486,13 @@ def _run_staged_mechanism_calibration(
                     "selected_tubelet_only_candidate must be resolved before tubelet_sync stages"
                 )
             selector_kwargs["selected_tubelet_only_candidate"] = selected_tubelet_only_candidate
-        stage_selection_payload = select_stage2_mechanism_candidate(**selector_kwargs)
+        with calibration_timing_recorder.event(
+            f"stage2_calibration_selector__{stage_name}",
+            event_group="stage2_mechanism_calibration",
+            stage_name=stage_name,
+            selection_scope=selection_scope,
+        ):
+            stage_selection_payload = select_stage2_mechanism_candidate(**selector_kwargs)
         total_generated_method_variant_count += len(generated_method_configs)
         if selection_scope == "tubelet_only":
             selected_tubelet_only_candidate = stage_selection_payload[
@@ -447,6 +544,11 @@ def _run_staged_mechanism_calibration(
                     "parameter_interval_summary",
                     {},
                 ),
+                "runtime_timing_summary_path": str(stage_runtime_timing_summary_path),
+                "runtime_timing_report_path": str(stage_runtime_timing_report_path),
+                "runtime_timing_summary": _build_runtime_timing_snapshot(
+                    stage_runtime_timing_summary
+                ),
             }
         )
         if (
@@ -484,14 +586,20 @@ def _run_staged_mechanism_calibration(
         "selection_blocking_details"
     )
     if selected_tubelet_sync_candidate is not None:
-        candidate_method_config = _build_tubelet_sync_candidate_method_config(
-            tubelet_sync_template=tubelet_sync_template,
-            candidate_payload={
-                "selected_tubelet_sync_candidate": selected_tubelet_sync_candidate,
-            },
-        )
-        _write_json(output_method_config_file, candidate_method_config)
-        generated_candidate_config_path = str(output_method_config_file)
+        with calibration_timing_recorder.event(
+            "stage2_calibration_candidate_write",
+            event_group="stage2_mechanism_calibration",
+            stage_name=str(stage_summaries[-1]["stage_name"]),
+            selection_scope="tubelet_sync",
+        ):
+            candidate_method_config = _build_tubelet_sync_candidate_method_config(
+                tubelet_sync_template=tubelet_sync_template,
+                candidate_payload={
+                    "selected_tubelet_sync_candidate": selected_tubelet_sync_candidate,
+                },
+            )
+            _write_json(output_method_config_file, candidate_method_config)
+            generated_candidate_config_path = str(output_method_config_file)
     else:
         calibration_completion_status = "anchor_only_partial_selection"
         calibration_blocking_reason = (
@@ -527,6 +635,171 @@ def _run_staged_mechanism_calibration(
         "selected_tubelet_sync_candidate": selected_tubelet_sync_candidate,
         "tubelet_sync_scan_seed": final_stage_selection_payload.get("tubelet_sync_scan_seed"),
         "generated_tubelet_sync_candidate_config_path": generated_candidate_config_path,
+    }
+
+
+def _summarize_run_timing_artifacts(
+    run_root: Path,
+) -> tuple[dict[str, Any], Path, Path]:
+    runtime_profile_root = run_root / "runtime_profile"
+    summary_path = runtime_profile_root / "run_timing_summary.json"
+    report_path = runtime_profile_root / "run_timing_report.md"
+    summary = summarize_run_timing(
+        run_root=run_root,
+        events_jsonl=runtime_profile_root / "run_timing_events.jsonl",
+        output_json=summary_path,
+        output_md=report_path,
+    )
+    return summary, summary_path, report_path
+
+
+def _build_runtime_timing_snapshot(
+    runtime_timing_summary: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "event_count": int(runtime_timing_summary.get("event_count", 0) or 0),
+        "failed_event_count": int(
+            runtime_timing_summary.get("failed_event_count", 0) or 0
+        ),
+        "total_recorded_seconds": float(
+            runtime_timing_summary.get("total_recorded_seconds", 0.0) or 0.0
+        ),
+        "slowest_event_name": str(
+            runtime_timing_summary.get("slowest_event_name", "")
+        ),
+        "slowest_event_seconds": float(
+            runtime_timing_summary.get("slowest_event_seconds", 0.0) or 0.0
+        ),
+        "runner_preparation_seconds": float(
+            runtime_timing_summary.get("runner_preparation_seconds", 0.0) or 0.0
+        ),
+        "decode_video_seconds": float(
+            runtime_timing_summary.get("decode_video_seconds", 0.0) or 0.0
+        ),
+        "video_attack_seconds": float(
+            runtime_timing_summary.get("video_attack_seconds", 0.0) or 0.0
+        ),
+        "vae_reencode_seconds": float(
+            runtime_timing_summary.get("vae_reencode_seconds", 0.0) or 0.0
+        ),
+        "threshold_calibration_seconds": float(
+            runtime_timing_summary.get("threshold_calibration_seconds", 0.0) or 0.0
+        ),
+        "threshold_materialization_seconds": float(
+            runtime_timing_summary.get("threshold_materialization_seconds", 0.0) or 0.0
+        ),
+        "record_persistence_seconds": float(
+            runtime_timing_summary.get("record_persistence_seconds", 0.0) or 0.0
+        ),
+        "artifact_build_seconds": float(
+            runtime_timing_summary.get("artifact_build_seconds", 0.0) or 0.0
+        ),
+        "manifest_write_seconds": float(
+            runtime_timing_summary.get("manifest_write_seconds", 0.0) or 0.0
+        ),
+        "top_timing_events": list(runtime_timing_summary.get("top_timing_events", []))[:5],
+    }
+
+
+def _build_stage2_mechanism_calibration_timing_summary(
+    *,
+    calibration_summary: dict[str, Any],
+    calibration_timing_root: Path,
+    calibration_runtime_profile_summary: dict[str, Any],
+    calibration_runtime_profile_summary_path: Path,
+    calibration_runtime_profile_report_path: Path,
+) -> dict[str, Any]:
+    stage_timing_summaries: list[dict[str, Any]] = []
+    search_stage_summaries = calibration_summary.get("search_stage_summaries", [])
+    if isinstance(search_stage_summaries, list) and search_stage_summaries:
+        for stage_summary in search_stage_summaries:
+            if not isinstance(stage_summary, dict):
+                continue
+            runtime_timing_summary = stage_summary.get("runtime_timing_summary")
+            if not isinstance(runtime_timing_summary, dict):
+                continue
+            stage_timing_summaries.append(
+                {
+                    "stage_index": stage_summary.get("stage_index"),
+                    "stage_name": stage_summary.get("stage_name"),
+                    "selection_scope": stage_summary.get("selection_scope"),
+                    "generated_method_variant_count": stage_summary.get(
+                        "generated_method_variant_count"
+                    ),
+                    "run_root": stage_summary.get("run_root"),
+                    "runtime_timing_summary_path": stage_summary.get(
+                        "runtime_timing_summary_path"
+                    ),
+                    "runtime_timing_report_path": stage_summary.get(
+                        "runtime_timing_report_path"
+                    ),
+                    **runtime_timing_summary,
+                }
+            )
+    else:
+        runtime_timing_summary = calibration_summary.get("runtime_timing_summary")
+        if isinstance(runtime_timing_summary, dict):
+            stage_timing_summaries.append(
+                {
+                    "stage_index": 1,
+                    "stage_name": "flat_grid",
+                    "selection_scope": "combined",
+                    "generated_method_variant_count": calibration_summary.get(
+                        "generated_method_variant_count"
+                    ),
+                    "run_root": calibration_summary.get("run_root"),
+                    "runtime_timing_summary_path": calibration_summary.get(
+                        "runtime_timing_summary_path"
+                    ),
+                    "runtime_timing_report_path": calibration_summary.get(
+                        "runtime_timing_report_path"
+                    ),
+                    **runtime_timing_summary,
+                }
+            )
+
+    stage_runner_hotspots: list[dict[str, Any]] = []
+    for stage_summary in stage_timing_summaries:
+        for event_payload in stage_summary.get("top_timing_events", []):
+            if not isinstance(event_payload, dict):
+                continue
+            stage_runner_hotspots.append(
+                {
+                    "stage_name": stage_summary.get("stage_name"),
+                    "selection_scope": stage_summary.get("selection_scope"),
+                    "event_name": event_payload.get("event_name"),
+                    "elapsed_seconds": float(
+                        event_payload.get("elapsed_seconds", 0.0) or 0.0
+                    ),
+                }
+            )
+    stage_runner_hotspots.sort(
+        key=lambda item: (
+            -float(item["elapsed_seconds"]),
+            str(item.get("stage_name", "")),
+            str(item.get("event_name", "")),
+        )
+    )
+
+    return {
+        "run_root": calibration_summary.get("run_root"),
+        "campaign_mode": calibration_summary.get("campaign_mode"),
+        "search_stage_count": calibration_summary.get(
+            "search_stage_count",
+            len(stage_timing_summaries),
+        ),
+        "calibration_timing_context_root": str(calibration_timing_root),
+        "calibration_runtime_profile_summary_path": str(
+            calibration_runtime_profile_summary_path
+        ),
+        "calibration_runtime_profile_report_path": str(
+            calibration_runtime_profile_report_path
+        ),
+        "calibration_timing_summary": _build_runtime_timing_snapshot(
+            calibration_runtime_profile_summary
+        ),
+        "stage_timing_summaries": stage_timing_summaries,
+        "stage_runner_hotspots": stage_runner_hotspots[:10],
     }
 
 

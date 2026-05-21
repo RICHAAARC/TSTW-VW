@@ -173,6 +173,7 @@ class RealVideoVaeLatentRunner:
         self._runner_timing_totals: dict[str, float] = {}
         self._runner_timing_counts: dict[str, int] = {}
         self._runner_timing_failures: dict[str, int] = {}
+        self._runner_timing_groups: dict[str, str] = {}
         self._runner_timing_lock = threading.Lock()
         self._runtime_event_tag_lock = threading.Lock()
         self._current_runtime_event_tag = "unlabeled"
@@ -367,31 +368,47 @@ class RealVideoVaeLatentRunner:
         output_root_path.mkdir(parents=True, exist_ok=True)
         latent_backend.set_output_root(output_root_path)
 
-        split_plan = build_split_plan(samples_per_role=resolved_samples_per_role)
-        split_plan = self._select_split_plan_shard(
-            split_plan,
-            shard_count=resolved_shard_count,
-            shard_index=resolved_shard_index,
-        )
-        attack_registry = build_real_video_attack_registry(
-            attack_config,
-            runtime_kind=(
-                "real_video" if self._video_mp4_runtime_available() else "tensor_scaffold"
-            ),
-        )
-        attack_registry = self._filter_attack_registry(
-            attack_registry,
-            attack_config,
-            runtime_profile,
-        )
-        event_plan = self._build_event_plan(split_plan, attack_registry)
-        method_config_paths = self._build_method_config_paths(ablation_config)
-        runtime_method_configs = self._build_runtime_method_configs(
-            ablation_config,
-            method_config_paths,
-            runtime_profile,
-            method_variants,
-        )
+        with self._runner_substage(
+            "runner_prepare_split_plan",
+            event_group="runner_runtime_phase",
+        ):
+            split_plan = build_split_plan(samples_per_role=resolved_samples_per_role)
+            split_plan = self._select_split_plan_shard(
+                split_plan,
+                shard_count=resolved_shard_count,
+                shard_index=resolved_shard_index,
+            )
+        with self._runner_substage(
+            "runner_prepare_attack_registry",
+            event_group="runner_runtime_phase",
+        ):
+            attack_registry = build_real_video_attack_registry(
+                attack_config,
+                runtime_kind=(
+                    "real_video" if self._video_mp4_runtime_available() else "tensor_scaffold"
+                ),
+            )
+            attack_registry = self._filter_attack_registry(
+                attack_registry,
+                attack_config,
+                runtime_profile,
+            )
+        with self._runner_substage(
+            "runner_prepare_event_plan",
+            event_group="runner_runtime_phase",
+        ):
+            event_plan = self._build_event_plan(split_plan, attack_registry)
+        with self._runner_substage(
+            "runner_prepare_runtime_method_configs",
+            event_group="runner_runtime_phase",
+        ):
+            method_config_paths = self._build_method_config_paths(ablation_config)
+            runtime_method_configs = self._build_runtime_method_configs(
+                ablation_config,
+                method_config_paths,
+                runtime_profile,
+                method_variants,
+            )
         run_id = output_root_path.name
         self._begin_runner_timing(output_root_path, run_id)
         event_score_records: list[dict[str, Any]] = []
@@ -416,125 +433,164 @@ class RealVideoVaeLatentRunner:
                 )
                 event_score_records.extend(variant_event_records)
                 threshold_records.append(threshold_record)
+
+            with self._runner_substage(
+                "runner_write_event_score_records",
+                event_group="runner_runtime_phase",
+            ):
+                record_writer.write_event_score_records(event_score_records)
+            with self._runner_substage(
+                "runner_write_threshold_records",
+                event_group="runner_runtime_phase",
+            ):
+                record_writer.write_threshold_records(threshold_records)
+            with self._runner_substage(
+                "runner_build_artifacts",
+                event_group="runner_runtime_phase",
+            ):
+                artifact_paths = self._artifact_builder.build_artifacts(
+                    event_score_records,
+                    threshold_records,
+                    output_root_path,
+                )
+            output_paths = build_real_video_vae_latent_output_paths(output_root_path)
+            runtime_config_payload = dict(runtime_config_overrides)
+            runtime_config_payload.update(
+                {
+                    "run_mode": run_mode,
+                    "construction_phase": protocol_config["construction_phase"],
+                    "shard_count": resolved_shard_count,
+                    "shard_index": resolved_shard_index,
+                    "worker_count": self._event_worker_count,
+                    "protocol_config": self._format_runtime_config_path(protocol_config_file),
+                    "backend_config": self._format_runtime_config_path(backend_config_file),
+                    "attack_matrix_config": self._format_runtime_config_path(attack_matrix_file),
+                    "ablation_config": self._format_runtime_config_path(ablation_config_file),
+                    "dataset_manifest": str(dataset_manifest_file),
+                    "dataset_manifest_path": str(dataset_manifest_file),
+                    "target_fpr": protocol_config["threshold_protocol"]["target_fpr_placeholder"],
+                    "method_variants": [
+                        method_config["method_variant"]
+                        for method_config in runtime_method_configs
+                    ],
+                    "cross_event_vae_batching_enabled": self._cross_event_vae_batching_config.enabled,
+                    "cross_event_vae_decode_batch_size": self._cross_event_vae_batching_config.decode_batch_size,
+                    "cross_event_vae_encode_batch_size": self._cross_event_vae_batching_config.encode_batch_size,
+                    "cross_event_vae_batch_grouping": self._cross_event_vae_batching_config.grouping,
+                    "cross_event_vae_batch_fallback_on_oom": self._cross_event_vae_batching_config.fallback_on_oom,
+                    "cross_event_vae_batch_write_trace": self._cross_event_vae_batching_config.write_trace,
+                }
+            )
+            with self._runner_substage(
+                "runner_write_runtime_config",
+                event_group="runner_runtime_phase",
+            ):
+                self._write_json(output_paths.runtime_config_path, runtime_config_payload)
+            runtime_config_digest = compute_object_digest(runtime_config_payload)
+            runtime_manifest = {
+                "run_id": run_id,
+                "construction_phase": protocol_config["construction_phase"],
+                "run_mode": run_mode,
+                "runtime_profile": runtime_profile,
+                "python_version": platform.python_version(),
+                "platform": platform.platform(),
+                "working_directory": str(self._repository_root),
+                "notebook_entrypoint_present": all(
+                    [
+                        (
+                            self._repository_root
+                            / "paper_workflow"
+                            / "build_processed_real_video_dataset.ipynb"
+                        ).exists(),
+                        (
+                            self._repository_root
+                            / "paper_workflow"
+                            / "run_real_video_vae_latent_probe.ipynb"
+                        ).exists(),
+                    ]
+                ),
+                "dataset_summary": dataset_summary,
+                "vae_metadata": vae_metadata,
+                "cross_event_vae_batching": {
+                    "enabled": self._cross_event_vae_batching_config.enabled,
+                    "decode_batch_size": self._cross_event_vae_batching_config.decode_batch_size,
+                    "encode_batch_size": self._cross_event_vae_batching_config.encode_batch_size,
+                    "grouping": self._cross_event_vae_batching_config.grouping,
+                    "fallback_on_oom": self._cross_event_vae_batching_config.fallback_on_oom,
+                    "write_trace": self._cross_event_vae_batching_config.write_trace,
+                },
+            }
+            runtime_manifest_overrides = runtime_config_overrides.get("runtime_manifest_overrides")
+            if runtime_manifest_overrides is None:
+                runtime_manifest_overrides = runtime_config_overrides.get(
+                    "colab_runtime_manifest_overrides"
+                )
+            if isinstance(runtime_manifest_overrides, dict):
+                runtime_manifest.update(runtime_manifest_overrides)
+            git_commit = runtime_config_overrides.get("git_commit")
+            if isinstance(git_commit, str) and git_commit:
+                runtime_manifest["git_commit"] = git_commit
+            with self._runner_substage(
+                "runner_write_runtime_manifest",
+                event_group="runner_runtime_phase",
+            ):
+                self._write_json(output_paths.runtime_manifest_path, runtime_manifest)
+            with self._runner_substage(
+                "runner_write_artifact_manifest",
+                event_group="runner_runtime_phase",
+            ):
+                artifact_manifest = self._build_artifact_manifest(event_score_records)
+                self._write_json(output_paths.artifact_manifest_path, artifact_manifest)
+            run_manifest = {
+                "run_id": run_id,
+                "created_at": threshold_records[0]["created_at"] if threshold_records else "",
+                "construction_phase": protocol_config["construction_phase"],
+                "protocol_name": protocol_config["protocol_name"],
+                "method_config_digest": compute_object_digest(
+                    [
+                        compute_file_digest(method_config_path)
+                        for method_config_path in method_config_paths.values()
+                    ]
+                ),
+                "protocol_config_digest": compute_file_digest(protocol_config_file),
+                "attack_matrix_digest": compute_file_digest(attack_matrix_file),
+                "ablation_config_digest": compute_file_digest(ablation_config_file),
+                "runtime_config_digest": runtime_config_digest,
+                "records_digest": compute_object_digest(event_score_records),
+                "thresholds_digest": compute_object_digest(threshold_records),
+                "tables_digest": compute_path_collection_digest(output_paths.table_paths()),
+                "figures_digest": compute_path_collection_digest(output_paths.figure_paths()),
+                "placeholder_fields": [],
+                "random_fields": ["latent_generation_seed_random"],
+            }
+            with self._runner_substage(
+                "runner_write_run_manifest",
+                event_group="runner_runtime_phase",
+            ):
+                self._write_json(output_paths.run_manifest_path, run_manifest)
+            with self._runner_substage(
+                "runner_write_cross_event_vae_batching_outputs",
+                event_group="runner_runtime_phase",
+            ):
+                self._write_cross_event_vae_batching_outputs(output_root_path)
+            del artifact_paths
+            return RealVideoVaeLatentRunResult(
+                run_id=run_id,
+                output_root=output_root_path,
+                event_score_records=event_score_records,
+                threshold_records=threshold_records,
+                run_manifest=run_manifest,
+            )
         finally:
             self._flush_runner_timing_events()
             self._set_runtime_event_tag("unlabeled")
-
-        record_writer.write_event_score_records(event_score_records)
-        record_writer.write_threshold_records(threshold_records)
-        artifact_paths = self._artifact_builder.build_artifacts(
-            event_score_records,
-            threshold_records,
-            output_root_path,
-        )
-        output_paths = build_real_video_vae_latent_output_paths(output_root_path)
-        runtime_config_payload = dict(runtime_config_overrides)
-        runtime_config_payload.update(
-            {
-                "run_mode": run_mode,
-                "construction_phase": protocol_config["construction_phase"],
-                "shard_count": resolved_shard_count,
-                "shard_index": resolved_shard_index,
-                "worker_count": self._event_worker_count,
-                "protocol_config": self._format_runtime_config_path(protocol_config_file),
-                "backend_config": self._format_runtime_config_path(backend_config_file),
-                "attack_matrix_config": self._format_runtime_config_path(attack_matrix_file),
-                "ablation_config": self._format_runtime_config_path(ablation_config_file),
-                "dataset_manifest": str(dataset_manifest_file),
-                "dataset_manifest_path": str(dataset_manifest_file),
-                "target_fpr": protocol_config["threshold_protocol"]["target_fpr_placeholder"],
-                "method_variants": [method_config["method_variant"] for method_config in runtime_method_configs],
-                "cross_event_vae_batching_enabled": self._cross_event_vae_batching_config.enabled,
-                "cross_event_vae_decode_batch_size": self._cross_event_vae_batching_config.decode_batch_size,
-                "cross_event_vae_encode_batch_size": self._cross_event_vae_batching_config.encode_batch_size,
-                "cross_event_vae_batch_grouping": self._cross_event_vae_batching_config.grouping,
-                "cross_event_vae_batch_fallback_on_oom": self._cross_event_vae_batching_config.fallback_on_oom,
-                "cross_event_vae_batch_write_trace": self._cross_event_vae_batching_config.write_trace,
-            }
-        )
-        self._write_json(output_paths.runtime_config_path, runtime_config_payload)
-        runtime_config_digest = compute_object_digest(runtime_config_payload)
-        runtime_manifest = {
-            "run_id": run_id,
-            "construction_phase": protocol_config["construction_phase"],
-            "run_mode": run_mode,
-            "runtime_profile": runtime_profile,
-            "python_version": platform.python_version(),
-            "platform": platform.platform(),
-            "working_directory": str(self._repository_root),
-            "notebook_entrypoint_present": all(
-                [
-                    (
-                        self._repository_root
-                        / "paper_workflow"
-                        / "build_processed_real_video_dataset.ipynb"
-                    ).exists(),
-                    (
-                        self._repository_root
-                        / "paper_workflow"
-                        / "run_real_video_vae_latent_probe.ipynb"
-                    ).exists(),
-                ]
-            ),
-            "dataset_summary": dataset_summary,
-            "vae_metadata": vae_metadata,
-            "cross_event_vae_batching": {
-                "enabled": self._cross_event_vae_batching_config.enabled,
-                "decode_batch_size": self._cross_event_vae_batching_config.decode_batch_size,
-                "encode_batch_size": self._cross_event_vae_batching_config.encode_batch_size,
-                "grouping": self._cross_event_vae_batching_config.grouping,
-                "fallback_on_oom": self._cross_event_vae_batching_config.fallback_on_oom,
-                "write_trace": self._cross_event_vae_batching_config.write_trace,
-            },
-        }
-        runtime_manifest_overrides = runtime_config_overrides.get("runtime_manifest_overrides")
-        if runtime_manifest_overrides is None:
-            runtime_manifest_overrides = runtime_config_overrides.get(
-                "colab_runtime_manifest_overrides"
-            )
-        if isinstance(runtime_manifest_overrides, dict):
-            runtime_manifest.update(runtime_manifest_overrides)
-        git_commit = runtime_config_overrides.get("git_commit")
-        if isinstance(git_commit, str) and git_commit:
-            runtime_manifest["git_commit"] = git_commit
-        self._write_json(output_paths.runtime_manifest_path, runtime_manifest)
-        artifact_manifest = self._build_artifact_manifest(event_score_records)
-        self._write_json(output_paths.artifact_manifest_path, artifact_manifest)
-        run_manifest = {
-            "run_id": run_id,
-            "created_at": threshold_records[0]["created_at"] if threshold_records else "",
-            "construction_phase": protocol_config["construction_phase"],
-            "protocol_name": protocol_config["protocol_name"],
-            "method_config_digest": compute_object_digest(
-                [compute_file_digest(method_config_path) for method_config_path in method_config_paths.values()]
-            ),
-            "protocol_config_digest": compute_file_digest(protocol_config_file),
-            "attack_matrix_digest": compute_file_digest(attack_matrix_file),
-            "ablation_config_digest": compute_file_digest(ablation_config_file),
-            "runtime_config_digest": runtime_config_digest,
-            "records_digest": compute_object_digest(event_score_records),
-            "thresholds_digest": compute_object_digest(threshold_records),
-            "tables_digest": compute_path_collection_digest(output_paths.table_paths()),
-            "figures_digest": compute_path_collection_digest(output_paths.figure_paths()),
-            "placeholder_fields": [],
-            "random_fields": ["latent_generation_seed_random"],
-        }
-        self._write_json(output_paths.run_manifest_path, run_manifest)
-        self._write_cross_event_vae_batching_outputs(output_root_path)
-        del artifact_paths
-        return RealVideoVaeLatentRunResult(
-            run_id=run_id,
-            output_root=output_root_path,
-            event_score_records=event_score_records,
-            threshold_records=threshold_records,
-            run_manifest=run_manifest,
-        )
 
     def _begin_runner_timing(self, output_root: Path, run_id: str) -> None:
         self._runner_timing_recorder = RunTimingRecorder(output_root, run_id=run_id)
         self._runner_timing_totals = {}
         self._runner_timing_counts = {}
         self._runner_timing_failures = {}
+        self._runner_timing_groups = {}
         self._set_runtime_event_tag("real_video_vae_latent_runner")
 
     def _get_runtime_event_tag(self) -> str:
@@ -542,9 +598,17 @@ class RealVideoVaeLatentRunner:
             return self._current_runtime_event_tag
 
     @contextmanager
-    def _runner_substage(self, event_name: str, **metadata: Any) -> Iterator[None]:
+    def _runner_substage(
+        self,
+        event_name: str,
+        *,
+        event_group: str = "runner_substage",
+        **metadata: Any,
+    ) -> Iterator[None]:
         if not isinstance(event_name, str) or not event_name:
             raise ValueError("event_name must be a non-empty string")
+        if not isinstance(event_group, str) or not event_group:
+            raise ValueError("event_group must be a non-empty string")
         previous_event_tag = self._get_runtime_event_tag()
         self._set_runtime_event_tag(event_name)
         start_time = time.perf_counter()
@@ -564,6 +628,13 @@ class RealVideoVaeLatentRunner:
                 self._runner_timing_counts[event_name] = self._runner_timing_counts.get(event_name, 0) + 1
                 if status == "failed":
                     self._runner_timing_failures[event_name] = self._runner_timing_failures.get(event_name, 0) + 1
+                registered_event_group = self._runner_timing_groups.get(event_name)
+                if registered_event_group is None:
+                    self._runner_timing_groups[event_name] = event_group
+                elif registered_event_group != event_group:
+                    raise ValueError(
+                        f"runner timing event_group mismatch for {event_name}: {registered_event_group} != {event_group}"
+                    )
             del metadata
             self._set_runtime_event_tag(previous_event_tag)
 
@@ -577,7 +648,7 @@ class RealVideoVaeLatentRunner:
                 start_time=0.0,
                 end_time=float(self._runner_timing_totals[event_name]),
                 status=status,
-                event_group="runner_substage",
+                event_group=self._runner_timing_groups.get(event_name, "runner_substage"),
                 invocation_count=self._runner_timing_counts.get(event_name, 0),
                 failure_count=self._runner_timing_failures.get(event_name, 0),
             )
@@ -617,7 +688,11 @@ class RealVideoVaeLatentRunner:
         vae_runtime_backend: Any,
         vae_metadata: dict[str, Any],
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        method = build_method_from_config(method_config)
+        with self._runner_substage(
+            "runner_build_method",
+            event_group="runner_runtime_phase",
+        ):
+            method = build_method_from_config(method_config)
         target_fpr = float(protocol_config["threshold_protocol"]["target_fpr_placeholder"])
         calibration_split = str(
             protocol_config["threshold_protocol"].get("calibration_split", "calibration")
@@ -664,28 +739,40 @@ class RealVideoVaeLatentRunner:
             vae_runtime_backend,
             vae_metadata,
         )
-        threshold_record = self._threshold_calibrator.calibrate(
-            run_id,
-            method_config,
-            protocol_config,
-            calibration_records,
-            runtime_profile_override=runtime_profile,
-        )
+        with self._runner_substage(
+            "runner_threshold_calibration",
+            event_group="runner_runtime_phase",
+        ):
+            threshold_record = self._threshold_calibrator.calibrate(
+                run_id,
+                method_config,
+                protocol_config,
+                calibration_records,
+                runtime_profile_override=runtime_profile,
+            )
         threshold_record = dict(threshold_record)
         threshold_record["threshold_id"] = (
             f"{threshold_record['threshold_id']}:{protocol_config['construction_phase']}"
         )
         threshold_record["construction_phase"] = protocol_config["construction_phase"]
-        dev_records = materialize_threshold_decisions(
-            dev_records,
-            threshold_record,
-            attach_threshold_id=True,
-        )
-        calibration_records = materialize_threshold_decisions(
-            calibration_records,
-            threshold_record,
-            attach_threshold_id=False,
-        )
+        with self._runner_substage(
+            "runner_materialize_dev_threshold_decisions",
+            event_group="runner_runtime_phase",
+        ):
+            dev_records = materialize_threshold_decisions(
+                dev_records,
+                threshold_record,
+                attach_threshold_id=True,
+            )
+        with self._runner_substage(
+            "runner_materialize_calibration_threshold_decisions",
+            event_group="runner_runtime_phase",
+        ):
+            calibration_records = materialize_threshold_decisions(
+                calibration_records,
+                threshold_record,
+                attach_threshold_id=False,
+            )
         test_records = self._run_event_subset(
             run_id,
             output_root,
@@ -700,11 +787,15 @@ class RealVideoVaeLatentRunner:
             vae_runtime_backend,
             vae_metadata,
         )
-        test_records = materialize_threshold_decisions(
-            test_records,
-            threshold_record,
-            attach_threshold_id=True,
-        )
+        with self._runner_substage(
+            "runner_materialize_test_threshold_decisions",
+            event_group="runner_runtime_phase",
+        ):
+            test_records = materialize_threshold_decisions(
+                test_records,
+                threshold_record,
+                attach_threshold_id=True,
+            )
         return dev_records + calibration_records + test_records, threshold_record
 
     def _run_event_subset(

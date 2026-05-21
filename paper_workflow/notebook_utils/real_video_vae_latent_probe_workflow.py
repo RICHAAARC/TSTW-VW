@@ -1981,6 +1981,7 @@ def _build_non_formal_audit_bundle_entries(
         "selected_report_path",
         "selected_grid_output_path",
         "generated_tubelet_sync_candidate_config_path",
+        "timing_summary_path",
     ):
         summary_path = calibration_summary_payload.get(summary_key)
         if summary_path is None:
