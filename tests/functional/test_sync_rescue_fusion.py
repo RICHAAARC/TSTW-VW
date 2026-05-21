@@ -301,6 +301,130 @@ def test_sync_candidate_surface_compares_penalized_and_raw_rankings(
 
 
 @pytest.mark.unit
+def test_local_clip_sync_search_defaults_to_hybrid_no_prior_runtime_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate local-clip sync search removes center bias in runtime selection.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    local_clip_config = copy.deepcopy(TUBELET_SYNC_CONFIG)
+    local_clip_config["sync_search"] = {
+        **local_clip_config["sync_search"],
+        "min_sync_alignment_coverage_ratio": 0.25,
+        "min_sync_alignment_matched_count": 1,
+    }
+
+    extractor = SyntheticProbeEvidenceExtractor(
+        method_variant="tubelet_sync",
+        method_config=local_clip_config,
+        enabled_evidence={"tubelet": True, "sync": True, "trajectory": False},
+        fusion_rule="sync_rescue_fusion",
+    )
+    sample = LatentSample(
+        sample_id="sample_test_surface_no_prior_000001",
+        split="test",
+        sample_role="attacked_positive",
+        latent_shape=(8, 4, 4, 4),
+        latent_tensor_digest_random="digest_surface_no_prior",
+        latent_generation_seed_random=11,
+        latent_backend_name="synthetic_backend",
+        latent_backend_status="ok",
+        latent_artifact_relpath="artifacts/latents/sample.npy",
+        latent_artifact_path="artifacts/latents/sample.npy",
+        mechanism_trace={
+            "reference_latent_shape": [8, 4, 4, 4],
+            "sync_ground_truth_offset": -2,
+        },
+        applied_attack_params={"clip_length": 4},
+    )
+
+    assert extractor._resolve_sync_search_score_rule(sample) == "hybrid_no_prior"
+
+    monkeypatch.setattr(
+        "main.methods.temporal_tubelet_watermark.evidence.read_float_tensor_npy",
+        lambda _: object(),
+    )
+    monkeypatch.setattr(
+        "main.methods.temporal_tubelet_watermark.evidence.build_tubelet_descriptors",
+        lambda latent_shape, partition_config: [
+            {
+                "latent_shape": latent_shape,
+                "partition_config": partition_config,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        extractor,
+        "_build_payload_coded_projections",
+        lambda sample, tensor_artifact, descriptors, partition_config: (
+            [0.25],
+            object(),
+            {(0, 0, 0): object()},
+            {
+                "reference_latent_shape": [8, 4, 4, 4],
+                "tubelet_projection_coverage_ratio": 1.0,
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        extractor,
+        "_build_alignment_candidate_scores",
+        lambda descriptors, tensor_artifact, reference_descriptor_map, codebook, sample: (
+            {
+                (0, 1.0): 0.5,
+                (-2, 1.0): 0.5,
+                (2, 1.0): 0.4,
+            },
+            {
+                (0, 1.0): {
+                    "sync_alignment_matched_count": 4,
+                    "sync_alignment_candidate_count": 8,
+                    "sync_alignment_coverage_ratio": 0.5,
+                    "sync_candidate_score_raw": 0.5,
+                    "sync_candidate_score_penalized": 0.5,
+                    "sync_candidate_score_hybrid": 0.5,
+                },
+                (-2, 1.0): {
+                    "sync_alignment_matched_count": 2,
+                    "sync_alignment_candidate_count": 8,
+                    "sync_alignment_coverage_ratio": 0.25,
+                    "sync_candidate_score_raw": 0.5,
+                    "sync_candidate_score_penalized": 0.25,
+                    "sync_candidate_score_hybrid": 0.5,
+                },
+                (2, 1.0): {
+                    "sync_alignment_matched_count": 6,
+                    "sync_alignment_candidate_count": 8,
+                    "sync_alignment_coverage_ratio": 0.75,
+                    "sync_candidate_score_raw": 0.4,
+                    "sync_candidate_score_penalized": 0.4,
+                    "sync_candidate_score_hybrid": 0.4,
+                },
+            },
+            "hybrid_no_prior",
+        ),
+    )
+
+    candidate_surface = extractor.build_sync_candidate_surface(sample)
+
+    assert candidate_surface["search_score_rule"] == "hybrid_no_prior"
+    assert candidate_surface["sync_result"]["sync_estimated_offset"] == -2
+    assert (
+        candidate_surface["ranking_summaries"]["hybrid_prior"]["winner"]["offset_candidate"]
+        == 0
+    )
+    assert (
+        candidate_surface["ranking_summaries"]["hybrid_no_prior"]["winner"]["offset_candidate"]
+        == -2
+    )
+
+
+@pytest.mark.unit
 def test_reliable_offset_alignment_can_create_payload_rescue_gain(tmp_path: Path) -> None:
     cropped_sample = _build_sync_embedded_crop(tmp_path)
     sync_result = build_method_from_config(TUBELET_SYNC_CONFIG).detect(

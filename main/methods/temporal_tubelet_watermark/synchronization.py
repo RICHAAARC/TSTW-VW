@@ -23,6 +23,7 @@ def search_best_offset(
     offset_search_min: int = OFFSET_SEARCH_MIN,
     offset_search_max: int = OFFSET_SEARCH_MAX,
     ground_truth_offset: int | None = None,
+    center_prior_enabled: bool = True,
 ) -> dict[str, float | int | None]:
     """功能：在受治理 offset 范围内搜索最佳同步偏移。
 
@@ -58,12 +59,17 @@ def search_best_offset(
             6,
         )
 
-    return build_offset_search_result(offset_scores, ground_truth_offset)
+    return build_offset_search_result(
+        offset_scores,
+        ground_truth_offset,
+        center_prior_enabled=center_prior_enabled,
+    )
 
 
 def build_offset_search_result(
     offset_scores: dict[int, float],
     ground_truth_offset: int | None = None,
+    center_prior_enabled: bool = True,
 ) -> dict[str, float | int | None]:
     """功能：从候选 offset 分数构建同步搜索诊断。
 
@@ -92,6 +98,7 @@ def build_offset_search_result(
         ground_truth_offset=ground_truth_offset,
         ground_truth_scale=None,
         alignment_mode="offset",
+        center_prior_enabled=center_prior_enabled,
     )
 
 
@@ -99,6 +106,7 @@ def build_offset_scale_search_result(
     candidate_scores: dict[tuple[int, float], float],
     ground_truth_offset: int | None = None,
     ground_truth_scale: float | None = None,
+    center_prior_enabled: bool = True,
 ) -> dict[str, float | int | str | None | bool]:
     """Build synchronization diagnostics from offset-scale candidates.
 
@@ -134,6 +142,7 @@ def build_offset_scale_search_result(
         ground_truth_offset=ground_truth_offset,
         ground_truth_scale=ground_truth_scale,
         alignment_mode="offset_scale",
+        center_prior_enabled=center_prior_enabled,
     )
 
 
@@ -142,6 +151,7 @@ def _build_search_result(
     ground_truth_offset: int | None,
     ground_truth_scale: float | None,
     alignment_mode: str,
+    center_prior_enabled: bool,
 ) -> dict[str, float | int | str | None | bool]:
     if not candidates:
         raise ValueError("candidates must be non-empty")
@@ -150,8 +160,14 @@ def _build_search_result(
         candidates,
         key=lambda item: (
             -float(item["score"]),
-            abs(int(item["offset"])),
-            abs(float(item["scale"]) - DEFAULT_SYNC_SCALE),
+            abs(int(item["offset"])) if center_prior_enabled else int(item["offset"]),
+            (
+                abs(float(item["scale"]) - DEFAULT_SYNC_SCALE)
+                if center_prior_enabled
+                else float(item["scale"])
+            ),
+            int(item["offset"]),
+            float(item["scale"]),
         ),
     )
     best_candidate = ranked_candidates[0]

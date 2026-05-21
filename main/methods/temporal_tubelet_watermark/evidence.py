@@ -209,6 +209,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 alignment_scores,
                 mechanism_trace,
                 sample,
+                search_score_rule,
             )
             sync_result.update(
                 self._build_best_alignment_candidate_trace(
@@ -362,6 +363,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             alignment_scores,
             mechanism_trace,
             sample,
+            search_score_rule,
         )
         current_selected_key = (
             int(sync_result["sync_estimated_offset"]),
@@ -806,21 +808,34 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             configured_rule = sync_search_config.get("search_score_rule")
         if configured_rule is not None:
             normalized_rule = str(configured_rule).strip()
-            if normalized_rule not in {"penalized_prior", "raw_prior", "hybrid_prior"}:
+            if normalized_rule not in {
+                "penalized_prior",
+                "penalized_no_prior",
+                "raw_prior",
+                "raw_no_prior",
+                "hybrid_prior",
+                "hybrid_no_prior",
+            }:
                 raise ValueError(
-                    "sync_search.search_score_rule must be one of: penalized_prior, raw_prior, hybrid_prior"
+                    "sync_search.search_score_rule must be one of: penalized_prior, penalized_no_prior, raw_prior, raw_no_prior, hybrid_prior, hybrid_no_prior"
                 )
             return normalized_rule
         if self._coverage_penalty_enabled() and self._is_local_clip_sample(sample):
-            return "hybrid_prior"
+            return "hybrid_no_prior"
         return "penalized_prior"
 
     def _resolve_sync_search_score_field(self, search_score_rule: str) -> str:
         return {
             "penalized_prior": "sync_candidate_score_penalized",
+            "penalized_no_prior": "sync_candidate_score_penalized",
             "raw_prior": "sync_candidate_score_raw",
+            "raw_no_prior": "sync_candidate_score_raw",
             "hybrid_prior": "sync_candidate_score_hybrid",
+            "hybrid_no_prior": "sync_candidate_score_hybrid",
         }[search_score_rule]
+
+    def _sync_search_uses_center_prior(self, search_score_rule: str) -> bool:
+        return not str(search_score_rule).endswith("_no_prior")
 
     def _is_local_clip_sample(self, sample: LatentSample) -> bool:
         applied_attack_params = sample.applied_attack_params or {}
@@ -885,17 +900,20 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         alignment_scores: dict[tuple[int, float], float],
         mechanism_trace: dict[str, object],
         sample: LatentSample,
+        search_score_rule: str,
     ) -> dict[str, float | int | str | None | bool]:
         ground_truth_offset = mechanism_trace.get("sync_ground_truth_offset")
         resolved_ground_truth_offset = (
             int(ground_truth_offset) if isinstance(ground_truth_offset, int) else None
         )
         ground_truth_scale = self._resolve_ground_truth_scale_from_trace(mechanism_trace)
+        center_prior_enabled = self._sync_search_uses_center_prior(search_score_rule)
         if self._scale_search_enabled(sample):
             return build_offset_scale_search_result(
                 alignment_scores,
                 ground_truth_offset=resolved_ground_truth_offset,
                 ground_truth_scale=ground_truth_scale,
+                center_prior_enabled=center_prior_enabled,
             )
 
         offset_scores = {
@@ -906,6 +924,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         return build_offset_search_result(
             offset_scores,
             ground_truth_offset=resolved_ground_truth_offset,
+            center_prior_enabled=center_prior_enabled,
         )
 
     def _build_trajectory_score(self, coded_projections: list[float]) -> float:
