@@ -670,8 +670,9 @@ def _build_tubelet_sync_calibration_grid_rows(
         )
     rows.sort(
         key=lambda row: (
-            _sync_candidate_status_rank(str(row.get("candidate_selection_status") or "")),
+            0 if bool(row.get("candidate_eligible")) else 1,
             0 if bool(row.get("fpr_controlled")) else 1,
+            _sync_candidate_status_rank(str(row.get("candidate_selection_status") or "")),
             -float(row.get("selection_score") or 0.0),
             float(row.get("lambda_sync") or 0.0),
             int(row.get("sync_search_radius") or 0),

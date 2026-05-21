@@ -1447,6 +1447,313 @@ def test_mechanism_candidate_selector_uses_any_of_k_sync_gain_policy(
     assert selected_sync_candidate["metrics"]["local_clip_anchor_headroom"] == 0.0
 
 
+def test_mechanism_candidate_selector_prefers_controlled_sync_frontier_over_leakage_rescue(
+    tmp_path: Path,
+) -> None:
+    """Validate sync selection keeps the FPR-controlled frontier ahead of leaking rescue rows.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    anchor_run_root = tmp_path / "runs" / "controlled_frontier_anchor"
+    sync_run_root = tmp_path / "runs" / "controlled_frontier_sync"
+    anchor_output_paths = build_real_video_vae_latent_output_paths(anchor_run_root)
+    sync_output_paths = build_real_video_vae_latent_output_paths(sync_run_root)
+    anchor_output_paths.event_scores_path.parent.mkdir(parents=True, exist_ok=True)
+    sync_output_paths.event_scores_path.parent.mkdir(parents=True, exist_ok=True)
+
+    grid_config_path = tmp_path / "controlled_frontier_grid.json"
+    mechanism_config_path = tmp_path / "controlled_frontier_gate.json"
+    grid_config_path.write_text(
+        json.dumps(
+            {
+                "construction_phase": "real_video_vae_latent_probe",
+                "calibration_purpose": "stage2_mechanism_effect_calibration",
+                "allowed_splits": ["dev", "calibration"],
+                "forbidden_splits": ["test"],
+                "grid": {
+                    "tubelet_length": [2],
+                    "spatial_patch_size": [[4, 4]],
+                    "embedding_projection_support_weight": [0.25],
+                    "lambda_sync": [0.0, 0.025],
+                    "sync_search_radius": [8],
+                    "min_sync_positive_margin": [0.0],
+                    "min_sync_alignment_coverage_ratio": [0.0625],
+                    "min_sync_alignment_matched_count": [1],
+                    "fusion_rule": ["sync_rescue_fusion"],
+                },
+                "selection_metrics": [
+                    "no_attack_clean_positive_tpr",
+                    "clean_negative_fpr",
+                    "max_attacked_negative_fpr",
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    mechanism_config_path.write_text(
+        json.dumps(
+            {
+                "construction_phase": "real_video_vae_latent_probe",
+                "required_mechanism_attacks": [
+                    "no_attack",
+                    "temporal_crop",
+                    "local_clip",
+                ],
+                "required_sync_gain_attacks": ["temporal_crop", "local_clip"],
+                "sync_gain_policy": "any_required_temporal_attack",
+                "min_required_sync_gain_attack_count": 1,
+                "max_clean_negative_fpr": 0.05,
+                "max_attacked_negative_fpr": 0.1,
+                "min_no_attack_clean_positive_tpr": 0.5,
+                "min_mean_temporal_sync_gain": 0.05,
+                "require_quality_not_collapsed": True,
+                "min_watermarked_video_psnr": 20.0,
+                "min_watermarked_video_ssim": 0.5,
+                "sync_gain_saturation_threshold": 1.0,
+                "absolute_rescue_tpr_threshold": 1.0,
+                "leakage_exceeded_multiplier": 2.0,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    anchor_records = []
+    for split_name in ("dev", "calibration"):
+        anchor_records.extend(
+            [
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_controlled_frontier_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=2,
+                    attack_name="no_attack",
+                    sample_role="clean_negative",
+                    decision=False,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_controlled_frontier_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=2,
+                    attack_name="no_attack",
+                    sample_role="watermarked_positive",
+                    decision=True,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_controlled_frontier_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=2,
+                    attack_name="temporal_crop",
+                    sample_role="attacked_positive",
+                    decision=False,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_controlled_frontier_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=2,
+                    attack_name="local_clip",
+                    sample_role="attacked_positive",
+                    decision=True,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_controlled_frontier_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=2,
+                    attack_name="temporal_crop",
+                    sample_role="attacked_negative",
+                    decision=False,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_controlled_frontier_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=2,
+                    attack_name="local_clip",
+                    sample_role="attacked_negative",
+                    decision=False,
+                ),
+            ]
+        )
+
+    anchor_output_paths.event_scores_path.write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in anchor_records),
+        encoding="utf-8",
+    )
+
+    anchor_result = select_stage2_mechanism_candidate(
+        run_root=anchor_run_root,
+        grid_config_path=grid_config_path,
+        mechanism_config_path=mechanism_config_path,
+        selection_scope="tubelet_only",
+        top_candidate_limit=1,
+    )
+
+    sync_records = []
+    for split_name in ("dev", "calibration"):
+        sync_records.extend(
+            [
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls000_mg000_cv062_mc01_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=2,
+                    attack_name="no_attack",
+                    sample_role="clean_negative",
+                    decision=False,
+                    s_sync=0.02,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.0,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls000_mg000_cv062_mc01_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=2,
+                    attack_name="no_attack",
+                    sample_role="watermarked_positive",
+                    decision=True,
+                    s_sync=0.28,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.0,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls000_mg000_cv062_mc01_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=2,
+                    attack_name="local_clip",
+                    sample_role="attacked_positive",
+                    decision=True,
+                    s_sync=0.16,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.0,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls000_mg000_cv062_mc01_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=2,
+                    attack_name="local_clip",
+                    sample_role="attacked_negative",
+                    decision=False,
+                    s_sync=0.03,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.0,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls025_mg120_cv062_mc01_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=2,
+                    attack_name="no_attack",
+                    sample_role="clean_negative",
+                    decision=False,
+                    s_sync=0.03,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.025,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls025_mg120_cv062_mc01_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=2,
+                    attack_name="no_attack",
+                    sample_role="watermarked_positive",
+                    decision=True,
+                    s_sync=0.34,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.025,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls025_mg120_cv062_mc01_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=2,
+                    attack_name="temporal_crop",
+                    sample_role="attacked_positive",
+                    decision=True,
+                    s_sync=0.24,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.025,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls025_mg120_cv062_mc01_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=2,
+                    attack_name="local_clip",
+                    sample_role="attacked_positive",
+                    decision=True,
+                    s_sync=0.18,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.025,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls025_mg120_cv062_mc01_frsync_rescue",
+                    base_method_variant="tubelet_sync",
+                    tubelet_length=2,
+                    attack_name="local_clip",
+                    sample_role="attacked_negative",
+                    decision=True,
+                    s_sync=0.19,
+                    fusion_rule="sync_rescue_fusion",
+                    lambda_sync=0.025,
+                ),
+            ]
+        )
+
+    sync_output_paths.event_scores_path.write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in sync_records),
+        encoding="utf-8",
+    )
+
+    sync_result = select_stage2_mechanism_candidate(
+        run_root=sync_run_root,
+        grid_config_path=grid_config_path,
+        mechanism_config_path=mechanism_config_path,
+        selection_scope="tubelet_sync",
+        selected_tubelet_only_candidate=anchor_result["selected_tubelet_only_candidate"],
+        top_candidate_limit=2,
+    )
+
+    assert sync_result["selected_tubelet_sync_candidate"]["method_variant"] == (
+        "tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls000_mg000_cv062_mc01_frsync_rescue"
+    )
+    assert (
+        sync_result["selected_tubelet_sync_candidate"]["candidate_selection_status"]
+        == "insufficient_signal"
+    )
+    assert (
+        sync_result["selected_tubelet_sync_candidate"]["negative_leakage_status"]
+        == "controlled"
+    )
+    assert sync_result["top_tubelet_sync_candidates"][1]["method_variant"] == (
+        "tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls025_mg120_cv062_mc01_frsync_rescue"
+    )
+    assert (
+        sync_result["top_tubelet_sync_candidates"][1]["candidate_selection_status"]
+        == "rescue_with_leakage"
+    )
+    assert (
+        sync_result["top_tubelet_sync_candidates"][1]["negative_leakage_status"]
+        == "leakage_exceeded"
+    )
+
+
 def test_mechanism_candidate_selector_reports_incompatible_sync_stage_rows(
     tmp_path: Path,
 ) -> None:
