@@ -862,6 +862,7 @@ def test_write_probe_stage2_local_clip_sync_diagnostics_persists_candidate_surfa
     mechanism_trace = dict(detection_result.mechanism_trace or {})
     mechanism_trace.update(
         {
+            "video_source_relpath": "processed_dataset/sample_surface_probe_000001.mp4",
             "latent_shape": list(clipped_sample.latent_shape),
             "latent_artifact_relpath": clipped_sample.latent_artifact_relpath,
             "latent_artifact_digest": clipped_sample.latent_artifact_digest,
@@ -874,7 +875,7 @@ def test_write_probe_stage2_local_clip_sync_diagnostics_persists_candidate_surfa
         json.dumps(
             {
                 "event_id": f"{selected_method_variant}:sample_surface_probe_000001:local_clip",
-                "sample_id": clipped_sample.sample_id,
+                "sample_id": "event_alias_attacked_positive_000001",
                 "split": clipped_sample.split,
                 "sample_role": "attacked_positive",
                 "method_variant": selected_method_variant,

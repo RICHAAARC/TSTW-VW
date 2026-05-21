@@ -1537,8 +1537,13 @@ def _build_local_clip_sync_forensics_sample(
     if not isinstance(attack_params, dict):
         raise ValueError("attack_params must be a dictionary for local_clip surface export")
 
+    forensics_sample_id = _resolve_local_clip_sync_forensics_sample_id(
+        record=record,
+        mechanism_trace=mechanism_trace,
+    )
+
     return LatentSample(
-        sample_id=str(record.get("sample_id", "")),
+        sample_id=forensics_sample_id,
         split=str(record.get("split", "")),
         sample_role=str(record.get("sample_role", "")),
         latent_shape=latent_shape,
@@ -1555,6 +1560,28 @@ def _build_local_clip_sync_forensics_sample(
         mechanism_trace=dict(mechanism_trace),
         applied_attack_params=dict(attack_params),
     )
+
+
+def _resolve_local_clip_sync_forensics_sample_id(
+    *,
+    record: dict[str, Any],
+    mechanism_trace: dict[str, Any],
+) -> str:
+    source_sample_id = str(
+        record.get("source_sample_id")
+        or mechanism_trace.get("source_sample_id")
+        or ""
+    ).strip()
+    if source_sample_id:
+        return source_sample_id
+
+    source_video_relpath = str(mechanism_trace.get("video_source_relpath") or "").strip()
+    if source_video_relpath:
+        source_video_stem = Path(source_video_relpath).stem.strip()
+        if source_video_stem:
+            return source_video_stem
+
+    return str(record.get("sample_id", "")).strip()
 
 
 def _coerce_local_clip_sync_latent_shape(
