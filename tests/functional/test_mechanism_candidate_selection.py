@@ -549,6 +549,237 @@ def test_mechanism_candidate_selector_uses_dev_and_calibration_only(
     assert result["parameter_interval_summary"]["tubelet_sync"]["lambda_sync"]["min"] == 0.0
 
 
+def test_mechanism_candidate_selector_prefers_headroom_anchor_over_saturated_anchor(
+    tmp_path: Path,
+) -> None:
+    """Validate tubelet-only selection prefers headroom-bearing anchors.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "runs" / "headroom_anchor"
+    output_paths = build_real_video_vae_latent_output_paths(run_root)
+    output_paths.event_scores_path.parent.mkdir(parents=True, exist_ok=True)
+
+    grid_config_path = tmp_path / "headroom_grid.json"
+    mechanism_config_path = tmp_path / "headroom_gate.json"
+    grid_config_path.write_text(
+        json.dumps(
+            {
+                "construction_phase": "real_video_vae_latent_probe",
+                "calibration_purpose": "stage2_mechanism_effect_calibration",
+                "allowed_splits": ["dev", "calibration"],
+                "forbidden_splits": ["test"],
+                "grid": {
+                    "tubelet_length": [1],
+                    "spatial_patch_size": [[4, 4]],
+                    "embedding_projection_support_weight": [0.45],
+                    "lambda_sync": [0.0],
+                    "sync_search_radius": [4],
+                    "min_sync_positive_margin": [0.0],
+                    "min_sync_alignment_coverage_ratio": [0.125],
+                    "min_sync_alignment_matched_count": [1],
+                    "fusion_rule": ["sync_rescue_fusion"]
+                },
+                "selection_metrics": [
+                    "no_attack_clean_positive_tpr",
+                    "clean_negative_fpr",
+                    "max_attacked_negative_fpr"
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    mechanism_config_path.write_text(
+        json.dumps(
+            {
+                "construction_phase": "real_video_vae_latent_probe",
+                "required_mechanism_attacks": [
+                    "no_attack",
+                    "temporal_crop",
+                    "frame_dropping",
+                    "local_clip"
+                ],
+                "required_sync_gain_attacks": ["temporal_crop", "local_clip"],
+                "max_clean_negative_fpr": 0.05,
+                "max_attacked_negative_fpr": 0.1,
+                "min_no_attack_clean_positive_tpr": 0.5,
+                "absolute_rescue_tpr_threshold": 1.0,
+                "sync_gain_saturation_threshold": 1.0
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    records: list[dict[str, object]] = []
+    for split_name in ("dev", "calibration"):
+        records.extend(
+            [
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_saturated_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="no_attack",
+                    sample_role="clean_negative",
+                    decision=False,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_saturated_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="no_attack",
+                    sample_role="watermarked_positive",
+                    decision=True,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_saturated_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="temporal_crop",
+                    sample_role="attacked_positive",
+                    decision=True,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_saturated_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="frame_dropping",
+                    sample_role="attacked_positive",
+                    decision=True,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_saturated_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="local_clip",
+                    sample_role="attacked_positive",
+                    decision=True,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_saturated_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="temporal_crop",
+                    sample_role="attacked_negative",
+                    decision=False,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_saturated_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="local_clip",
+                    sample_role="attacked_negative",
+                    decision=False,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_headroom_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="no_attack",
+                    sample_role="clean_negative",
+                    decision=False,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_headroom_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="no_attack",
+                    sample_role="watermarked_positive",
+                    decision=True,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_headroom_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="temporal_crop",
+                    sample_role="attacked_positive",
+                    decision=(split_name == "calibration"),
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_headroom_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="frame_dropping",
+                    sample_role="attacked_positive",
+                    decision=True,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_headroom_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="local_clip",
+                    sample_role="attacked_positive",
+                    decision=(split_name == "calibration"),
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_headroom_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="temporal_crop",
+                    sample_role="attacked_negative",
+                    decision=False,
+                ),
+                _build_event_record(
+                    split_name=split_name,
+                    method_variant="tubelet_only_headroom_anchor",
+                    base_method_variant="tubelet_only",
+                    tubelet_length=1,
+                    attack_name="local_clip",
+                    sample_role="attacked_negative",
+                    decision=False,
+                ),
+            ]
+        )
+
+    output_paths.event_scores_path.write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+    result = select_stage2_mechanism_candidate(
+        run_root=run_root,
+        grid_config_path=grid_config_path,
+        mechanism_config_path=mechanism_config_path,
+        selection_scope="tubelet_only",
+        top_candidate_limit=2,
+    )
+
+    assert result["selected_tubelet_only_candidate"]["method_variant"] == (
+        "tubelet_only_headroom_anchor"
+    )
+    assert result["selected_tubelet_only_candidate"]["candidate_selection_status"] == (
+        "strong_anchor_with_headroom"
+    )
+    assert result["top_tubelet_only_candidates"][0]["method_variant"] == (
+        "tubelet_only_headroom_anchor"
+    )
+    assert result["top_tubelet_only_candidates"][1]["method_variant"] == (
+        "tubelet_only_saturated_anchor"
+    )
+
+
 def test_mechanism_candidate_selector_supports_stage_scopes(
     tmp_path: Path,
 ) -> None:

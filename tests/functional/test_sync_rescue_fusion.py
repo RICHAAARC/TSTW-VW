@@ -182,9 +182,16 @@ def test_sync_candidate_surface_compares_penalized_and_raw_rankings(
     Returns:
         None.
     """
+    local_clip_config = copy.deepcopy(TUBELET_SYNC_CONFIG)
+    local_clip_config["sync_search"] = {
+        **local_clip_config["sync_search"],
+        "min_sync_alignment_coverage_ratio": 0.25,
+        "min_sync_alignment_matched_count": 1,
+    }
+
     extractor = SyntheticProbeEvidenceExtractor(
         method_variant="tubelet_sync",
-        method_config=TUBELET_SYNC_CONFIG,
+        method_config=local_clip_config,
         enabled_evidence={"tubelet": True, "sync": True, "trajectory": False},
         fusion_rule="sync_rescue_fusion",
     )
@@ -238,7 +245,7 @@ def test_sync_candidate_surface_compares_penalized_and_raw_rankings(
         lambda descriptors, tensor_artifact, reference_descriptor_map, codebook, sample: (
             {
                 (0, 1.0): 0.4,
-                (-2, 1.0): 0.25,
+                (-2, 1.0): 0.5,
                 (2, 1.0): 0.39,
             },
             {
@@ -248,6 +255,7 @@ def test_sync_candidate_surface_compares_penalized_and_raw_rankings(
                     "sync_alignment_coverage_ratio": 0.5,
                     "sync_candidate_score_raw": 0.4,
                     "sync_candidate_score_penalized": 0.4,
+                    "sync_candidate_score_hybrid": 0.4,
                 },
                 (-2, 1.0): {
                     "sync_alignment_matched_count": 2,
@@ -255,6 +263,7 @@ def test_sync_candidate_surface_compares_penalized_and_raw_rankings(
                     "sync_alignment_coverage_ratio": 0.25,
                     "sync_candidate_score_raw": 0.5,
                     "sync_candidate_score_penalized": 0.25,
+                    "sync_candidate_score_hybrid": 0.5,
                 },
                 (2, 1.0): {
                     "sync_alignment_matched_count": 6,
@@ -262,25 +271,33 @@ def test_sync_candidate_surface_compares_penalized_and_raw_rankings(
                     "sync_alignment_coverage_ratio": 0.75,
                     "sync_candidate_score_raw": 0.39,
                     "sync_candidate_score_penalized": 0.39,
+                    "sync_candidate_score_hybrid": 0.39,
                 },
             },
+            "hybrid_prior",
         ),
     )
 
     candidate_surface = extractor.build_sync_candidate_surface(sample)
     candidate_rows = candidate_surface["candidate_rows"]
     penalized_winner = candidate_surface["ranking_summaries"]["penalized_prior"]["winner"]
+    hybrid_winner = candidate_surface["ranking_summaries"]["hybrid_prior"]["winner"]
     raw_winner = candidate_surface["ranking_summaries"]["raw_prior"]["winner"]
     ground_truth_row = candidate_surface["ground_truth_candidate"]
 
-    assert candidate_surface["sync_result"]["sync_estimated_offset"] == 0
+    assert candidate_surface["search_score_rule"] == "hybrid_prior"
+    assert candidate_surface["sync_result"]["sync_estimated_offset"] == -2
     assert penalized_winner["offset_candidate"] == 0
+    assert hybrid_winner["offset_candidate"] == -2
     assert raw_winner["offset_candidate"] == -2
     assert ground_truth_row["offset_candidate"] == -2
     assert candidate_surface["ranking_summaries"]["penalized_prior"]["ground_truth_rank"] == 3
+    assert candidate_surface["ranking_summaries"]["hybrid_prior"]["ground_truth_rank"] == 1
     assert candidate_surface["ranking_summaries"]["raw_prior"]["ground_truth_rank"] == 1
     assert any(bool(row["selected_penalized_prior"]) for row in candidate_rows)
+    assert any(bool(row["selected_hybrid_prior"]) for row in candidate_rows)
     assert any(bool(row["selected_raw_prior"]) for row in candidate_rows)
+    assert any(bool(row["is_current_selected_candidate"]) for row in candidate_rows)
 
 
 @pytest.mark.unit

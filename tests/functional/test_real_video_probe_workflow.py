@@ -906,16 +906,16 @@ def test_write_probe_stage2_local_clip_sync_diagnostics_persists_candidate_surfa
 
     with surface_csv_path.open("r", encoding="utf-8", newline="") as handle:
         surface_rows = list(csv.DictReader(handle))
-    assert any(row["selected_penalized_prior"] == "True" for row in surface_rows)
+    assert any(row["is_current_selected_candidate"] == "True" for row in surface_rows)
     assert any(row["is_ground_truth_candidate"] == "True" for row in surface_rows)
 
     surface_summary_payload = json.loads(surface_summary_path.read_text(encoding="utf-8"))
     assert surface_summary_payload["surface_event_count"] == 1
     assert surface_summary_payload["events"][0]["recomputed_matches_recorded_selection"] is True
     assert (
-        surface_summary_payload["events"][0]["ranking_summaries"]["penalized_prior"][
-            "winner"
-        ]["offset_candidate"]
+        surface_summary_payload["events"][0]["recomputed_selected_candidate"][
+            "offset_candidate"
+        ]
         == detection_result.mechanism_trace["sync_estimated_offset"]
     )
 

@@ -194,7 +194,11 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         sync_rescue_applied = False
         trajectory_projections = payload_coded_projections
         if self._enabled_evidence.get("sync", False):
-            alignment_scores, alignment_candidate_metrics = self._build_alignment_candidate_scores(
+            (
+                alignment_scores,
+                alignment_candidate_metrics,
+                search_score_rule,
+            ) = self._build_alignment_candidate_scores(
                 descriptors,
                 tensor_artifact,
                 reference_descriptor_map,
@@ -212,6 +216,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                     alignment_candidate_metrics,
                 )
             )
+            sync_result["sync_search_score_rule"] = search_score_rule
             mechanism_trace.update(sync_result)
             evidence_scores["S_sync"] = self._build_sync_support_score(
                 float(sync_result["S_sync_positive_margin"]),
@@ -342,7 +347,11 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         )
         mechanism_trace = dict(sample.mechanism_trace or {})
         mechanism_trace.update(reference_shape_trace)
-        alignment_scores, alignment_candidate_metrics = self._build_alignment_candidate_scores(
+        (
+            alignment_scores,
+            alignment_candidate_metrics,
+            search_score_rule,
+        ) = self._build_alignment_candidate_scores(
             descriptors,
             tensor_artifact,
             reference_descriptor_map,
@@ -371,6 +380,8 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         ranking_specs = (
             ("penalized_prior", "sync_candidate_score_penalized", True),
             ("penalized_no_prior", "sync_candidate_score_penalized", False),
+            ("hybrid_prior", "sync_candidate_score_hybrid", True),
+            ("hybrid_no_prior", "sync_candidate_score_hybrid", False),
             ("raw_prior", "sync_candidate_score_raw", True),
             ("raw_no_prior", "sync_candidate_score_raw", False),
         )
@@ -392,7 +403,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 candidate_row[f"selected_{rule_name}"] = candidate_key == winner_key
 
         selected_candidate_row = next(
-            row for row in candidate_rows if bool(row["selected_penalized_prior"])
+            row for row in candidate_rows if bool(row["is_current_selected_candidate"])
         )
         ground_truth_candidate_row = None
         if ground_truth_key is not None:
@@ -407,6 +418,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
 
         return {
             "sync_result": dict(sync_result),
+            "search_score_rule": search_score_rule,
             "coverage_penalty_enabled": self._coverage_penalty_enabled(),
             "candidate_rows": candidate_rows,
             "selected_candidate": dict(selected_candidate_row),
@@ -530,6 +542,10 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                     ),
                     "sync_candidate_score_penalized": round(
                         float(candidate_metrics["sync_candidate_score_penalized"]),
+                        6,
+                    ),
+                    "sync_candidate_score_hybrid": round(
+                        float(candidate_metrics["sync_candidate_score_hybrid"]),
                         6,
                     ),
                     "is_current_selected_candidate": (
@@ -674,7 +690,13 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         reference_descriptor_map: dict[tuple[int, int, int], object],
         codebook: object,
         sample: LatentSample,
-    ) -> tuple[dict[tuple[int, float], float], dict[tuple[int, float], dict[str, float | int]]]:
+    ) -> tuple[
+        dict[tuple[int, float], float],
+        dict[tuple[int, float], dict[str, float | int]],
+        str,
+    ]:
+        search_score_rule = self._resolve_sync_search_score_rule(sample)
+        search_score_field = self._resolve_sync_search_score_field(search_score_rule)
         alignment_scores: dict[tuple[int, float], float] = {}
         alignment_candidate_metrics: dict[tuple[int, float], dict[str, float | int]] = {}
         for offset_candidate in self._resolve_offset_candidates(sample):
@@ -689,10 +711,8 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                     scale_candidate,
                 )
                 alignment_candidate_metrics[candidate_key] = candidate_metrics
-                alignment_scores[candidate_key] = float(
-                    candidate_metrics["sync_candidate_score_penalized"]
-                )
-        return alignment_scores, alignment_candidate_metrics
+                alignment_scores[candidate_key] = float(candidate_metrics[search_score_field])
+        return alignment_scores, alignment_candidate_metrics, search_score_rule
 
     def _score_alignment_candidate(
         self,
@@ -734,6 +754,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 "sync_alignment_coverage_ratio": 0.0,
                 "sync_candidate_score_raw": -1.0,
                 "sync_candidate_score_penalized": -1.0,
+                "sync_candidate_score_hybrid": -1.0,
             }
         projection_support = sum(candidate_payload_projections) / len(
             candidate_payload_projections
@@ -744,13 +765,69 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             penalized_score = projection_support * coverage_ratio
         else:
             penalized_score = projection_support
+        hybrid_score = penalized_score
+        if self._candidate_supports_hybrid_search(
+            matched_count=matched_count,
+            coverage_ratio=coverage_ratio,
+            projection_support=projection_support,
+        ):
+            hybrid_score = projection_support
         return {
             "sync_alignment_matched_count": matched_count,
             "sync_alignment_candidate_count": candidate_count,
             "sync_alignment_coverage_ratio": round(coverage_ratio, 6),
             "sync_candidate_score_raw": round(projection_support, 6),
             "sync_candidate_score_penalized": round(penalized_score, 6),
+            "sync_candidate_score_hybrid": round(hybrid_score, 6),
         }
+
+    def _candidate_supports_hybrid_search(
+        self,
+        *,
+        matched_count: int,
+        coverage_ratio: float,
+        projection_support: float,
+    ) -> bool:
+        if projection_support <= 0.0:
+            return False
+        min_coverage_ratio = self._resolve_sync_confidence_value(
+            "min_sync_alignment_coverage_ratio",
+            0.5,
+        )
+        min_matched_count = int(
+            self._resolve_sync_confidence_value("min_sync_alignment_matched_count", 1.0)
+        )
+        return coverage_ratio >= float(min_coverage_ratio) and matched_count >= min_matched_count
+
+    def _resolve_sync_search_score_rule(self, sample: LatentSample) -> str:
+        sync_search_config = self._method_config.get("sync_search", {})
+        configured_rule = None
+        if isinstance(sync_search_config, dict):
+            configured_rule = sync_search_config.get("search_score_rule")
+        if configured_rule is not None:
+            normalized_rule = str(configured_rule).strip()
+            if normalized_rule not in {"penalized_prior", "raw_prior", "hybrid_prior"}:
+                raise ValueError(
+                    "sync_search.search_score_rule must be one of: penalized_prior, raw_prior, hybrid_prior"
+                )
+            return normalized_rule
+        if self._coverage_penalty_enabled() and self._is_local_clip_sample(sample):
+            return "hybrid_prior"
+        return "penalized_prior"
+
+    def _resolve_sync_search_score_field(self, search_score_rule: str) -> str:
+        return {
+            "penalized_prior": "sync_candidate_score_penalized",
+            "raw_prior": "sync_candidate_score_raw",
+            "hybrid_prior": "sync_candidate_score_hybrid",
+        }[search_score_rule]
+
+    def _is_local_clip_sample(self, sample: LatentSample) -> bool:
+        applied_attack_params = sample.applied_attack_params or {}
+        if isinstance(applied_attack_params, dict) and "clip_length" in applied_attack_params:
+            return True
+        mechanism_trace = sample.mechanism_trace or {}
+        return isinstance(mechanism_trace, dict) and mechanism_trace.get("clip_length") is not None
 
     def _build_best_alignment_candidate_trace(
         self,
@@ -769,6 +846,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 "sync_alignment_coverage_ratio": None,
                 "sync_candidate_score_raw": None,
                 "sync_candidate_score_penalized": None,
+                "sync_candidate_score_hybrid": None,
             }
         return dict(best_metrics)
 

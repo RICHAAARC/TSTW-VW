@@ -16,6 +16,7 @@ from experiments.real_video_vae_latent_probe.mechanism_audit import (
     build_stage2_mechanism_audit_rows,
 )
 from experiments.real_video_vae_latent_probe.mechanism_semantics import (
+    build_anchor_selection_assessment,
     build_sync_gain_assessment,
 )
 from main.core.records import RecordWriter
@@ -331,6 +332,30 @@ def _build_tubelet_only_calibration_grid_rows(
             _safe_float(frame_dropping_row.get("attacked_positive_TPR")),
             _safe_float(local_clip_row.get("attacked_positive_TPR")),
         ]
+        clean_negative_fpr = _safe_float(no_attack_negative_row.get("clean_negative_FPR"))
+        no_attack_clean_positive_tpr = _safe_float(
+            no_attack_positive_row.get("clean_positive_TPR")
+        )
+        quality_psnr_mean = _safe_float(no_attack_positive_row.get("quality_psnr_mean"))
+        quality_ssim_mean = _safe_float(no_attack_positive_row.get("quality_ssim_mean"))
+        candidate_eligible = _is_tubelet_only_candidate_eligible(
+            clean_negative_fpr,
+            no_attack_clean_positive_tpr,
+            max_attacked_negative_fpr,
+            quality_psnr_mean,
+            quality_ssim_mean,
+            mechanism_config,
+        )
+        anchor_semantics = build_anchor_selection_assessment(
+            absolute_tprs={
+                "temporal_crop": _safe_float(temporal_crop_row.get("attacked_positive_TPR")),
+                "local_clip": _safe_float(local_clip_row.get("attacked_positive_TPR")),
+            },
+            candidate_eligible=candidate_eligible,
+            max_attacked_negative_fpr=max_attacked_negative_fpr,
+            mechanism_config=mechanism_config,
+            anchor_compatible=True,
+        )
         rows.append(
             {
                 "selection_scope": "tubelet_only",
@@ -355,12 +380,11 @@ def _build_tubelet_only_calibration_grid_rows(
                 "fusion_rule": None,
                 "lambda_sync": None,
                 "sync_search_radius": None,
-                "no_attack_clean_negative_fpr": _safe_float(
-                    no_attack_negative_row.get("clean_negative_FPR")
-                ),
-                "no_attack_clean_positive_tpr": _safe_float(
-                    no_attack_positive_row.get("clean_positive_TPR")
-                ),
+                "min_sync_positive_margin": None,
+                "min_sync_alignment_coverage_ratio": None,
+                "min_sync_alignment_matched_count": None,
+                "no_attack_clean_negative_fpr": clean_negative_fpr,
+                "no_attack_clean_positive_tpr": no_attack_clean_positive_tpr,
                 "max_attacked_negative_fpr": max_attacked_negative_fpr,
                 "temporal_crop_attacked_positive_tpr": _safe_float(
                     temporal_crop_row.get("attacked_positive_TPR")
@@ -374,36 +398,47 @@ def _build_tubelet_only_calibration_grid_rows(
                 "mean_temporal_attacked_positive_tpr": _mean_numeric_values(
                     temporal_positive_rates
                 ),
-                "quality_psnr_mean": _safe_float(
-                    no_attack_positive_row.get("quality_psnr_mean")
-                ),
-                "quality_ssim_mean": _safe_float(
-                    no_attack_positive_row.get("quality_ssim_mean")
-                ),
+                "quality_psnr_mean": quality_psnr_mean,
+                "quality_ssim_mean": quality_ssim_mean,
                 "temporal_crop_sync_gain": None,
                 "frame_dropping_sync_gain": None,
                 "local_clip_sync_gain": None,
                 "mean_temporal_sync_gain": None,
+                "temporal_crop_absolute_tpr": anchor_semantics["temporal_crop_absolute_tpr"],
+                "local_clip_absolute_tpr": anchor_semantics["local_clip_absolute_tpr"],
+                "temporal_crop_anchor_headroom": anchor_semantics[
+                    "temporal_crop_anchor_headroom"
+                ],
+                "local_clip_anchor_headroom": anchor_semantics[
+                    "local_clip_anchor_headroom"
+                ],
+                "temporal_crop_saturated_anchor": anchor_semantics[
+                    "temporal_crop_saturated_anchor"
+                ],
+                "local_clip_saturated_anchor": anchor_semantics[
+                    "local_clip_saturated_anchor"
+                ],
+                "absolute_rescue_status": anchor_semantics["absolute_rescue_status"],
+                "incremental_gain_status": None,
+                "negative_leakage_status": anchor_semantics["negative_leakage_status"],
+                "sync_rescue_decision": None,
+                "sync_leakage_decision": None,
+                "candidate_selection_status": anchor_semantics[
+                    "candidate_selection_status"
+                ],
                 "fpr_controlled": _is_fpr_controlled(
-                    _safe_float(no_attack_negative_row.get("clean_negative_FPR")),
+                    clean_negative_fpr,
                     max_attacked_negative_fpr,
                     mechanism_config,
                 ),
                 "quality_not_collapsed": _is_quality_not_collapsed(
-                    _safe_float(no_attack_positive_row.get("quality_psnr_mean")),
-                    _safe_float(no_attack_positive_row.get("quality_ssim_mean")),
+                    quality_psnr_mean,
+                    quality_ssim_mean,
                     mechanism_config,
                 ),
-                "candidate_eligible": _is_tubelet_only_candidate_eligible(
-                    _safe_float(no_attack_negative_row.get("clean_negative_FPR")),
-                    _safe_float(no_attack_positive_row.get("clean_positive_TPR")),
-                    max_attacked_negative_fpr,
-                    _safe_float(no_attack_positive_row.get("quality_psnr_mean")),
-                    _safe_float(no_attack_positive_row.get("quality_ssim_mean")),
-                    mechanism_config,
-                ),
+                "candidate_eligible": candidate_eligible,
                 "selection_score": _selection_score(
-                    _safe_float(no_attack_positive_row.get("clean_positive_TPR")),
+                    no_attack_clean_positive_tpr,
                     _mean_numeric_values(temporal_positive_rates),
                     max_attacked_negative_fpr,
                 ),
@@ -411,7 +446,9 @@ def _build_tubelet_only_calibration_grid_rows(
         )
     rows.sort(
         key=lambda row: (
+            _anchor_candidate_status_rank(str(row.get("candidate_selection_status") or "")),
             0 if bool(row.get("fpr_controlled")) else 1,
+            -float(_anchor_headroom_score(row) or 0.0),
             -float(row.get("selection_score") or 0.0),
             int(row.get("tubelet_length") or 1),
         )
@@ -657,6 +694,9 @@ def _select_tubelet_only_candidate(
             if bool(selected_row.get("fpr_controlled"))
             else "best_effort_candidate_selected"
         ),
+        "candidate_selection_status": selected_row["candidate_selection_status"],
+        "absolute_rescue_status": selected_row["absolute_rescue_status"],
+        "negative_leakage_status": selected_row["negative_leakage_status"],
         "method_variant": selected_row["method_variant"],
         "base_method_variant": selected_row["base_method_variant"],
         "tubelet_length": int(selected_row["tubelet_length"]),
@@ -677,6 +717,18 @@ def _select_tubelet_only_candidate(
             ],
             "max_attacked_negative_fpr": selected_row[
                 "max_attacked_negative_fpr"
+            ],
+            "temporal_crop_absolute_tpr": selected_row[
+                "temporal_crop_absolute_tpr"
+            ],
+            "local_clip_absolute_tpr": selected_row[
+                "local_clip_absolute_tpr"
+            ],
+            "temporal_crop_anchor_headroom": selected_row[
+                "temporal_crop_anchor_headroom"
+            ],
+            "local_clip_anchor_headroom": selected_row[
+                "local_clip_anchor_headroom"
             ],
             "temporal_crop_attacked_positive_tpr": selected_row[
                 "temporal_crop_attacked_positive_tpr"
@@ -1066,6 +1118,24 @@ def _sync_candidate_status_rank(candidate_selection_status: str) -> int:
         "insufficient_signal": 3,
         "anchor_incompatible": 4,
     }.get(candidate_selection_status, 5)
+
+
+def _anchor_candidate_status_rank(candidate_selection_status: str) -> int:
+    return {
+        "strong_anchor_with_headroom": 0,
+        "strong_anchor_saturated": 1,
+        "weak_anchor_with_headroom": 2,
+        "weak_anchor_incompatible": 3,
+    }.get(candidate_selection_status, 4)
+
+
+def _anchor_headroom_score(row: dict[str, Any]) -> float | None:
+    return _mean_numeric_values(
+        [
+            _safe_float(row.get("temporal_crop_anchor_headroom")),
+            _safe_float(row.get("local_clip_anchor_headroom")),
+        ]
+    )
 
 
 def _is_quality_not_collapsed(
