@@ -15,7 +15,7 @@ import sys
 import threading
 import time
 from array import array
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -178,9 +178,12 @@ class RealVideoVaeLatentRunner:
         self._runtime_event_tag_lock = threading.Lock()
         self._current_runtime_event_tag = "unlabeled"
         self._event_worker_count = 1
+        self._attack_worker_count = 1
+        self._video_io_worker_count = 1
         self._runtime_profile = "unresolved"
         self._cross_event_vae_batching_config = resolve_cross_event_vae_batching_config({})
         self._cross_event_vae_batching_trace: list[dict[str, Any]] = []
+        self._reset_run_scoped_caches()
 
     def run(
         self,
@@ -337,6 +340,14 @@ class RealVideoVaeLatentRunner:
             runtime_config_overrides.get("worker_count", 1),
             field_name="worker_count",
         )
+        self._video_io_worker_count = self._resolve_positive_runtime_integer(
+            runtime_config_overrides.get("video_io_worker_count", 1),
+            field_name="video_io_worker_count",
+        )
+        self._attack_worker_count = self._resolve_positive_runtime_integer(
+            runtime_config_overrides.get("attack_worker_count", 1),
+            field_name="attack_worker_count",
+        )
         if self._cross_event_vae_batching_config.enabled and self._event_worker_count != 1:
             raise ValueError(
                 "cross-event VAE batching requires worker_count == 1 in the first governed implementation"
@@ -415,6 +426,7 @@ class RealVideoVaeLatentRunner:
         threshold_records: list[dict[str, Any]] = []
         record_writer = RecordWriter(output_root_path)
         self._reset_incremental_outputs(record_writer)
+        self._reset_run_scoped_caches()
 
         try:
             for method_config in runtime_method_configs:
@@ -462,6 +474,8 @@ class RealVideoVaeLatentRunner:
                     "shard_count": resolved_shard_count,
                     "shard_index": resolved_shard_index,
                     "worker_count": self._event_worker_count,
+                    "video_io_worker_count": self._video_io_worker_count,
+                    "attack_worker_count": self._attack_worker_count,
                     "protocol_config": self._format_runtime_config_path(protocol_config_file),
                     "backend_config": self._format_runtime_config_path(backend_config_file),
                     "attack_matrix_config": self._format_runtime_config_path(attack_matrix_file),
@@ -584,6 +598,7 @@ class RealVideoVaeLatentRunner:
         finally:
             self._flush_runner_timing_events()
             self._set_runtime_event_tag("unlabeled")
+            self._reset_run_scoped_caches()
 
     def _begin_runner_timing(self, output_root: Path, run_id: str) -> None:
         self._runner_timing_recorder = RunTimingRecorder(output_root, run_id=run_id)
@@ -920,7 +935,11 @@ class RealVideoVaeLatentRunner:
         vae_metadata: dict[str, Any],
     ) -> list[dict[str, Any]]:
         event_score_records: list[dict[str, Any]] = []
-        source_sample_cache: dict[tuple[str, str, str], Any] = {}
+        source_sample_cache: dict[tuple[str, str, str], Any] = (
+            self._shared_source_sample_cache
+            if self._cross_variant_shared_artifact_cache_enabled()
+            else {}
+        )
         embedded_sample_cache: dict[tuple[str, str, str, str], Any] = {}
         decoded_video_cache: dict[tuple[str, str], dict[str, Any]] = {}
         attacked_video_cache: dict[tuple[str, str], dict[str, Any]] = {}
@@ -1016,6 +1035,31 @@ class RealVideoVaeLatentRunner:
                 video_fps,
                 video_resolution,
             )
+            decoded_video_metadata_cache = self._select_cross_variant_artifact_cache(
+                event_plan_entry.sample_role,
+                decoded_video_cache,
+                self._shared_decoded_video_cache,
+            )
+            decoded_video_frames_cache = self._select_cross_variant_artifact_cache(
+                event_plan_entry.sample_role,
+                decoded_video_tensor_cache,
+                self._shared_decoded_video_tensor_cache,
+            )
+            attacked_video_metadata_cache = self._select_cross_variant_artifact_cache(
+                event_plan_entry.sample_role,
+                attacked_video_cache,
+                self._shared_attacked_video_cache,
+            )
+            attacked_video_frames_cache = self._select_cross_variant_artifact_cache(
+                event_plan_entry.sample_role,
+                attacked_video_tensor_cache,
+                self._shared_attacked_video_tensor_cache,
+            )
+            reencoded_latent_cache = self._select_cross_variant_artifact_cache(
+                event_plan_entry.sample_role,
+                reencoded_cache,
+                self._shared_reencoded_cache,
+            )
 
             decoded_video_relpath = self._build_decoded_video_artifact_relpath(
                 sample_role=event_plan_entry.sample_role,
@@ -1029,7 +1073,7 @@ class RealVideoVaeLatentRunner:
                 split=event_plan_entry.split,
             ):
                 decoded_video_metadata = self._cached_decoded_video_artifact(
-                    decoded_video_cache,
+                    decoded_video_metadata_cache,
                     working_sample,
                     vae_runtime_backend,
                     vae_metadata,
@@ -1037,10 +1081,10 @@ class RealVideoVaeLatentRunner:
                     decoded_video_relpath,
                     video_fps,
                     video_resolution,
-                    tensor_cache=decoded_video_tensor_cache,
+                    tensor_cache=decoded_video_frames_cache,
                 )
             decoded_video_frames = self._get_cached_video_tensor(
-                decoded_video_tensor_cache,
+                decoded_video_frames_cache,
                 decoded_video_cache_key,
                 output_root / decoded_video_metadata["video_relpath"],
             )
@@ -1092,7 +1136,7 @@ class RealVideoVaeLatentRunner:
                             attacked_video_relpath,
                         )
                         attacked_video_metadata = self._cached_attacked_video_artifact(
-                            attacked_video_cache,
+                            attacked_video_metadata_cache,
                             decoded_video_metadata,
                             attacked_sample,
                             event_plan_entry.attack_name,
@@ -1106,10 +1150,10 @@ class RealVideoVaeLatentRunner:
                                 "sample_id": event_plan_entry.sample_id,
                             },
                             source_video_frames=decoded_video_frames,
-                            tensor_cache=attacked_video_tensor_cache,
+                            tensor_cache=attacked_video_frames_cache,
                         )
                         attacked_video_frames = self._get_cached_video_tensor(
-                            attacked_video_tensor_cache,
+                            attacked_video_frames_cache,
                             attacked_video_cache_key,
                             output_root / attacked_video_metadata["video_relpath"],
                         )
@@ -1124,7 +1168,7 @@ class RealVideoVaeLatentRunner:
                             video_resolution,
                         )
                         attacked_video_metadata = self._cached_decoded_video_artifact(
-                            decoded_video_cache,
+                            decoded_video_metadata_cache,
                             attacked_sample,
                             vae_runtime_backend,
                             vae_metadata,
@@ -1132,10 +1176,10 @@ class RealVideoVaeLatentRunner:
                             attacked_video_relpath,
                             video_fps,
                             video_resolution,
-                            tensor_cache=decoded_video_tensor_cache,
+                            tensor_cache=decoded_video_frames_cache,
                         )
                         attacked_video_frames = self._get_cached_video_tensor(
-                            decoded_video_tensor_cache,
+                            decoded_video_frames_cache,
                             attacked_video_cache_key,
                             output_root / attacked_video_metadata["video_relpath"],
                         )
@@ -1154,7 +1198,7 @@ class RealVideoVaeLatentRunner:
                 split=event_plan_entry.split,
             ):
                 reencoded_latent_metadata = self._cached_reencoded_latent_artifact(
-                    reencoded_cache,
+                    reencoded_latent_cache,
                     attacked_video_metadata,
                     attacked_sample,
                     vae_runtime_backend,
@@ -1332,7 +1376,11 @@ class RealVideoVaeLatentRunner:
         vae_metadata: dict[str, Any],
     ) -> list[dict[str, Any]]:
         event_score_records: list[dict[str, Any]] = []
-        source_sample_cache: dict[tuple[str, str, str], LatentSample] = {}
+        source_sample_cache: dict[tuple[str, str, str], LatentSample] = (
+            self._shared_source_sample_cache
+            if self._cross_variant_shared_artifact_cache_enabled()
+            else {}
+        )
         embedded_sample_cache: dict[tuple[str, str, str, str], LatentSample] = {}
         decoded_video_cache: dict[tuple[str, str, str], dict[str, Any]] = {}
         attacked_video_cache: dict[tuple[str, str], dict[str, Any]] = {}
@@ -1488,11 +1536,21 @@ class RealVideoVaeLatentRunner:
         decode_request_id_by_cache_key: dict[tuple[str, str, str], str] = {}
         decode_contexts_by_request_id: dict[str, list[EventRuntimeContext]] = {}
         for context in contexts:
-            cached_metadata = decoded_video_cache.get(context.decoded_cache_key)
+            decoded_video_metadata_cache = self._select_cross_variant_artifact_cache(
+                context.event_plan_entry.sample_role,
+                decoded_video_cache,
+                self._shared_decoded_video_cache,
+            )
+            decoded_video_frames_cache = self._select_cross_variant_artifact_cache(
+                context.event_plan_entry.sample_role,
+                decoded_video_tensor_cache,
+                self._shared_decoded_video_tensor_cache,
+            )
+            cached_metadata = decoded_video_metadata_cache.get(context.decoded_cache_key)
             if cached_metadata is not None:
                 context.decoded_video_metadata = cached_metadata
                 context.decoded_video_frames = self._get_cached_video_tensor(
-                    decoded_video_tensor_cache,
+                    decoded_video_frames_cache,
                     context.decoded_cache_key,
                     output_root / cached_metadata["video_relpath"],
                 )
@@ -1505,10 +1563,10 @@ class RealVideoVaeLatentRunner:
                     context.decoded_video_relpath,
                     context.video_fps,
                 )
-                decoded_video_cache[context.decoded_cache_key] = metadata
+                decoded_video_metadata_cache[context.decoded_cache_key] = metadata
                 context.decoded_video_metadata = metadata
                 context.decoded_video_frames = self._get_cached_video_tensor(
-                    decoded_video_tensor_cache,
+                    decoded_video_frames_cache,
                     context.decoded_cache_key,
                     output_path,
                 )
@@ -1558,16 +1616,34 @@ class RealVideoVaeLatentRunner:
                 decode_results,
                 method_variant=method_config["method_variant"],
             )
-            for decode_result in decode_results:
-                metadata = self._write_video_artifact(
-                    decode_result.video_frames,
-                    output_root,
-                    decode_result.output_relpath,
-                    decode_result.fps,
+            decode_write_results = self._run_video_io_tasks_in_parallel(
+                decode_results,
+                lambda decode_result: (
+                    decode_result,
+                    self._write_video_artifact(
+                        decode_result.video_frames,
+                        output_root,
+                        decode_result.output_relpath,
+                        decode_result.fps,
+                    ),
+                ),
+            )
+            for decode_result, metadata in decode_write_results:
+                result_contexts = decode_contexts_by_request_id[decode_result.request_id]
+                cache_source_context = result_contexts[0]
+                decoded_video_metadata_cache = self._select_cross_variant_artifact_cache(
+                    cache_source_context.event_plan_entry.sample_role,
+                    decoded_video_cache,
+                    self._shared_decoded_video_cache,
                 )
-                decoded_video_cache[decode_result.cache_key] = metadata
-                decoded_video_tensor_cache[decode_result.cache_key] = decode_result.video_frames
-                for context in decode_contexts_by_request_id[decode_result.request_id]:
+                decoded_video_frames_cache = self._select_cross_variant_artifact_cache(
+                    cache_source_context.event_plan_entry.sample_role,
+                    decoded_video_tensor_cache,
+                    self._shared_decoded_video_tensor_cache,
+                )
+                decoded_video_metadata_cache[decode_result.cache_key] = metadata
+                decoded_video_frames_cache[decode_result.cache_key] = decode_result.video_frames
+                for context in result_contexts:
                     context.decoded_video_metadata = metadata
                     context.decoded_video_frames = decode_result.video_frames
                     context.decode_effective_batch_size = decode_result.effective_batch_size
@@ -1575,6 +1651,7 @@ class RealVideoVaeLatentRunner:
                     if decode_result.fallback_reason is not None:
                         context.batching_fallback_reason = decode_result.fallback_reason
 
+        pending_attack_tasks: list[tuple[EventRuntimeContext, tuple[str, str]]] = []
         for context in contexts:
             if context.decoded_video_metadata is None or context.decoded_video_frames is None:
                 raise RuntimeError("decoded video materialization is incomplete")
@@ -1583,46 +1660,104 @@ class RealVideoVaeLatentRunner:
                 context.attacked_video_metadata = context.decoded_video_metadata
                 context.attacked_video_frames = context.decoded_video_frames
                 continue
-
-            with self._runner_substage(
-                "runner_attack_materialization",
-                method_variant=method_config["method_variant"],
-                attack_name=event_plan_entry.attack_name,
-                split=event_plan_entry.split,
-            ):
-                if context.decoded_video_metadata["container"] != "mp4":
-                    raise RuntimeError(
-                        "cross-event VAE batching attack materialization requires mp4 decoded videos"
-                    )
-                attacked_video_cache_key = self._build_attacked_video_cache_key(
-                    context.decoded_video_metadata,
-                    event_plan_entry.attack_name,
-                    context.attacked_sample,
-                    context.attacked_video_relpath,
+            if context.decoded_video_metadata["container"] != "mp4":
+                raise RuntimeError(
+                    "cross-event VAE batching attack materialization requires mp4 decoded videos"
                 )
-                attacked_video_metadata = self._cached_attacked_video_artifact(
-                    attacked_video_cache,
-                    context.decoded_video_metadata,
-                    context.attacked_sample,
-                    event_plan_entry.attack_name,
-                    event_plan_entry.attack_object,
-                    output_root,
+            attacked_video_metadata_cache = self._select_cross_variant_artifact_cache(
+                event_plan_entry.sample_role,
+                attacked_video_cache,
+                self._shared_attacked_video_cache,
+            )
+            attacked_video_frames_cache = self._select_cross_variant_artifact_cache(
+                event_plan_entry.sample_role,
+                attacked_video_tensor_cache,
+                self._shared_attacked_video_tensor_cache,
+            )
+            attacked_video_cache_key = self._build_attacked_video_cache_key(
+                context.decoded_video_metadata,
+                event_plan_entry.attack_name,
+                context.attacked_sample,
+                context.attacked_video_relpath,
+            )
+            cached_attacked_video_metadata = attacked_video_metadata_cache.get(
+                attacked_video_cache_key
+            )
+            if cached_attacked_video_metadata is not None:
+                context.attacked_video_metadata = cached_attacked_video_metadata
+                context.attacked_video_frames = self._get_cached_video_tensor(
+                    attacked_video_frames_cache,
+                    attacked_video_cache_key,
+                    output_root / cached_attacked_video_metadata["video_relpath"],
+                )
+                continue
+            attacked_output_path = output_root / context.attacked_video_relpath
+            if attacked_output_path.exists():
+                attacked_video_metadata = self._build_video_artifact_metadata_from_path(
+                    attacked_output_path,
                     context.attacked_video_relpath,
                     context.video_fps,
-                    context.video_resolution,
-                    {
-                        "run_id": run_id,
-                        "sample_id": event_plan_entry.sample_id,
-                    },
-                    source_video_frames=context.decoded_video_frames,
-                    tensor_cache=attacked_video_tensor_cache,
                 )
-                attacked_video_frames = self._get_cached_video_tensor(
-                    attacked_video_tensor_cache,
+                attacked_video_metadata_cache[attacked_video_cache_key] = attacked_video_metadata
+                context.attacked_video_metadata = attacked_video_metadata
+                context.attacked_video_frames = self._get_cached_video_tensor(
+                    attacked_video_frames_cache,
+                    attacked_video_cache_key,
+                    attacked_output_path,
+                )
+                continue
+            pending_attack_tasks.append((context, attacked_video_cache_key))
+
+        attack_task_results = self._run_attack_tasks_in_parallel(
+            pending_attack_tasks,
+            lambda task_input: self._materialize_batched_attack_task(
+                task_input=task_input,
+                run_id=run_id,
+                output_root=output_root,
+                method_variant=str(method_config["method_variant"]),
+            ),
+        )
+        pending_attacked_frame_loads: list[tuple[EventRuntimeContext, tuple[str, str], Path]] = []
+        for context, attacked_video_cache_key, attacked_video_metadata, attacked_video_frames in attack_task_results:
+            attacked_video_metadata_cache = self._select_cross_variant_artifact_cache(
+                context.event_plan_entry.sample_role,
+                attacked_video_cache,
+                self._shared_attacked_video_cache,
+            )
+            attacked_video_frames_cache = self._select_cross_variant_artifact_cache(
+                context.event_plan_entry.sample_role,
+                attacked_video_tensor_cache,
+                self._shared_attacked_video_tensor_cache,
+            )
+            attacked_video_metadata_cache[attacked_video_cache_key] = attacked_video_metadata
+            context.attacked_video_metadata = attacked_video_metadata
+            if attacked_video_frames is not None:
+                attacked_video_frames_cache[attacked_video_cache_key] = attacked_video_frames
+                context.attacked_video_frames = attacked_video_frames
+                continue
+            pending_attacked_frame_loads.append(
+                (
+                    context,
                     attacked_video_cache_key,
                     output_root / attacked_video_metadata["video_relpath"],
                 )
-            context.attacked_video_metadata = attacked_video_metadata
+            )
+
+        attacked_frame_load_results = self._run_video_io_tasks_in_parallel(
+            pending_attacked_frame_loads,
+            lambda task_input: (
+                task_input[0],
+                task_input[1],
+                self._read_video_tensor_from_artifact(task_input[2]),
+            ),
+        )
+        for context, attacked_video_cache_key, attacked_video_frames in attacked_frame_load_results:
+            attacked_video_frames_cache = self._select_cross_variant_artifact_cache(
+                context.event_plan_entry.sample_role,
+                attacked_video_tensor_cache,
+                self._shared_attacked_video_tensor_cache,
+            )
+            attacked_video_frames_cache[attacked_video_cache_key] = attacked_video_frames
             context.attacked_video_frames = attacked_video_frames
 
         encode_requests: list[EncodeRequest] = []
@@ -1635,7 +1770,12 @@ class RealVideoVaeLatentRunner:
                 context.attacked_video_metadata["video_digest"],
                 context.reencoded_latent_relpath.as_posix(),
             )
-            cached_metadata = reencoded_cache.get(cache_key)
+            reencoded_latent_cache = self._select_cross_variant_artifact_cache(
+                context.event_plan_entry.sample_role,
+                reencoded_cache,
+                self._shared_reencoded_cache,
+            )
+            cached_metadata = reencoded_latent_cache.get(cache_key)
             if cached_metadata is not None:
                 context.reencoded_latent_metadata = cached_metadata
                 continue
@@ -1646,7 +1786,7 @@ class RealVideoVaeLatentRunner:
                     "latent_relpath": context.reencoded_latent_relpath.as_posix(),
                     "latent_digest": compute_file_digest(output_path),
                 }
-                reencoded_cache[cache_key] = metadata
+                reencoded_latent_cache[cache_key] = metadata
                 context.reencoded_latent_metadata = metadata
                 continue
 
@@ -1688,6 +1828,13 @@ class RealVideoVaeLatentRunner:
                 method_variant=method_config["method_variant"],
             )
             for encode_result in encode_results:
+                result_contexts = encode_contexts_by_request_id[encode_result.request_id]
+                cache_source_context = result_contexts[0]
+                reencoded_latent_cache = self._select_cross_variant_artifact_cache(
+                    cache_source_context.event_plan_entry.sample_role,
+                    reencoded_cache,
+                    self._shared_reencoded_cache,
+                )
                 output_path = output_root / encode_result.output_relpath
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 write_float_tensor_npy(
@@ -1704,8 +1851,8 @@ class RealVideoVaeLatentRunner:
                     "latent_relpath": encode_result.output_relpath.as_posix(),
                     "latent_digest": compute_file_digest(output_path),
                 }
-                reencoded_cache[encode_result.cache_key] = metadata
-                for context in encode_contexts_by_request_id[encode_result.request_id]:
+                reencoded_latent_cache[encode_result.cache_key] = metadata
+                for context in result_contexts:
                     context.reencoded_latent_metadata = metadata
                     context.encode_effective_batch_size = encode_result.effective_batch_size
                     context.batching_fallback_count += encode_result.fallback_count
@@ -1924,6 +2071,57 @@ class RealVideoVaeLatentRunner:
             worker_buckets[group_index % worker_count].extend(source_group)
         return [worker_bucket for worker_bucket in worker_buckets if worker_bucket]
 
+    def _resolve_parallel_task_worker_count(
+        self,
+        configured_worker_count: int,
+        task_count: int,
+    ) -> int:
+        if task_count < 0:
+            raise ValueError("task_count must be non-negative")
+        if task_count == 0:
+            return 0
+        return min(configured_worker_count, task_count)
+
+    def _run_ordered_parallel_tasks(
+        self,
+        task_inputs: list[Any],
+        *,
+        configured_worker_count: int,
+        task_runner: Callable[[Any], Any],
+    ) -> list[Any]:
+        if not task_inputs:
+            return []
+        resolved_worker_count = self._resolve_parallel_task_worker_count(
+            configured_worker_count,
+            len(task_inputs),
+        )
+        if resolved_worker_count <= 1:
+            return [task_runner(task_input) for task_input in task_inputs]
+        with ThreadPoolExecutor(max_workers=resolved_worker_count) as executor:
+            return list(executor.map(task_runner, task_inputs))
+
+    def _run_attack_tasks_in_parallel(
+        self,
+        task_inputs: list[Any],
+        task_runner: Callable[[Any], Any],
+    ) -> list[Any]:
+        return self._run_ordered_parallel_tasks(
+            task_inputs,
+            configured_worker_count=self._attack_worker_count,
+            task_runner=task_runner,
+        )
+
+    def _run_video_io_tasks_in_parallel(
+        self,
+        task_inputs: list[Any],
+        task_runner: Callable[[Any], Any],
+    ) -> list[Any]:
+        return self._run_ordered_parallel_tasks(
+            task_inputs,
+            configured_worker_count=self._video_io_worker_count,
+            task_runner=task_runner,
+        )
+
     def _select_split_plan_shard(
         self,
         split_plan: list[Any],
@@ -2015,6 +2213,29 @@ class RealVideoVaeLatentRunner:
             str(fps),
             f"{int(target_resolution[0])}x{int(target_resolution[1])}",
         )
+
+    def _cross_variant_shared_artifact_cache_enabled(self) -> bool:
+        return self._event_worker_count == 1
+
+    def _select_cross_variant_artifact_cache(
+        self,
+        sample_role: str,
+        local_cache: dict[Any, Any],
+        shared_cache: dict[Any, Any],
+    ) -> dict[Any, Any]:
+        if not self._cross_variant_shared_artifact_cache_enabled():
+            return local_cache
+        if self._sample_role_requires_method_scoped_artifacts(sample_role):
+            return local_cache
+        return shared_cache
+
+    def _reset_run_scoped_caches(self) -> None:
+        self._shared_source_sample_cache: dict[tuple[str, str, str], Any] = {}
+        self._shared_decoded_video_cache: dict[tuple[str, str, str], dict[str, Any]] = {}
+        self._shared_attacked_video_cache: dict[tuple[str, str], dict[str, Any]] = {}
+        self._shared_decoded_video_tensor_cache: dict[tuple[str, str, str], np.ndarray] = {}
+        self._shared_attacked_video_tensor_cache: dict[tuple[str, str], np.ndarray] = {}
+        self._shared_reencoded_cache: dict[tuple[str, str], dict[str, str]] = {}
 
     def _sample_role_requires_method_scoped_artifacts(self, sample_role: str) -> bool:
         return sample_role in {"watermarked_positive", "attacked_positive"}
@@ -2294,7 +2515,48 @@ class RealVideoVaeLatentRunner:
                 )
             return metadata
 
+        metadata, attacked_frames = self._materialize_uncached_attacked_video_artifact(
+            source_video_metadata=source_video_metadata,
+            sample=sample,
+            attack_name=attack_name,
+            attack_object=attack_object,
+            output_root=output_root,
+            artifact_relpath=artifact_relpath,
+            fps=fps,
+            target_resolution=target_resolution,
+            runtime_config=runtime_config,
+            source_video_frames=source_video_frames,
+        )
+        if tensor_cache is not None:
+            if attacked_frames is None:
+                self._get_cached_video_tensor(
+                    tensor_cache,
+                    cache_key,
+                    output_path,
+                )
+            else:
+                tensor_cache[cache_key] = attacked_frames
+        cache[cache_key] = metadata
+        return metadata
+
+    def _materialize_uncached_attacked_video_artifact(
+        self,
+        *,
+        source_video_metadata: dict[str, Any],
+        sample: LatentSample,
+        attack_name: str,
+        attack_object: Any,
+        output_root: Path,
+        artifact_relpath: Path,
+        fps: int,
+        target_resolution: tuple[int, int],
+        runtime_config: dict[str, Any],
+        source_video_frames: np.ndarray | None = None,
+    ) -> tuple[dict[str, Any], np.ndarray | None]:
+        output_path = output_root / artifact_relpath
+        input_video_path = output_root / source_video_metadata["video_relpath"]
         codec_hint = None
+        attacked_frames: np.ndarray | None = None
         if hasattr(attack_object, "apply_video"):
             attack_metadata = attack_object.apply_video(
                 input_video_path,
@@ -2304,12 +2566,6 @@ class RealVideoVaeLatentRunner:
                 runtime_config=runtime_config,
             )
             codec_hint = attack_metadata.get("codec")
-            if tensor_cache is not None:
-                self._get_cached_video_tensor(
-                    tensor_cache,
-                    cache_key,
-                    output_path,
-                )
         else:
             input_frames = source_video_frames
             if input_frames is None:
@@ -2334,17 +2590,55 @@ class RealVideoVaeLatentRunner:
                 crf=18,
             )
             codec_hint = "libx264"
-            if tensor_cache is not None:
-                tensor_cache[cache_key] = attacked_frames
-
         metadata = self._build_video_artifact_metadata_from_path(
             output_path,
             artifact_relpath,
             fps,
             codec_hint=codec_hint,
         )
-        cache[cache_key] = metadata
-        return metadata
+        return metadata, attacked_frames
+
+    def _materialize_batched_attack_task(
+        self,
+        *,
+        task_input: tuple[EventRuntimeContext, tuple[str, str]],
+        run_id: str,
+        output_root: Path,
+        method_variant: str,
+    ) -> tuple[EventRuntimeContext, tuple[str, str], dict[str, Any], np.ndarray | None]:
+        context, attacked_video_cache_key = task_input
+        event_plan_entry = context.event_plan_entry
+        if context.decoded_video_metadata is None or context.decoded_video_frames is None:
+            raise RuntimeError("decoded video materialization is incomplete")
+        with self._runner_substage(
+            "runner_attack_materialization",
+            method_variant=method_variant,
+            attack_name=event_plan_entry.attack_name,
+            split=event_plan_entry.split,
+        ):
+            attacked_video_metadata, attacked_video_frames = (
+                self._materialize_uncached_attacked_video_artifact(
+                    source_video_metadata=context.decoded_video_metadata,
+                    sample=context.attacked_sample,
+                    attack_name=event_plan_entry.attack_name,
+                    attack_object=event_plan_entry.attack_object,
+                    output_root=output_root,
+                    artifact_relpath=context.attacked_video_relpath,
+                    fps=context.video_fps,
+                    target_resolution=context.video_resolution,
+                    runtime_config={
+                        "run_id": run_id,
+                        "sample_id": event_plan_entry.sample_id,
+                    },
+                    source_video_frames=context.decoded_video_frames,
+                )
+            )
+        return (
+            context,
+            attacked_video_cache_key,
+            attacked_video_metadata,
+            attacked_video_frames,
+        )
 
     def _cached_reencoded_latent_artifact(
         self,

@@ -44,7 +44,7 @@ class _FallbackVaeBackend(_EchoVaeBackend):
         return super().decode_video(latent_batch, config=config)
 
 
-def _decode_request(request_id: str, value: float) -> DecodeRequest:
+def _decode_request(request_id: str, value: float, *, split: str = "dev") -> DecodeRequest:
     latent = np.full((2, 3, 2, 2), value, dtype=np.float32)
     return DecodeRequest(
         request_id=request_id,
@@ -55,12 +55,12 @@ def _decode_request(request_id: str, value: float) -> DecodeRequest:
         fps=8,
         target_resolution=(2, 2),
         method_variant="frame_prc",
-        split="dev",
+        split=split,
         event_id=request_id,
     )
 
 
-def _encode_request(request_id: str, value: float) -> EncodeRequest:
+def _encode_request(request_id: str, value: float, *, split: str = "dev") -> EncodeRequest:
     frames = np.full((2, 2, 2, 3), value, dtype=np.float32)
     return EncodeRequest(
         request_id=request_id,
@@ -70,7 +70,7 @@ def _encode_request(request_id: str, value: float) -> EncodeRequest:
         output_relpath=Path("artifacts") / "latents" / "reencoded" / f"{request_id}.npy",
         method_variant="frame_prc",
         attack_name="no_attack",
-        split="dev",
+        split=split,
         event_id=request_id,
     )
 
@@ -135,6 +135,54 @@ def test_cross_event_vae_batching_groups_and_splits_decode_encode_requests() -> 
     assert [result.video_frames.shape for result in decode_results] == [(2, 2, 2, 3), (2, 2, 2, 3)]
     assert [result.effective_batch_size for result in encode_results] == [2, 2]
     assert [result.latent_tensor.shape for result in encode_results] == [(2, 3, 2, 2), (2, 3, 2, 2)]
+
+
+@pytest.mark.unit
+def test_cross_event_vae_batching_groups_requests_across_splits() -> None:
+    metadata = {
+        "vae_backend_name": "video_vae_tensor_runtime",
+        "vae_backend_version": "framewise_tensor_runtime",
+        "device": "cpu",
+        "dtype": "float32",
+        "runtime_impl": "mock_numpy",
+        "vae_decode_mode": "framewise",
+        "vae_encode_mode": "framewise",
+    }
+    config = resolve_cross_event_vae_batching_config(
+        {
+            "cross_event_vae_batching_enabled": True,
+            "cross_event_vae_decode_batch_size": 2,
+            "cross_event_vae_encode_batch_size": 2,
+        }
+    )
+    decode_requests = [
+        _decode_request("a", 0.1, split="dev"),
+        _decode_request("b", 0.2, split="calibration"),
+    ]
+    encode_requests = [
+        _encode_request("a", 0.3, split="dev"),
+        _encode_request("b", 0.4, split="calibration"),
+    ]
+
+    decode_groups = group_decode_requests(decode_requests, vae_metadata=metadata)
+    encode_groups = group_encode_requests(encode_requests, vae_metadata=metadata)
+    decode_results = run_decode_request_batch(
+        decode_groups[0],
+        vae_runtime_backend=_EchoVaeBackend(),
+        config=config,
+    )
+    encode_results = run_encode_request_batch(
+        encode_groups[0],
+        vae_runtime_backend=_EchoVaeBackend(),
+        config=config,
+    )
+
+    assert len(decode_groups) == 1
+    assert len(encode_groups) == 1
+    assert [result.split for result in decode_results] == ["dev", "calibration"]
+    assert [result.effective_batch_size for result in decode_results] == [2, 2]
+    assert [result.split for result in encode_results] == ["dev", "calibration"]
+    assert [result.effective_batch_size for result in encode_results] == [2, 2]
 
 
 @pytest.mark.unit

@@ -168,7 +168,6 @@ def group_decode_requests(
             tuple(int(value) for value in request.latent_tensor.shape),
             tuple(int(value) for value in request.target_resolution),
             int(request.fps),
-            request.split,
             vae_metadata.get("vae_backend_name", "unknown"),
             vae_metadata.get("vae_backend_version", "unknown"),
             vae_metadata.get("device", "unknown"),
@@ -199,7 +198,6 @@ def group_encode_requests(
         key = (
             "encode",
             tuple(int(value) for value in request.video_frames.shape),
-            request.split,
             vae_metadata.get("vae_backend_name", "unknown"),
             vae_metadata.get("vae_backend_version", "unknown"),
             vae_metadata.get("device", "unknown"),

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import experiments.real_video_vae_latent_probe.runner as real_video_runner_module
 
+import json
 import types
 from array import array
 from pathlib import Path
@@ -865,6 +866,213 @@ def test_decoded_video_artifact_scope_shares_negative_and_keeps_positive_isolate
         / "tubelet_sync"
         / f"{positive_tubelet_sync_digest}.mp4"
     )
+
+
+@pytest.mark.unit
+def test_runner_shares_cross_variant_artifact_cache_only_for_negative_roles() -> None:
+    """Validate cross-variant cache reuse remains limited to negative-shared artifacts.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    local_cache: dict[object, object] = {}
+
+    runner._event_worker_count = 1
+    runner._reset_run_scoped_caches()
+    negative_cache = runner._select_cross_variant_artifact_cache(
+        "attacked_negative",
+        local_cache,
+        runner._shared_decoded_video_cache,
+    )
+    positive_cache = runner._select_cross_variant_artifact_cache(
+        "attacked_positive",
+        local_cache,
+        runner._shared_decoded_video_cache,
+    )
+
+    runner._event_worker_count = 2
+    multi_worker_negative_cache = runner._select_cross_variant_artifact_cache(
+        "attacked_negative",
+        local_cache,
+        runner._shared_decoded_video_cache,
+    )
+
+    assert negative_cache is runner._shared_decoded_video_cache
+    assert positive_cache is local_cache
+    assert multi_worker_negative_cache is local_cache
+
+
+@pytest.mark.unit
+def test_runner_run_resolves_attack_and_video_io_worker_counts_from_runtime_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate run() materializes attack and video-I/O worker counts from runtime config.
+
+    Args:
+        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    runtime_config_path = tmp_path / "runtime_config.json"
+    runtime_config_path.write_text(
+        json.dumps(
+            {
+                "video_io_worker_count": 3,
+                "attack_worker_count": 2,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    class _FakeVaeBackend:
+        def backend_metadata(self) -> dict[str, str]:
+            return {
+                "vae_backend_name": "fake_backend",
+                "vae_backend_version": "test",
+                "vae_encode_mode": "framewise",
+                "vae_decode_mode": "framewise",
+            }
+
+    class _FakeLatentBackend:
+        def set_output_root(self, output_root: Path) -> None:
+            self.output_root = output_root
+
+    monkeypatch.setattr(
+        real_video_runner_module,
+        "resolve_vae_backend",
+        lambda _config: _FakeVaeBackend(),
+    )
+    monkeypatch.setattr(
+        real_video_runner_module,
+        "build_real_video_vae_latent_backend_from_support_config",
+        lambda _config: _FakeLatentBackend(),
+    )
+    monkeypatch.setattr(
+        real_video_runner_module,
+        "build_real_video_attack_registry",
+        lambda *args, **kwargs: [],
+    )
+    monkeypatch.setattr(
+        real_video_runner_module,
+        "build_split_plan",
+        lambda *args, **kwargs: [],
+    )
+    monkeypatch.setattr(runner, "_filter_attack_registry", lambda *args, **kwargs: [])
+    monkeypatch.setattr(runner, "_build_runtime_method_configs", lambda *args, **kwargs: [])
+    monkeypatch.setattr(runner, "_build_method_config_paths", lambda *args, **kwargs: {})
+    monkeypatch.setattr(
+        real_video_runner_module,
+        "compute_path_collection_digest",
+        lambda *_args, **_kwargs: "stubbed-path-digest",
+    )
+    monkeypatch.setattr(
+        runner._artifact_builder,
+        "build_artifacts",
+        lambda *args, **kwargs: [],
+    )
+
+    run_root = tmp_path / "run_root"
+    runner.run(
+        output_root=run_root,
+        run_mode="smoke",
+        runtime_config_path=runtime_config_path,
+    )
+
+    runtime_payload = json.loads(
+        (run_root / "artifacts" / "runtime_config.json").read_text(encoding="utf-8")
+    )
+
+    assert runner._video_io_worker_count == 3
+    assert runner._attack_worker_count == 2
+    assert runtime_payload["video_io_worker_count"] == 3
+    assert runtime_payload["attack_worker_count"] == 2
+
+
+@pytest.mark.unit
+def test_runner_uses_attack_worker_count_for_parallel_attack_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate attack worker configuration drives runner-local attack task parallelism.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    runner._attack_worker_count = 4
+    captured: dict[str, int] = {}
+
+    class _FakeExecutor:
+        def __init__(self, max_workers: int) -> None:
+            captured["max_workers"] = int(max_workers)
+
+        def __enter__(self) -> "_FakeExecutor":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            del exc_type, exc, tb
+            return False
+
+        def map(self, func, iterable):
+            return [func(item) for item in iterable]
+
+    monkeypatch.setattr(real_video_runner_module, "ThreadPoolExecutor", _FakeExecutor)
+
+    results = runner._run_attack_tasks_in_parallel([1, 2, 3], lambda value: value * 2)
+
+    assert captured["max_workers"] == 3
+    assert results == [2, 4, 6]
+
+
+@pytest.mark.unit
+def test_runner_uses_video_io_worker_count_for_parallel_video_io_tasks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate video I/O worker configuration drives runner-local I/O parallelism.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    runner._video_io_worker_count = 5
+    captured: dict[str, int] = {}
+
+    class _FakeExecutor:
+        def __init__(self, max_workers: int) -> None:
+            captured["max_workers"] = int(max_workers)
+
+        def __enter__(self) -> "_FakeExecutor":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            del exc_type, exc, tb
+            return False
+
+        def map(self, func, iterable):
+            return [func(item) for item in iterable]
+
+    monkeypatch.setattr(real_video_runner_module, "ThreadPoolExecutor", _FakeExecutor)
+
+    results = runner._run_video_io_tasks_in_parallel([1, 2, 3, 4], lambda value: value + 1)
+
+    assert captured["max_workers"] == 4
+    assert results == [2, 3, 4, 5]
 
 
 @pytest.mark.unit

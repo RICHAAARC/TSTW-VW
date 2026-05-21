@@ -36,6 +36,14 @@ MANIFEST_WRITE_EVENT_NAMES = (
     "runner_write_run_manifest",
     "runner_write_cross_event_vae_batching_outputs",
 )
+DECODE_VIDEO_EVENT_NAMES = (
+    "runner_decode_video",
+    "runner_cross_event_decode_video",
+)
+VAE_REENCODE_EVENT_NAMES = (
+    "runner_reencode_latent",
+    "runner_cross_event_reencode_latent",
+)
 
 
 def _sum_event_durations(
@@ -146,13 +154,19 @@ def summarize_run_timing(
         "events_by_group": events_by_group,
         "event_counts_by_group": event_counts_by_group,
         "runner_substage_counts": runner_substage_counts,
-        "decode_video_seconds": events_by_name.get("runner_decode_video", 0.0),
+        "decode_video_seconds": _sum_event_durations(
+            events_by_name,
+            DECODE_VIDEO_EVENT_NAMES,
+        ),
         "video_attack_seconds": round(
             events_by_name.get("runner_attack_video", 0.0)
             + events_by_name.get("runner_attack_materialization", 0.0),
             6,
         ),
-        "vae_reencode_seconds": events_by_name.get("runner_reencode_latent", 0.0),
+        "vae_reencode_seconds": _sum_event_durations(
+            events_by_name,
+            VAE_REENCODE_EVENT_NAMES,
+        ),
         "quality_metrics_seconds": events_by_name.get("runner_quality_metrics", 0.0),
         "temporal_metrics_seconds": events_by_name.get("runner_temporal_metrics", 0.0),
         "metric_frame_loading_seconds": events_by_name.get("runner_load_metric_frames", 0.0),
@@ -192,6 +206,7 @@ def summarize_run_timing(
         f"- slowest_event_name: {summary['slowest_event_name']}",
         f"- slowest_event_seconds: {summary['slowest_event_seconds']}",
         f"- estimated_work_planning_label: {summary['estimated_work_planning_label']}",
+        f"- decode_video_seconds: {summary['decode_video_seconds']}",
         f"- video_attack_seconds: {summary['video_attack_seconds']}",
         f"- vae_reencode_seconds: {summary['vae_reencode_seconds']}",
         f"- quality_metrics_seconds: {summary['quality_metrics_seconds']}",

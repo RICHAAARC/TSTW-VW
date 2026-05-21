@@ -325,11 +325,27 @@ def test_run_timing_summary_reports_runner_substage_totals(tmp_path: Path) -> No
     events = [
         {
             "run_id": "run_root",
+            "event_name": "runner_cross_event_decode_video",
+            "event_group": "runner_substage",
+            "elapsed_seconds": 1.0,
+            "status": "ok",
+            "metadata": {"event_group": "runner_substage", "invocation_count": 1},
+        },
+        {
+            "run_id": "run_root",
             "event_name": "runner_attack_materialization",
             "event_group": "runner_substage",
             "elapsed_seconds": 3.0,
             "status": "ok",
             "metadata": {"event_group": "runner_substage", "invocation_count": 2},
+        },
+        {
+            "run_id": "run_root",
+            "event_name": "runner_cross_event_reencode_latent",
+            "event_group": "runner_substage",
+            "elapsed_seconds": 6.0,
+            "status": "ok",
+            "metadata": {"event_group": "runner_substage", "invocation_count": 3},
         },
         {
             "run_id": "run_root",
@@ -360,17 +376,19 @@ def test_run_timing_summary_reports_runner_substage_totals(tmp_path: Path) -> No
         output_md=runtime_profile_dir / "run_timing_report.md",
     )
 
+    assert summary["decode_video_seconds"] == 1.0
     assert summary["video_attack_seconds"] == 3.0
-    assert summary["vae_reencode_seconds"] == 5.0
+    assert summary["vae_reencode_seconds"] == 11.0
     assert summary["quality_metrics_seconds"] == 7.0
-    assert summary["events_by_group"]["runner_substage"] == 15.0
-    assert summary["event_counts_by_group"]["runner_substage"] == 3
+    assert summary["events_by_group"]["runner_substage"] == 22.0
+    assert summary["event_counts_by_group"]["runner_substage"] == 5
     assert summary["runner_preparation_seconds"] == 0.0
     assert summary["threshold_calibration_seconds"] == 0.0
     assert summary["record_persistence_seconds"] == 0.0
     assert summary["top_timing_events"][0]["event_name"] == "runner_quality_metrics"
     assert summary["top_timing_events"][0]["elapsed_seconds"] == 7.0
     assert summary["runner_substage_counts"]["runner_reencode_latent"] == 4
+    assert summary["runner_substage_counts"]["runner_cross_event_reencode_latent"] == 3
 
 
 def test_runtime_profile_workflow_persists_profile_plan(tmp_path: Path) -> None:
