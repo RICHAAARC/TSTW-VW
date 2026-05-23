@@ -9,9 +9,6 @@
     "tubelet_only",
     "tubelet_sync"
   ],
-  "method_config_paths": {
-    "tubelet_sync": "configs/method/tubelet_sync_real_video_vae_frozen.json"
-  },
   "method_variants_by_profile": {
     "debug_real_video": [
       "frame_prc"
