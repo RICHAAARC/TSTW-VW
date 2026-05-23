@@ -1118,8 +1118,8 @@ def write_probe_stage2_local_clip_sync_diagnostics(
     Raises:
         FileNotFoundError: Raised when the calibration summary or selected-stage
             event-score records are missing.
-        ValueError: Raised when the calibration summary does not resolve a selected
-            tubelet-sync candidate or when no qualifying local-clip rows are found.
+        ValueError: Raised when the calibration summary is malformed or when no
+            qualifying local-clip rows are found for the selected stage.
     """
     resolved_run_root = Path(run_root)
     calibration_summary_path = resolved_run_root / "artifacts" / "stage2_mechanism_calibration_summary.json"
@@ -1129,8 +1129,38 @@ def write_probe_stage2_local_clip_sync_diagnostics(
     )
     selected_candidate = calibration_summary_payload.get("selected_tubelet_sync_candidate")
     if not isinstance(selected_candidate, dict):
-        raise ValueError(
-            "selected_tubelet_sync_candidate must be available before writing local-clip sync diagnostics"
+        return _json_safe(
+            {
+                "run_root": resolved_run_root,
+                "calibration_summary_path": calibration_summary_path,
+                "selected_stage_name": None,
+                "selected_stage_run_root": None,
+                "event_scores_path": None,
+                "output_csv_path": None,
+                "selected_method_variant": None,
+                "method_variant_filter_applied": False,
+                "record_count": 0,
+                "sample_roles": [],
+                "clip_lengths": [],
+                "diagnostic_columns": [],
+                "skipped": True,
+                "skip_reason": "selected_tubelet_sync_candidate_missing",
+                "selection_completion_status": calibration_summary_payload.get(
+                    "selection_completion_status"
+                ),
+                "selection_blocking_reason": calibration_summary_payload.get(
+                    "selection_blocking_reason"
+                ),
+                "selection_blocking_details": calibration_summary_payload.get(
+                    "selection_blocking_details"
+                ),
+                "surface_export_status": "skipped",
+                "surface_export_failure_reason": "selected_tubelet_sync_candidate_missing",
+                "output_surface_csv_path": None,
+                "output_surface_summary_path": None,
+                "surface_row_count": 0,
+                "surface_event_count": 0,
+            }
         )
     selected_method_variant = str(selected_candidate.get("method_variant", "")).strip()
     if not selected_method_variant:

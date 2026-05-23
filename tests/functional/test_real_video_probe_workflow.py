@@ -530,6 +530,53 @@ def test_run_probe_stage2_mechanism_calibration_forwards_governed_arguments(
 
 
 @pytest.mark.unit
+def test_write_probe_stage2_local_clip_sync_diagnostics_skips_without_selected_candidate(
+    tmp_path: Path,
+) -> None:
+    """Validate diagnostics skip cleanly when calibration selected no sync candidate.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "stage2_calibration"
+    artifacts_root = run_root / "artifacts"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+
+    calibration_summary_path = artifacts_root / "stage2_mechanism_calibration_summary.json"
+    calibration_summary_path.write_text(
+        json.dumps(
+            {
+                "selected_tubelet_sync_candidate": None,
+                "selection_completion_status": "incomplete_no_eligible_tubelet_sync_candidate",
+                "selection_blocking_reason": "no_eligible_tubelet_sync_candidate",
+                "selection_blocking_details": {
+                    "tubelet_sync_row_count": 2160,
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = write_probe_stage2_local_clip_sync_diagnostics(run_root=run_root)
+
+    assert summary["skipped"] is True
+    assert summary["skip_reason"] == "selected_tubelet_sync_candidate_missing"
+    assert summary["selection_completion_status"] == "incomplete_no_eligible_tubelet_sync_candidate"
+    assert summary["selection_blocking_reason"] == "no_eligible_tubelet_sync_candidate"
+    assert summary["selection_blocking_details"] == {"tubelet_sync_row_count": 2160}
+    assert summary["output_csv_path"] is None
+    assert summary["record_count"] == 0
+    assert summary["surface_export_status"] == "skipped"
+    assert summary["surface_export_failure_reason"] == "selected_tubelet_sync_candidate_missing"
+
+
+@pytest.mark.unit
 def test_write_probe_stage2_local_clip_sync_diagnostics_persists_selected_candidate_rows(
     tmp_path: Path,
 ) -> None:
