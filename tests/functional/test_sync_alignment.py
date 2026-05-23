@@ -7,6 +7,7 @@ Module type: General module
 from __future__ import annotations
 
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -15,9 +16,11 @@ pytestmark = pytest.mark.quick
 from pathlib import Path
 
 from main.attacks.temporal import TemporalAttackPlaceholder
+from main.core.schema import LatentSample
 from experiments.synthetic_tubelet_sync_probe.synthetic_video_latent import (
     SyntheticVideoLatentPlaceholder,
 )
+from main.methods.temporal_tubelet_watermark.evidence import SyntheticProbeEvidenceExtractor
 from main.methods.temporal_tubelet_watermark.method import build_method_from_config
 from main.methods.temporal_tubelet_watermark.synchronization import search_best_offset
 
@@ -216,24 +219,17 @@ def test_sync_search_range_does_not_expand_from_ground_truth() -> None:
     )
 
 
-def test_short_local_clip_coverage_penalty_does_not_double_scale_payload_scores(
-    tmp_path: Path,
+def test_short_local_clip_coverage_penalty_scales_unaligned_tubelet_score_only(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Validate short local clips keep coverage penalty in alignment scoring only.
+    """Validate short local clips penalize unaligned tubelet evidence only.
 
     Args:
-        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
 
     Returns:
         None.
     """
-    backend = SyntheticVideoLatentPlaceholder(latent_shape=(32, 4, 16, 16))
-    backend.set_output_root(tmp_path)
-    base_sample = backend.build_sample(
-        "sample_test_watermarked_positive_local_clip_penalty_000001",
-        "test",
-        "watermarked_positive",
-    )
     local_clip_config = {
         **TUBELET_SYNC_CONFIG,
         "sync_search": {
@@ -250,30 +246,105 @@ def test_short_local_clip_coverage_penalty_does_not_double_scale_payload_scores(
             "coverage_penalty_enabled": False,
         },
     }
-    watermarked_sample = build_method_from_config(local_clip_config).embed(base_sample, {})
-    seeded_sample = replace(
-        watermarked_sample,
-        latent_generation_seed_random=42,
-    )
-    local_clip = TemporalAttackPlaceholder("local_clip", {"clip_length": 4})
-    clipped_sample = local_clip.apply(seeded_sample)
 
-    penalty_enabled_result = build_method_from_config(local_clip_config).detect(
-        clipped_sample,
-        threshold_record=None,
+    monkeypatch.setattr(
+        "main.methods.temporal_tubelet_watermark.evidence.read_float_tensor_npy",
+        lambda _: object(),
     )
-    penalty_disabled_result = build_method_from_config(penalty_disabled_config).detect(
-        clipped_sample,
-        threshold_record=None,
+    monkeypatch.setattr(
+        "main.methods.temporal_tubelet_watermark.evidence.build_tubelet_descriptors",
+        lambda latent_shape, partition_config: [
+            {
+                "latent_shape": latent_shape,
+                "partition_config": partition_config,
+            }
+        ],
     )
 
-    enabled_trace = penalty_enabled_result.mechanism_trace
-    disabled_trace = penalty_disabled_result.mechanism_trace
+    sample = LatentSample(
+        sample_id="sample_test_attacked_negative_local_clip_penalty_000001",
+        split="test",
+        sample_role="attacked_negative",
+        latent_shape=(4, 4, 4, 4),
+        latent_tensor_digest_random="digest_local_clip_penalty",
+        latent_generation_seed_random=17,
+        latent_backend_name="synthetic_backend",
+        latent_backend_status="ok",
+        latent_artifact_relpath="artifacts/latents/sample.npy",
+        latent_artifact_path="artifacts/latents/sample.npy",
+        mechanism_trace={
+            "reference_latent_shape": [32, 4, 4, 4],
+            "sync_ground_truth_offset": -24,
+        },
+        applied_attack_params={
+            "clip_length": 4,
+            "original_frame_count": 32,
+            "observed_frame_count": 4,
+            "ground_truth_offset": -24,
+            "ground_truth_scale": 1.0,
+        },
+    )
 
-    assert enabled_trace["sync_estimated_offset"] == -24
-    assert disabled_trace["sync_estimated_offset"] == -24
+    def build_detection_result(method_config: dict[str, object]) -> tuple[dict[str, float | None], dict[str, object]]:
+        extractor = SyntheticProbeEvidenceExtractor(
+            method_variant="tubelet_sync",
+            method_config=method_config,
+            enabled_evidence={"tubelet": True, "sync": True, "trajectory": False},
+            fusion_rule="sync_rescue_fusion",
+        )
+        candidate_penalized_score = 0.125 if extractor._coverage_penalty_enabled() else 1.0
+        monkeypatch.setattr(
+            extractor,
+            "_build_payload_coded_projections",
+            lambda sample, tensor_artifact, descriptors, partition_config: (
+                [1.0],
+                SimpleNamespace(
+                    codebook_digest="codebook_digest",
+                    sync_code_digest="sync_code_digest",
+                    payload_digest="payload_digest",
+                ),
+                {(0, 0, 0): object()},
+                {
+                    "reference_latent_shape": [32, 4, 4, 4],
+                    "tubelet_projection_matched_count": 4,
+                    "tubelet_projection_candidate_count": 32,
+                    "tubelet_projection_coverage_ratio": 0.125,
+                },
+            ),
+        )
+        monkeypatch.setattr(
+            extractor,
+            "_build_alignment_candidate_scores",
+            lambda descriptors, tensor_artifact, reference_descriptor_map, codebook, sample: (
+                {(0, 1.0): 0.125},
+                {
+                    (0, 1.0): {
+                        "sync_alignment_matched_count": 4,
+                        "sync_alignment_candidate_count": 32,
+                        "sync_alignment_coverage_ratio": 0.125,
+                        "sync_candidate_score_raw": 1.0,
+                        "sync_candidate_score_penalized": candidate_penalized_score,
+                        "sync_candidate_score_hybrid": 0.125,
+                    }
+                },
+                "penalized_prior",
+            ),
+        )
+        monkeypatch.setattr(
+            extractor,
+            "_align_tubelet_projections",
+            lambda descriptors, tensor_artifact, reference_descriptor_map, codebook, estimated_offset, estimated_scale: [1.0],
+        )
+        return extractor.extract(sample)
+
+    penalty_enabled_scores, enabled_trace = build_detection_result(local_clip_config)
+    penalty_disabled_scores, disabled_trace = build_detection_result(penalty_disabled_config)
+
+    assert enabled_trace["sync_estimated_offset"] == 0
+    assert disabled_trace["sync_estimated_offset"] == 0
     assert enabled_trace["sync_candidate_score_penalized"] < enabled_trace["sync_candidate_score_raw"]
     assert disabled_trace["sync_candidate_score_penalized"] == disabled_trace["sync_candidate_score_raw"]
-    assert penalty_enabled_result.evidence_scores["S_tubelet"] == penalty_disabled_result.evidence_scores["S_tubelet"]
+    assert penalty_enabled_scores["S_tubelet"] < penalty_disabled_scores["S_tubelet"]
+    assert enabled_trace["S_payload_unaligned"] < disabled_trace["S_payload_unaligned"]
     assert enabled_trace["S_payload_aligned"] == disabled_trace["S_payload_aligned"]
-    assert enabled_trace["S_payload_rescue_gain"] == disabled_trace["S_payload_rescue_gain"]
+    assert enabled_trace["S_payload_rescue_gain"] > disabled_trace["S_payload_rescue_gain"]

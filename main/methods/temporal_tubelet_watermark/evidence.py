@@ -188,6 +188,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             embedding_support,
             attack_strength,
             tubelet_projection_coverage_ratio,
+            apply_coverage_penalty=True,
         )
         S_payload_aligned = S_payload_unaligned
         S_payload_rescue_gain = 0.0
@@ -242,6 +243,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 embedding_support,
                 attack_strength,
                 aligned_projection_coverage_ratio,
+                apply_coverage_penalty=False,
             )
             S_payload_rescue_gain = round(
                 max(0.0, S_payload_aligned - S_payload_unaligned),
@@ -979,14 +981,17 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         embedding_support: float,
         attack_strength: float,
         coverage_ratio: float,
+        *,
+        apply_coverage_penalty: bool,
     ) -> float:
         del attack_strength
         base_score = sum(aligned_tubelet_projections) / len(aligned_tubelet_projections)
+        if apply_coverage_penalty and self._coverage_penalty_enabled() and base_score > 0.0:
+            base_score *= max(0.0, min(1.0, float(coverage_ratio)))
         projection_support_weight = self._resolve_score_calibration_value(
             "embedding_projection_support_weight",
         )
         support_score = float(embedding_support) * projection_support_weight
-        del coverage_ratio
         return self._clip_score(base_score + support_score)
 
     def _resolve_score_calibration_value(self, field_name: str) -> float:
