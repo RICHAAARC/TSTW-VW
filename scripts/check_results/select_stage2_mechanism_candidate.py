@@ -165,6 +165,7 @@ def select_stage2_mechanism_candidate(
             audit_rows,
             event_score_records,
             mechanism_config,
+            allowed_splits=set(allowed_splits),
             selected_candidate=selected_candidate,
         )
         if tubelet_sync_rows:
@@ -172,6 +173,9 @@ def select_stage2_mechanism_candidate(
                 tubelet_sync_rows,
                 mechanism_config,
             )
+            if selected_tubelet_sync_candidate is None:
+                selection_completion_status = "incomplete_no_eligible_tubelet_sync_candidate"
+                selection_blocking_reason = "no_tubelet_sync_candidate_passes_selection_gate"
         else:
             selection_completion_status = "incomplete_no_compatible_tubelet_sync_rows"
             selection_blocking_reason = "selected_anchor_not_covered_by_sync_stage_records"
@@ -193,6 +197,7 @@ def select_stage2_mechanism_candidate(
             audit_rows,
             event_score_records,
             mechanism_config,
+            allowed_splits=set(allowed_splits),
             selected_candidate=selected_candidate,
         )
         if tubelet_sync_rows:
@@ -200,6 +205,9 @@ def select_stage2_mechanism_candidate(
                 tubelet_sync_rows,
                 mechanism_config,
             )
+            if selected_tubelet_sync_candidate is None:
+                selection_completion_status = "incomplete_no_eligible_tubelet_sync_candidate"
+                selection_blocking_reason = "no_tubelet_sync_candidate_passes_selection_gate"
         else:
             selection_completion_status = "incomplete_no_compatible_tubelet_sync_rows"
             selection_blocking_reason = "selected_anchor_not_covered_by_sync_stage_records"
@@ -462,6 +470,7 @@ def _build_tubelet_sync_calibration_grid_rows(
     event_score_records: list[dict[str, Any]],
     mechanism_config: dict[str, Any],
     *,
+    allowed_splits: set[str],
     selected_candidate: dict[str, Any],
 ) -> list[dict[str, Any]]:
     lookup = {
@@ -567,6 +576,13 @@ def _build_tubelet_sync_calibration_grid_rows(
         no_attack_clean_positive_tpr = _safe_float(
             no_attack_positive_row.get("clean_positive_TPR")
         )
+        local_clip_sync_confident_negative_count = (
+            _count_local_clip_attacked_negative_sync_confident_records(
+                event_score_records,
+                method_variant=method_variant,
+                allowed_splits=allowed_splits,
+            )
+        )
         sync_semantics = build_sync_gain_assessment(
             absolute_tprs={
                 "temporal_crop": temporal_crop_positive_tpr,
@@ -663,6 +679,7 @@ def _build_tubelet_sync_calibration_grid_rows(
                     temporal_crop_sync_gain,
                     local_clip_sync_gain,
                     mean_temporal_sync_gain,
+                    local_clip_sync_confident_negative_count,
                     mechanism_config,
                 ),
                 "selection_score": _selection_score(
@@ -760,10 +777,13 @@ def _select_tubelet_only_candidate(
 def _select_tubelet_sync_candidate(
     calibration_rows: list[dict[str, Any]],
     mechanism_config: dict[str, Any],
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     if not calibration_rows:
         raise ValueError("tubelet_sync calibration rows must not be empty")
-    selected_row = calibration_rows[0]
+    eligible_rows = [row for row in calibration_rows if bool(row.get("candidate_eligible"))]
+    if not eligible_rows:
+        return None
+    selected_row = eligible_rows[0]
     parsed_payload = _parse_tubelet_sync_variant_name(
         str(selected_row.get("method_variant", ""))
     )
@@ -1089,6 +1109,7 @@ def _is_tubelet_sync_candidate_eligible(
     temporal_crop_sync_gain: float | None,
     local_clip_sync_gain: float | None,
     mean_temporal_sync_gain: float | None,
+    local_clip_sync_confident_negative_count: int,
     mechanism_config: dict[str, Any],
 ) -> bool:
     if not _is_tubelet_only_candidate_eligible(
@@ -1099,6 +1120,8 @@ def _is_tubelet_sync_candidate_eligible(
         quality_ssim_mean,
         mechanism_config,
     ):
+        return False
+    if int(local_clip_sync_confident_negative_count) > 0:
         return False
     sync_semantics = build_sync_gain_assessment(
         absolute_tprs={
@@ -1115,6 +1138,23 @@ def _is_tubelet_sync_candidate_eligible(
         mechanism_config=mechanism_config,
     )
     return sync_semantics["candidate_selection_status"] == "eligible"
+
+
+def _count_local_clip_attacked_negative_sync_confident_records(
+    event_score_records: list[dict[str, Any]],
+    *,
+    method_variant: str,
+    allowed_splits: set[str],
+) -> int:
+    return sum(
+        1
+        for record in event_score_records
+        if str(record.get("method_variant")) == method_variant
+        and str(record.get("split")) in allowed_splits
+        and str(record.get("attack_name")) == "local_clip"
+        and str(record.get("sample_role")) == "attacked_negative"
+        and bool(record.get("sync_confident"))
+    )
 
 
 def _attack_headroom(attack_positive_tpr: float | None) -> float | None:
