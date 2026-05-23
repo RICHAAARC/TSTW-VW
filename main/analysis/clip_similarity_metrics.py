@@ -1,5 +1,5 @@
 """
-文件用途：计算阶段 2 真实视频帧级 CLIP 相似度指标。
+文件用途：计算真实视频帧级 CLIP 相似度指标。
 File purpose: Compute CLIP-based frame similarity metrics for stage-two real video runtime.
 Module type: General module
 """

@@ -96,6 +96,55 @@ def test_runner_allows_method_config_path_overrides(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_real_video_formal_ablation_uses_promoted_frozen_tubelet_sync_config() -> None:
+    """Validate the real-video formal ablation resolves the promoted sync baseline.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    ablation_config = load_json_config(
+        ROOT / "configs" / "ablation" / "real_video_vae_latent_ablation.json"
+    )
+    frozen_config_path = (
+        ROOT / "configs" / "method" / "tubelet_sync_real_video_vae_frozen.json"
+    )
+    frozen_method_config = load_json_config(frozen_config_path)
+
+    resolved_paths = runner._build_method_config_paths(ablation_config)
+    runtime_method_configs = runner._build_runtime_method_configs(
+        ablation_config,
+        resolved_paths,
+        "formal",
+        None,
+    )
+    tubelet_sync_config = next(
+        config for config in runtime_method_configs if config["method_variant"] == "tubelet_sync"
+    )
+
+    assert resolved_paths["tubelet_sync"] == (
+        ROOT / "configs" / "method" / "tubelet_sync_real_video_vae_frozen.json"
+    )
+    assert frozen_method_config["method_status"] == "formal_real_video_vae_frozen_baseline"
+    assert frozen_method_config["method_variant"] == "tubelet_sync"
+    assert tubelet_sync_config["base_method_variant"] == "tubelet_sync"
+    assert tubelet_sync_config["target_construction_phase"] == "real_video_vae_latent_probe"
+    assert tubelet_sync_config["method_status"] == "formal_real_video_vae_probe_runtime"
+    assert tubelet_sync_config["tubelet_length"] == 1
+    assert tubelet_sync_config["tubelet_partition"]["spatial_patch_size"] == [4, 4]
+    assert tubelet_sync_config["lambda_sync"] == 0.025
+    assert tubelet_sync_config["sync_search"]["offset_search_min"] == -8
+    assert tubelet_sync_config["sync_search"]["offset_search_max"] == 8
+    assert tubelet_sync_config["sync_search"]["min_sync_positive_margin"] == 0.09
+    assert tubelet_sync_config["sync_search"]["min_sync_alignment_coverage_ratio"] == 0.3
+    assert tubelet_sync_config["sync_search"]["min_sync_alignment_matched_count"] == 1
+    assert tubelet_sync_config["sync_search"]["min_sync_candidate_score"] == 0.0
+
+
+@pytest.mark.unit
 def test_runner_formats_runtime_config_paths_for_repo_and_external_configs(
     tmp_path: Path,
 ) -> None:

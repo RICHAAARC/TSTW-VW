@@ -258,6 +258,7 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | stage2_mechanism_report_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-two mechanism audit report. |
 | stage2_mechanism_decision_path | artifact_layout | none | false | false | false | Relative layout path for the persisted stage-two mechanism decision artifact. |
 | calibration_purpose | protocol | none | false | false | false | Semantic calibration intent label recorded by stage-two mechanism calibration configs and candidate artifacts. |
+| config_purpose | governance | none | false | false | false | Human-readable purpose note for governed configs; it documents operator intent without changing runtime semantics. |
 | selected_tubelet_only_candidate | protocol | none | false | false | false | Top-level artifact field carrying the governed tubelet-only calibration candidate selected from dev and calibration records only. |
 | tubelet_sync_scan_seed | protocol | none | false | false | false | Top-level artifact field describing the governed sync-parameter search seed derived from the selected tubelet-only calibration candidate. |
 | selected_tubelet_sync_candidate | protocol | none | false | false | false | Top-level artifact field carrying the governed tubelet-sync calibration candidate selected from actual scan records under the selected tubelet-only seed parameters. |
