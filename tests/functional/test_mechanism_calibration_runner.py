@@ -175,6 +175,19 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
                 "tubelet_sync_scan_seed": {
                     "base_method_variant": "tubelet_sync",
                     "recommended_method_variant": "tubelet_sync_real_video_vae_wide_candidate",
+                    "seed_method_config": {
+                        "tubelet_length": anchor_candidate["tubelet_length"],
+                        "tubelet_partition": {
+                            "spatial_patch_size": anchor_candidate["tubelet_partition"][
+                                "spatial_patch_size"
+                            ]
+                        },
+                        "score_calibration": {
+                            "embedding_projection_support_weight": anchor_candidate[
+                                "score_calibration"
+                            ]["embedding_projection_support_weight"]
+                        },
+                    },
                     "parameter_scan": {
                         "fusion_rule": ["sync_rescue_fusion"],
                         "lambda_sync": [0.0, 0.025, 0.05, 0.1],
@@ -209,6 +222,19 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
             "tubelet_sync_scan_seed": {
                 "base_method_variant": "tubelet_sync",
                 "recommended_method_variant": "tubelet_sync_real_video_vae_candidate",
+                "seed_method_config": {
+                    "tubelet_length": anchor_candidate["tubelet_length"],
+                    "tubelet_partition": {
+                        "spatial_patch_size": anchor_candidate["tubelet_partition"][
+                            "spatial_patch_size"
+                        ]
+                    },
+                    "score_calibration": {
+                        "embedding_projection_support_weight": anchor_candidate[
+                            "score_calibration"
+                        ]["embedding_projection_support_weight"]
+                    },
+                },
                 "parameter_scan": {
                     "fusion_rule": ["sync_rescue_fusion"],
                     "lambda_sync": [0.0, 0.025, 0.05, 0.075],
@@ -383,6 +409,201 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
 
 
 @pytest.mark.unit
+def test_stage2_mechanism_calibration_runner_continues_refine_scan_from_sync_scan_seed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate default staged search can refine from tubelet_sync_scan_seed.
+
+    Args:
+        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    captured_runner_calls: list[dict[str, object]] = []
+
+    class _FakeRunner:
+        def __init__(self, repository_root: str | Path) -> None:
+            self._repository_root = str(repository_root)
+
+        def run(self, **kwargs: object) -> dict[str, object]:
+            captured_runner_calls.append(
+                {
+                    "repository_root": self._repository_root,
+                    "kwargs": dict(kwargs),
+                }
+            )
+            return {"status": "ok"}
+
+    monkeypatch.setattr(calibration_runner_module, "RealVideoVaeLatentRunner", _FakeRunner)
+
+    anchor_candidate = {
+        "candidate_status": "fpr_controlled_candidate_selected",
+        "method_variant": "tubelet_only_cal_tl02_sp04x04_w025",
+        "tubelet_length": 2,
+        "tubelet_partition": {"spatial_patch_size": [4, 4]},
+        "score_calibration": {"embedding_projection_support_weight": 0.25},
+        "metrics": {
+            "no_attack_clean_negative_fpr": 0.0,
+            "no_attack_clean_positive_tpr": 1.0,
+            "max_attacked_negative_fpr": 0.0,
+            "temporal_crop_attacked_positive_tpr": 1.0,
+            "frame_dropping_attacked_positive_tpr": 1.0,
+            "local_clip_attacked_positive_tpr": 0.5,
+        },
+    }
+    refined_sync_candidate = {
+        "candidate_status": "sync_gain_candidate_selected",
+        "candidate_selection_status": "eligible",
+        "negative_leakage_status": "controlled",
+        "method_variant": "tubelet_sync_real_video_vae_candidate",
+        "base_method_variant": "tubelet_sync",
+        "tubelet_length": 2,
+        "tubelet_partition": {"spatial_patch_size": [4, 4]},
+        "score_calibration": {"embedding_projection_support_weight": 0.25},
+        "fusion_rule": "sync_rescue_fusion",
+        "lambda_sync": 0.05,
+        "sync_search": {
+            "offset_search_min": -8,
+            "offset_search_max": 8,
+            "min_sync_positive_margin": 0.12,
+            "min_sync_alignment_coverage_ratio": 0.125,
+            "min_sync_alignment_matched_count": 3,
+            "min_sync_candidate_score": 0.55,
+        },
+        "metrics": {
+            "no_attack_clean_negative_fpr": 0.0,
+            "no_attack_clean_positive_tpr": 1.0,
+            "max_attacked_negative_fpr": 0.0,
+            "temporal_crop_attacked_positive_tpr": 1.0,
+            "frame_dropping_attacked_positive_tpr": 1.0,
+            "local_clip_attacked_positive_tpr": 0.75,
+            "quality_psnr_mean": 24.0,
+            "quality_ssim_mean": 0.7,
+            "temporal_crop_sync_gain": 0.0,
+            "frame_dropping_sync_gain": 0.0,
+            "local_clip_sync_gain": 0.25,
+            "mean_temporal_sync_gain": 0.083333,
+        },
+    }
+
+    def _build_sync_scan_seed() -> dict[str, object]:
+        return {
+            "base_method_variant": "tubelet_sync",
+            "recommended_method_variant": "tubelet_sync_real_video_vae_candidate",
+            "seed_method_config": {
+                "tubelet_length": anchor_candidate["tubelet_length"],
+                "tubelet_partition": {
+                    "spatial_patch_size": anchor_candidate["tubelet_partition"][
+                        "spatial_patch_size"
+                    ]
+                },
+                "score_calibration": {
+                    "embedding_projection_support_weight": anchor_candidate[
+                        "score_calibration"
+                    ]["embedding_projection_support_weight"]
+                },
+            },
+            "parameter_scan": {
+                "fusion_rule": ["sync_rescue_fusion"],
+                "lambda_sync": [0.0, 0.025, 0.05, 0.1],
+                "sync_search_radius": [4, 8, 12],
+                "min_sync_positive_margin": [0.0, 0.05, 0.12],
+                "min_sync_alignment_coverage_ratio": [0.125, 0.25, 0.5],
+                "min_sync_alignment_matched_count": [1, 2, 4],
+                "min_sync_candidate_score": [0.0],
+            },
+        }
+
+    def _fake_select_stage2_mechanism_candidate(**kwargs: object) -> dict[str, object]:
+        stage_name = Path(str(kwargs["run_root"])).name
+        if stage_name == "anchor_tubelet_only_wide":
+            return {
+                "selection_scope": "tubelet_only",
+                "selection_completion_status": "complete",
+                "selection_blocking_reason": None,
+                "selection_blocking_details": None,
+                "output_path": str(tmp_path / f"{stage_name}_selected_candidate.json"),
+                "report_path": str(tmp_path / f"{stage_name}_selected_candidate.md"),
+                "grid_output_path": str(tmp_path / f"{stage_name}_selected_candidate.csv"),
+                "selected_tubelet_only_candidate": anchor_candidate,
+                "selected_tubelet_sync_candidate": None,
+                "tubelet_sync_scan_seed": None,
+                "top_tubelet_only_candidates": [anchor_candidate],
+                "top_tubelet_sync_candidates": [],
+                "parameter_interval_summary": {"tubelet_only": {}, "tubelet_sync": {}},
+            }
+        if stage_name == "sync_wide_scan":
+            return {
+                "selection_scope": "tubelet_sync",
+                "selection_completion_status": "incomplete_no_eligible_tubelet_sync_candidate",
+                "selection_blocking_reason": "no_tubelet_sync_candidate_passes_selection_gate",
+                "selection_blocking_details": None,
+                "output_path": str(tmp_path / f"{stage_name}_selected_candidate.json"),
+                "report_path": str(tmp_path / f"{stage_name}_selected_candidate.md"),
+                "grid_output_path": str(tmp_path / f"{stage_name}_selected_candidate.csv"),
+                "selected_tubelet_only_candidate": anchor_candidate,
+                "selected_tubelet_sync_candidate": None,
+                "tubelet_sync_scan_seed": _build_sync_scan_seed(),
+                "top_tubelet_only_candidates": [],
+                "top_tubelet_sync_candidates": [],
+                "parameter_interval_summary": {"tubelet_only": {}, "tubelet_sync": {}},
+            }
+        return {
+            "selection_scope": "tubelet_sync",
+            "selection_completion_status": "complete",
+            "selection_blocking_reason": None,
+            "selection_blocking_details": None,
+            "output_path": str(tmp_path / f"{stage_name}_selected_candidate.json"),
+            "report_path": str(tmp_path / f"{stage_name}_selected_candidate.md"),
+            "grid_output_path": str(tmp_path / f"{stage_name}_selected_candidate.csv"),
+            "selected_tubelet_only_candidate": anchor_candidate,
+            "selected_tubelet_sync_candidate": refined_sync_candidate,
+            "tubelet_sync_scan_seed": _build_sync_scan_seed(),
+            "top_tubelet_only_candidates": [],
+            "top_tubelet_sync_candidates": [refined_sync_candidate],
+            "parameter_interval_summary": {"tubelet_only": {}, "tubelet_sync": {}},
+        }
+
+    monkeypatch.setattr(
+        calibration_runner_module,
+        "select_stage2_mechanism_candidate",
+        _fake_select_stage2_mechanism_candidate,
+    )
+
+    candidate_method_config_path = tmp_path / "candidate_from_scan_seed.json"
+    summary = run_stage2_mechanism_calibration(
+        run_root=tmp_path / "mcal_scan_seed_refine",
+        runtime_profile="formal",
+        samples_per_role=2,
+        batch_size_frames=8,
+        output_method_config_path=candidate_method_config_path,
+    )
+
+    assert len(captured_runner_calls) == 3
+    assert [Path(call["kwargs"]["output_root"]).name for call in captured_runner_calls] == [
+        "anchor_tubelet_only_wide",
+        "sync_wide_scan",
+        "sync_refine_scan",
+    ]
+    assert summary["search_terminated_early"] is False
+    assert summary["terminated_before_stage_name"] is None
+    assert summary["selected_tubelet_sync_candidate"]["method_variant"] == refined_sync_candidate[
+        "method_variant"
+    ]
+    assert summary["search_stage_summaries"][1]["selected_tubelet_sync_candidate"] is None
+    assert summary["search_stage_summaries"][1]["tubelet_sync_scan_seed"][
+        "seed_method_config"
+    ]["tubelet_length"] == anchor_candidate["tubelet_length"]
+    assert summary["search_stage_summaries"][2]["selected_tubelet_sync_candidate"][
+        "method_variant"
+    ] == refined_sync_candidate["method_variant"]
+    assert candidate_method_config_path.exists()
+
+
+@pytest.mark.unit
 def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -475,6 +696,19 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
             "tubelet_sync_scan_seed": {
                 "base_method_variant": "tubelet_sync",
                 "recommended_method_variant": "tubelet_sync_real_video_vae_candidate",
+                "seed_method_config": {
+                    "tubelet_length": anchor_candidate["tubelet_length"],
+                    "tubelet_partition": {
+                        "spatial_patch_size": anchor_candidate["tubelet_partition"][
+                            "spatial_patch_size"
+                        ]
+                    },
+                    "score_calibration": {
+                        "embedding_projection_support_weight": anchor_candidate[
+                            "score_calibration"
+                        ]["embedding_projection_support_weight"]
+                    },
+                },
                 "parameter_scan": {
                     "fusion_rule": ["sync_rescue_fusion"],
                     "lambda_sync": [0.0, 0.025, 0.05, 0.1],
@@ -496,12 +730,25 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
         _fake_select_stage2_mechanism_candidate,
     )
 
+    grid_config = json.loads(
+        Path(calibration_runner_module.DEFAULT_GRID_CONFIG_PATH).read_text(encoding="utf-8")
+    )
+    for stage_payload in grid_config["search_stages"]:
+        if stage_payload["stage_name"] == "sync_refine_scan":
+            stage_payload["candidate_source"] = "selected_tubelet_sync_candidate"
+    grid_config_path = tmp_path / "grid_requires_selected_sync_candidate.json"
+    grid_config_path.write_text(
+        json.dumps(grid_config, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
     candidate_method_config_path = tmp_path / "candidate.json"
     summary = run_stage2_mechanism_calibration(
         run_root=tmp_path / "mcal_partial",
         runtime_profile="formal",
         samples_per_role=2,
         batch_size_frames=8,
+        grid_config_path=grid_config_path,
         output_method_config_path=candidate_method_config_path,
     )
 

@@ -1259,6 +1259,179 @@ def write_probe_stage2_local_clip_sync_diagnostics(
     )
 
 
+def write_probe_stage2_local_clip_sync_candidate_surface_forensics(
+    *,
+    run_root: str | Path,
+    calibration_summary: dict[str, Any] | None = None,
+    method_variant: str | None = None,
+    anchor_key: str | None = None,
+    stage_name: str | None = None,
+    output_surface_csv_path: str | Path | None = None,
+    output_surface_summary_path: str | Path | None = None,
+    sample_roles: tuple[str, ...] = ("attacked_positive", "attacked_negative"),
+) -> dict[str, Any]:
+    """功能：按指定 anchor 或 method_variant 写出 local_clip sync candidate-surface 取证。
+
+    Persist local-clip sync candidate-surface forensics for an explicit
+    tubelet-sync method variant or for every local-clip variant under one
+    anchor fragment.
+
+    Args:
+        run_root: Calibration run root.
+        calibration_summary: Optional in-memory calibration summary payload.
+        method_variant: Exact tubelet-sync method variant to export.
+        anchor_key: Anchor fragment such as tl02_sp04x04_w025 used to select
+            matching method variants within one sync stage.
+        stage_name: Optional sync-stage name override.
+        output_surface_csv_path: Optional CSV output path override.
+        output_surface_summary_path: Optional JSON summary path override.
+        sample_roles: Sample roles retained in the forensics export.
+
+    Returns:
+        A summary payload describing the resolved stage, target variants, and
+        emitted candidate-surface artifacts.
+
+    Raises:
+        FileNotFoundError: Raised when the calibration summary, stage records,
+            or resolved method-config paths are missing.
+        ValueError: Raised when target selection is invalid or when no matching
+            local-clip records exist for the requested export.
+    """
+    normalized_method_variant = str(method_variant or "").strip()
+    normalized_anchor_key = str(anchor_key or "").strip()
+    if bool(normalized_method_variant) == bool(normalized_anchor_key):
+        raise ValueError("exactly one of method_variant or anchor_key must be provided")
+
+    resolved_run_root = Path(run_root)
+    calibration_summary_path = (
+        resolved_run_root / "artifacts" / "stage2_mechanism_calibration_summary.json"
+    )
+    calibration_summary_payload = _resolve_stage2_mechanism_calibration_summary(
+        calibration_summary=calibration_summary,
+        calibration_summary_path=calibration_summary_path,
+    )
+    surface_target_mode = "method_variant" if normalized_method_variant else "anchor_key"
+    target_value = normalized_method_variant or normalized_anchor_key
+
+    selected_stage_summary = _resolve_local_clip_surface_stage_summary(
+        calibration_summary_payload=calibration_summary_payload,
+        method_variant=normalized_method_variant or None,
+        anchor_key=normalized_anchor_key or None,
+        stage_name=stage_name,
+    )
+    selected_stage_name = str(selected_stage_summary.get("stage_name", "")).strip()
+    selected_stage_run_root = Path(selected_stage_summary["run_root"])
+    event_scores_path = selected_stage_run_root / "records" / "event_scores.jsonl"
+    if not event_scores_path.exists():
+        raise FileNotFoundError(event_scores_path)
+
+    candidate_records = _extract_local_clip_sync_diagnostic_records(
+        event_scores_path=event_scores_path,
+        sample_roles=sample_roles,
+    )
+    target_entries = _resolve_local_clip_surface_target_entries(
+        calibration_summary_payload=calibration_summary_payload,
+        stage_summary=selected_stage_summary,
+        candidate_records=candidate_records,
+        method_variant=normalized_method_variant or None,
+        anchor_key=normalized_anchor_key or None,
+    )
+
+    if output_surface_csv_path is None or output_surface_summary_path is None:
+        output_stem = _build_local_clip_sync_surface_output_stem(
+            target_mode=surface_target_mode,
+            target_value=target_value,
+        )
+    output_surface_csv_file = (
+        Path(output_surface_csv_path)
+        if output_surface_csv_path is not None
+        else resolved_run_root / "artifacts" / f"{output_stem}.csv"
+    )
+    output_surface_summary_file = (
+        Path(output_surface_summary_path)
+        if output_surface_summary_path is not None
+        else resolved_run_root / "artifacts" / f"{output_stem}_summary.json"
+    )
+
+    surface_rows: list[dict[str, Any]] = []
+    event_summaries: list[dict[str, Any]] = []
+    ranking_rule_names: list[str] = []
+    resolved_method_variants: list[str] = []
+    method_config_paths: dict[str, str] = {}
+    record_count = 0
+    for target_entry in target_entries:
+        target_method_variant = str(target_entry["method_variant"])
+        target_method_config_path = Path(target_entry["method_config_path"])
+        target_records = list(target_entry["records"])
+        target_surface_rows, target_event_summaries, target_ranking_rule_names = (
+            _collect_local_clip_sync_surface_artifacts(
+                method_config_path=target_method_config_path,
+                selected_stage_name=selected_stage_name,
+                selected_stage_run_root=selected_stage_run_root,
+                selected_method_variant=target_method_variant,
+                selected_records=target_records,
+            )
+        )
+        surface_rows.extend(target_surface_rows)
+        event_summaries.extend(target_event_summaries)
+        record_count += len(target_records)
+        resolved_method_variants.append(target_method_variant)
+        method_config_paths[target_method_variant] = str(target_method_config_path)
+        for rule_name in target_ranking_rule_names:
+            if rule_name not in ranking_rule_names:
+                ranking_rule_names.append(rule_name)
+
+    summary_payload = {
+        "surface_target_mode": surface_target_mode,
+        "requested_method_variant": normalized_method_variant or None,
+        "requested_anchor_key": normalized_anchor_key or None,
+        "selected_stage_name": selected_stage_name,
+        "selected_method_variant": normalized_method_variant or None,
+        "resolved_method_variants": resolved_method_variants,
+        "method_config_paths": method_config_paths,
+        "surface_event_count": len(event_summaries),
+        "surface_row_count": len(surface_rows),
+        "ranking_rule_names": ranking_rule_names,
+        "events": event_summaries,
+    }
+    _write_local_clip_sync_surface_output_files(
+        output_surface_csv_file=output_surface_csv_file,
+        output_surface_summary_file=output_surface_summary_file,
+        surface_rows=surface_rows,
+        summary_payload=summary_payload,
+    )
+
+    return _json_safe(
+        {
+            "run_root": resolved_run_root,
+            "calibration_summary_path": calibration_summary_path,
+            "selected_stage_name": selected_stage_name,
+            "selected_stage_run_root": selected_stage_run_root,
+            "event_scores_path": event_scores_path,
+            "surface_target_mode": surface_target_mode,
+            "requested_method_variant": normalized_method_variant or None,
+            "requested_anchor_key": normalized_anchor_key or None,
+            "resolved_method_variants": resolved_method_variants,
+            "method_config_paths": method_config_paths,
+            "record_count": record_count,
+            "sample_roles": sorted(
+                {
+                    str(record.get("sample_role", ""))
+                    for target_entry in target_entries
+                    for record in target_entry["records"]
+                }
+            ),
+            "output_surface_csv_path": output_surface_csv_file,
+            "output_surface_summary_path": output_surface_summary_file,
+            "surface_row_count": len(surface_rows),
+            "surface_event_count": len(event_summaries),
+            "ranking_rule_names": ranking_rule_names,
+            "surface_export_status": "ok",
+            "surface_export_failure_reason": None,
+        }
+    )
+
+
 def _resolve_stage2_mechanism_calibration_summary(
     *,
     calibration_summary: dict[str, Any] | None,
@@ -1279,18 +1452,9 @@ def _resolve_selected_tubelet_sync_stage_summary(
     calibration_summary_payload: dict[str, Any],
     selected_method_variant: str,
 ) -> dict[str, Any]:
-    stage_summaries = calibration_summary_payload.get("search_stage_summaries", [])
-    if not isinstance(stage_summaries, list):
-        raise ValueError("search_stage_summaries must be a list")
-
-    tubelet_sync_stage_summaries = [
-        stage_summary
-        for stage_summary in stage_summaries
-        if isinstance(stage_summary, dict)
-        and str(stage_summary.get("selection_scope", "")).strip() == "tubelet_sync"
-    ]
-    if not tubelet_sync_stage_summaries:
-        raise ValueError("search_stage_summaries must contain at least one tubelet_sync stage")
+    tubelet_sync_stage_summaries = _resolve_tubelet_sync_stage_summaries(
+        calibration_summary_payload
+    )
 
     for stage_summary in reversed(tubelet_sync_stage_summaries):
         stage_candidate = stage_summary.get("selected_tubelet_sync_candidate")
@@ -1301,6 +1465,291 @@ def _resolve_selected_tubelet_sync_stage_summary(
             return stage_summary
     return tubelet_sync_stage_summaries[-1]
 
+
+def _resolve_tubelet_sync_stage_summaries(
+    calibration_summary_payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    stage_summaries = calibration_summary_payload.get("search_stage_summaries", [])
+    if not isinstance(stage_summaries, list):
+        raise ValueError("search_stage_summaries must be a list")
+
+    resolved_stage_summaries = [
+        stage_summary
+        for stage_summary in stage_summaries
+        if isinstance(stage_summary, dict)
+        and str(stage_summary.get("selection_scope", "")).strip() == "tubelet_sync"
+    ]
+    if not resolved_stage_summaries:
+        raise ValueError("search_stage_summaries must contain at least one tubelet_sync stage")
+    return resolved_stage_summaries
+
+
+def _resolve_local_clip_surface_stage_summary(
+    *,
+    calibration_summary_payload: dict[str, Any],
+    method_variant: str | None,
+    anchor_key: str | None,
+    stage_name: str | None,
+) -> dict[str, Any]:
+    tubelet_sync_stage_summaries = _resolve_tubelet_sync_stage_summaries(
+        calibration_summary_payload
+    )
+    normalized_stage_name = str(stage_name or "").strip()
+    if normalized_stage_name:
+        tubelet_sync_stage_summaries = [
+            stage_summary
+            for stage_summary in tubelet_sync_stage_summaries
+            if str(stage_summary.get("stage_name", "")).strip() == normalized_stage_name
+        ]
+        if not tubelet_sync_stage_summaries:
+            raise ValueError(
+                f"no tubelet_sync stage named {normalized_stage_name!r} was found in calibration summary"
+            )
+
+    if method_variant is not None:
+        normalized_method_variant = str(method_variant).strip()
+        for stage_summary in reversed(tubelet_sync_stage_summaries):
+            if _stage_summary_references_method_variant(
+                stage_summary,
+                method_variant=normalized_method_variant,
+            ):
+                return stage_summary
+            stage_method_config_paths = _load_stage_method_config_paths(stage_summary)
+            if normalized_method_variant in stage_method_config_paths:
+                return stage_summary
+        raise ValueError(
+            f"no tubelet_sync stage contains method_variant {normalized_method_variant!r}"
+        )
+
+    normalized_anchor_key = str(anchor_key or "").strip()
+    if not normalized_anchor_key:
+        raise ValueError("anchor_key must be provided when method_variant is omitted")
+    matching_stage_summaries = [
+        stage_summary
+        for stage_summary in tubelet_sync_stage_summaries
+        if _stage_summary_matches_anchor_key(stage_summary, anchor_key=normalized_anchor_key)
+    ]
+    if not matching_stage_summaries:
+        raise ValueError(
+            f"no tubelet_sync stage matches anchor_key {normalized_anchor_key!r}"
+        )
+    return matching_stage_summaries[-1]
+
+
+def _stage_summary_references_method_variant(
+    stage_summary: dict[str, Any],
+    *,
+    method_variant: str,
+) -> bool:
+    stage_candidate = stage_summary.get("selected_tubelet_sync_candidate")
+    if _candidate_payload_matches_method_variant(stage_candidate, method_variant=method_variant):
+        return True
+
+    for top_candidate in stage_summary.get("top_tubelet_sync_candidates", []):
+        if _candidate_payload_matches_method_variant(
+            top_candidate,
+            method_variant=method_variant,
+        ):
+            return True
+    return False
+
+
+def _stage_summary_matches_anchor_key(
+    stage_summary: dict[str, Any],
+    *,
+    anchor_key: str,
+) -> bool:
+    if _candidate_payload_matches_anchor_key(
+        stage_summary.get("selected_tubelet_only_candidate"),
+        anchor_key=anchor_key,
+    ):
+        return True
+    if _candidate_payload_matches_anchor_key(
+        stage_summary.get("selected_tubelet_sync_candidate"),
+        anchor_key=anchor_key,
+    ):
+        return True
+    for candidate_key in ("top_tubelet_only_candidates", "top_tubelet_sync_candidates"):
+        for candidate_payload in stage_summary.get(candidate_key, []):
+            if _candidate_payload_matches_anchor_key(candidate_payload, anchor_key=anchor_key):
+                return True
+    return False
+
+
+def _candidate_payload_matches_method_variant(
+    candidate_payload: Any,
+    *,
+    method_variant: str,
+) -> bool:
+    if not isinstance(candidate_payload, dict):
+        return False
+    return str(candidate_payload.get("method_variant", "")).strip() == method_variant
+
+
+def _candidate_payload_matches_anchor_key(
+    candidate_payload: Any,
+    *,
+    anchor_key: str,
+) -> bool:
+    if not isinstance(candidate_payload, dict):
+        return False
+    candidate_method_variant = str(candidate_payload.get("method_variant", "")).strip()
+    return bool(candidate_method_variant) and anchor_key in candidate_method_variant
+
+
+def _load_stage_method_config_paths(
+    stage_summary: dict[str, Any],
+) -> dict[str, Path]:
+    ablation_config_path_value = str(stage_summary.get("ablation_config_path", "")).strip()
+    if not ablation_config_path_value:
+        raise ValueError("tubelet_sync stage summary must include ablation_config_path")
+    ablation_config_path = Path(ablation_config_path_value)
+    if not ablation_config_path.exists():
+        raise FileNotFoundError(ablation_config_path)
+
+    ablation_payload = json.loads(ablation_config_path.read_text(encoding="utf-8"))
+    if not isinstance(ablation_payload, dict):
+        raise ValueError("stage ablation config must contain a JSON object")
+    method_config_paths_payload = ablation_payload.get("method_config_paths", {})
+    if not isinstance(method_config_paths_payload, dict):
+        raise ValueError("stage ablation config must contain method_config_paths")
+
+    resolved_method_config_paths: dict[str, Path] = {}
+    for variant_name, config_path_value in method_config_paths_payload.items():
+        normalized_variant_name = str(variant_name).strip()
+        normalized_config_path = str(config_path_value).strip()
+        if not normalized_variant_name or not normalized_config_path:
+            continue
+        resolved_method_config_paths[normalized_variant_name] = Path(normalized_config_path)
+    if not resolved_method_config_paths:
+        raise ValueError("stage ablation config must resolve at least one method config path")
+    return resolved_method_config_paths
+
+
+def _resolve_local_clip_surface_target_entries(
+    *,
+    calibration_summary_payload: dict[str, Any],
+    stage_summary: dict[str, Any],
+    candidate_records: list[dict[str, Any]],
+    method_variant: str | None,
+    anchor_key: str | None,
+) -> list[dict[str, Any]]:
+    stage_method_config_paths = _load_stage_method_config_paths(stage_summary)
+    if method_variant is not None:
+        normalized_method_variant = str(method_variant).strip()
+        target_records = [
+            record
+            for record in candidate_records
+            if str(record.get("method_variant", "")).strip() == normalized_method_variant
+        ]
+        if not target_records:
+            generated_candidate_path = _resolve_generated_candidate_method_config_path(
+                calibration_summary_payload=calibration_summary_payload,
+                method_variant=normalized_method_variant,
+            )
+            if generated_candidate_path is not None:
+                raise ValueError(
+                    "requested method_variant matches generated_tubelet_sync_candidate_config_path, "
+                    "but selected-stage event scores use stage-generated method variants; pass the "
+                    "stage-generated method_variant instead"
+                )
+            raise ValueError(
+                f"no local_clip records were found for method_variant {normalized_method_variant!r}"
+            )
+        method_config_path = stage_method_config_paths.get(normalized_method_variant)
+        if method_config_path is None:
+            method_config_path = _resolve_generated_candidate_method_config_path(
+                calibration_summary_payload=calibration_summary_payload,
+                method_variant=normalized_method_variant,
+            )
+        if method_config_path is None:
+            raise ValueError(
+                f"no method config path was found for method_variant {normalized_method_variant!r}"
+            )
+        return [
+            {
+                "method_variant": normalized_method_variant,
+                "method_config_path": method_config_path,
+                "records": target_records,
+            }
+        ]
+
+    normalized_anchor_key = str(anchor_key or "").strip()
+    grouped_records: dict[str, list[dict[str, Any]]] = {}
+    for record in candidate_records:
+        record_method_variant = str(record.get("method_variant", "")).strip()
+        if not record_method_variant or normalized_anchor_key not in record_method_variant:
+            continue
+        grouped_records.setdefault(record_method_variant, []).append(record)
+    if not grouped_records:
+        raise ValueError(
+            f"no local_clip records were found for anchor_key {normalized_anchor_key!r}"
+        )
+
+    missing_method_config_variants = [
+        record_method_variant
+        for record_method_variant in grouped_records
+        if record_method_variant not in stage_method_config_paths
+    ]
+    if missing_method_config_variants:
+        raise ValueError(
+            "stage ablation config is missing method_config_paths for: "
+            + ", ".join(sorted(missing_method_config_variants))
+        )
+    return [
+        {
+            "method_variant": record_method_variant,
+            "method_config_path": stage_method_config_paths[record_method_variant],
+            "records": grouped_records[record_method_variant],
+        }
+        for record_method_variant in sorted(grouped_records)
+    ]
+
+
+def _resolve_generated_candidate_method_config_path(
+    *,
+    calibration_summary_payload: dict[str, Any],
+    method_variant: str,
+) -> Path | None:
+    generated_candidate_path_value = str(
+        calibration_summary_payload.get("generated_tubelet_sync_candidate_config_path", "")
+    ).strip()
+    if not generated_candidate_path_value:
+        return None
+    generated_candidate_path = Path(generated_candidate_path_value)
+    if not generated_candidate_path.exists():
+        raise FileNotFoundError(generated_candidate_path)
+
+    generated_candidate_payload = json.loads(
+        generated_candidate_path.read_text(encoding="utf-8")
+    )
+    if not isinstance(generated_candidate_payload, dict):
+        raise ValueError("generated tubelet_sync candidate config must contain a JSON object")
+    generated_method_variant = str(generated_candidate_payload.get("method_variant", "")).strip()
+    if generated_method_variant != method_variant:
+        return None
+    return generated_candidate_path
+
+
+def _build_local_clip_sync_surface_output_stem(
+    *,
+    target_mode: str,
+    target_value: str,
+) -> str:
+    normalized_target_value = re.sub(r"[^0-9A-Za-z_.-]+", "_", target_value).strip("_")
+    if not normalized_target_value:
+        normalized_target_value = target_mode
+    if len(normalized_target_value) > 32:
+        target_digest = compute_object_digest(
+            {
+                "target_mode": target_mode,
+                "target_value": target_value,
+            }
+        )[:8]
+        normalized_target_value = f"{normalized_target_value[:32]}_{target_digest}"
+    return (
+        f"local_clip_sync_candidate_surface__{target_mode}__{normalized_target_value}"
+    )
 
 def _extract_local_clip_sync_diagnostic_rows(
     *,
@@ -1430,19 +1879,6 @@ def _write_local_clip_sync_candidate_surface_forensics(
     if not method_config_path.exists():
         raise FileNotFoundError(method_config_path)
 
-    method_config_payload = json.loads(method_config_path.read_text(encoding="utf-8"))
-    if not isinstance(method_config_payload, dict):
-        raise ValueError("selected_tubelet_sync_candidate config must contain a JSON object")
-    method_instance = build_method_from_config(method_config_payload)
-    evidence_extractor = getattr(method_instance, "_evidence_extractor", None)
-    if evidence_extractor is None or not hasattr(
-        evidence_extractor,
-        "build_sync_candidate_surface",
-    ):
-        raise ValueError(
-            "selected_tubelet_sync_candidate method must expose build_sync_candidate_surface"
-        )
-
     output_surface_csv_file = (
         Path(output_surface_csv_path)
         if output_surface_csv_path is not None
@@ -1455,8 +1891,58 @@ def _write_local_clip_sync_candidate_surface_forensics(
         / "artifacts"
         / "selected_candidate_local_clip_sync_candidate_surface_summary.json"
     )
-    output_surface_csv_file.parent.mkdir(parents=True, exist_ok=True)
-    output_surface_summary_file.parent.mkdir(parents=True, exist_ok=True)
+    surface_rows, event_summaries, ranking_rule_names = _collect_local_clip_sync_surface_artifacts(
+        method_config_path=method_config_path,
+        selected_stage_name=selected_stage_name,
+        selected_stage_run_root=selected_stage_run_root,
+        selected_method_variant=selected_method_variant,
+        selected_records=selected_records,
+    )
+
+    summary_payload = {
+        "selected_stage_name": selected_stage_name,
+        "selected_method_variant": selected_method_variant,
+        "method_config_path": str(method_config_path),
+        "surface_event_count": len(event_summaries),
+        "surface_row_count": len(surface_rows),
+        "ranking_rule_names": ranking_rule_names,
+        "events": event_summaries,
+    }
+    _write_local_clip_sync_surface_output_files(
+        output_surface_csv_file=output_surface_csv_file,
+        output_surface_summary_file=output_surface_summary_file,
+        surface_rows=surface_rows,
+        summary_payload=summary_payload,
+    )
+
+    return {
+        "surface_export_status": "ok",
+        "surface_export_failure_reason": None,
+        "output_surface_csv_path": output_surface_csv_file,
+        "output_surface_summary_path": output_surface_summary_file,
+        "surface_row_count": len(surface_rows),
+        "surface_event_count": len(event_summaries),
+    }
+
+
+def _collect_local_clip_sync_surface_artifacts(
+    *,
+    method_config_path: Path,
+    selected_stage_name: str,
+    selected_stage_run_root: Path,
+    selected_method_variant: str,
+    selected_records: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    method_config_payload = json.loads(method_config_path.read_text(encoding="utf-8"))
+    if not isinstance(method_config_payload, dict):
+        raise ValueError("local_clip surface method config must contain a JSON object")
+    method_instance = build_method_from_config(method_config_payload)
+    evidence_extractor = getattr(method_instance, "_evidence_extractor", None)
+    if evidence_extractor is None or not hasattr(
+        evidence_extractor,
+        "build_sync_candidate_surface",
+    ):
+        raise ValueError("local_clip surface method must expose build_sync_candidate_surface")
 
     surface_rows: list[dict[str, Any]] = []
     event_summaries: list[dict[str, Any]] = []
@@ -1492,34 +1978,26 @@ def _write_local_clip_sync_candidate_surface_forensics(
 
     if not surface_rows:
         raise ValueError("no local_clip sync candidate surface rows were generated")
+    return surface_rows, event_summaries, ranking_rule_names
 
+
+def _write_local_clip_sync_surface_output_files(
+    *,
+    output_surface_csv_file: Path,
+    output_surface_summary_file: Path,
+    surface_rows: list[dict[str, Any]],
+    summary_payload: dict[str, Any],
+) -> None:
+    output_surface_csv_file.parent.mkdir(parents=True, exist_ok=True)
+    output_surface_summary_file.parent.mkdir(parents=True, exist_ok=True)
     with output_surface_csv_file.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(surface_rows[0].keys()))
         writer.writeheader()
         writer.writerows(surface_rows)
-
-    summary_payload = {
-        "selected_stage_name": selected_stage_name,
-        "selected_method_variant": selected_method_variant,
-        "method_config_path": str(method_config_path),
-        "surface_event_count": len(event_summaries),
-        "surface_row_count": len(surface_rows),
-        "ranking_rule_names": ranking_rule_names,
-        "events": event_summaries,
-    }
     output_surface_summary_file.write_text(
         json.dumps(summary_payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-
-    return {
-        "surface_export_status": "ok",
-        "surface_export_failure_reason": None,
-        "output_surface_csv_path": output_surface_csv_file,
-        "output_surface_summary_path": output_surface_summary_file,
-        "surface_row_count": len(surface_rows),
-        "surface_event_count": len(event_summaries),
-    }
 
 
 def _build_local_clip_sync_forensics_sample(
@@ -1655,6 +2133,7 @@ def _build_local_clip_sync_surface_rows(
             {
                 "selected_stage_name": selected_stage_name,
                 "selected_method_variant": selected_method_variant,
+                "method_variant": str(record.get("method_variant", "")),
                 "event_id": str(record.get("event_id", "")),
                 "sample_id": str(record.get("sample_id", "")),
                 "split": str(record.get("split", "")),
@@ -1733,6 +2212,7 @@ def _build_local_clip_sync_surface_summary_entry(
     return {
         "selected_stage_name": selected_stage_name,
         "selected_method_variant": selected_method_variant,
+        "method_variant": str(record.get("method_variant", "")),
         "event_id": str(record.get("event_id", "")),
         "sample_id": str(record.get("sample_id", "")),
         "split": str(record.get("split", "")),

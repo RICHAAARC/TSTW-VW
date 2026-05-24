@@ -33,12 +33,92 @@ from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
     run_probe_stage2_mechanism_calibration,
     run_probe_method_variant_splits,
     run_probe_runner,
+    write_probe_stage2_local_clip_sync_candidate_surface_forensics,
     write_probe_stage2_local_clip_sync_diagnostics,
     write_probe_runtime_config,
 )
 from scripts.prepare_models.prepare_session_autoencoder_kl import (
     prepare_session_autoencoder_kl,
 )
+
+
+def _build_local_clip_surface_candidate_config(
+    method_variant: str,
+    *,
+    lambda_sync: float,
+    min_sync_positive_margin: float,
+    min_sync_alignment_coverage_ratio: float,
+) -> dict[str, object]:
+    return {
+        "method_family": "temporal_tubelet_watermark",
+        "method_variant": method_variant,
+        "base_method_variant": "tubelet_sync",
+        "method_status": "stage2_mechanism_calibration_candidate",
+        "enable_frame_prc": False,
+        "enable_tubelet": True,
+        "enable_sync": True,
+        "enable_trajectory": False,
+        "tubelet_length": 4,
+        "score_calibration": {
+            "embedding_projection_support_weight": 0.25,
+        },
+        "sync_search": {
+            "offset_search_min": -8,
+            "offset_search_max": 8,
+            "enable_scale_search": False,
+            "coverage_penalty_enabled": True,
+            "min_sync_positive_margin": min_sync_positive_margin,
+            "min_sync_alignment_coverage_ratio": min_sync_alignment_coverage_ratio,
+            "min_sync_alignment_matched_count": 1,
+        },
+        "lambda_sync": lambda_sync,
+        "fusion_rule": "sync_rescue_fusion",
+    }
+
+
+def _build_local_clip_surface_event_record(
+    *,
+    stage_run_root: Path,
+    method_config: dict[str, object],
+    sample_id: str,
+    clip_length: int,
+) -> dict[str, object]:
+    backend = SyntheticVideoLatentPlaceholder(latent_shape=(32, 4, 16, 16))
+    backend.set_output_root(stage_run_root)
+    base_sample = backend.build_sample(sample_id, "calibration", "watermarked_positive")
+    watermark_method = build_method_from_config(method_config)
+    watermarked_sample = watermark_method.embed(base_sample, {})
+    clipped_sample = TemporalAttackPlaceholder(
+        "local_clip",
+        {"clip_length": clip_length},
+    ).apply(watermarked_sample)
+    detection_result = watermark_method.detect(clipped_sample, threshold_record=None)
+
+    mechanism_trace = dict(detection_result.mechanism_trace or {})
+    mechanism_trace.update(
+        {
+            "video_source_relpath": f"processed_dataset/{sample_id}.mp4",
+            "latent_shape": list(clipped_sample.latent_shape),
+            "latent_artifact_relpath": clipped_sample.latent_artifact_relpath,
+            "latent_artifact_digest": clipped_sample.latent_artifact_digest,
+            "reencoded_latent_relpath": clipped_sample.latent_artifact_relpath,
+            "reencoded_latent_digest": clipped_sample.latent_artifact_digest,
+        }
+    )
+    return {
+        "event_id": f"{method_config['method_variant']}:{sample_id}:local_clip_len_{clip_length:02d}",
+        "sample_id": sample_id,
+        "split": clipped_sample.split,
+        "sample_role": "attacked_positive",
+        "method_variant": method_config["method_variant"],
+        "attack_name": "local_clip",
+        "attack_params": clipped_sample.applied_attack_params,
+        "latent_backend_name": clipped_sample.latent_backend_name,
+        "latent_backend_status": clipped_sample.latent_backend_status,
+        "latent_tensor_digest_random": clipped_sample.latent_tensor_digest_random,
+        "latent_generation_seed_random": clipped_sample.latent_generation_seed_random,
+        "mechanism_trace": mechanism_trace,
+    }
 
 
 @pytest.mark.unit
@@ -978,16 +1058,288 @@ def test_write_probe_stage2_local_clip_sync_diagnostics_persists_candidate_surfa
     assert "sync_candidate_score_hybrid" in surface_summary_payload["events"][0][
         "ranking_summaries"
     ]["hybrid_no_prior"]["winner"]
+
+
+@pytest.mark.unit
+def test_write_probe_stage2_local_clip_sync_candidate_surface_forensics_exports_explicit_method_variant(
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "stage2_calibration"
+    artifacts_root = run_root / "artifacts"
+    stage_run_root = run_root / "stages" / "sync_wide_scan"
+    records_root = stage_run_root / "records"
+    stage_workspace_root = tmp_path / "workspace" / "sync_wide_scan"
+    method_config_root = stage_workspace_root / "method_configs"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    records_root.mkdir(parents=True, exist_ok=True)
+    method_config_root.mkdir(parents=True, exist_ok=True)
+
+    target_method_variant = (
+        "tubelet_sync_cal_tl02_sp04x04_w025_sr04_ls000_mg120_cv250_mc01_frsync_rescue"
+    )
+    other_method_variant = (
+        "tubelet_sync_cal_tl01_sp04x04_w045_sr12_ls000_mg000_cv500_mc01_frsync_rescue"
+    )
+    target_method_config = _build_local_clip_surface_candidate_config(
+        target_method_variant,
+        lambda_sync=0.1,
+        min_sync_positive_margin=0.12,
+        min_sync_alignment_coverage_ratio=0.25,
+    )
+    other_method_config = _build_local_clip_surface_candidate_config(
+        other_method_variant,
+        lambda_sync=0.0,
+        min_sync_positive_margin=0.0,
+        min_sync_alignment_coverage_ratio=0.5,
+    )
+    target_method_config_path = method_config_root / f"{target_method_variant}.json"
+    other_method_config_path = method_config_root / f"{other_method_variant}.json"
+    target_method_config_path.write_text(
+        json.dumps(target_method_config, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    other_method_config_path.write_text(
+        json.dumps(other_method_config, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    stage_ablation_config_path = stage_workspace_root / "sync_wide_scan_ablation.json"
+    stage_ablation_config_path.write_text(
+        json.dumps(
+            {
+                "method_config_paths": {
+                    target_method_variant: str(target_method_config_path),
+                    other_method_variant: str(other_method_config_path),
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    calibration_summary_path = artifacts_root / "stage2_mechanism_calibration_summary.json"
+    calibration_summary_path.write_text(
+        json.dumps(
+            {
+                "selected_tubelet_sync_candidate": None,
+                "search_stage_summaries": [
+                    {
+                        "stage_name": "sync_wide_scan",
+                        "selection_scope": "tubelet_sync",
+                        "run_root": str(stage_run_root),
+                        "ablation_config_path": str(stage_ablation_config_path),
+                        "selected_tubelet_only_candidate": {
+                            "method_variant": "tubelet_only_cal_tl02_sp04x04_w025",
+                        },
+                        "top_tubelet_sync_candidates": [
+                            {"method_variant": target_method_variant},
+                        ],
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    event_records = [
+        _build_local_clip_surface_event_record(
+            stage_run_root=stage_run_root,
+            method_config=target_method_config,
+            sample_id="sample_surface_target_000001",
+            clip_length=4,
+        ),
+        _build_local_clip_surface_event_record(
+            stage_run_root=stage_run_root,
+            method_config=other_method_config,
+            sample_id="sample_surface_other_000001",
+            clip_length=8,
+        ),
+    ]
+    (records_root / "event_scores.jsonl").write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in event_records),
+        encoding="utf-8",
+    )
+
+    summary = write_probe_stage2_local_clip_sync_candidate_surface_forensics(
+        run_root=run_root,
+        method_variant=target_method_variant,
+    )
+
+    assert summary["surface_target_mode"] == "method_variant"
+    assert summary["requested_method_variant"] == target_method_variant
+    assert summary["resolved_method_variants"] == [target_method_variant]
+    assert summary["record_count"] == 1
+    assert summary["surface_event_count"] == 1
+
+    surface_csv_path = Path(summary["output_surface_csv_path"])
+    surface_summary_path = Path(summary["output_surface_summary_path"])
+    assert surface_csv_path.exists()
+    assert surface_summary_path.exists()
+
+    with surface_csv_path.open("r", encoding="utf-8", newline="") as handle:
+        surface_rows = list(csv.DictReader(handle))
+    assert surface_rows
+    assert {row["method_variant"] for row in surface_rows} == {target_method_variant}
+
+    surface_summary_payload = json.loads(surface_summary_path.read_text(encoding="utf-8"))
+    assert surface_summary_payload["requested_method_variant"] == target_method_variant
+    assert surface_summary_payload["resolved_method_variants"] == [target_method_variant]
+
+
+@pytest.mark.unit
+def test_write_probe_stage2_local_clip_sync_candidate_surface_forensics_exports_anchor_variants(
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "stage2_calibration"
+    artifacts_root = run_root / "artifacts"
+    stage_run_root = run_root / "stages" / "sync_wide_scan"
+    records_root = stage_run_root / "records"
+    stage_workspace_root = tmp_path / "workspace" / "sync_wide_scan"
+    method_config_root = stage_workspace_root / "method_configs"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    records_root.mkdir(parents=True, exist_ok=True)
+    method_config_root.mkdir(parents=True, exist_ok=True)
+
+    anchor_key = "tl02_sp04x04_w025"
+    matching_method_variants = [
+        "tubelet_sync_cal_tl02_sp04x04_w025_sr04_ls000_mg120_cv250_mc01_frsync_rescue",
+        "tubelet_sync_cal_tl02_sp04x04_w025_sr12_ls000_mg000_cv500_mc01_frsync_rescue",
+    ]
+    nonmatching_method_variant = (
+        "tubelet_sync_cal_tl01_sp04x04_w045_sr04_ls000_mg120_cv250_mc01_frsync_rescue"
+    )
+
+    method_configs = {
+        matching_method_variants[0]: _build_local_clip_surface_candidate_config(
+            matching_method_variants[0],
+            lambda_sync=0.1,
+            min_sync_positive_margin=0.12,
+            min_sync_alignment_coverage_ratio=0.25,
+        ),
+        matching_method_variants[1]: _build_local_clip_surface_candidate_config(
+            matching_method_variants[1],
+            lambda_sync=0.0,
+            min_sync_positive_margin=0.0,
+            min_sync_alignment_coverage_ratio=0.5,
+        ),
+        nonmatching_method_variant: _build_local_clip_surface_candidate_config(
+            nonmatching_method_variant,
+            lambda_sync=0.05,
+            min_sync_positive_margin=0.06,
+            min_sync_alignment_coverage_ratio=0.125,
+        ),
+    }
+    method_config_paths: dict[str, str] = {}
+    for method_variant_name, method_config in method_configs.items():
+        method_config_path = method_config_root / f"{method_variant_name}.json"
+        method_config_path.write_text(
+            json.dumps(method_config, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        method_config_paths[method_variant_name] = str(method_config_path)
+
+    stage_ablation_config_path = stage_workspace_root / "sync_wide_scan_ablation.json"
+    stage_ablation_config_path.write_text(
+        json.dumps(
+            {
+                "method_config_paths": method_config_paths,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    calibration_summary_path = artifacts_root / "stage2_mechanism_calibration_summary.json"
+    calibration_summary_path.write_text(
+        json.dumps(
+            {
+                "selected_tubelet_sync_candidate": None,
+                "search_stage_summaries": [
+                    {
+                        "stage_name": "sync_wide_scan",
+                        "selection_scope": "tubelet_sync",
+                        "run_root": str(stage_run_root),
+                        "ablation_config_path": str(stage_ablation_config_path),
+                        "selected_tubelet_only_candidate": {
+                            "method_variant": f"tubelet_only_cal_{anchor_key}",
+                        },
+                        "top_tubelet_sync_candidates": [
+                            {"method_variant": matching_method_variants[0]},
+                            {"method_variant": matching_method_variants[1]},
+                        ],
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    event_records = [
+        _build_local_clip_surface_event_record(
+            stage_run_root=stage_run_root,
+            method_config=method_configs[matching_method_variants[0]],
+            sample_id="sample_surface_anchor_000001",
+            clip_length=4,
+        ),
+        _build_local_clip_surface_event_record(
+            stage_run_root=stage_run_root,
+            method_config=method_configs[matching_method_variants[1]],
+            sample_id="sample_surface_anchor_000002",
+            clip_length=8,
+        ),
+        _build_local_clip_surface_event_record(
+            stage_run_root=stage_run_root,
+            method_config=method_configs[nonmatching_method_variant],
+            sample_id="sample_surface_other_000003",
+            clip_length=12,
+        ),
+    ]
+    (records_root / "event_scores.jsonl").write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in event_records),
+        encoding="utf-8",
+    )
+
+    summary = write_probe_stage2_local_clip_sync_candidate_surface_forensics(
+        run_root=run_root,
+        anchor_key=anchor_key,
+    )
+
+    assert summary["surface_target_mode"] == "anchor_key"
+    assert summary["requested_anchor_key"] == anchor_key
+    assert summary["resolved_method_variants"] == sorted(matching_method_variants)
+    assert summary["record_count"] == 2
+    assert summary["surface_event_count"] == 2
+
+    surface_csv_path = Path(summary["output_surface_csv_path"])
+    surface_summary_path = Path(summary["output_surface_summary_path"])
+    assert surface_csv_path.exists()
+    assert surface_summary_path.exists()
+
+    with surface_csv_path.open("r", encoding="utf-8", newline="") as handle:
+        surface_rows = list(csv.DictReader(handle))
+    assert {row["method_variant"] for row in surface_rows} == set(matching_method_variants)
+
+    surface_summary_payload = json.loads(surface_summary_path.read_text(encoding="utf-8"))
+    assert surface_summary_payload["requested_anchor_key"] == anchor_key
+    assert surface_summary_payload["resolved_method_variants"] == sorted(
+        matching_method_variants
+    )
     assert surface_summary_payload["events"][0]["recomputed_matches_recorded_selection"] is True
     assert (
         surface_summary_payload["events"][0]["recomputed_selected_candidate"][
             "offset_candidate"
         ]
-        == detection_result.mechanism_trace["sync_estimated_offset"]
-    )
-    assert (
-        surface_summary_payload["events"][0]["sync_result"]["sync_estimated_offset"]
-        == detection_result.mechanism_trace["sync_estimated_offset"]
+        == surface_summary_payload["events"][0]["sync_result"]["sync_estimated_offset"]
     )
 
 

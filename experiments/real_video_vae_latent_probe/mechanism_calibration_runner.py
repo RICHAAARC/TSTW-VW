@@ -400,6 +400,7 @@ def _run_staged_mechanism_calibration(
     total_generated_method_variant_count = 0
     selected_tubelet_only_candidate: dict[str, Any] | None = None
     selected_tubelet_sync_candidate: dict[str, Any] | None = None
+    tubelet_sync_scan_seed: dict[str, Any] | None = None
     final_stage_selection_payload: dict[str, Any] | None = None
     search_terminated_early = False
     termination_reason = None
@@ -433,6 +434,7 @@ def _run_staged_mechanism_calibration(
             stage_config,
             selected_tubelet_only_candidate=selected_tubelet_only_candidate,
             selected_tubelet_sync_candidate=selected_tubelet_sync_candidate,
+            tubelet_sync_scan_seed=tubelet_sync_scan_seed,
         )
         with calibration_timing_recorder.event(
             f"stage2_calibration_prepare__{stage_name}",
@@ -516,6 +518,8 @@ def _run_staged_mechanism_calibration(
             selected_tubelet_sync_candidate = stage_selection_payload[
                 "selected_tubelet_sync_candidate"
             ]
+        if stage_selection_payload.get("tubelet_sync_scan_seed") is not None:
+            tubelet_sync_scan_seed = stage_selection_payload["tubelet_sync_scan_seed"]
         final_stage_selection_payload = stage_selection_payload
         stage_summaries.append(
             {
@@ -536,6 +540,9 @@ def _run_staged_mechanism_calibration(
                 ),
                 "selected_tubelet_sync_candidate": stage_selection_payload.get(
                     "selected_tubelet_sync_candidate"
+                ),
+                "tubelet_sync_scan_seed": stage_selection_payload.get(
+                    "tubelet_sync_scan_seed"
                 ),
                 "selection_completion_status": stage_selection_payload.get(
                     "selection_completion_status"
@@ -926,9 +933,10 @@ def _read_search_stages(grid_config: dict[str, Any]) -> list[dict[str, Any]]:
         if candidate_source is not None and candidate_source not in {
             "selected_tubelet_only_candidate",
             "selected_tubelet_sync_candidate",
+            "tubelet_sync_scan_seed",
         }:
             raise ValueError(
-                "search stage candidate_source must be one of: selected_tubelet_only_candidate, selected_tubelet_sync_candidate"
+                "search stage candidate_source must be one of: selected_tubelet_only_candidate, selected_tubelet_sync_candidate, tubelet_sync_scan_seed"
             )
         normalized_stage_payload = copy.deepcopy(stage_payload)
         if candidate_source is not None:
@@ -977,6 +985,7 @@ def _resolve_stage_seed_candidate(
     *,
     selected_tubelet_only_candidate: dict[str, Any] | None,
     selected_tubelet_sync_candidate: dict[str, Any] | None,
+    tubelet_sync_scan_seed: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     selection_scope = str(stage_config["selection_scope"])
     if selection_scope == "tubelet_only":
@@ -988,9 +997,150 @@ def _resolve_stage_seed_candidate(
         if selected_tubelet_only_candidate is None:
             raise ValueError("tubelet_sync search stage requires a selected tubelet-only candidate")
         return selected_tubelet_only_candidate
+    if candidate_source == "tubelet_sync_scan_seed":
+        if tubelet_sync_scan_seed is None:
+            raise ValueError("tubelet_sync refinement stage requires tubelet_sync_scan_seed")
+        return _build_stage_seed_candidate_from_sync_scan_seed(tubelet_sync_scan_seed)
     if selected_tubelet_sync_candidate is None:
         raise ValueError("tubelet_sync refinement stage requires a selected tubelet-sync candidate")
     return selected_tubelet_sync_candidate
+
+
+def _build_stage_seed_candidate_from_sync_scan_seed(
+    tubelet_sync_scan_seed: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(tubelet_sync_scan_seed, dict):
+        raise TypeError("tubelet_sync_scan_seed must be a dictionary")
+
+    seed_method_config = tubelet_sync_scan_seed.get("seed_method_config")
+    if not isinstance(seed_method_config, dict):
+        raise ValueError("tubelet_sync_scan_seed.seed_method_config must be a dictionary")
+    parameter_scan = tubelet_sync_scan_seed.get("parameter_scan")
+    if not isinstance(parameter_scan, dict):
+        raise ValueError("tubelet_sync_scan_seed.parameter_scan must be a dictionary")
+
+    tubelet_partition = seed_method_config.get("tubelet_partition")
+    if not isinstance(tubelet_partition, dict):
+        raise ValueError(
+            "tubelet_sync_scan_seed.seed_method_config.tubelet_partition must be a dictionary"
+        )
+    spatial_patch_size = tubelet_partition.get("spatial_patch_size")
+    if (
+        not isinstance(spatial_patch_size, list)
+        or len(spatial_patch_size) != 2
+        or not all(isinstance(size, int) and size > 0 for size in spatial_patch_size)
+    ):
+        raise ValueError(
+            "tubelet_sync_scan_seed.seed_method_config.tubelet_partition.spatial_patch_size must contain two positive integers"
+        )
+    tubelet_length = seed_method_config.get("tubelet_length")
+    if not isinstance(tubelet_length, int) or tubelet_length < 1:
+        raise ValueError(
+            "tubelet_sync_scan_seed.seed_method_config.tubelet_length must be a positive integer"
+        )
+    score_calibration = seed_method_config.get("score_calibration")
+    if not isinstance(score_calibration, dict):
+        raise ValueError(
+            "tubelet_sync_scan_seed.seed_method_config.score_calibration must be a dictionary"
+        )
+    support_weight = score_calibration.get("embedding_projection_support_weight")
+    if not isinstance(support_weight, (int, float)):
+        raise ValueError(
+            "tubelet_sync_scan_seed.seed_method_config.score_calibration.embedding_projection_support_weight must be numeric"
+        )
+
+    sync_search_radius = _resolve_sync_scan_seed_first_integer(
+        parameter_scan,
+        "sync_search_radius",
+    )
+    return {
+        "base_method_variant": str(
+            tubelet_sync_scan_seed.get("base_method_variant", "tubelet_sync")
+        ),
+        "method_variant": str(
+            tubelet_sync_scan_seed.get("recommended_method_variant", "tubelet_sync")
+        ),
+        "tubelet_length": int(tubelet_length),
+        "tubelet_partition": {
+            "spatial_patch_size": [
+                int(spatial_patch_size[0]),
+                int(spatial_patch_size[1]),
+            ],
+        },
+        "score_calibration": {
+            "embedding_projection_support_weight": round(float(support_weight), 6),
+        },
+        "fusion_rule": _resolve_sync_scan_seed_first_string(parameter_scan, "fusion_rule"),
+        "lambda_sync": _resolve_sync_scan_seed_first_numeric(parameter_scan, "lambda_sync"),
+        "sync_search": {
+            "offset_search_min": -int(sync_search_radius),
+            "offset_search_max": int(sync_search_radius),
+            "min_sync_positive_margin": _resolve_sync_scan_seed_first_numeric(
+                parameter_scan,
+                "min_sync_positive_margin",
+            ),
+            "min_sync_alignment_coverage_ratio": _resolve_sync_scan_seed_first_numeric(
+                parameter_scan,
+                "min_sync_alignment_coverage_ratio",
+            ),
+            "min_sync_alignment_matched_count": _resolve_sync_scan_seed_first_integer(
+                parameter_scan,
+                "min_sync_alignment_matched_count",
+            ),
+            "min_sync_candidate_score": _resolve_sync_scan_seed_first_numeric(
+                parameter_scan,
+                "min_sync_candidate_score",
+            ),
+        },
+    }
+
+
+def _resolve_sync_scan_seed_first_value(
+    parameter_scan: dict[str, Any],
+    field_name: str,
+) -> Any:
+    field_value = parameter_scan.get(field_name)
+    if not isinstance(field_value, list) or not field_value:
+        raise ValueError(
+            f"tubelet_sync_scan_seed.parameter_scan.{field_name} must be a non-empty list"
+        )
+    return field_value[0]
+
+
+def _resolve_sync_scan_seed_first_string(
+    parameter_scan: dict[str, Any],
+    field_name: str,
+) -> str:
+    field_value = _resolve_sync_scan_seed_first_value(parameter_scan, field_name)
+    if not isinstance(field_value, str) or not field_value:
+        raise ValueError(
+            f"tubelet_sync_scan_seed.parameter_scan.{field_name}[0] must be a non-empty string"
+        )
+    return str(field_value)
+
+
+def _resolve_sync_scan_seed_first_numeric(
+    parameter_scan: dict[str, Any],
+    field_name: str,
+) -> float:
+    field_value = _resolve_sync_scan_seed_first_value(parameter_scan, field_name)
+    if not isinstance(field_value, (int, float)):
+        raise ValueError(
+            f"tubelet_sync_scan_seed.parameter_scan.{field_name}[0] must be numeric"
+        )
+    return round(float(field_value), 6)
+
+
+def _resolve_sync_scan_seed_first_integer(
+    parameter_scan: dict[str, Any],
+    field_name: str,
+) -> int:
+    field_value = _resolve_sync_scan_seed_first_value(parameter_scan, field_name)
+    if not isinstance(field_value, int):
+        raise ValueError(
+            f"tubelet_sync_scan_seed.parameter_scan.{field_name}[0] must be an integer"
+        )
+    return int(field_value)
 
 
 def _build_stage_generated_method_configs(

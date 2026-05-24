@@ -127,7 +127,7 @@
     {
       "stage_name": "sync_refine_scan",
       "selection_scope": "tubelet_sync",
-      "candidate_source": "selected_tubelet_sync_candidate",
+      "candidate_source": "tubelet_sync_scan_seed",
       "include_frame_prc_baseline": false,
       "top_candidate_limit": 8,
       "grid": {
