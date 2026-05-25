@@ -1113,12 +1113,10 @@ class RealVideoVaeLatentRunner:
                 input_latent_digest=working_sample.latent_tensor_digest_random,
                 attack_params=materialized_attack_params,
             )
-            attacked_video_relpath = (
-                Path("artifacts")
-                / "videos"
-                / "attacked"
-                / event_plan_entry.attack_name
-                / f"{attack_artifact_digest}{video_artifact_suffix}"
+            attacked_video_relpath = self._build_attacked_video_artifact_relpath(
+                attack_name=event_plan_entry.attack_name,
+                artifact_digest=attack_artifact_digest,
+                video_artifact_suffix=video_artifact_suffix,
             )
             if event_plan_entry.attack_name == "no_attack":
                 attacked_video_metadata = decoded_video_metadata
@@ -1186,12 +1184,9 @@ class RealVideoVaeLatentRunner:
                             output_root / attacked_video_metadata["video_relpath"],
                         )
 
-            reencoded_latent_relpath = (
-                Path("artifacts")
-                / "latents"
-                / "reencoded"
-                / event_plan_entry.attack_name
-                / f"{attack_artifact_digest}.npy"
+            reencoded_latent_relpath = self._build_reencoded_latent_artifact_relpath(
+                attack_name=event_plan_entry.attack_name,
+                artifact_digest=attack_artifact_digest,
             )
             with self._runner_substage(
                 "runner_reencode_latent",
@@ -1503,19 +1498,14 @@ class RealVideoVaeLatentRunner:
                 input_latent_digest=working_sample.latent_tensor_digest_random,
                 attack_params=materialized_attack_params,
             )
-            attacked_video_relpath = (
-                Path("artifacts")
-                / "videos"
-                / "attacked"
-                / event_plan_entry.attack_name
-                / f"{attack_artifact_digest}{video_artifact_suffix}"
+            attacked_video_relpath = self._build_attacked_video_artifact_relpath(
+                attack_name=event_plan_entry.attack_name,
+                artifact_digest=attack_artifact_digest,
+                video_artifact_suffix=video_artifact_suffix,
             )
-            reencoded_latent_relpath = (
-                Path("artifacts")
-                / "latents"
-                / "reencoded"
-                / event_plan_entry.attack_name
-                / f"{attack_artifact_digest}.npy"
+            reencoded_latent_relpath = self._build_reencoded_latent_artifact_relpath(
+                attack_name=event_plan_entry.attack_name,
+                artifact_digest=attack_artifact_digest,
             )
             contexts.append(
                 EventRuntimeContext(
@@ -2289,7 +2279,7 @@ class RealVideoVaeLatentRunner:
                 else method_variant
             )
         return (
-            Path("artifacts")
+            self._artifact_relpath_prefix()
             / "videos"
             / "decoded"
             / artifact_scope
@@ -2316,12 +2306,50 @@ class RealVideoVaeLatentRunner:
         artifact_digest: str,
     ) -> Path:
         return (
-            Path("artifacts")
+            self._artifact_relpath_prefix()
             / "latents"
             / "watermarked"
             / "positive_shared"
             / f"{artifact_digest}.npy"
         )
+
+    def _build_attacked_video_artifact_relpath(
+        self,
+        *,
+        attack_name: str,
+        artifact_digest: str,
+        video_artifact_suffix: str,
+    ) -> Path:
+        return (
+            self._artifact_relpath_prefix()
+            / "videos"
+            / "attacked"
+            / attack_name
+            / f"{artifact_digest}{video_artifact_suffix}"
+        )
+
+    def _build_reencoded_latent_artifact_relpath(
+        self,
+        *,
+        attack_name: str,
+        artifact_digest: str,
+    ) -> Path:
+        return (
+            self._artifact_relpath_prefix()
+            / "latents"
+            / "reencoded"
+            / attack_name
+            / f"{artifact_digest}.npy"
+        )
+
+    def _artifact_relpath_prefix(self) -> Path:
+        raw_prefix = self._runtime_config_overrides.get("artifact_relpath_prefix", "artifacts")
+        if not isinstance(raw_prefix, str) or not raw_prefix.strip():
+            raise ValueError("artifact_relpath_prefix must be a non-empty relative path string")
+        artifact_prefix = Path(raw_prefix)
+        if artifact_prefix.is_absolute():
+            raise ValueError("artifact_relpath_prefix must be relative")
+        return artifact_prefix
 
     def _build_attack_case_artifact_digest(
         self,

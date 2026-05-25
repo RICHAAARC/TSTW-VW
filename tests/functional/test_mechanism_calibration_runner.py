@@ -298,6 +298,7 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     assert runtime_payload["quality_metrics"]["enabled_sample_roles"] == ["watermarked_positive"]
     assert runtime_payload["temporal_metrics"]["enable_temporal_metrics"] is False
     assert runtime_payload["temporal_metrics"]["enable_motion_consistency"] is False
+    assert runtime_payload["artifact_relpath_prefix"] == "../../artifacts/stage_runtime_shared_artifacts"
 
     stage_summaries = summary["search_stage_summaries"]
     anchor_ablation_payload = json.loads(

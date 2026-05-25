@@ -1036,6 +1036,77 @@ def test_watermarked_latent_copy_uses_source_sample_scope_by_default() -> None:
 
 
 @pytest.mark.unit
+def test_runner_artifact_relpath_prefix_redirects_runtime_artifacts() -> None:
+    """Validate runtime artifacts can be redirected to a shared stage-relative prefix.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    runner._runtime_config_overrides = {
+        "artifact_relpath_prefix": "../../artifacts/stage_runtime_shared_artifacts"
+    }
+
+    assert runner._build_decoded_video_artifact_relpath(
+        sample_role="attacked_positive",
+        method_variant="tubelet_sync",
+        artifact_digest="decoded_digest",
+        video_artifact_suffix=".mp4",
+    ) == (
+        Path("..")
+        / ".."
+        / "artifacts"
+        / "stage_runtime_shared_artifacts"
+        / "videos"
+        / "decoded"
+        / "tubelet_sync"
+        / "decoded_digest.mp4"
+    )
+    assert runner._build_watermarked_latent_artifact_relpath(
+        artifact_digest="watermarked_digest",
+    ) == (
+        Path("..")
+        / ".."
+        / "artifacts"
+        / "stage_runtime_shared_artifacts"
+        / "latents"
+        / "watermarked"
+        / "positive_shared"
+        / "watermarked_digest.npy"
+    )
+    assert runner._build_attacked_video_artifact_relpath(
+        attack_name="local_clip",
+        artifact_digest="attacked_digest",
+        video_artifact_suffix=".mp4",
+    ) == (
+        Path("..")
+        / ".."
+        / "artifacts"
+        / "stage_runtime_shared_artifacts"
+        / "videos"
+        / "attacked"
+        / "local_clip"
+        / "attacked_digest.mp4"
+    )
+    assert runner._build_reencoded_latent_artifact_relpath(
+        attack_name="local_clip",
+        artifact_digest="reencoded_digest",
+    ) == (
+        Path("..")
+        / ".."
+        / "artifacts"
+        / "stage_runtime_shared_artifacts"
+        / "latents"
+        / "reencoded"
+        / "local_clip"
+        / "reencoded_digest.npy"
+    )
+
+
+@pytest.mark.unit
 def test_runner_shares_cross_variant_artifact_cache_only_for_negative_roles() -> None:
     """Validate cross-variant cache reuse remains limited to negative-shared artifacts.
 

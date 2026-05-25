@@ -117,6 +117,11 @@ def run_stage2_mechanism_calibration(
     )
     search_stages = _read_search_stages(grid_config)
     campaign_mode = "staged_search" if search_stages else "flat_grid"
+    stage_shared_artifact_relpath_prefix = (
+        (Path("..") / ".." / "artifacts" / "stage_runtime_shared_artifacts").as_posix()
+        if search_stages
+        else None
+    )
     calibration_timing_root = (
         run_root_path / "artifacts" / "stage2_mechanism_calibration_timing_context"
     )
@@ -137,7 +142,10 @@ def run_stage2_mechanism_calibration(
         )
         calibration_workspace_root.mkdir(parents=True, exist_ok=True)
         _write_json(temp_protocol_config_path, calibration_protocol_config)
-        calibration_runtime_config = _build_calibration_runtime_config(runtime_config_file)
+        calibration_runtime_config = _build_calibration_runtime_config(
+            runtime_config_file,
+            artifact_relpath_prefix=stage_shared_artifact_relpath_prefix,
+        )
         _write_json(temp_runtime_config_path, calibration_runtime_config)
     if search_stages:
         calibration_summary = _run_staged_mechanism_calibration(
@@ -1371,7 +1379,11 @@ def _build_calibration_protocol_config(
     return calibration_protocol_config
 
 
-def _build_calibration_runtime_config(runtime_config_path: Path | None) -> dict[str, Any]:
+def _build_calibration_runtime_config(
+    runtime_config_path: Path | None,
+    *,
+    artifact_relpath_prefix: str | None = None,
+) -> dict[str, Any]:
     runtime_config = {} if runtime_config_path is None else load_json_config(runtime_config_path)
     if not isinstance(runtime_config, dict):
         raise TypeError("runtime_config must be a dictionary")
@@ -1388,6 +1400,8 @@ def _build_calibration_runtime_config(runtime_config_path: Path | None) -> dict[
     temporal_metrics_config["enable_temporal_metrics"] = False
     temporal_metrics_config["enable_motion_consistency"] = False
     calibration_runtime_config["temporal_metrics"] = temporal_metrics_config
+    if artifact_relpath_prefix is not None:
+        calibration_runtime_config["artifact_relpath_prefix"] = str(artifact_relpath_prefix)
     return calibration_runtime_config
 
 

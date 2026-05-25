@@ -218,6 +218,8 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "repository bootstrap failed during git clone." in notebook_text
     assert "git_clone_stdout=" in notebook_text
     assert "git_clone_stderr=" in notebook_text
+    assert "'fetch', '--depth', '1', 'origin', repo_branch" in notebook_text
+    assert "'pull', '--ff-only', 'origin', repo_branch" in notebook_text
     assert "TSTW_WORKFLOW_KEY" in notebook_text
     assert "TSTW_STEP_KEY" in notebook_text
     assert "TSTW_FAMILY_ID_TEMPLATE" in notebook_text
@@ -258,6 +260,8 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "with run_timer.event('real_video_vae_latent_runner'" in notebook_text
     assert "with run_timer.event('table_and_report_rebuild'" in notebook_text
     assert "with run_timer.event('formal_checker'" in notebook_text
+    assert "stage2_calibration_gpu_profile_process = runtime_profile_workflow.start_gpu_runtime_profile(" in notebook_text
+    assert "run_root=STAGE2_MECHANISM_CALIBRATION_RUN_ROOT" in notebook_text
     assert "with run_timer.event('stage2_mechanism_audit'" in notebook_text
     assert "with run_timer.event('stage2_mechanism_calibration'" in notebook_text
     assert "with run_timer.event('audit_bundle_packaging'" in notebook_text
