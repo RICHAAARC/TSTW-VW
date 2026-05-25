@@ -764,6 +764,7 @@ def test_attack_case_artifact_digest_distinguishes_local_clip_variants() -> None
     short_digest = runner._build_attack_case_artifact_digest(
         event_plan_entry=event_plan_entry,
         method_variant="tubelet_sync",
+        input_latent_digest="positive-latent-digest",
         attack_params={
             "clip_start": 8,
             "clip_length": 4,
@@ -776,6 +777,7 @@ def test_attack_case_artifact_digest_distinguishes_local_clip_variants() -> None
     long_digest = runner._build_attack_case_artifact_digest(
         event_plan_entry=event_plan_entry,
         method_variant="tubelet_sync",
+        input_latent_digest="positive-latent-digest",
         attack_params={
             "clip_start": 8,
             "clip_length": 12,
@@ -823,15 +825,61 @@ def test_attack_case_artifact_digest_reuses_negative_artifacts_across_methods() 
     frame_prc_digest = runner._build_attack_case_artifact_digest(
         event_plan_entry=event_plan_entry,
         method_variant="frame_prc",
+        input_latent_digest="negative-latent-digest",
         attack_params=attack_params,
     )
     tubelet_sync_digest = runner._build_attack_case_artifact_digest(
         event_plan_entry=event_plan_entry,
         method_variant="tubelet_sync",
+        input_latent_digest="negative-latent-digest",
         attack_params=attack_params,
     )
 
     assert frame_prc_digest == tubelet_sync_digest
+
+
+@pytest.mark.unit
+def test_attack_case_artifact_digest_shares_positive_artifacts_when_reuse_is_enabled() -> None:
+    """Validate positive attacked artifacts can reuse the same digest when inputs match.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    runner._runtime_config_overrides = {"reuse_attacked_videos": True}
+    event_plan_entry = types.SimpleNamespace(
+        event_id="sample_dev_attacked_positive_000001:local_clip",
+        sample_id="sample_dev_attacked_positive_000001",
+        split="dev",
+        sample_role="attacked_positive",
+        attack_name="local_clip",
+    )
+    attack_params = {
+        "clip_start": 8,
+        "clip_length": 4,
+        "original_frame_count": 32,
+        "observed_frame_count": 4,
+        "ground_truth_offset": -8,
+        "ground_truth_scale": 1.0,
+    }
+
+    first_digest = runner._build_attack_case_artifact_digest(
+        event_plan_entry=event_plan_entry,
+        method_variant="tubelet_sync_calibration_a",
+        input_latent_digest="shared-positive-latent-digest",
+        attack_params=attack_params,
+    )
+    second_digest = runner._build_attack_case_artifact_digest(
+        event_plan_entry=event_plan_entry,
+        method_variant="tubelet_sync_calibration_b",
+        input_latent_digest="shared-positive-latent-digest",
+        attack_params=attack_params,
+    )
+
+    assert first_digest == second_digest
 
 
 @pytest.mark.unit
@@ -904,6 +952,86 @@ def test_decoded_video_artifact_scope_shares_negative_and_keeps_positive_isolate
         / "decoded"
         / "tubelet_sync"
         / f"{positive_tubelet_sync_digest}.mp4"
+    )
+
+
+@pytest.mark.unit
+def test_decoded_video_artifact_scope_shares_positive_artifacts_when_reuse_is_enabled() -> None:
+    """Validate positive decoded artifacts can share scope when reuse is enabled.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    runner._runtime_config_overrides = {"reuse_decoded_videos": True}
+
+    first_digest = runner._build_decoded_video_artifact_digest(
+        source_sample_id="sample_dev_watermarked_positive_000001",
+        source_sample_role="watermarked_positive",
+        sample_role="attacked_positive",
+        split="dev",
+        method_variant="tubelet_sync_calibration_a",
+        latent_digest="shared-positive-latent-digest",
+    )
+    second_digest = runner._build_decoded_video_artifact_digest(
+        source_sample_id="sample_dev_watermarked_positive_000001",
+        source_sample_role="watermarked_positive",
+        sample_role="attacked_positive",
+        split="dev",
+        method_variant="tubelet_sync_calibration_b",
+        latent_digest="shared-positive-latent-digest",
+    )
+
+    assert first_digest == second_digest
+    assert runner._build_decoded_video_artifact_relpath(
+        sample_role="attacked_positive",
+        method_variant="tubelet_sync_calibration_a",
+        artifact_digest=first_digest,
+        video_artifact_suffix=".mp4",
+    ) == (
+        Path("artifacts")
+        / "videos"
+        / "decoded"
+        / "positive_shared"
+        / f"{first_digest}.mp4"
+    )
+
+
+@pytest.mark.unit
+def test_watermarked_latent_copy_uses_source_sample_scope_by_default() -> None:
+    """Validate watermarked latent copies are keyed by source sample scope.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+
+    first_digest = runner._build_watermarked_latent_artifact_digest(
+        source_sample_id="sample_dev_watermarked_positive_000001",
+        source_sample_role="watermarked_positive",
+        latent_digest="shared-positive-latent-digest",
+    )
+    second_digest = runner._build_watermarked_latent_artifact_digest(
+        source_sample_id="sample_dev_watermarked_positive_000001",
+        source_sample_role="watermarked_positive",
+        latent_digest="shared-positive-latent-digest",
+    )
+
+    assert first_digest == second_digest
+    assert runner._build_watermarked_latent_artifact_relpath(
+        artifact_digest=first_digest,
+    ) == (
+        Path("artifacts")
+        / "latents"
+        / "watermarked"
+        / "positive_shared"
+        / f"{first_digest}.npy"
     )
 
 

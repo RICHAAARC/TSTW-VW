@@ -12,7 +12,7 @@
   "shard_count": 1,
   "reuse_encoded_latents": true,
   "reuse_decoded_videos": true,
-  "reuse_attacked_videos": false,
+  "reuse_attacked_videos": true,
   "local_cache_policy": "session_local_prefer_local_runtime",
   "profile_gpu_runtime": true,
   "profile_run_timing": true,
