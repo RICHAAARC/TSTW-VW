@@ -27,6 +27,7 @@ from main.methods.temporal_tubelet_watermark.method import build_method_from_con
 import paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow as workflow_module
 
 from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
+    export_probe_stage2_calibration_family_snapshot,
     merge_probe_method_variant_split_outputs,
     package_probe_non_formal_audit_bundle,
     prepare_probe_runtime_workspace,
@@ -607,6 +608,82 @@ def test_run_probe_stage2_mechanism_calibration_forwards_governed_arguments(
     assert summary["generated_tubelet_sync_candidate_config_path"] == str(
         tmp_path / "tubelet_sync_real_video_vae_candidate.json"
     )
+
+
+@pytest.mark.unit
+def test_export_probe_stage2_calibration_family_snapshot_persists_summary_and_candidate(
+    tmp_path: Path,
+) -> None:
+    """Validate calibration-only notebook runs persist a family snapshot.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    family_root = tmp_path / "families" / "family_a"
+    calibration_run_root = tmp_path / "runs" / "stage2_calibration"
+    artifacts_root = calibration_run_root / "artifacts"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+
+    summary_path = artifacts_root / "stage2_mechanism_calibration_summary.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "selection_completion_status": "incomplete_no_eligible_tubelet_sync_candidate",
+                "selection_blocking_reason": "no_tubelet_sync_candidate_passes_selection_gate",
+                "selected_tubelet_sync_candidate": None,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    candidate_path = artifacts_root / "tubelet_sync_real_video_vae_candidate.json"
+    candidate_path.write_text(
+        json.dumps(
+            {
+                "method_variant": "tubelet_sync_real_video_vae_candidate",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    diagnostics_path = artifacts_root / "selected_candidate_local_clip_sync_diagnostics.csv"
+    diagnostics_path.write_text(
+        "event_id,method_variant\nexample,tubelet_sync_real_video_vae_candidate\n",
+        encoding="utf-8",
+    )
+
+    summary = export_probe_stage2_calibration_family_snapshot(
+        family_root=family_root,
+        calibration_run_root=calibration_run_root,
+        diagnostics_csv_path=diagnostics_path,
+    )
+
+    stage2_family_root = family_root / "stage2_calibration"
+    assert summary["stage2_family_root"] == str(stage2_family_root)
+    assert summary["summary_copy_path"] == str(
+        stage2_family_root / "stage2_mechanism_calibration_summary.json"
+    )
+    assert summary["candidate_copy_path"] == str(
+        stage2_family_root / "tubelet_sync_real_video_vae_candidate.json"
+    )
+    assert summary["diagnostics_copy_path"] == str(
+        stage2_family_root / "selected_candidate_local_clip_sync_diagnostics.csv"
+    )
+    assert summary["selection_completion_status"] == (
+        "incomplete_no_eligible_tubelet_sync_candidate"
+    )
+    assert (stage2_family_root / "stage2_mechanism_calibration_summary.json").exists()
+    assert (stage2_family_root / "tubelet_sync_real_video_vae_candidate.json").exists()
+    assert (stage2_family_root / "selected_candidate_local_clip_sync_diagnostics.csv").exists()
 
 
 @pytest.mark.unit

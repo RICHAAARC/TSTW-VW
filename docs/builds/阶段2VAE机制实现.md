@@ -1704,3 +1704,173 @@ CLIP 应修，但它首先是治理与质量指标修复项，而不是当前首
 再重构 quality / temporal hot path；
 最后再将 LPIPS / CLIP 纳入统一的 batched quality backend。
 ```
+
+---
+
+## 十四、2026-05-26 tl02 controlled validation 更新
+
+本节用于补充 2026-05-26 最新一次 `tl02_controlled_validation` calibration-only 运行的正式判断，并据此更新下一步的修改优先级。
+
+### （一）本次 tl02 运行的正式判断
+
+本次 family 为：
+
+```text
+real_video_vae_latent_probe__formal__davis2017_trainval480p__20260526T012737Z__2e6f6bf
+```
+
+当前已回灌的 calibration 摘要位于：
+
+```text
+G:\我的云端硬盘\TSTW\results\families\real_video_vae_latent_probe__formal__davis2017_trainval480p__20260526T012737Z__2e6f6bf\stage2_calibration\stage2_mechanism_calibration_summary.json
+```
+
+该次运行的关键状态为：
+
+```text
+calibration_completion_status = anchor_only_partial_selection
+selection_completion_status = incomplete_no_eligible_tubelet_sync_candidate
+selection_blocking_reason = no_tubelet_sync_candidate_passes_selection_gate
+search_stage_count = 2
+search_terminated_early = false
+selected_tubelet_only_candidate = tubelet_only_cal_tl02_sp04x04_w025
+selected_tubelet_sync_candidate = null
+```
+
+这说明本次 `tl02` 结果不是“运行中断导致未定”，而是一次已完整执行完既定 2 个搜索阶段后的有效负结果。
+
+其中，当前被选中的 `tubelet_only` anchor 指标为：
+
+```text
+no_attack_clean_negative_fpr = 0.0
+no_attack_clean_positive_tpr = 0.05
+temporal_crop_attacked_positive_tpr = 0.0
+frame_dropping_attacked_positive_tpr = 0.1
+local_clip_attacked_positive_tpr = 0.0
+candidate_selection_status = weak_anchor_with_headroom
+```
+
+而当前 mechanism gate 对 anchor 的关键要求仍是：
+
+```text
+min_no_attack_clean_positive_tpr = 0.5
+```
+
+因此，这次 `tl02` 的主要结论不是“找不到好的 sync 参数”，而是：
+
+```text
+当前 tl02 anchor 本身就没有形成可用的 no_attack 正样本恢复能力；
+在这样的 anchor 上继续做 sync 窄扫，不足以把 tubelet_sync 推到 eligible；
+本次 sync_wide_scan 的 top rows 全部是 controlled but insufficient_signal，而不是 leakage-driven frontier。
+```
+
+当前最靠前的 `tubelet_sync` 窄扫候选虽然保持：
+
+```text
+fpr_controlled = true
+quality_not_collapsed = true
+negative_leakage_status = controlled
+```
+
+但同时仍然满足：
+
+```text
+selected_tubelet_sync_candidate = null
+candidate_selection_status = insufficient_signal
+local_clip_sync_gain = 0.0
+temporal_crop_sync_gain = 0.0
+mean_temporal_sync_gain <= 0.0
+```
+
+据此，当前应将 `tl02` 视为：
+
+```text
+一个已确认的 calibration-only 负结果；
+一个可保留的 regression / forensics 锚点；
+而不是下一轮 formal freeze 的候选方向。
+```
+
+### （二）对前述根因清单的当前状态修正
+
+2026-05-15 审查结论中的若干代码级根因，在当前代码树中已经不再是“未修复状态”。
+
+目前已可确认：
+
+```text
+reference_latent_shape 已在 source sample 的 mechanism_trace 中显式写入；
+attacked sample 与 reencoded sample 路径也已做 setdefault 级别继承；
+sync_rescue_fusion 已将 rescue gain 与 lambda_sync * S_sync 统一挂到 gate_sync；
+sync candidate scoring 已具备 coverage_ratio、matched_count、sync_candidate_score_penalized 与 hybrid search 路径。
+```
+
+对应代码路径包括：
+
+```text
+main/backends/real_video_vae_latent.py
+main/attacks/real_video_attack_registry.py
+experiments/real_video_vae_latent_probe/runner.py
+main/methods/temporal_tubelet_watermark/fusion.py
+main/methods/temporal_tubelet_watermark/evidence.py
+```
+
+这意味着：
+
+```text
+2026-05-15 的“传播链缺失 / 只 gate rescue / 无 coverage penalty”应保留为历史根因说明；
+但它们不再是 2026-05-26 这次 tl02 负结果的第一优先级解释。
+
+```
+
+当前更直接的解释是：
+
+```text
+在现有已修正的 sync 语义下，tl02 的 tubelet_only anchor 仍过弱；
+anchor 无法先把 no_attack positive 拉出有效信号区间，导致 sync 也没有可审计的增益空间；
+因此继续扩大 tl02 的 sync 参数网格，收益会非常低。
+```
+
+### （三）下一步明确修改方向
+
+基于本次运行结果，当前不建议继续把 `tl02` 当作下一轮主要 calibration 候选，也不建议继续扩大 `tl02` 的 sync 网格。
+
+当前更合理的下一步应明确切换为：
+
+```text
+先修 tubelet_only anchor 的 no_attack 正样本信号，再回到 sync。
+```
+
+具体而言，下一步修改方向应优先落在：
+
+```text
+main/methods/temporal_tubelet_watermark/evidence.py
+```
+
+并围绕以下两个局部面展开：
+
+```text
+_build_payload_coded_projections()
+_build_tubelet_score()
+```
+
+目标不是继续调 `lambda_sync`、`sync_search_radius` 或 `min_sync_positive_margin`，而是先回答并修复：
+
+```text
+为什么在当前已修复传播链、已修复 sync gate、已接入 coverage penalty 的前提下，
+tl02 的 tubelet_only anchor 在 dev / calibration 上仍只有 no_attack_clean_positive_tpr = 0.05。
+```
+
+因此，建议按以下顺序推进：
+
+```text
+1. 新增 tubelet_only / no_attack / watermarked_positive 的分布级取证，直接导出 S_tubelet、S_final、embedding support、tubelet_projection_coverage_ratio；
+2. 检查 tl02 下 payload-coded projection 是否整体偏低，或 embedding support 是否被当前 score calibration 抵消；
+3. 仅在 anchor 的 no_attack 正样本信号恢复到可用区间后，再重新评估是否值得继续做 tl02 sync 扫描；
+4. 在此之前，将 tl02 保留为 regression / negative-control，而不是 formal freeze 候选。
+```
+
+当前一句话结论应固定为：
+
+```text
+先不要继续考虑 tl02 作为当前主候选方向；
+下一步先修 tubelet_only anchor 的正样本恢复能力，再决定是否回到 tl02 的 sync 搜索。
+```

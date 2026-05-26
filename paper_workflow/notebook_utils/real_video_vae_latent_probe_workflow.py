@@ -1093,6 +1093,86 @@ def run_probe_stage2_mechanism_calibration(
     )
 
 
+def export_probe_stage2_calibration_family_snapshot(
+    *,
+    family_root: str | Path,
+    calibration_run_root: str | Path,
+    calibration_summary: dict[str, Any] | None = None,
+    diagnostics_csv_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Export a calibration-only stage-two snapshot into the family result root.
+
+    Args:
+        family_root: Family result root used by the notebook workflow.
+        calibration_run_root: Stage-two calibration run root.
+        calibration_summary: Optional in-memory calibration summary payload.
+        diagnostics_csv_path: Optional local-clip diagnostics CSV path.
+
+    Returns:
+        A summary payload describing the emitted family snapshot files.
+
+    Raises:
+        FileNotFoundError: Raised when the calibration summary cannot be resolved.
+    """
+    resolved_family_root = Path(family_root)
+    resolved_run_root = Path(calibration_run_root)
+    stage2_family_root = resolved_family_root / "stage2_calibration"
+    stage2_family_root.mkdir(parents=True, exist_ok=True)
+
+    summary_payload = dict(calibration_summary or {})
+    summary_source_path = Path(
+        summary_payload.get(
+            "calibration_summary_path",
+            resolved_run_root / "artifacts" / "stage2_mechanism_calibration_summary.json",
+        )
+    )
+    summary_copy_path = stage2_family_root / "stage2_mechanism_calibration_summary.json"
+    if summary_source_path.exists():
+        shutil.copy2(summary_source_path, summary_copy_path)
+        if not summary_payload:
+            summary_payload = json.loads(summary_copy_path.read_text(encoding="utf-8"))
+    elif summary_payload:
+        summary_copy_path.write_text(
+            json.dumps(summary_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    else:
+        raise FileNotFoundError(summary_source_path)
+
+    candidate_source_path = Path(
+        summary_payload.get(
+            "generated_tubelet_sync_candidate_config_path",
+            resolved_run_root / "artifacts" / "tubelet_sync_real_video_vae_candidate.json",
+        )
+    )
+    candidate_copy_path = None
+    if candidate_source_path.exists():
+        candidate_copy_path = stage2_family_root / "tubelet_sync_real_video_vae_candidate.json"
+        shutil.copy2(candidate_source_path, candidate_copy_path)
+
+    diagnostics_copy_path = None
+    if diagnostics_csv_path is not None:
+        resolved_diagnostics_path = Path(diagnostics_csv_path)
+        if resolved_diagnostics_path.exists():
+            diagnostics_copy_path = stage2_family_root / resolved_diagnostics_path.name
+            shutil.copy2(resolved_diagnostics_path, diagnostics_copy_path)
+
+    export_summary = {
+        "family_root": str(resolved_family_root),
+        "stage2_family_root": str(stage2_family_root),
+        "calibration_run_root": str(resolved_run_root),
+        "summary_copy_path": str(summary_copy_path),
+        "candidate_copy_path": None if candidate_copy_path is None else str(candidate_copy_path),
+        "diagnostics_copy_path": None if diagnostics_copy_path is None else str(diagnostics_copy_path),
+        "selection_completion_status": summary_payload.get("selection_completion_status"),
+        "selection_blocking_reason": summary_payload.get("selection_blocking_reason"),
+        "selected_tubelet_sync_candidate_present": bool(
+            summary_payload.get("selected_tubelet_sync_candidate")
+        ),
+    }
+    return _json_safe(export_summary)
+
+
 def write_probe_stage2_local_clip_sync_diagnostics(
     *,
     run_root: str | Path,
