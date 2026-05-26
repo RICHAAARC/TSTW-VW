@@ -189,6 +189,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "probe_workflow.check_probe_outputs" in notebook_text
     assert "probe_workflow.run_probe_stage2_mechanism_audit" in notebook_text
     assert "probe_workflow.run_probe_stage2_mechanism_calibration" in notebook_text
+    assert "probe_workflow.write_probe_tubelet_anchor_forensics" in notebook_text
     assert "probe_workflow.package_probe_non_formal_audit_bundle" in notebook_text
     assert "probe_workflow.package_probe_family_results" in notebook_text
     assert "FAMILY_ID_TEMPLATE" in notebook_text
@@ -244,8 +245,12 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TSTW_SAMPLES_PER_ROLE_OVERRIDE" in notebook_text
     assert "TSTW_RUN_MAIN_FORMAL" in notebook_text
     assert "TSTW_PACKAGE_NON_FORMAL_AUDIT_BUNDLE" in notebook_text
+    assert "TSTW_RUN_TUBELET_ANCHOR_FORENSICS" in notebook_text
+    assert "'run_tubelet_anchor_forensics': True" in notebook_text
     assert "'run_stage2_local_clip_sync_forensics': False" in notebook_text
     assert "'package_non_formal_audit_bundle': False" in notebook_text
+    assert "selected_tubelet_anchor_forensics.csv" in notebook_text
+    assert "selected_tubelet_anchor_forensics_summary.json" in notebook_text
     assert "TL02_CONTROLLED_SYNC_WIDE_GRID" in notebook_text
     assert "TL02_CONTROLLED_EMBEDDING_MARGINS = [0.25, 0.4, 0.6]" in notebook_text
     assert "TL02_CONTROLLED_SEARCH_STAGE_NAMES" in notebook_text
@@ -288,6 +293,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "run_root=STAGE2_MECHANISM_CALIBRATION_RUN_ROOT" in notebook_text
     assert "with run_timer.event('stage2_mechanism_audit'" in notebook_text
     assert "with run_timer.event('stage2_mechanism_calibration'" in notebook_text
+    assert "with run_timer.event('tubelet_anchor_forensics'" in notebook_text
     assert "with run_timer.event('audit_bundle_packaging'" in notebook_text
     assert "with run_timer.event('result_packaging'" in notebook_text
     assert "run_main_formal_disabled" in notebook_text
@@ -315,6 +321,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "shard_index=SHARD_INDEX" in notebook_text
     assert "worker_count=WORKER_COUNT" in notebook_text
     assert "lpips_evidence_summary" in notebook_text
+    assert "tubelet_anchor_forensics_summary" in notebook_text
     assert "non_formal_audit_bundle_summary" in notebook_text
     assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
     assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text

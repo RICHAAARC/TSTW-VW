@@ -34,6 +34,7 @@ from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
     run_probe_stage2_mechanism_calibration,
     run_probe_method_variant_splits,
     run_probe_runner,
+    write_probe_tubelet_anchor_forensics,
     write_probe_stage2_local_clip_sync_candidate_surface_forensics,
     write_probe_stage2_local_clip_sync_diagnostics,
     write_probe_runtime_config,
@@ -118,6 +119,66 @@ def _build_local_clip_surface_event_record(
         "latent_backend_status": clipped_sample.latent_backend_status,
         "latent_tensor_digest_random": clipped_sample.latent_tensor_digest_random,
         "latent_generation_seed_random": clipped_sample.latent_generation_seed_random,
+        "mechanism_trace": mechanism_trace,
+    }
+
+
+def _build_tubelet_anchor_event_record(
+    *,
+    stage_run_root: Path,
+    method_config: dict[str, object],
+    sample_id: str,
+    sample_role: str,
+    threshold_record: dict[str, object],
+) -> dict[str, object]:
+    """构造单条 tubelet-only anchor 取证测试记录。
+
+    Args:
+        stage_run_root: 本轮校准 stage 的临时输出根目录。
+        method_config: tubelet-only 方法配置。
+        sample_id: 样本标识。
+        sample_role: 样本角色。
+        threshold_record: 检测时使用的阈值记录。
+
+    Returns:
+        可写入 event_scores.jsonl 的轻量记录。
+    """
+    backend = SyntheticVideoLatentPlaceholder(latent_shape=(16, 4, 16, 16))
+    backend.set_output_root(stage_run_root)
+    base_sample = backend.build_sample(sample_id, "calibration", sample_role)
+    watermark_method = build_method_from_config(method_config)
+    input_sample = (
+        watermark_method.embed(base_sample, {})
+        if sample_role == "watermarked_positive"
+        else base_sample
+    )
+    detection_result = watermark_method.detect(input_sample, threshold_record)
+
+    mechanism_trace = dict(detection_result.mechanism_trace or {})
+    mechanism_trace.update(
+        {
+            "latent_shape": list(input_sample.latent_shape),
+            "latent_artifact_relpath": input_sample.latent_artifact_relpath,
+            "latent_artifact_digest": input_sample.latent_artifact_digest,
+            "reencoded_latent_relpath": input_sample.latent_artifact_relpath,
+            "reencoded_latent_digest": input_sample.latent_artifact_digest,
+        }
+    )
+    return {
+        "event_id": f"{method_config['method_variant']}:{sample_id}:no_attack",
+        "sample_id": sample_id,
+        "split": input_sample.split,
+        "sample_role": sample_role,
+        "method_variant": method_config["method_variant"],
+        "attack_name": "no_attack",
+        "attack_params": {},
+        "threshold_id": threshold_record["threshold_id"],
+        "decision": detection_result.decision,
+        "evidence_scores": detection_result.evidence_scores,
+        "latent_backend_name": input_sample.latent_backend_name,
+        "latent_backend_status": input_sample.latent_backend_status,
+        "latent_tensor_digest_random": input_sample.latent_tensor_digest_random,
+        "latent_generation_seed_random": input_sample.latent_generation_seed_random,
         "mechanism_trace": mechanism_trace,
     }
 
@@ -660,11 +721,25 @@ def test_export_probe_stage2_calibration_family_snapshot_persists_summary_and_ca
         "event_id,method_variant\nexample,tubelet_sync_real_video_vae_candidate\n",
         encoding="utf-8",
     )
+    anchor_forensics_csv_path = artifacts_root / "selected_tubelet_anchor_forensics.csv"
+    anchor_forensics_csv_path.write_text(
+        "event_id,method_variant\nanchor,tubelet_only_cal_tl02_sp04x04_w025\n",
+        encoding="utf-8",
+    )
+    anchor_forensics_summary_path = (
+        artifacts_root / "selected_tubelet_anchor_forensics_summary.json"
+    )
+    anchor_forensics_summary_path.write_text(
+        json.dumps({"record_count": 1}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     summary = export_probe_stage2_calibration_family_snapshot(
         family_root=family_root,
         calibration_run_root=calibration_run_root,
         diagnostics_csv_path=diagnostics_path,
+        anchor_forensics_csv_path=anchor_forensics_csv_path,
+        anchor_forensics_summary_path=anchor_forensics_summary_path,
     )
 
     stage2_family_root = family_root / "stage2_calibration"
@@ -678,12 +753,22 @@ def test_export_probe_stage2_calibration_family_snapshot_persists_summary_and_ca
     assert summary["diagnostics_copy_path"] == str(
         stage2_family_root / "selected_candidate_local_clip_sync_diagnostics.csv"
     )
+    assert summary["anchor_forensics_csv_copy_path"] == str(
+        stage2_family_root / "selected_tubelet_anchor_forensics.csv"
+    )
+    assert summary["anchor_forensics_summary_copy_path"] == str(
+        stage2_family_root / "selected_tubelet_anchor_forensics_summary.json"
+    )
     assert summary["selection_completion_status"] == (
         "incomplete_no_eligible_tubelet_sync_candidate"
     )
     assert (stage2_family_root / "stage2_mechanism_calibration_summary.json").exists()
     assert (stage2_family_root / "tubelet_sync_real_video_vae_candidate.json").exists()
     assert (stage2_family_root / "selected_candidate_local_clip_sync_diagnostics.csv").exists()
+    assert (stage2_family_root / "selected_tubelet_anchor_forensics.csv").exists()
+    assert (
+        stage2_family_root / "selected_tubelet_anchor_forensics_summary.json"
+    ).exists()
 
 
 @pytest.mark.unit
@@ -738,6 +823,171 @@ def test_export_probe_stage2_calibration_family_snapshot_skips_missing_candidate
     assert summary["selected_tubelet_sync_candidate_present"] is False
     assert (stage2_family_root / "stage2_mechanism_calibration_summary.json").exists()
     assert not (stage2_family_root / "tubelet_sync_real_video_vae_candidate.json").exists()
+
+
+@pytest.mark.unit
+def test_write_probe_tubelet_anchor_forensics_exports_selected_anchor_rows(
+    tmp_path: Path,
+) -> None:
+    """验证 tubelet-only anchor 取证表可从校准记录中重建。
+
+    Args:
+        tmp_path: 临时输出根目录。
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "calibration_run"
+    artifacts_root = run_root / "artifacts"
+    stage_run_root = run_root / "stages" / "anchor_tubelet_only_wide"
+    records_root = stage_run_root / "records"
+    thresholds_root = stage_run_root / "thresholds"
+    method_config_root = tmp_path / "workspace" / "method_configs"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    records_root.mkdir(parents=True, exist_ok=True)
+    thresholds_root.mkdir(parents=True, exist_ok=True)
+    method_config_root.mkdir(parents=True, exist_ok=True)
+
+    method_variant = "tubelet_only_cal_tl02_sp04x04_w025"
+    method_config = {
+        "method_family": "temporal_tubelet_watermark",
+        "method_variant": method_variant,
+        "base_method_variant": "tubelet_only",
+        "method_status": "stage2_mechanism_calibration_candidate",
+        "enable_frame_prc": False,
+        "enable_tubelet": True,
+        "enable_sync": False,
+        "enable_trajectory": False,
+        "tubelet_length": 2,
+        "embedding_margin": 0.25,
+        "tubelet_partition": {"spatial_patch_size": [4, 4]},
+        "score_calibration": {
+            "embedding_projection_support_weight": 0.25,
+        },
+        "sync_search": {
+            "coverage_penalty_enabled": True,
+        },
+        "fusion_rule": "tubelet_score_only",
+    }
+    method_config_path = method_config_root / f"{method_variant}.json"
+    method_config_path.write_text(
+        json.dumps(method_config, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    stage_ablation_config_path = tmp_path / "workspace" / "anchor_ablation_config.json"
+    stage_ablation_config_path.write_text(
+        json.dumps(
+            {
+                "method_config_paths": {
+                    method_variant: str(method_config_path),
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    threshold_record = {
+        "threshold_id": "threshold:tubelet_anchor",
+        "method_variant": method_variant,
+        "score_name": "S_final",
+        "threshold_value": 0.0,
+    }
+    (thresholds_root / "thresholds.json").write_text(
+        json.dumps([threshold_record], ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    event_records = [
+        _build_tubelet_anchor_event_record(
+            stage_run_root=stage_run_root,
+            method_config=method_config,
+            sample_id="sample_anchor_positive_000001",
+            sample_role="watermarked_positive",
+            threshold_record=threshold_record,
+        ),
+        _build_tubelet_anchor_event_record(
+            stage_run_root=stage_run_root,
+            method_config=method_config,
+            sample_id="sample_anchor_negative_000002",
+            sample_role="clean_negative",
+            threshold_record=threshold_record,
+        ),
+    ]
+    (records_root / "event_scores.jsonl").write_text(
+        "".join(
+            json.dumps(record, ensure_ascii=False) + "\n" for record in event_records
+        ),
+        encoding="utf-8",
+    )
+    (artifacts_root / "stage2_mechanism_calibration_summary.json").write_text(
+        json.dumps(
+            {
+                "selected_tubelet_only_candidate": {
+                    "method_variant": method_variant,
+                },
+                "search_stage_summaries": [
+                    {
+                        "stage_name": "anchor_tubelet_only_wide",
+                        "selection_scope": "tubelet_only",
+                        "run_root": str(stage_run_root),
+                        "ablation_config_path": str(stage_ablation_config_path),
+                        "selected_tubelet_only_candidate": {
+                            "method_variant": method_variant,
+                        },
+                        "top_tubelet_only_candidates": [
+                            {
+                                "method_variant": method_variant,
+                            },
+                        ],
+                    },
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = write_probe_tubelet_anchor_forensics(run_root=run_root)
+
+    assert summary["selected_stage_name"] == "anchor_tubelet_only_wide"
+    assert summary["selected_method_variant"] == method_variant
+    assert summary["record_count"] == 2
+    assert summary["sample_roles"] == ["clean_negative", "watermarked_positive"]
+    assert Path(summary["output_csv_path"]).exists()
+    assert Path(summary["output_summary_path"]).exists()
+
+    with Path(summary["output_csv_path"]).open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert {row["sample_role"] for row in rows} == {
+        "clean_negative",
+        "watermarked_positive",
+    }
+    required_columns = {
+        "payload_projection_mean",
+        "tubelet_projection_coverage_ratio",
+        "embedding_support_score",
+        "threshold_margin",
+        "recomputed_delta_vs_recorded_S_tubelet",
+        "payload_coded_projection_digest",
+    }
+    assert required_columns.issubset(rows[0].keys())
+    assert all(
+        abs(float(row["recomputed_delta_vs_recorded_S_tubelet"])) <= 1e-6
+        for row in rows
+    )
+
+    summary_payload = json.loads(
+        Path(summary["output_summary_path"]).read_text(encoding="utf-8")
+    )
+    assert summary_payload["record_count"] == 2
+    assert len(summary_payload["decision_rate_by_role_attack"]) == 2
+    assert summary_payload["lowest_positive_margin_records"][0]["sample_role"] == (
+        "watermarked_positive"
+    )
 
 
 @pytest.mark.unit
@@ -1550,6 +1800,22 @@ def test_package_probe_non_formal_audit_bundle_persists_selected_audit_files(
         json.dumps({"surface_event_count": 1}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    anchor_forensics_csv_path = (
+        calibration_run_root / "artifacts" / "selected_tubelet_anchor_forensics.csv"
+    )
+    anchor_forensics_csv_path.write_text(
+        "event_id,method_variant\nanchor_event,tubelet_only_cal_tl02_sp04x04_w025\n",
+        encoding="utf-8",
+    )
+    anchor_forensics_summary_path = (
+        calibration_run_root
+        / "artifacts"
+        / "selected_tubelet_anchor_forensics_summary.json"
+    )
+    anchor_forensics_summary_path.write_text(
+        json.dumps({"record_count": 1}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     protocol_config_path = calibration_run_root / "artifacts" / "protocol_config.json"
     protocol_config_path.write_text(
         json.dumps({"splits": ["dev", "calibration"]}, ensure_ascii=False, indent=2) + "\n",
@@ -1694,6 +1960,14 @@ def test_package_probe_non_formal_audit_bundle_persists_selected_audit_files(
     )
     assert (
         "calibration_run/artifacts/selected_candidate_local_clip_sync_candidate_surface_summary.json"
+        in archive_names
+    )
+    assert (
+        "calibration_run/artifacts/selected_tubelet_anchor_forensics.csv"
+        in archive_names
+    )
+    assert (
+        "calibration_run/artifacts/selected_tubelet_anchor_forensics_summary.json"
         in archive_names
     )
     assert "selected_stage/records/event_scores.jsonl" in archive_names

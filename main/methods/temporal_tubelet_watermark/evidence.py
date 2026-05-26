@@ -435,6 +435,67 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             "ranking_summaries": ranking_summaries,
         }
 
+    def build_tubelet_anchor_forensics(self, sample: LatentSample) -> dict[str, object]:
+        """功能：重建单个样本的 tubelet-only anchor 打分分解以供离线取证。
+
+        Args:
+            sample: 携带持久化 latent artifact 的输入样本。
+
+        Returns:
+            包含 payload-coded projection 分布、coverage、embedding support 与
+            S_tubelet 分解项的取证负载。
+        """
+        if not isinstance(sample, LatentSample):
+            raise TypeError("sample must be a LatentSample instance")
+        if sample.latent_artifact_path is None:
+            raise ValueError("sample must carry latent_artifact_path")
+
+        tensor_artifact = read_float_tensor_npy(sample.latent_artifact_path)
+        partition_config = build_partition_config_from_method_config(self._method_config)
+        descriptors = build_tubelet_descriptors(sample.latent_shape, partition_config)
+        (
+            payload_coded_projections,
+            codebook,
+            _reference_descriptor_map,
+            reference_shape_trace,
+        ) = self._build_payload_coded_projections(
+            sample,
+            tensor_artifact,
+            descriptors,
+            partition_config,
+        )
+        embedding_support = self._resolve_embedding_support(sample)
+        attack_strength = self._resolve_attack_strength(sample)
+        coverage_ratio = float(reference_shape_trace["tubelet_projection_coverage_ratio"])
+        score_components = self._build_tubelet_score_components(
+            payload_coded_projections,
+            embedding_support,
+            attack_strength,
+            coverage_ratio,
+            apply_coverage_penalty=True,
+        )
+        projection_stats = self._build_payload_projection_stats(
+            payload_coded_projections
+        )
+
+        return {
+            "method_variant": self._method_variant,
+            "tubelet_length": partition_config.tubelet_length,
+            "spatial_patch_size": list(partition_config.spatial_patch_size),
+            "partition_digest": compute_tubelet_partition_digest(
+                sample.latent_shape,
+                partition_config,
+            ),
+            "codebook_digest": codebook.codebook_digest,
+            "payload_digest": codebook.payload_digest,
+            "payload_coded_projection_digest": compute_object_digest(
+                [round(float(value), 6) for value in payload_coded_projections]
+            ),
+            **reference_shape_trace,
+            **projection_stats,
+            **score_components,
+        }
+
     def _build_payload_coded_projections(
         self,
         sample: LatentSample,
@@ -984,15 +1045,88 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         *,
         apply_coverage_penalty: bool,
     ) -> float:
+        return float(
+            self._build_tubelet_score_components(
+                aligned_tubelet_projections,
+                embedding_support,
+                attack_strength,
+                coverage_ratio,
+                apply_coverage_penalty=apply_coverage_penalty,
+            )["S_tubelet_recomputed"]
+        )
+
+    def _build_tubelet_score_components(
+        self,
+        aligned_tubelet_projections: list[float],
+        embedding_support: float,
+        attack_strength: float,
+        coverage_ratio: float,
+        *,
+        apply_coverage_penalty: bool,
+    ) -> dict[str, float | bool]:
         del attack_strength
         base_score = sum(aligned_tubelet_projections) / len(aligned_tubelet_projections)
+        coverage_multiplier = 1.0
         if apply_coverage_penalty and self._coverage_penalty_enabled() and base_score > 0.0:
-            base_score *= max(0.0, min(1.0, float(coverage_ratio)))
+            coverage_multiplier = max(0.0, min(1.0, float(coverage_ratio)))
+        base_score_after_coverage = base_score * coverage_multiplier
         projection_support_weight = self._resolve_score_calibration_value(
             "embedding_projection_support_weight",
         )
         support_score = float(embedding_support) * projection_support_weight
-        return self._clip_score(base_score + support_score)
+        return {
+            "tubelet_score_base_before_coverage": round(float(base_score), 6),
+            "tubelet_score_coverage_multiplier": round(float(coverage_multiplier), 6),
+            "tubelet_score_base_after_coverage": round(
+                float(base_score_after_coverage),
+                6,
+            ),
+            "embedding_support": round(float(embedding_support), 6),
+            "embedding_projection_support_weight": round(
+                float(projection_support_weight),
+                6,
+            ),
+            "embedding_support_score": round(float(support_score), 6),
+            "tubelet_score_coverage_penalty_applied": bool(
+                apply_coverage_penalty
+                and self._coverage_penalty_enabled()
+                and base_score > 0.0
+            ),
+            "S_tubelet_recomputed": self._clip_score(
+                base_score_after_coverage + support_score
+            ),
+        }
+
+    def _build_payload_projection_stats(
+        self,
+        payload_coded_projections: list[float],
+    ) -> dict[str, float | int]:
+        sorted_projections = sorted(float(value) for value in payload_coded_projections)
+        projection_count = len(sorted_projections)
+        positive_count = sum(1 for value in sorted_projections if value > 0.0)
+        negative_count = sum(1 for value in sorted_projections if value < 0.0)
+        zero_count = projection_count - positive_count - negative_count
+        return {
+            "payload_projection_count": projection_count,
+            "payload_projection_mean": round(
+                sum(sorted_projections) / projection_count,
+                6,
+            ),
+            "payload_projection_median": round(float(median(sorted_projections)), 6),
+            "payload_projection_min": round(float(sorted_projections[0]), 6),
+            "payload_projection_max": round(float(sorted_projections[-1]), 6),
+            "payload_projection_positive_count": positive_count,
+            "payload_projection_negative_count": negative_count,
+            "payload_projection_zero_count": zero_count,
+            "payload_projection_positive_fraction": round(
+                float(positive_count) / float(projection_count),
+                6,
+            ),
+            "payload_projection_negative_fraction": round(
+                float(negative_count) / float(projection_count),
+                6,
+            ),
+        }
 
     def _resolve_score_calibration_value(self, field_name: str) -> float:
         score_calibration = self._method_config.get("score_calibration", {})

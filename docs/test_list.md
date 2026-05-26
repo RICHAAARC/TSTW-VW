@@ -7,8 +7,8 @@
 - 测试根目录：`tests/`
 - 测试构建约束：`docs/test_case_constraints.md`
 - 当前 pytest 默认参数来自 `pyproject.toml`：`(constraint or unit or quick) and not integration and not smoke and not slow and not formal`
-- 当前全量测试节点：394 个
-- 当前默认会执行的测试节点：327 个
+- 当前全量测试节点：395 个
+- 当前默认会执行的测试节点：328 个
 - 当前默认排除的测试节点：67 个
 
 ## 2. 分层统计
@@ -16,7 +16,7 @@
 | Layer | Files | Nodes | Default role |
 | --- | --- | --- | --- |
 | constraints | 33 | 146 | default governance checks |
-| functional | 39 | 209 | default quick behavior checks |
+| functional | 39 | 210 | default quick behavior checks |
 | integration | 22 | 39 | excluded runner/smoke/formal checks |
 
 ## 3. 推荐执行命令
@@ -81,7 +81,7 @@ python tools/harness/run_all_audits.py
 | `tests/functional/test_real_video_formal_backend_fallback_guard.py` | 1 | functional | `quick`, `unit` | 1 | yes | no | yes | 验证 formal 阶段 2 backend 禁止回退为 synthetic fallback video。 |
 | `tests/functional/test_real_video_mp4_io.py` | 3 | functional | `quick`, `unit` | 3 | yes | yes | yes | 验证真实 mp4 读写与帧标准化工具。 |
 | `tests/functional/test_real_video_probe_runner_profiles.py` | 31 | functional | `quick`, `unit` | 31 | yes | no | yes | 验证 real-video debug profile 的受治理配置解析。 |
-| `tests/functional/test_real_video_probe_workflow.py` | 19 | functional | `quick`, `unit` | 19 | yes | yes | yes | 验证阶段 2 notebook workflow helper 的 manifest handoff 与 session model 语义。 |
+| `tests/functional/test_real_video_probe_workflow.py` | 20 | functional | `quick`, `unit` | 20 | yes | yes | yes | 验证阶段 2 notebook workflow helper 的 manifest handoff 与 session model 语义。 |
 | `tests/functional/test_real_video_vae_latent_backend_uses_mp4_manifest.py` | 1 | functional | `quick`, `unit` | 1 | yes | yes | yes | 验证阶段 2 backend 会使用 manifest 中的 mp4 样本构建 source artifact。 |
 | `tests/functional/test_real_video_vae_latent_progress_watcher.py` | 2 | functional | `quick` | 2 | yes | no | yes | 验证 real-video VAE latent progress watcher 的统计与 stall 检测合同。 |
 | `tests/functional/test_real_video_vae_latent_quality_metrics.py` | 1 | functional | `quick` | 1 | yes | no | yes | 验证阶段 2 scaffold 质量指标负载。File purpose: Validate quality-metrics payloads for the stage-two scaffold. |

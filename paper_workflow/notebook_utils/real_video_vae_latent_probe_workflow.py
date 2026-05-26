@@ -1099,6 +1099,8 @@ def export_probe_stage2_calibration_family_snapshot(
     calibration_run_root: str | Path,
     calibration_summary: dict[str, Any] | None = None,
     diagnostics_csv_path: str | Path | None = None,
+    anchor_forensics_csv_path: str | Path | None = None,
+    anchor_forensics_summary_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Export a calibration-only stage-two snapshot into the family result root.
 
@@ -1107,6 +1109,8 @@ def export_probe_stage2_calibration_family_snapshot(
         calibration_run_root: Stage-two calibration run root.
         calibration_summary: Optional in-memory calibration summary payload.
         diagnostics_csv_path: Optional local-clip diagnostics CSV path.
+        anchor_forensics_csv_path: 可选的 tubelet anchor 取证 CSV 路径。
+        anchor_forensics_summary_path: 可选的 tubelet anchor 取证摘要路径。
 
     Returns:
         A summary payload describing the emitted family snapshot files.
@@ -1160,6 +1164,30 @@ def export_probe_stage2_calibration_family_snapshot(
             diagnostics_copy_path = stage2_family_root / resolved_diagnostics_path.name
             shutil.copy2(resolved_diagnostics_path, diagnostics_copy_path)
 
+    anchor_forensics_csv_copy_path = None
+    if anchor_forensics_csv_path is not None:
+        resolved_anchor_forensics_csv_path = Path(anchor_forensics_csv_path)
+        if resolved_anchor_forensics_csv_path.exists():
+            anchor_forensics_csv_copy_path = (
+                stage2_family_root / resolved_anchor_forensics_csv_path.name
+            )
+            shutil.copy2(
+                resolved_anchor_forensics_csv_path,
+                anchor_forensics_csv_copy_path,
+            )
+
+    anchor_forensics_summary_copy_path = None
+    if anchor_forensics_summary_path is not None:
+        resolved_anchor_forensics_summary_path = Path(anchor_forensics_summary_path)
+        if resolved_anchor_forensics_summary_path.exists():
+            anchor_forensics_summary_copy_path = (
+                stage2_family_root / resolved_anchor_forensics_summary_path.name
+            )
+            shutil.copy2(
+                resolved_anchor_forensics_summary_path,
+                anchor_forensics_summary_copy_path,
+            )
+
     export_summary = {
         "family_root": str(resolved_family_root),
         "stage2_family_root": str(stage2_family_root),
@@ -1167,6 +1195,16 @@ def export_probe_stage2_calibration_family_snapshot(
         "summary_copy_path": str(summary_copy_path),
         "candidate_copy_path": None if candidate_copy_path is None else str(candidate_copy_path),
         "diagnostics_copy_path": None if diagnostics_copy_path is None else str(diagnostics_copy_path),
+        "anchor_forensics_csv_copy_path": (
+            None
+            if anchor_forensics_csv_copy_path is None
+            else str(anchor_forensics_csv_copy_path)
+        ),
+        "anchor_forensics_summary_copy_path": (
+            None
+            if anchor_forensics_summary_copy_path is None
+            else str(anchor_forensics_summary_copy_path)
+        ),
         "selection_completion_status": summary_payload.get("selection_completion_status"),
         "selection_blocking_reason": summary_payload.get("selection_blocking_reason"),
         "selected_tubelet_sync_candidate_present": bool(
@@ -1174,6 +1212,162 @@ def export_probe_stage2_calibration_family_snapshot(
         ),
     }
     return _json_safe(export_summary)
+
+
+def write_probe_tubelet_anchor_forensics(
+    *,
+    run_root: str | Path,
+    calibration_summary: dict[str, Any] | None = None,
+    output_csv_path: str | Path | None = None,
+    output_summary_path: str | Path | None = None,
+    sample_roles: tuple[str, ...] = ("watermarked_positive", "clean_negative"),
+    attack_names: tuple[str, ...] = ("no_attack",),
+) -> dict[str, Any]:
+    """功能：写出 selected tubelet-only anchor 的 no-attack 取证表。
+
+    Args:
+        run_root: Calibration run root。
+        calibration_summary: 可选的内存态 calibration summary 负载。
+        output_csv_path: 可选的 CSV 输出路径覆盖值。
+        output_summary_path: 可选的 JSON 摘要输出路径覆盖值。
+        sample_roles: 需要保留到取证表中的样本角色。
+        attack_names: 需要保留到取证表中的攻击名称。
+
+    Returns:
+        描述 selected anchor、来源记录与取证产物路径的摘要负载。
+    """
+    resolved_run_root = Path(run_root)
+    calibration_summary_path = (
+        resolved_run_root / "artifacts" / "stage2_mechanism_calibration_summary.json"
+    )
+    calibration_summary_payload = _resolve_stage2_mechanism_calibration_summary(
+        calibration_summary=calibration_summary,
+        calibration_summary_path=calibration_summary_path,
+    )
+    selected_candidate = calibration_summary_payload.get("selected_tubelet_only_candidate")
+    if not isinstance(selected_candidate, dict):
+        return _json_safe(
+            {
+                "run_root": resolved_run_root,
+                "calibration_summary_path": calibration_summary_path,
+                "selected_method_variant": None,
+                "selected_stage_name": None,
+                "selected_stage_run_root": None,
+                "event_scores_path": None,
+                "output_csv_path": None,
+                "output_summary_path": None,
+                "record_count": 0,
+                "skipped": True,
+                "skip_reason": "selected_tubelet_only_candidate_missing",
+            }
+        )
+    selected_method_variant = str(selected_candidate.get("method_variant", "")).strip()
+    if not selected_method_variant:
+        raise ValueError("selected_tubelet_only_candidate.method_variant must be available")
+
+    selected_stage_summary = _resolve_selected_tubelet_only_stage_summary(
+        calibration_summary_payload=calibration_summary_payload,
+        selected_method_variant=selected_method_variant,
+    )
+    selected_stage_name = str(selected_stage_summary.get("stage_name", "")).strip()
+    selected_stage_run_root = Path(selected_stage_summary["run_root"])
+    event_scores_path = selected_stage_run_root / "records" / "event_scores.jsonl"
+    if not event_scores_path.exists():
+        raise FileNotFoundError(event_scores_path)
+
+    stage_method_config_paths = _load_stage_method_config_paths(selected_stage_summary)
+    method_config_path = stage_method_config_paths.get(selected_method_variant)
+    if method_config_path is None:
+        raise ValueError(
+            f"no method config path was found for tubelet-only method_variant {selected_method_variant!r}"
+        )
+    method_config_payload = json.loads(method_config_path.read_text(encoding="utf-8"))
+    if not isinstance(method_config_payload, dict):
+        raise ValueError("tubelet anchor method config must contain a JSON object")
+    method_instance = build_method_from_config(method_config_payload)
+    evidence_extractor = getattr(method_instance, "_evidence_extractor", None)
+    if evidence_extractor is None or not hasattr(
+        evidence_extractor,
+        "build_tubelet_anchor_forensics",
+    ):
+        raise ValueError("tubelet anchor method must expose build_tubelet_anchor_forensics")
+
+    candidate_records = _extract_tubelet_anchor_forensics_records(
+        event_scores_path=event_scores_path,
+        selected_method_variant=selected_method_variant,
+        sample_roles=sample_roles,
+        attack_names=attack_names,
+    )
+    if not candidate_records:
+        raise ValueError(
+            "no tubelet anchor forensics records were found for the selected calibration stage"
+        )
+    threshold_records = _load_stage_threshold_records(selected_stage_run_root)
+
+    output_rows: list[dict[str, Any]] = []
+    for record in candidate_records:
+        forensics_sample = _build_tubelet_anchor_forensics_sample(
+            record=record,
+            selected_stage_run_root=selected_stage_run_root,
+        )
+        forensics_payload = evidence_extractor.build_tubelet_anchor_forensics(
+            forensics_sample
+        )
+        threshold_record = _lookup_threshold_record_for_event(
+            record=record,
+            threshold_records=threshold_records,
+        )
+        output_rows.append(
+            _build_tubelet_anchor_forensics_row(
+                record=record,
+                forensics_payload=forensics_payload,
+                threshold_record=threshold_record,
+            )
+        )
+
+    output_csv_file = (
+        Path(output_csv_path)
+        if output_csv_path is not None
+        else resolved_run_root / "artifacts" / "selected_tubelet_anchor_forensics.csv"
+    )
+    output_summary_file = (
+        Path(output_summary_path)
+        if output_summary_path is not None
+        else resolved_run_root
+        / "artifacts"
+        / "selected_tubelet_anchor_forensics_summary.json"
+    )
+    output_csv_file.parent.mkdir(parents=True, exist_ok=True)
+    with output_csv_file.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(output_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(output_rows)
+
+    summary_payload = {
+        "run_root": str(resolved_run_root),
+        "calibration_summary_path": str(calibration_summary_path),
+        "selected_stage_name": selected_stage_name,
+        "selected_stage_run_root": str(selected_stage_run_root),
+        "event_scores_path": str(event_scores_path),
+        "selected_method_variant": selected_method_variant,
+        "method_config_path": str(method_config_path),
+        "output_csv_path": str(output_csv_file),
+        "output_summary_path": str(output_summary_file),
+        "record_count": len(output_rows),
+        "sample_roles": sorted({str(row["sample_role"]) for row in output_rows}),
+        "attack_names": sorted({str(row["attack_name"]) for row in output_rows}),
+        "decision_rate_by_role_attack": _summarize_tubelet_anchor_forensics_rows(
+            output_rows
+        ),
+        "lowest_positive_margin_records": _select_lowest_positive_margin_rows(
+            output_rows
+        ),
+    }
+    output_summary_file.write_text(
+        json.dumps(summary_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return _json_safe(summary_payload)
 
 
 def write_probe_stage2_local_clip_sync_diagnostics(
@@ -1530,6 +1724,57 @@ def _resolve_stage2_mechanism_calibration_summary(
     return summary_payload
 
 
+def _resolve_selected_tubelet_only_stage_summary(
+    *,
+    calibration_summary_payload: dict[str, Any],
+    selected_method_variant: str,
+) -> dict[str, Any]:
+    stage_summaries = calibration_summary_payload.get("search_stage_summaries", [])
+    if not isinstance(stage_summaries, list):
+        raise ValueError("search_stage_summaries must be a list")
+    tubelet_only_stage_summaries = [
+        stage_summary
+        for stage_summary in stage_summaries
+        if isinstance(stage_summary, dict)
+        and str(stage_summary.get("selection_scope", "")).strip() == "tubelet_only"
+    ]
+    if not tubelet_only_stage_summaries:
+        raise ValueError("search_stage_summaries must contain at least one tubelet_only stage")
+
+    for stage_summary in reversed(tubelet_only_stage_summaries):
+        if _stage_summary_references_tubelet_only_method_variant(
+            stage_summary,
+            method_variant=selected_method_variant,
+        ):
+            return stage_summary
+        try:
+            stage_method_config_paths = _load_stage_method_config_paths(stage_summary)
+        except (FileNotFoundError, ValueError):
+            stage_method_config_paths = {}
+        if selected_method_variant in stage_method_config_paths:
+            return stage_summary
+    return tubelet_only_stage_summaries[-1]
+
+
+def _stage_summary_references_tubelet_only_method_variant(
+    stage_summary: dict[str, Any],
+    *,
+    method_variant: str,
+) -> bool:
+    if _candidate_payload_matches_method_variant(
+        stage_summary.get("selected_tubelet_only_candidate"),
+        method_variant=method_variant,
+    ):
+        return True
+    for top_candidate in stage_summary.get("top_tubelet_only_candidates", []):
+        if _candidate_payload_matches_method_variant(
+            top_candidate,
+            method_variant=method_variant,
+        ):
+            return True
+    return False
+
+
 def _resolve_selected_tubelet_sync_stage_summary(
     *,
     calibration_summary_payload: dict[str, Any],
@@ -1685,7 +1930,7 @@ def _load_stage_method_config_paths(
 ) -> dict[str, Path]:
     ablation_config_path_value = str(stage_summary.get("ablation_config_path", "")).strip()
     if not ablation_config_path_value:
-        raise ValueError("tubelet_sync stage summary must include ablation_config_path")
+        raise ValueError("calibration stage summary must include ablation_config_path")
     ablation_config_path = Path(ablation_config_path_value)
     if not ablation_config_path.exists():
         raise FileNotFoundError(ablation_config_path)
@@ -1833,6 +2078,358 @@ def _build_local_clip_sync_surface_output_stem(
     return (
         f"local_clip_sync_candidate_surface__{target_mode}__{normalized_target_value}"
     )
+
+
+def _extract_tubelet_anchor_forensics_records(
+    *,
+    event_scores_path: Path,
+    selected_method_variant: str,
+    sample_roles: tuple[str, ...],
+    attack_names: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    selected_variant = str(selected_method_variant).strip()
+    allowed_sample_roles = {str(sample_role) for sample_role in sample_roles}
+    allowed_attack_names = {str(attack_name) for attack_name in attack_names}
+    records: list[dict[str, Any]] = []
+    with event_scores_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if str(record.get("method_variant", "")).strip() != selected_variant:
+                continue
+            if allowed_sample_roles and str(record.get("sample_role", "")) not in allowed_sample_roles:
+                continue
+            if allowed_attack_names and str(record.get("attack_name", "")) not in allowed_attack_names:
+                continue
+            mechanism_trace = record.get("mechanism_trace", {})
+            if not isinstance(mechanism_trace, dict):
+                continue
+            records.append(record)
+    records.sort(
+        key=lambda record: (
+            str(record.get("split", "")),
+            str(record.get("sample_role", "")),
+            str(record.get("sample_id", "")),
+            str(record.get("event_id", "")),
+        )
+    )
+    return records
+
+
+def _build_tubelet_anchor_forensics_sample(
+    *,
+    record: dict[str, Any],
+    selected_stage_run_root: Path,
+) -> LatentSample:
+    mechanism_trace = record.get("mechanism_trace", {})
+    if not isinstance(mechanism_trace, dict):
+        raise ValueError("tubelet anchor forensics record must include mechanism_trace")
+    latent_relpath = str(
+        mechanism_trace.get("reencoded_latent_relpath")
+        or mechanism_trace.get("latent_artifact_relpath")
+        or ""
+    ).strip()
+    if not latent_relpath:
+        raise ValueError("tubelet anchor forensics record must include latent_artifact_relpath")
+    latent_artifact_path = selected_stage_run_root / Path(latent_relpath)
+    if not latent_artifact_path.exists():
+        raise FileNotFoundError(latent_artifact_path)
+
+    latent_shape = _coerce_local_clip_sync_latent_shape(
+        mechanism_trace.get("latent_shape"),
+        field_name="mechanism_trace.latent_shape",
+    )
+    input_artifact_trace = record.get("input_artifact_trace", {})
+    latent_artifact_digest = str(
+        mechanism_trace.get("reencoded_latent_digest")
+        or mechanism_trace.get("latent_artifact_digest")
+        or (
+            input_artifact_trace.get("artifact_digest")
+            if isinstance(input_artifact_trace, dict)
+            else ""
+        )
+        or ""
+    ).strip()
+    if not latent_artifact_digest:
+        raise ValueError("tubelet anchor forensics record must include latent artifact digest")
+    latent_generation_seed_random = record.get("latent_generation_seed_random")
+    if not isinstance(latent_generation_seed_random, int):
+        raise ValueError(
+            "tubelet anchor forensics record must include latent_generation_seed_random"
+        )
+    attack_params = record.get("attack_params", {})
+    if attack_params is None:
+        attack_params = {}
+    if not isinstance(attack_params, dict):
+        raise ValueError("attack_params must be a dictionary for tubelet anchor forensics")
+
+    return LatentSample(
+        sample_id=_resolve_local_clip_sync_forensics_sample_id(
+            record=record,
+            mechanism_trace=mechanism_trace,
+        ),
+        split=str(record.get("split", "")),
+        sample_role=str(record.get("sample_role", "")),
+        latent_shape=latent_shape,
+        latent_tensor_digest_random=str(
+            record.get("latent_tensor_digest_random") or latent_artifact_digest
+        ),
+        latent_generation_seed_random=latent_generation_seed_random,
+        latent_backend_name=str(record.get("latent_backend_name", "")),
+        latent_backend_status=str(record.get("latent_backend_status", "")),
+        latent_artifact_relpath=latent_relpath,
+        latent_artifact_path=str(latent_artifact_path),
+        latent_artifact_digest=latent_artifact_digest,
+        run_root_path=str(selected_stage_run_root),
+        mechanism_trace=dict(mechanism_trace),
+        applied_attack_params=dict(attack_params),
+    )
+
+
+def _load_stage_threshold_records(stage_run_root: Path) -> list[dict[str, Any]]:
+    threshold_path = stage_run_root / "thresholds" / "thresholds.json"
+    if not threshold_path.exists():
+        return []
+    threshold_payload = json.loads(threshold_path.read_text(encoding="utf-8"))
+    if isinstance(threshold_payload, list):
+        return [
+            threshold_record
+            for threshold_record in threshold_payload
+            if isinstance(threshold_record, dict)
+        ]
+    return []
+
+
+def _lookup_threshold_record_for_event(
+    *,
+    record: dict[str, Any],
+    threshold_records: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    threshold_id = str(record.get("threshold_id") or "").strip()
+    if threshold_id:
+        for threshold_record in threshold_records:
+            if str(threshold_record.get("threshold_id") or "").strip() == threshold_id:
+                return threshold_record
+    record_method_variant = str(record.get("method_variant") or "").strip()
+    for threshold_record in threshold_records:
+        if str(threshold_record.get("method_variant") or "").strip() == record_method_variant:
+            return threshold_record
+    return None
+
+
+def _build_tubelet_anchor_forensics_row(
+    *,
+    record: dict[str, Any],
+    forensics_payload: dict[str, Any],
+    threshold_record: dict[str, Any] | None,
+) -> dict[str, Any]:
+    evidence_scores = record.get("evidence_scores", {})
+    if not isinstance(evidence_scores, dict):
+        evidence_scores = {}
+    mechanism_trace = record.get("mechanism_trace", {})
+    if not isinstance(mechanism_trace, dict):
+        mechanism_trace = {}
+    threshold_score_name = (
+        None
+        if threshold_record is None
+        else str(threshold_record.get("score_name") or "S_final")
+    )
+    threshold_value = (
+        None if threshold_record is None else _safe_float(threshold_record.get("threshold_value"))
+    )
+    threshold_score = _safe_float(
+        evidence_scores.get(threshold_score_name or "S_final")
+    )
+    threshold_margin = (
+        None
+        if threshold_value is None or threshold_score is None
+        else round(float(threshold_score) - float(threshold_value), 6)
+    )
+    recorded_s_tubelet = _safe_float(evidence_scores.get("S_tubelet"))
+    recomputed_s_tubelet = _safe_float(forensics_payload.get("S_tubelet_recomputed"))
+    recomputed_delta = (
+        None
+        if recorded_s_tubelet is None or recomputed_s_tubelet is None
+        else round(float(recomputed_s_tubelet) - float(recorded_s_tubelet), 6)
+    )
+    return {
+        "event_id": str(record.get("event_id", "")),
+        "sample_id": str(record.get("sample_id", "")),
+        "split": str(record.get("split", "")),
+        "sample_role": str(record.get("sample_role", "")),
+        "method_variant": str(record.get("method_variant", "")),
+        "attack_name": str(record.get("attack_name", "")),
+        "decision": bool(record.get("decision", False)),
+        "threshold_id": record.get("threshold_id"),
+        "threshold_score_name": threshold_score_name,
+        "threshold_value": threshold_value,
+        "threshold_score": threshold_score,
+        "threshold_margin": threshold_margin,
+        "recorded_S_tubelet": recorded_s_tubelet,
+        "recorded_S_final": _safe_float(evidence_scores.get("S_final")),
+        "recorded_S_payload_unaligned": _safe_float(
+            mechanism_trace.get("S_payload_unaligned")
+        ),
+        "recorded_S_payload_aligned": _safe_float(
+            mechanism_trace.get("S_payload_aligned")
+        ),
+        "recomputed_S_tubelet": recomputed_s_tubelet,
+        "recomputed_delta_vs_recorded_S_tubelet": recomputed_delta,
+        "tubelet_score_base_before_coverage": forensics_payload.get(
+            "tubelet_score_base_before_coverage"
+        ),
+        "tubelet_score_coverage_multiplier": forensics_payload.get(
+            "tubelet_score_coverage_multiplier"
+        ),
+        "tubelet_score_base_after_coverage": forensics_payload.get(
+            "tubelet_score_base_after_coverage"
+        ),
+        "tubelet_score_coverage_penalty_applied": forensics_payload.get(
+            "tubelet_score_coverage_penalty_applied"
+        ),
+        "embedding_support": forensics_payload.get("embedding_support"),
+        "embedding_projection_support_weight": forensics_payload.get(
+            "embedding_projection_support_weight"
+        ),
+        "embedding_support_score": forensics_payload.get("embedding_support_score"),
+        "payload_projection_count": forensics_payload.get("payload_projection_count"),
+        "payload_projection_mean": forensics_payload.get("payload_projection_mean"),
+        "payload_projection_median": forensics_payload.get("payload_projection_median"),
+        "payload_projection_min": forensics_payload.get("payload_projection_min"),
+        "payload_projection_max": forensics_payload.get("payload_projection_max"),
+        "payload_projection_positive_fraction": forensics_payload.get(
+            "payload_projection_positive_fraction"
+        ),
+        "payload_projection_negative_fraction": forensics_payload.get(
+            "payload_projection_negative_fraction"
+        ),
+        "tubelet_projection_matched_count": forensics_payload.get(
+            "tubelet_projection_matched_count"
+        ),
+        "tubelet_projection_candidate_count": forensics_payload.get(
+            "tubelet_projection_candidate_count"
+        ),
+        "tubelet_projection_coverage_ratio": forensics_payload.get(
+            "tubelet_projection_coverage_ratio"
+        ),
+        "tubelet_coverage_penalty_enabled": forensics_payload.get(
+            "tubelet_coverage_penalty_enabled"
+        ),
+        "reference_latent_shape": json.dumps(
+            forensics_payload.get("reference_latent_shape"),
+            ensure_ascii=False,
+        ),
+        "reference_latent_shape_source": forensics_payload.get(
+            "reference_latent_shape_source"
+        ),
+        "reference_latent_shape_fallback_used": forensics_payload.get(
+            "reference_latent_shape_fallback_used"
+        ),
+        "payload_coded_projection_digest": forensics_payload.get(
+            "payload_coded_projection_digest"
+        ),
+        "codebook_digest": forensics_payload.get("codebook_digest"),
+        "payload_digest": forensics_payload.get("payload_digest"),
+        "latent_artifact_relpath": mechanism_trace.get("reencoded_latent_relpath")
+        or mechanism_trace.get("latent_artifact_relpath"),
+        "latent_artifact_digest": mechanism_trace.get("reencoded_latent_digest")
+        or mechanism_trace.get("latent_artifact_digest"),
+    }
+
+
+def _summarize_tubelet_anchor_forensics_rows(
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    grouped_rows: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        group_key = (str(row["sample_role"]), str(row["attack_name"]))
+        grouped_rows.setdefault(group_key, []).append(row)
+    summaries: list[dict[str, Any]] = []
+    for (sample_role, attack_name), group_rows in sorted(grouped_rows.items()):
+        margins = [
+            _safe_float(row.get("threshold_margin"))
+            for row in group_rows
+            if _safe_float(row.get("threshold_margin")) is not None
+        ]
+        scores = [
+            _safe_float(row.get("recorded_S_final"))
+            for row in group_rows
+            if _safe_float(row.get("recorded_S_final")) is not None
+        ]
+        summaries.append(
+            {
+                "sample_role": sample_role,
+                "attack_name": attack_name,
+                "record_count": len(group_rows),
+                "decision_rate": round(
+                    sum(1 for row in group_rows if bool(row.get("decision")))
+                    / float(len(group_rows)),
+                    6,
+                ),
+                "mean_recorded_S_final": _mean_or_none(scores),
+                "mean_threshold_margin": _mean_or_none(margins),
+                "min_threshold_margin": (
+                    None if not margins else round(float(min(margins)), 6)
+                ),
+            }
+        )
+    return summaries
+
+
+def _select_lowest_positive_margin_rows(
+    rows: list[dict[str, Any]],
+    *,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    positive_rows = [
+        row
+        for row in rows
+        if str(row.get("sample_role")) in {"watermarked_positive", "attacked_positive"}
+    ]
+    ranked_rows = sorted(
+        positive_rows,
+        key=lambda row: (
+            float("inf")
+            if _safe_float(row.get("threshold_margin")) is None
+            else float(_safe_float(row.get("threshold_margin"))),
+            str(row.get("sample_id", "")),
+        ),
+    )
+    return [
+        {
+            "event_id": row.get("event_id"),
+            "sample_id": row.get("sample_id"),
+            "sample_role": row.get("sample_role"),
+            "attack_name": row.get("attack_name"),
+            "decision": row.get("decision"),
+            "threshold_margin": row.get("threshold_margin"),
+            "recorded_S_final": row.get("recorded_S_final"),
+            "recorded_S_tubelet": row.get("recorded_S_tubelet"),
+            "payload_projection_mean": row.get("payload_projection_mean"),
+            "tubelet_projection_coverage_ratio": row.get(
+                "tubelet_projection_coverage_ratio"
+            ),
+            "embedding_support_score": row.get("embedding_support_score"),
+        }
+        for row in ranked_rows[:limit]
+    ]
+
+
+def _mean_or_none(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return round(sum(float(value) for value in values) / float(len(values)), 6)
+
+
+def _safe_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
 
 def _extract_local_clip_sync_diagnostic_rows(
     *,
@@ -2603,6 +3200,28 @@ def _build_non_formal_audit_bundle_entries(
         ),
         archive_prefix=(
             "calibration_run/artifacts/selected_candidate_local_clip_sync_candidate_surface_summary.json"
+        ),
+    )
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=(
+            calibration_run_root
+            / "artifacts"
+            / "selected_tubelet_anchor_forensics.csv"
+        ),
+        archive_prefix="calibration_run/artifacts/selected_tubelet_anchor_forensics.csv",
+    )
+    _append_non_formal_audit_bundle_entries(
+        bundle_entries=bundle_entries,
+        seen_source_paths=seen_source_paths,
+        source_path=(
+            calibration_run_root
+            / "artifacts"
+            / "selected_tubelet_anchor_forensics_summary.json"
+        ),
+        archive_prefix=(
+            "calibration_run/artifacts/selected_tubelet_anchor_forensics_summary.json"
         ),
     )
 
