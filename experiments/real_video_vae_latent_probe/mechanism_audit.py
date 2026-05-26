@@ -1114,7 +1114,8 @@ def _max_attacked_negative_rate(
     method_variants: list[str],
     attack_name: str,
 ) -> float | None:
-    return _mean(
+    """返回同一攻击下各方法 attacked-negative FPR 的最大值。"""
+    return _max_numeric_value(
         [
             _relevant_negative_rate(records, method_variant, attack_name)
             for method_variant in method_variants

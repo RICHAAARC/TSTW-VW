@@ -1344,23 +1344,6 @@ def _is_tubelet_sync_candidate_eligible(
     return sync_semantics["candidate_selection_status"] == "eligible"
 
 
-def _count_local_clip_attacked_negative_sync_confident_records(
-    event_score_records: list[dict[str, Any]],
-    *,
-    method_variant: str,
-    allowed_splits: set[str],
-) -> int:
-    return sum(
-        1
-        for record in event_score_records
-        if str(record.get("method_variant")) == method_variant
-        and str(record.get("split")) in allowed_splits
-        and str(record.get("attack_name")) == "local_clip"
-        and str(record.get("sample_role")) == "attacked_negative"
-        and bool(record.get("sync_confident"))
-    )
-
-
 def _attack_headroom(attack_positive_tpr: float | None) -> float | None:
     if attack_positive_tpr is None:
         return None
