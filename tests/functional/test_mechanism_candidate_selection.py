@@ -16,9 +16,11 @@ from experiments.real_video_vae_latent_probe.output_layout import (
 )
 from main.core.records import RecordWriter
 from scripts.check_results.select_stage2_mechanism_candidate import (
+    _build_tubelet_only_calibration_grid_rows,
     _build_tubelet_sync_scan_seed,
     _resolve_embedding_margin,
     _resolve_projection_support_weight,
+    _select_tubelet_only_candidate,
     select_stage2_mechanism_candidate,
 )
 
@@ -62,6 +64,162 @@ def test_embedding_margin_falls_back_to_variant_name_token() -> None:
     )
 
     assert embedding_margin == 0.6
+
+
+def test_tubelet_only_anchor_selection_prefers_stronger_signal_over_extra_headroom() -> None:
+    """Validate tubelet-only anchor ranking prefers stronger signal when status is unchanged.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    mechanism_config = {
+        "required_mechanism_attacks": [
+            "no_attack",
+            "temporal_crop",
+            "frame_dropping",
+            "local_clip",
+        ],
+        "max_clean_negative_fpr": 0.05,
+        "max_attacked_negative_fpr": 0.1,
+        "min_no_attack_clean_positive_tpr": 0.5,
+        "require_quality_not_collapsed": True,
+        "min_watermarked_video_psnr": 20.0,
+        "min_watermarked_video_ssim": 0.5,
+    }
+    representative_records = {
+        "tubelet_only_cal_tl02_sp04x04_w025": {
+            "method_variant": "tubelet_only_cal_tl02_sp04x04_w025",
+            "base_method_variant": "tubelet_only",
+            "tubelet_length": 2,
+            "mechanism_trace": {
+                "spatial_patch_size": [4, 4],
+                "embedding_projection_support_weight": 0.25,
+                "embedding_margin": 0.25,
+            },
+        },
+        "tubelet_only_cal_tl02_sp04x04_w025_em600": {
+            "method_variant": "tubelet_only_cal_tl02_sp04x04_w025_em600",
+            "base_method_variant": "tubelet_only",
+            "tubelet_length": 2,
+            "mechanism_trace": {
+                "spatial_patch_size": [4, 4],
+                "embedding_projection_support_weight": 0.25,
+                "embedding_margin": 0.6,
+            },
+        },
+    }
+    audit_lookup = {
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025",
+            "no_attack",
+            "clean_negative",
+        ): {"clean_negative_FPR": 0.0},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025",
+            "no_attack",
+            "watermarked_positive",
+        ): {
+            "clean_positive_TPR": 0.05,
+            "quality_psnr_mean": float("inf"),
+            "quality_ssim_mean": 1.0,
+        },
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025",
+            "temporal_crop",
+            "attacked_positive",
+        ): {"attacked_positive_TPR": 0.1},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025",
+            "frame_dropping",
+            "attacked_positive",
+        ): {"attacked_positive_TPR": 0.15},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025",
+            "local_clip",
+            "attacked_positive",
+        ): {"attacked_positive_TPR": 0.0125},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025",
+            "temporal_crop",
+            "attacked_negative",
+        ): {"attacked_negative_FPR": 0.0},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025",
+            "frame_dropping",
+            "attacked_negative",
+        ): {"attacked_negative_FPR": 0.0},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025",
+            "local_clip",
+            "attacked_negative",
+        ): {"attacked_negative_FPR": 0.0},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025_em600",
+            "no_attack",
+            "clean_negative",
+        ): {"clean_negative_FPR": 0.0},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025_em600",
+            "no_attack",
+            "watermarked_positive",
+        ): {
+            "clean_positive_TPR": 0.05,
+            "quality_psnr_mean": float("inf"),
+            "quality_ssim_mean": 1.0,
+        },
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025_em600",
+            "temporal_crop",
+            "attacked_positive",
+        ): {"attacked_positive_TPR": 0.2},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025_em600",
+            "frame_dropping",
+            "attacked_positive",
+        ): {"attacked_positive_TPR": 0.3},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025_em600",
+            "local_clip",
+            "attacked_positive",
+        ): {"attacked_positive_TPR": 0.075},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025_em600",
+            "temporal_crop",
+            "attacked_negative",
+        ): {"attacked_negative_FPR": 0.0},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025_em600",
+            "frame_dropping",
+            "attacked_negative",
+        ): {"attacked_negative_FPR": 0.0},
+        (
+            "tubelet_only_cal_tl02_sp04x04_w025_em600",
+            "local_clip",
+            "attacked_negative",
+        ): {"attacked_negative_FPR": 0.0},
+    }
+
+    calibration_rows = _build_tubelet_only_calibration_grid_rows(
+        audit_lookup,
+        set(representative_records),
+        representative_records,
+        mechanism_config,
+    )
+
+    assert calibration_rows[0]["method_variant"] == "tubelet_only_cal_tl02_sp04x04_w025_em600"
+    assert calibration_rows[0]["candidate_selection_status"] == "weak_anchor_with_headroom"
+    assert calibration_rows[1]["candidate_selection_status"] == "weak_anchor_with_headroom"
+
+    selected_candidate = _select_tubelet_only_candidate(
+        calibration_rows,
+        mechanism_config,
+    )
+
+    assert selected_candidate["method_variant"] == "tubelet_only_cal_tl02_sp04x04_w025_em600"
+    assert selected_candidate["embedding_margin"] == pytest.approx(0.6)
 
 
 def test_tubelet_sync_scan_seed_uses_selected_candidate_defaults_for_missing_stage_grid_fields() -> None:
