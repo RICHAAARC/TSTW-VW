@@ -243,7 +243,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 embedding_support,
                 attack_strength,
                 aligned_projection_coverage_ratio,
-                apply_coverage_penalty=False,
+                apply_coverage_penalty=True,
             )
             S_payload_rescue_gain = round(
                 max(0.0, S_payload_aligned - S_payload_unaligned),

@@ -219,10 +219,10 @@ def test_sync_search_range_does_not_expand_from_ground_truth() -> None:
     )
 
 
-def test_short_local_clip_coverage_penalty_scales_unaligned_tubelet_score_only(
+def test_short_local_clip_coverage_penalty_scales_unaligned_and_aligned_payload_scores(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Validate short local clips penalize unaligned tubelet evidence only.
+    """Validate short local clips penalize both unaligned and aligned payload evidence.
 
     Args:
         monkeypatch: Pytest monkeypatch fixture.
@@ -346,5 +346,5 @@ def test_short_local_clip_coverage_penalty_scales_unaligned_tubelet_score_only(
     assert disabled_trace["sync_candidate_score_penalized"] == disabled_trace["sync_candidate_score_raw"]
     assert penalty_enabled_scores["S_tubelet"] < penalty_disabled_scores["S_tubelet"]
     assert enabled_trace["S_payload_unaligned"] < disabled_trace["S_payload_unaligned"]
-    assert enabled_trace["S_payload_aligned"] == disabled_trace["S_payload_aligned"]
-    assert enabled_trace["S_payload_rescue_gain"] > disabled_trace["S_payload_rescue_gain"]
+    assert enabled_trace["S_payload_aligned"] < disabled_trace["S_payload_aligned"]
+    assert enabled_trace["S_payload_rescue_gain"] == disabled_trace["S_payload_rescue_gain"]

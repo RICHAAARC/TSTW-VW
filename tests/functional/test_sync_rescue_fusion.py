@@ -564,12 +564,17 @@ def test_aligned_payload_uses_payload_code_not_sync_code(tmp_path: Path) -> None
         threshold_record=None,
     )
     mechanism_trace = sync_result.mechanism_trace
-    pure_payload_score, sync_coupled_payload_score = _rebuild_aligned_payload_scores(
+    (
+        pure_payload_penalized_score,
+        pure_payload_unpenalized_score,
+        sync_coupled_payload_score,
+    ) = _rebuild_aligned_payload_scores(
         cropped_sample,
         int(mechanism_trace["sync_estimated_offset"]),
     )
 
-    assert mechanism_trace["S_payload_aligned"] == pure_payload_score
+    assert mechanism_trace["S_payload_aligned"] == pure_payload_penalized_score
+    assert pure_payload_penalized_score < pure_payload_unpenalized_score
     assert mechanism_trace["S_payload_aligned"] != sync_coupled_payload_score
     assert sync_result.evidence_scores["S_sync"] == mechanism_trace["S_sync_positive_margin"]
     assert mechanism_trace["S_payload_rescue_gain"] == round(
@@ -654,8 +659,24 @@ def _rebuild_aligned_payload_scores(cropped_sample, estimated_offset: int) -> tu
     )
     coverage_ratio = len(pure_payload_projections) / max(len(reference_descriptor_map), 1)
     return (
-        _score_payload_projections(pure_payload_projections, embedding_support, coverage_ratio),
-        _score_payload_projections(sync_coupled_projections, embedding_support, coverage_ratio),
+        _score_payload_projections(
+            pure_payload_projections,
+            embedding_support,
+            coverage_ratio,
+            apply_coverage_penalty=True,
+        ),
+        _score_payload_projections(
+            pure_payload_projections,
+            embedding_support,
+            coverage_ratio,
+            apply_coverage_penalty=False,
+        ),
+        _score_payload_projections(
+            sync_coupled_projections,
+            embedding_support,
+            coverage_ratio,
+            apply_coverage_penalty=True,
+        ),
     )
 
 
@@ -679,9 +700,12 @@ def _score_payload_projections(
     projections: list[float],
     embedding_support: float,
     coverage_ratio: float,
+    *,
+    apply_coverage_penalty: bool,
 ) -> float:
-    del coverage_ratio
     base_score = sum(projections) / len(projections)
+    if apply_coverage_penalty and base_score > 0.0:
+        base_score *= max(0.0, min(1.0, coverage_ratio))
     support_score = embedding_support * 0.45
     return _clip_score(base_score + support_score)
 
