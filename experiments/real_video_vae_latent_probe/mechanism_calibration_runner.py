@@ -16,6 +16,7 @@ from typing import Any
 
 from experiments.real_video_vae_latent_probe.runner import RealVideoVaeLatentRunner
 from main.core.registry import load_json_config
+from main.methods.temporal_tubelet_watermark.embedding import DEFAULT_EMBEDDING_MARGIN
 from scripts.check_results.select_stage2_mechanism_candidate import (
     select_stage2_mechanism_candidate,
 )
@@ -1174,10 +1175,16 @@ def _build_stage_generated_method_configs(
             stage_grid,
             "embedding_projection_support_weight",
         )
-        for tubelet_length, spatial_patch_size, support_weight in itertools.product(
+        embedding_margins = _read_optional_grid_numeric_list(
+            stage_grid,
+            "embedding_margin",
+            [_resolve_template_embedding_margin(tubelet_only_template)],
+        )
+        for tubelet_length, spatial_patch_size, support_weight, embedding_margin in itertools.product(
             tubelet_lengths,
             spatial_patch_sizes,
             projection_support_weights,
+            embedding_margins,
         ):
             generated_method_configs.append(
                 _build_tubelet_only_calibration_config(
@@ -1185,6 +1192,7 @@ def _build_stage_generated_method_configs(
                     tubelet_length=tubelet_length,
                     spatial_patch_size=spatial_patch_size,
                     support_weight=support_weight,
+                    embedding_margin=embedding_margin,
                 )
             )
         return generated_method_configs
@@ -1194,9 +1202,18 @@ def _build_stage_generated_method_configs(
     tubelet_length = int(stage_seed_candidate["tubelet_length"])
     spatial_patch_size = _resolve_seed_spatial_patch_size(stage_seed_candidate)
     support_weight = _resolve_seed_support_weight(stage_seed_candidate)
+    embedding_margin = _resolve_seed_embedding_margin(
+        stage_seed_candidate,
+        tubelet_sync_template,
+    )
     seed_sync_defaults = _resolve_seed_sync_defaults(
         stage_seed_candidate=stage_seed_candidate,
         tubelet_sync_template=tubelet_sync_template,
+    )
+    embedding_margins = _read_optional_grid_numeric_list(
+        stage_grid,
+        "embedding_margin",
+        [embedding_margin],
     )
     lambda_sync_values = _read_optional_grid_numeric_list(
         stage_grid,
@@ -1234,6 +1251,7 @@ def _build_stage_generated_method_configs(
         [seed_sync_defaults["min_sync_candidate_score"]],
     )
     for (
+        embedding_margin,
         lambda_sync,
         sync_search_radius,
         fusion_rule,
@@ -1242,6 +1260,7 @@ def _build_stage_generated_method_configs(
         min_sync_matched_count,
         min_sync_candidate_score,
     ) in itertools.product(
+        embedding_margins,
         lambda_sync_values,
         sync_search_radii,
         fusion_rules,
@@ -1256,6 +1275,7 @@ def _build_stage_generated_method_configs(
                 tubelet_length=tubelet_length,
                 spatial_patch_size=spatial_patch_size,
                 support_weight=support_weight,
+                embedding_margin=embedding_margin,
                 lambda_sync=lambda_sync,
                 sync_search_radius=sync_search_radius,
                 fusion_rule=fusion_rule,
@@ -1294,6 +1314,16 @@ def _resolve_seed_support_weight(stage_seed_candidate: dict[str, Any]) -> float:
             "score_calibration.embedding_projection_support_weight must be numeric"
         )
     return round(float(support_weight), 6)
+
+
+def _resolve_seed_embedding_margin(
+    stage_seed_candidate: dict[str, Any],
+    tubelet_sync_template: dict[str, Any],
+) -> float:
+    embedding_margin = stage_seed_candidate.get("embedding_margin")
+    if isinstance(embedding_margin, (int, float)) and float(embedding_margin) > 0.0:
+        return round(float(embedding_margin), 6)
+    return _resolve_template_embedding_margin(tubelet_sync_template)
 
 
 def _resolve_seed_sync_defaults(
@@ -1422,6 +1452,11 @@ def _build_generated_method_configs(
         grid_payload,
         "embedding_projection_support_weight",
     )
+    embedding_margins = _read_optional_grid_numeric_list(
+        grid_payload,
+        "embedding_margin",
+        [_resolve_template_embedding_margin(tubelet_only_template)],
+    )
     lambda_sync_values = _read_grid_numeric_list(grid_payload, "lambda_sync")
     sync_search_radii = _read_grid_integer_list(grid_payload, "sync_search_radius")
     fusion_rules = _read_grid_string_list(grid_payload, "fusion_rule")
@@ -1449,10 +1484,11 @@ def _build_generated_method_configs(
     generated_method_configs: list[dict[str, Any]] = [
         _build_frame_prc_baseline_config(frame_prc_template)
     ]
-    for tubelet_length, spatial_patch_size, support_weight in itertools.product(
+    for tubelet_length, spatial_patch_size, support_weight, embedding_margin in itertools.product(
         tubelet_lengths,
         spatial_patch_sizes,
         projection_support_weights,
+        embedding_margins,
     ):
         generated_method_configs.append(
             _build_tubelet_only_calibration_config(
@@ -1460,9 +1496,11 @@ def _build_generated_method_configs(
                 tubelet_length=tubelet_length,
                 spatial_patch_size=spatial_patch_size,
                 support_weight=support_weight,
+                embedding_margin=embedding_margin,
             )
         )
         for (
+            embedding_margin,
             lambda_sync,
             sync_search_radius,
             fusion_rule,
@@ -1471,6 +1509,7 @@ def _build_generated_method_configs(
             min_sync_matched_count,
             min_sync_candidate_score,
         ) in itertools.product(
+            embedding_margins,
             lambda_sync_values,
             sync_search_radii,
             fusion_rules,
@@ -1485,6 +1524,7 @@ def _build_generated_method_configs(
                     tubelet_length=tubelet_length,
                     spatial_patch_size=spatial_patch_size,
                     support_weight=support_weight,
+                    embedding_margin=embedding_margin,
                     lambda_sync=lambda_sync,
                     sync_search_radius=sync_search_radius,
                     fusion_rule=fusion_rule,
@@ -1551,6 +1591,7 @@ def _build_tubelet_only_calibration_config(
     tubelet_length: int,
     spatial_patch_size: tuple[int, int],
     support_weight: float,
+    embedding_margin: float,
 ) -> dict[str, Any]:
     calibration_config = copy.deepcopy(tubelet_only_template)
     calibration_config["target_construction_phase"] = "real_video_vae_latent_probe"
@@ -1560,8 +1601,10 @@ def _build_tubelet_only_calibration_config(
         tubelet_length=tubelet_length,
         spatial_patch_size=spatial_patch_size,
         support_weight=support_weight,
+        embedding_margin=embedding_margin,
     )
     calibration_config["tubelet_length"] = int(tubelet_length)
+    calibration_config["embedding_margin"] = round(float(embedding_margin), 6)
     calibration_config["tubelet_partition"] = {
         "spatial_patch_size": [int(spatial_patch_size[0]), int(spatial_patch_size[1])],
     }
@@ -1579,6 +1622,7 @@ def _build_tubelet_sync_calibration_config(
     tubelet_length: int,
     spatial_patch_size: tuple[int, int],
     support_weight: float,
+    embedding_margin: float,
     lambda_sync: float,
     sync_search_radius: int,
     fusion_rule: str,
@@ -1595,6 +1639,7 @@ def _build_tubelet_sync_calibration_config(
         tubelet_length=tubelet_length,
         spatial_patch_size=spatial_patch_size,
         support_weight=support_weight,
+        embedding_margin=embedding_margin,
         lambda_sync=lambda_sync,
         sync_search_radius=sync_search_radius,
         fusion_rule=fusion_rule,
@@ -1604,6 +1649,7 @@ def _build_tubelet_sync_calibration_config(
         min_sync_candidate_score=min_sync_candidate_score,
     )
     calibration_config["tubelet_length"] = int(tubelet_length)
+    calibration_config["embedding_margin"] = round(float(embedding_margin), 6)
     calibration_config["tubelet_partition"] = {
         "spatial_patch_size": [int(spatial_patch_size[0]), int(spatial_patch_size[1])],
     }
@@ -1640,12 +1686,14 @@ def _build_tubelet_only_variant_name(
     tubelet_length: int,
     spatial_patch_size: tuple[int, int],
     support_weight: float,
+    embedding_margin: float,
 ) -> str:
     return (
         "tubelet_only_cal_"
         f"tl{int(tubelet_length):02d}_"
         f"sp{int(spatial_patch_size[0]):02d}x{int(spatial_patch_size[1]):02d}_"
         f"w{int(round(float(support_weight) * 100)):03d}"
+        f"{_build_embedding_margin_variant_name_suffix(embedding_margin)}"
     )
 
 
@@ -1654,6 +1702,7 @@ def _build_tubelet_sync_variant_name(
     tubelet_length: int,
     spatial_patch_size: tuple[int, int],
     support_weight: float,
+    embedding_margin: float,
     lambda_sync: float,
     sync_search_radius: int,
     fusion_rule: str,
@@ -1680,6 +1729,7 @@ def _build_tubelet_sync_variant_name(
         f"tl{int(tubelet_length):02d}_"
         f"sp{int(spatial_patch_size[0]):02d}x{int(spatial_patch_size[1]):02d}_"
         f"w{int(round(float(support_weight) * 100)):03d}_"
+        f"{_build_embedding_margin_variant_name_token(embedding_margin)}"
         f"sr{int(sync_search_radius):02d}_"
         f"ls{int(round(float(lambda_sync) * 1000)):03d}_"
         f"mg{int(round(float(min_sync_margin) * 1000)):03d}_"
@@ -1688,6 +1738,29 @@ def _build_tubelet_sync_variant_name(
         f"{candidate_score_token}"
         f"fr{fusion_rule_token}"
     )
+
+
+def _build_embedding_margin_variant_name_suffix(embedding_margin: float) -> str:
+    margin_token = _build_embedding_margin_variant_name_token(embedding_margin)
+    if not margin_token:
+        return ""
+    return f"_{margin_token[:-1]}"
+
+
+def _build_embedding_margin_variant_name_token(embedding_margin: float) -> str:
+    normalized_margin = round(float(embedding_margin), 6)
+    if abs(normalized_margin - float(DEFAULT_EMBEDDING_MARGIN)) <= 1e-9:
+        return ""
+    return f"em{int(round(normalized_margin * 1000)):03d}_"
+
+
+def _resolve_template_embedding_margin(method_template: dict[str, Any]) -> float:
+    embedding_margin = method_template.get("embedding_margin")
+    if not isinstance(embedding_margin, (int, float)):
+        return round(float(DEFAULT_EMBEDDING_MARGIN), 6)
+    if float(embedding_margin) <= 0.0:
+        raise ValueError("embedding_margin must be positive when present in method template")
+    return round(float(embedding_margin), 6)
 
 
 def _build_tubelet_sync_candidate_method_config(
@@ -1702,6 +1775,15 @@ def _build_tubelet_sync_candidate_method_config(
     calibration_config["base_method_variant"] = str(selected_candidate["base_method_variant"])
     calibration_config["method_variant"] = str(selected_candidate["method_variant"])
     calibration_config["tubelet_length"] = int(selected_candidate["tubelet_length"])
+    calibration_config["embedding_margin"] = round(
+        float(
+            selected_candidate.get(
+                "embedding_margin",
+                _resolve_template_embedding_margin(tubelet_sync_template),
+            )
+        ),
+        6,
+    )
     calibration_config["tubelet_partition"] = {
         "spatial_patch_size": list(
             selected_candidate["tubelet_partition"]["spatial_patch_size"]

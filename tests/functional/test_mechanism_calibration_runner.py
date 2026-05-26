@@ -780,3 +780,51 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
     assert summary["search_stage_summaries"][1]["selection_completion_status"] == (
         "incomplete_no_compatible_tubelet_sync_rows"
     )
+
+
+@pytest.mark.unit
+def test_calibration_config_carries_non_default_embedding_margin() -> None:
+    """Validate calibration configs preserve non-default embedding margin values.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    tubelet_only_config = calibration_runner_module._build_tubelet_only_calibration_config(
+        tubelet_only_template={
+            "method_family": "temporal_tubelet_watermark",
+            "method_variant": "tubelet_only",
+            "method_status": "formal_real_video_probe",
+            "fusion_rule": "tubelet_score_only",
+        },
+        tubelet_length=2,
+        spatial_patch_size=(4, 4),
+        support_weight=0.45,
+        embedding_margin=0.6,
+    )
+    tubelet_sync_config = calibration_runner_module._build_tubelet_sync_calibration_config(
+        tubelet_sync_template={
+            "method_family": "temporal_tubelet_watermark",
+            "method_variant": "tubelet_sync",
+            "method_status": "formal_real_video_probe",
+            "fusion_rule": "sync_rescue_fusion",
+        },
+        tubelet_length=2,
+        spatial_patch_size=(4, 4),
+        support_weight=0.45,
+        embedding_margin=0.6,
+        lambda_sync=0.025,
+        sync_search_radius=8,
+        fusion_rule="sync_rescue_fusion",
+        min_sync_margin=0.0,
+        min_sync_coverage_ratio=0.25,
+        min_sync_matched_count=1,
+        min_sync_candidate_score=0.0,
+    )
+
+    assert tubelet_only_config["embedding_margin"] == 0.6
+    assert "_em600" in tubelet_only_config["method_variant"]
+    assert tubelet_sync_config["embedding_margin"] == 0.6
+    assert "_em600_" in tubelet_sync_config["method_variant"]

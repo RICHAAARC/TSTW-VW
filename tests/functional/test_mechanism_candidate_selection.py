@@ -17,6 +17,7 @@ from experiments.real_video_vae_latent_probe.output_layout import (
 from main.core.records import RecordWriter
 from scripts.check_results.select_stage2_mechanism_candidate import (
     _build_tubelet_sync_scan_seed,
+    _resolve_embedding_margin,
     _resolve_projection_support_weight,
     select_stage2_mechanism_candidate,
 )
@@ -42,6 +43,25 @@ def test_projection_support_weight_falls_back_to_variant_name() -> None:
     )
 
     assert weight == 0.75
+
+
+def test_embedding_margin_falls_back_to_variant_name_token() -> None:
+    """Validate embedding margin parsing falls back to the calibration variant name.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    embedding_margin = _resolve_embedding_margin(
+        {
+            "method_variant": "tubelet_sync_cal_tl01_sp04x04_w075_em600_sr04_ls000_frsync_rescue",
+            "mechanism_trace": {},
+        }
+    )
+
+    assert embedding_margin == 0.6
 
 
 def test_tubelet_sync_scan_seed_uses_selected_candidate_defaults_for_missing_stage_grid_fields() -> None:

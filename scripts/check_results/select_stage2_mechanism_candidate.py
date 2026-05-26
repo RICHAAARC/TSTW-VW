@@ -24,6 +24,7 @@ from experiments.real_video_vae_latent_probe.mechanism_semantics import (
 )
 from main.core.records import RecordWriter
 from main.core.registry import load_json_config
+from main.methods.temporal_tubelet_watermark.embedding import DEFAULT_EMBEDDING_MARGIN
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -39,6 +40,7 @@ CALIBRATION_GRID_COLUMNS = [
     "tubelet_length",
     "spatial_patch_size",
     "embedding_projection_support_weight",
+    "embedding_margin",
     "fusion_rule",
     "lambda_sync",
     "sync_search_radius",
@@ -314,7 +316,7 @@ def _build_selection_snapshot(
         "tubelet_sync": set(),
     }
     observed_splits: set[str] = set()
-    tubelet_sync_signatures: set[tuple[int, str, float]] = set()
+    tubelet_sync_signatures: set[tuple[int, str, float, float]] = set()
     local_clip_sync_confident_negative_counts: dict[str, int] = defaultdict(int)
     grouped_metrics: dict[tuple[str, str, str], dict[str, Any]] = {}
 
@@ -493,7 +495,7 @@ def _build_selection_audit_lookup(
     return audit_lookup
 
 
-def _build_sync_stage_signature(event_record: dict[str, Any]) -> tuple[int, str, float]:
+def _build_sync_stage_signature(event_record: dict[str, Any]) -> tuple[int, str, float, float]:
     return (
         int(event_record.get("tubelet_length", 1)),
         json.dumps(
@@ -501,6 +503,7 @@ def _build_sync_stage_signature(event_record: dict[str, Any]) -> tuple[int, str,
             ensure_ascii=False,
         ),
         round(float(_resolve_projection_support_weight(event_record) or 0.0), 6),
+        round(float(_resolve_embedding_margin(event_record) or DEFAULT_EMBEDDING_MARGIN), 6),
     )
 
 
@@ -581,6 +584,7 @@ def _build_tubelet_only_calibration_grid_rows(
                 "embedding_projection_support_weight": _resolve_projection_support_weight(
                     representative_record,
                 ),
+                "embedding_margin": _resolve_embedding_margin(representative_record),
                 "fusion_rule": None,
                 "lambda_sync": None,
                 "sync_search_radius": None,
@@ -681,6 +685,10 @@ def _build_tubelet_sync_calibration_grid_rows(
         ),
         6,
     )
+    selected_embedding_margin = round(
+        float(selected_candidate.get("embedding_margin", DEFAULT_EMBEDDING_MARGIN)),
+        6,
+    )
     selected_tubelet_length = int(selected_candidate["tubelet_length"])
     tubelet_only_metrics = selected_candidate["metrics"]
     rows: list[dict[str, Any]] = []
@@ -693,11 +701,14 @@ def _build_tubelet_sync_calibration_grid_rows(
             [4, 4],
         )
         support_weight = _resolve_projection_support_weight(representative_record)
+        embedding_margin = _resolve_embedding_margin(representative_record)
         if int(representative_record.get("tubelet_length", 1)) != selected_tubelet_length:
             continue
         if list(spatial_patch_size) != selected_spatial_patch_size:
             continue
         if support_weight != selected_support_weight:
+            continue
+        if round(float(embedding_margin), 6) != selected_embedding_margin:
             continue
 
         no_attack_negative_row = audit_lookup.get((method_variant, "no_attack", "clean_negative"), {})
@@ -786,6 +797,7 @@ def _build_tubelet_sync_calibration_grid_rows(
                 "tubelet_length": int(representative_record.get("tubelet_length", 1)),
                 "spatial_patch_size": json.dumps(spatial_patch_size, ensure_ascii=False),
                 "embedding_projection_support_weight": support_weight,
+                "embedding_margin": embedding_margin,
                 "fusion_rule": fusion_rule,
                 "lambda_sync": lambda_sync,
                 "sync_search_radius": sync_search_radius,
@@ -901,6 +913,7 @@ def _select_tubelet_only_candidate(
         "tubelet_partition": {
             "spatial_patch_size": json.loads(str(selected_row["spatial_patch_size"])),
         },
+        "embedding_margin": float(selected_row["embedding_margin"]),
         "score_calibration": {
             "embedding_projection_support_weight": float(
                 selected_row["embedding_projection_support_weight"]
@@ -1023,6 +1036,7 @@ def _select_tubelet_sync_candidate(
         "tubelet_partition": {
             "spatial_patch_size": json.loads(str(selected_row["spatial_patch_size"])),
         },
+        "embedding_margin": float(selected_row["embedding_margin"]),
         "score_calibration": {
             "embedding_projection_support_weight": float(
                 selected_row["embedding_projection_support_weight"]
@@ -1117,7 +1131,7 @@ def _select_tubelet_sync_candidate(
 
 
 def _build_sync_stage_blocking_details(
-    observed_sync_signatures: set[tuple[int, str, float]],
+    observed_sync_signatures: set[tuple[int, str, float, float]],
     selected_candidate: dict[str, Any],
 ) -> dict[str, Any]:
     selected_signature = {
@@ -1133,12 +1147,17 @@ def _build_sync_stage_blocking_details(
             ),
             6,
         ),
+        "embedding_margin": round(
+            float(selected_candidate.get("embedding_margin", DEFAULT_EMBEDDING_MARGIN)),
+            6,
+        ),
     }
     normalized_signatures = [
         {
             "tubelet_length": signature[0],
             "spatial_patch_size": json.loads(signature[1]),
             "embedding_projection_support_weight": signature[2],
+            "embedding_margin": signature[3],
         }
         for signature in sorted(observed_sync_signatures)
     ]
@@ -1149,6 +1168,8 @@ def _build_sync_stage_blocking_details(
         and list(signature["spatial_patch_size"]) == list(selected_signature["spatial_patch_size"])
         and round(float(signature["embedding_projection_support_weight"]), 6)
         == round(float(selected_signature["embedding_projection_support_weight"]), 6)
+        and round(float(signature["embedding_margin"]), 6)
+        == round(float(selected_signature["embedding_margin"]), 6)
     )
     return {
         "selected_anchor_signature": selected_signature,
@@ -1173,6 +1194,10 @@ def _build_tubelet_sync_scan_seed(
         "recommended_method_variant": "tubelet_sync_real_video_vae_candidate",
         "seed_method_config": {
             "tubelet_length": int(selected_candidate["tubelet_length"]),
+            "embedding_margin": round(
+                float(selected_candidate.get("embedding_margin", DEFAULT_EMBEDDING_MARGIN)),
+                6,
+            ),
             "tubelet_partition": {
                 "spatial_patch_size": list(
                     selected_candidate["tubelet_partition"]["spatial_patch_size"]
@@ -1544,6 +1569,21 @@ def _resolve_projection_support_weight(event_record: dict[str, Any]) -> float:
     return round(float(field_value), 6)
 
 
+def _resolve_embedding_margin(event_record: dict[str, Any]) -> float:
+    mechanism_trace = event_record.get("mechanism_trace", {})
+    if not isinstance(mechanism_trace, dict):
+        mechanism_trace = {}
+    field_value = mechanism_trace.get("embedding_margin")
+    if isinstance(field_value, (int, float)) and float(field_value) > 0.0:
+        return round(float(field_value), 6)
+    parsed_value = _parse_embedding_margin_from_variant_name(
+        str(event_record.get("method_variant", ""))
+    )
+    if parsed_value is not None:
+        return parsed_value
+    return round(float(DEFAULT_EMBEDDING_MARGIN), 6)
+
+
 def _parse_projection_support_weight_from_variant_name(
     method_variant: str,
 ) -> float | None:
@@ -1551,6 +1591,16 @@ def _parse_projection_support_weight_from_variant_name(
     for token in variant_tokens:
         if token.startswith("w") and token[1:].isdigit():
             return round(int(token[1:]) / 100.0, 6)
+    return None
+
+
+def _parse_embedding_margin_from_variant_name(
+    method_variant: str,
+) -> float | None:
+    variant_tokens = method_variant.split("_")
+    for token in variant_tokens:
+        if token.startswith("em") and token[2:].isdigit():
+            return round(int(token[2:]) / 1000.0, 6)
     return None
 
 

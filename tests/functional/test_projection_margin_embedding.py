@@ -22,6 +22,7 @@ from main.methods.temporal_tubelet_watermark.embedding import (
     apply_projection_margin_embedding,
     build_partition_config_from_method_config,
 )
+from main.methods.temporal_tubelet_watermark.method import build_method_from_config
 from main.methods.temporal_tubelet_watermark.tubelet_partition import (
     build_tubelet_descriptors,
     extract_tubelet_values,
@@ -107,3 +108,49 @@ def test_clean_negative_sample_is_not_embedded_when_left_unchanged(tmp_path: Pat
 
     assert clean_sample.mechanism_trace["embedding_margin"] is None
     assert clean_sample.latent_artifact_digest == clean_sample.latent_tensor_digest_random
+
+
+def test_method_config_embedding_margin_controls_embed_strength(tmp_path: Path) -> None:
+    """Validate method-config embedding_margin is honored during embed.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    backend = SyntheticVideoLatentPlaceholder()
+    backend.set_output_root(tmp_path)
+    clean_sample = backend.build_sample(
+        "sample_test_watermarked_positive_000002",
+        "test",
+        "watermarked_positive",
+    )
+    method_config = {
+        **METHOD_CONFIG,
+        "embedding_margin": 0.6,
+    }
+    method = build_method_from_config(method_config)
+    embedded_sample = method.embed(clean_sample, payload={})
+
+    tensor_artifact = read_float_tensor_npy(embedded_sample.latent_artifact_path)
+    partition_config = build_partition_config_from_method_config(method_config)
+    descriptors = build_tubelet_descriptors(embedded_sample.latent_shape, partition_config)
+    codebook = build_tubelet_codebook(
+        embedded_sample.sample_id,
+        descriptors,
+        len(extract_tubelet_values(tensor_artifact, descriptors[0])),
+        build_codebook_config(),
+        enable_sync=True,
+    )
+    coded_projections = []
+    for descriptor in descriptors:
+        values = extract_tubelet_values(tensor_artifact, descriptor)
+        direction = codebook.directions[descriptor.tubelet_index]
+        code_sign = codebook.combined_codes[descriptor.tubelet_index]
+        coded_projections.append(
+            code_sign * sum(value * direction_value for value, direction_value in zip(values, direction))
+        )
+
+    assert min(coded_projections) >= 0.6 - 1e-5
+    assert embedded_sample.mechanism_trace["embedding_margin"] == 0.6

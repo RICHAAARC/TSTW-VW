@@ -56,6 +56,7 @@ class MethodRuntimeConfig:
     score_calibration: dict[str, float] | None = None
     sync_search: dict[str, Any] | None = None
     lambda_sync: float | None = None
+    embedding_margin: float | None = None
     score_generation_seed_random: int | None = None
 
 
@@ -259,6 +260,11 @@ class SyntheticProbeWatermarkMethod(BaseStageZeroWatermarkMethod):
             "base_method_variant": base_method_variant,
             "method_status": runtime_config.method_status,
             "tubelet_length": int(runtime_config.tubelet_length),
+            "embedding_margin": (
+                DEFAULT_EMBEDDING_MARGIN
+                if runtime_config.embedding_margin is None
+                else float(runtime_config.embedding_margin)
+            ),
             "enable_frame_prc": base_method_variant == "frame_prc",
             "enable_tubelet": runtime_config.enabled_evidence["tubelet"],
             "enable_sync": runtime_config.enabled_evidence["sync"],
@@ -287,7 +293,7 @@ class SyntheticProbeWatermarkMethod(BaseStageZeroWatermarkMethod):
             self.runtime_config.method_variant,
             build_partition_config_from_method_config(self._method_config),
             enable_sync=self._sync_code_couples_payload_embedding(),
-            embedding_margin=DEFAULT_EMBEDDING_MARGIN,
+            embedding_margin=float(self._method_config["embedding_margin"]),
         )
 
     def _sync_code_couples_payload_embedding(self) -> bool:
@@ -375,6 +381,7 @@ def build_method_runtime_config(method_config: dict[str, Any]) -> MethodRuntimeC
         score_calibration=_build_score_calibration(method_config),
         sync_search=_build_sync_search_config(method_config),
         lambda_sync=_build_optional_float(method_config, "lambda_sync"),
+        embedding_margin=_build_optional_positive_float(method_config, "embedding_margin"),
         score_generation_seed_random=method_config.get("score_generation_seed_random"),
     )
 
@@ -410,6 +417,18 @@ def _build_optional_float(method_config: dict[str, Any], field_name: str) -> flo
         return None
     if not isinstance(field_value, (int, float)):
         raise TypeError(f"{field_name} must be numeric")
+    return float(field_value)
+
+
+def _build_optional_positive_float(
+    method_config: dict[str, Any],
+    field_name: str,
+) -> float | None:
+    field_value = _build_optional_float(method_config, field_name)
+    if field_value is None:
+        return None
+    if float(field_value) <= 0.0:
+        raise ValueError(f"{field_name} must be positive")
     return float(field_value)
 
 
