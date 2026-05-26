@@ -1874,3 +1874,64 @@ tl02 的 tubelet_only anchor 在 dev / calibration 上仍只有 no_attack_clean_
 先不要继续考虑 tl02 作为当前主候选方向；
 下一步先修 tubelet_only anchor 的正样本恢复能力，再决定是否回到 tl02 的 sync 搜索。
 ```
+
+### （四）selector 字段与 gate 语义修复回灌
+
+在上述 `tl02_controlled_validation` 负结果之后，已完成一轮 selector 侧代码修复，用于排除候选选择路径本身继续混淆机制判断。修复范围限定在：
+
+```text
+scripts/check_results/select_stage2_mechanism_candidate.py
+tests/functional/test_mechanism_candidate_selection.py
+```
+
+本轮修复确认并修正了三个 selector 级阻断项：
+
+```text
+1. `sync_confident` 的 canonical record 位置是 `mechanism_trace.sync_confident`，selector 现在优先读取该字段，顶层 `sync_confident` 仅作为 legacy fallback；
+2. `tubelet_sync` 候选 eligibility 的 sync-confident negative tail 不再只统计 `local_clip`，而是统计所有 `attacked_negative`；
+3. `tubelet_only` anchor 输出现在显式记录 `candidate_eligible`、`fpr_controlled` 与 `quality_not_collapsed`，弱 anchor 不再被误标为正式合格候选。
+```
+
+对应输出语义更新为：
+
+```text
+若 tubelet-only anchor 只满足 FPR 受控但不满足 mechanism gate，则 candidate_status = fpr_controlled_best_effort_candidate_selected；
+若任何 attacked_negative record 出现 sync_confident = true，则对应 tubelet_sync row 的 candidate_eligible = false；
+calibration grid / report 增加 sync_confident_attacked_negative_count，用于直接定位负样本 tail 是否阻断 sync 候选。
+```
+
+该修复不会改变 threshold calibration 协议，也不会使用 test split 参与参数选择。其作用是让后续 calibration 结果能清楚区分：
+
+```text
+代码层 selector / field 读取问题；
+tubelet_only anchor 正样本信号不足；
+tubelet_sync 参数搜索仍未找到 eligible candidate；
+机制设计本身在某类攻击上存在结构性失配。
+```
+
+因此，在下一轮重跑后，如果仍出现：
+
+```text
+selected_tubelet_sync_candidate = null
+selection_completion_status = incomplete_no_eligible_tubelet_sync_candidate
+```
+
+则应优先读取：
+
+```text
+sync_confident_attacked_negative_count
+no_attack_clean_positive_tpr
+mean_temporal_sync_gain
+candidate_eligible
+candidate_selection_status
+```
+
+若 `sync_confident_attacked_negative_count > 0`，说明候选仍被 attacked-negative sync tail 阻断；若该字段为0但 `no_attack_clean_positive_tpr < 0.5`，则仍应回到 tubelet_only anchor 正样本恢复能力，而不是继续扩大 sync 网格。
+
+本轮验证结果为：
+
+```text
+python -m pytest -q tests/functional/test_mechanism_candidate_selection.py：12 passed；
+python -m pytest -q：325 passed，67 deselected，3 warnings；
+python tools/harness/run_all_audits.py：17 pass，0 fail。
+```

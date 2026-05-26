@@ -220,6 +220,10 @@ def test_tubelet_only_anchor_selection_prefers_stronger_signal_over_extra_headro
 
     assert selected_candidate["method_variant"] == "tubelet_only_cal_tl02_sp04x04_w025_em600"
     assert selected_candidate["embedding_margin"] == pytest.approx(0.6)
+    assert selected_candidate["candidate_eligible"] is False
+    assert selected_candidate["candidate_status"] == (
+        "fpr_controlled_best_effort_candidate_selected"
+    )
 
 
 def test_tubelet_sync_scan_seed_uses_selected_candidate_defaults_for_missing_stage_grid_fields() -> None:
@@ -2177,7 +2181,7 @@ def test_mechanism_candidate_selector_returns_no_best_effort_sync_candidate_with
 def test_mechanism_candidate_selector_prefers_strict_sync_seal_over_higher_gain_leakage(
     tmp_path: Path,
 ) -> None:
-    """Validate sync selection rejects local_clip negative sync-confidence leakage even when gain is higher.
+    """Validate sync selection rejects attacked-negative sync-confidence leakage even when gain is higher.
 
     Args:
         tmp_path: Temporary output root.
@@ -2363,7 +2367,7 @@ def test_mechanism_candidate_selector_prefers_strict_sync_seal_over_higher_gain_
                     method_variant="tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls025_mg000_cv062_mc01_frsync_rescue",
                     base_method_variant="tubelet_sync",
                     tubelet_length=2,
-                    attack_name="local_clip",
+                    attack_name="temporal_crop",
                     sample_role="attacked_negative",
                     decision=False,
                     s_sync=0.19,
@@ -2690,5 +2694,5 @@ def _build_event_record(
         }
     }
     if sync_confident is not None:
-        event_record["sync_confident"] = bool(sync_confident)
+        event_record["mechanism_trace"]["sync_confident"] = bool(sync_confident)
     return event_record

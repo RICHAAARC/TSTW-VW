@@ -61,6 +61,7 @@ CALIBRATION_GRID_COLUMNS = [
     "frame_dropping_sync_gain",
     "local_clip_sync_gain",
     "mean_temporal_sync_gain",
+    "sync_confident_attacked_negative_count",
     "temporal_crop_absolute_tpr",
     "local_clip_absolute_tpr",
     "temporal_crop_anchor_headroom",
@@ -171,7 +172,7 @@ def select_stage2_mechanism_candidate(
             selection_snapshot["audit_lookup"],
             selection_snapshot["candidate_variants_by_base"]["tubelet_sync"],
             selection_snapshot["representative_records"],
-            selection_snapshot["local_clip_sync_confident_negative_counts"],
+            selection_snapshot["sync_confident_attacked_negative_counts"],
             mechanism_config,
             selected_candidate=selected_candidate,
         )
@@ -204,7 +205,7 @@ def select_stage2_mechanism_candidate(
             selection_snapshot["audit_lookup"],
             selection_snapshot["candidate_variants_by_base"]["tubelet_sync"],
             selection_snapshot["representative_records"],
-            selection_snapshot["local_clip_sync_confident_negative_counts"],
+            selection_snapshot["sync_confident_attacked_negative_counts"],
             mechanism_config,
             selected_candidate=selected_candidate,
         )
@@ -317,7 +318,7 @@ def _build_selection_snapshot(
     }
     observed_splits: set[str] = set()
     tubelet_sync_signatures: set[tuple[int, str, float, float]] = set()
-    local_clip_sync_confident_negative_counts: dict[str, int] = defaultdict(int)
+    sync_confident_attacked_negative_counts: dict[str, int] = defaultdict(int)
     grouped_metrics: dict[tuple[str, str, str], dict[str, Any]] = {}
 
     for event_record in record_writer.iter_event_score_records():
@@ -353,11 +354,10 @@ def _build_selection_snapshot(
         )
         if (
             base_method_variant == "tubelet_sync"
-            and attack_name == "local_clip"
             and sample_role == "attacked_negative"
-            and bool(event_record.get("sync_confident"))
+            and _record_sync_confident(event_record)
         ):
-            local_clip_sync_confident_negative_counts[method_variant] += 1
+            sync_confident_attacked_negative_counts[method_variant] += 1
 
     return {
         "record_count": record_count,
@@ -369,8 +369,8 @@ def _build_selection_snapshot(
         },
         "observed_splits": sorted(observed_splits),
         "tubelet_sync_signatures": set(tubelet_sync_signatures),
-        "local_clip_sync_confident_negative_counts": dict(
-            local_clip_sync_confident_negative_counts
+        "sync_confident_attacked_negative_counts": dict(
+            sync_confident_attacked_negative_counts
         ),
     }
 
@@ -389,6 +389,13 @@ def _build_selection_group_state(event_record: dict[str, Any]) -> dict[str, Any]
         ),
         "quality_ssim_state": _build_selection_mean_state(),
     }
+
+
+def _record_sync_confident(event_record: dict[str, Any]) -> bool:
+    mechanism_trace = event_record.get("mechanism_trace", {})
+    if isinstance(mechanism_trace, dict) and "sync_confident" in mechanism_trace:
+        return bool(mechanism_trace.get("sync_confident"))
+    return bool(event_record.get("sync_confident"))
 
 
 def _update_selection_group_state(
@@ -668,7 +675,7 @@ def _build_tubelet_sync_calibration_grid_rows(
     audit_lookup: dict[tuple[str, str, str], dict[str, Any]],
     candidate_variants: set[str],
     representative_records: dict[str, dict[str, Any]],
-    local_clip_sync_confident_negative_counts: dict[str, int],
+    sync_confident_attacked_negative_counts: dict[str, int],
     mechanism_config: dict[str, Any],
     *,
     selected_candidate: dict[str, Any],
@@ -767,8 +774,8 @@ def _build_tubelet_sync_calibration_grid_rows(
         no_attack_clean_positive_tpr = _safe_float(
             no_attack_positive_row.get("clean_positive_TPR")
         )
-        local_clip_sync_confident_negative_count = int(
-            local_clip_sync_confident_negative_counts.get(method_variant, 0)
+        sync_confident_attacked_negative_count = int(
+            sync_confident_attacked_negative_counts.get(method_variant, 0)
         )
         sync_semantics = build_sync_gain_assessment(
             absolute_tprs={
@@ -828,6 +835,9 @@ def _build_tubelet_sync_calibration_grid_rows(
                 "frame_dropping_sync_gain": frame_dropping_sync_gain,
                 "local_clip_sync_gain": local_clip_sync_gain,
                 "mean_temporal_sync_gain": mean_temporal_sync_gain,
+                "sync_confident_attacked_negative_count": (
+                    sync_confident_attacked_negative_count
+                ),
                 "temporal_crop_absolute_tpr": temporal_crop_positive_tpr,
                 "local_clip_absolute_tpr": local_clip_positive_tpr,
                 "temporal_crop_anchor_headroom": _attack_headroom(
@@ -867,7 +877,7 @@ def _build_tubelet_sync_calibration_grid_rows(
                     temporal_crop_sync_gain,
                     local_clip_sync_gain,
                     mean_temporal_sync_gain,
-                    local_clip_sync_confident_negative_count,
+                    sync_confident_attacked_negative_count,
                     mechanism_config,
                 ),
                 "selection_score": _selection_score(
@@ -898,12 +908,12 @@ def _select_tubelet_only_candidate(
     if not calibration_rows:
         raise ValueError("calibration_rows must not be empty")
     selected_row = calibration_rows[0]
+    candidate_eligible = bool(selected_row.get("candidate_eligible"))
     return {
-        "candidate_status": (
-            "fpr_controlled_candidate_selected"
-            if bool(selected_row.get("fpr_controlled"))
-            else "best_effort_candidate_selected"
-        ),
+        "candidate_status": _resolve_tubelet_only_candidate_status(selected_row),
+        "candidate_eligible": candidate_eligible,
+        "fpr_controlled": bool(selected_row.get("fpr_controlled")),
+        "quality_not_collapsed": bool(selected_row.get("quality_not_collapsed")),
         "candidate_selection_status": selected_row["candidate_selection_status"],
         "absolute_rescue_status": selected_row["absolute_rescue_status"],
         "negative_leakage_status": selected_row["negative_leakage_status"],
@@ -961,6 +971,14 @@ def _select_tubelet_only_candidate(
             ),
         },
     }
+
+
+def _resolve_tubelet_only_candidate_status(selected_row: dict[str, Any]) -> str:
+    if bool(selected_row.get("candidate_eligible")):
+        return "eligible_candidate_selected"
+    if bool(selected_row.get("fpr_controlled")):
+        return "fpr_controlled_best_effort_candidate_selected"
+    return "best_effort_candidate_selected"
 
 
 def _select_tubelet_sync_candidate(
@@ -1295,7 +1313,7 @@ def _is_tubelet_sync_candidate_eligible(
     temporal_crop_sync_gain: float | None,
     local_clip_sync_gain: float | None,
     mean_temporal_sync_gain: float | None,
-    local_clip_sync_confident_negative_count: int,
+    sync_confident_attacked_negative_count: int,
     mechanism_config: dict[str, Any],
 ) -> bool:
     if not _is_tubelet_only_candidate_eligible(
@@ -1307,7 +1325,7 @@ def _is_tubelet_sync_candidate_eligible(
         mechanism_config,
     ):
         return False
-    if int(local_clip_sync_confident_negative_count) > 0:
+    if int(sync_confident_attacked_negative_count) > 0:
         return False
     sync_semantics = build_sync_gain_assessment(
         absolute_tprs={
@@ -1783,6 +1801,8 @@ def _write_text_report(
                 "",
                 "## Selected Tubelet-only Candidate",
                 f"- candidate_status: {selected_candidate['candidate_status']}",
+                f"- candidate_eligible: {selected_candidate.get('candidate_eligible')}",
+                f"- fpr_controlled: {selected_candidate.get('fpr_controlled')}",
                 f"- method_variant: {selected_candidate['method_variant']}",
                 f"- tubelet_length: {selected_candidate['tubelet_length']}",
                 f"- spatial_patch_size: {selected_candidate['tubelet_partition']['spatial_patch_size']}",
