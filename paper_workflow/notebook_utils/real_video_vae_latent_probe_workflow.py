@@ -207,6 +207,80 @@ def prepare_probe_runtime_workspace(
     }
 
 
+def reset_probe_runtime_run_root(
+    *,
+    run_root: str | Path,
+    allowed_parent_root: str | Path | None = None,
+    reason: str = "manual_runtime_reset",
+) -> dict[str, Any]:
+    """安全重置 session-local run root, 避免旧 artifact 污染重跑.
+
+    Args:
+        run_root: 需要删除并重建的 runtime run root.
+        allowed_parent_root: 可选父目录, run_root 必须位于该目录下.
+        reason: 写入返回结果的重置原因.
+
+    Returns:
+        描述本次 reset 行为的 JSON-safe 字典.
+    """
+    resolved_run_root = Path(run_root).expanduser().resolve()
+    resolved_allowed_parent = (
+        None
+        if allowed_parent_root is None
+        else Path(allowed_parent_root).expanduser().resolve()
+    )
+    _assert_safe_probe_runtime_reset_root(
+        run_root=resolved_run_root,
+        allowed_parent_root=resolved_allowed_parent,
+    )
+
+    existed_before_reset = resolved_run_root.exists()
+    if existed_before_reset:
+        shutil.rmtree(resolved_run_root)
+    resolved_run_root.mkdir(parents=True, exist_ok=True)
+    return {
+        "reset_run_root": str(resolved_run_root),
+        "allowed_parent_root": (
+            None if resolved_allowed_parent is None else str(resolved_allowed_parent)
+        ),
+        "existed_before_reset": existed_before_reset,
+        "reason": reason,
+    }
+
+
+def _assert_safe_probe_runtime_reset_root(
+    *,
+    run_root: Path,
+    allowed_parent_root: Path | None,
+) -> None:
+    """限制 reset 只能作用于明确的 runtime run 子目录, 避免误删仓库或 Drive 根."""
+    if run_root.anchor == str(run_root):
+        raise ValueError("run_root must not be a filesystem root")
+    if len(run_root.parts) < 4:
+        raise ValueError("run_root is too broad for a governed runtime reset")
+
+    repository_root = Path(__file__).resolve().parents[2].resolve()
+    protected_roots = {
+        repository_root,
+        repository_root.parent,
+        Path.cwd().resolve(),
+    }
+    if run_root in protected_roots:
+        raise ValueError(f"run_root points to a protected directory: {run_root}")
+
+    if allowed_parent_root is None:
+        return
+    if run_root == allowed_parent_root:
+        raise ValueError("run_root must be a child of allowed_parent_root, not the parent itself")
+    try:
+        run_root.relative_to(allowed_parent_root)
+    except ValueError as exc:
+        raise ValueError(
+            f"run_root must stay under allowed_parent_root: run_root={run_root}, "
+            f"allowed_parent_root={allowed_parent_root}"
+        ) from exc
+
+
 def prepare_probe_session_model(
     *,
     model_id: str,
@@ -1071,9 +1145,18 @@ def run_probe_stage2_mechanism_calibration(
     samples_per_role: int | None = None,
     batch_size_frames: int | None = None,
     output_method_config_path: str | Path = "configs/method/tubelet_sync_real_video_vae_candidate.json",
+    reset_run_root: bool = False,
+    allowed_reset_parent_root: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Run the stage-two mechanism calibration through the notebook helper layer."""
-    return _json_safe(
+    """通过 notebook helper 层启动机制校准, 可选先清空 session-local run root."""
+    reset_summary = None
+    if reset_run_root:
+        reset_summary = reset_probe_runtime_run_root(
+            run_root=run_root,
+            allowed_parent_root=allowed_reset_parent_root,
+            reason="stage2_mechanism_calibration_rerun",
+        )
+    calibration_summary = _json_safe(
         run_stage2_mechanism_calibration(
             run_root=run_root,
             run_mode=run_mode,
@@ -1091,6 +1174,9 @@ def run_probe_stage2_mechanism_calibration(
             output_method_config_path=output_method_config_path,
         )
     )
+    if reset_summary is not None and isinstance(calibration_summary, dict):
+        calibration_summary["run_root_reset_summary"] = _json_safe(reset_summary)
+    return calibration_summary
 
 
 def export_probe_stage2_calibration_family_snapshot(

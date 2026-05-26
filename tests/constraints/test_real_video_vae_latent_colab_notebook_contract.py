@@ -246,7 +246,11 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TSTW_RUN_MAIN_FORMAL" in notebook_text
     assert "TSTW_PACKAGE_NON_FORMAL_AUDIT_BUNDLE" in notebook_text
     assert "TSTW_RUN_TUBELET_ANCHOR_FORENSICS" in notebook_text
+    assert "TSTW_RESET_STAGE2_MECHANISM_CALIBRATION_RUN_ROOT" in notebook_text
+    assert "probe_workflow.reset_probe_runtime_run_root(" in notebook_text
+    assert "reset_run_root=False" in notebook_text
     assert "'run_tubelet_anchor_forensics': True" in notebook_text
+    assert "'reset_stage2_mechanism_calibration_run_root': True" in notebook_text
     assert "'run_stage2_local_clip_sync_forensics': False" in notebook_text
     assert "'package_non_formal_audit_bundle': False" in notebook_text
     assert "selected_tubelet_anchor_forensics.csv" in notebook_text

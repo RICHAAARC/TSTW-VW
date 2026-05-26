@@ -31,6 +31,7 @@ from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
     merge_probe_method_variant_split_outputs,
     package_probe_non_formal_audit_bundle,
     prepare_probe_runtime_workspace,
+    reset_probe_runtime_run_root,
     run_probe_stage2_mechanism_calibration,
     run_probe_method_variant_splits,
     run_probe_runner,
@@ -401,6 +402,63 @@ def test_prepare_probe_runtime_workspace_preserves_build_aligned_drive_root(
     )
     assert handoff["family_root"] == str(family_root)
     assert handoff["dataset_source_mode"] == "processed_dataset_in_place"
+
+
+@pytest.mark.unit
+def test_reset_probe_runtime_run_root_removes_only_allowed_child(
+    tmp_path: Path,
+) -> None:
+    """校验 notebook reset helper 只清理允许父目录下的指定 run root.
+
+    Args:
+        tmp_path: 临时输出根目录.
+
+    Returns:
+        None.
+    """
+    allowed_parent_root = tmp_path / "runtime" / "runs"
+    run_root = allowed_parent_root / "real_video_calibration"
+    stale_artifact_path = run_root / "artifacts" / "latents" / "stale.npy"
+    sibling_artifact_path = allowed_parent_root / "sibling_run" / "keep.txt"
+    stale_artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    sibling_artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    stale_artifact_path.write_bytes(b"stale")
+    sibling_artifact_path.write_text("keep\n", encoding="utf-8")
+
+    summary = reset_probe_runtime_run_root(
+        run_root=run_root,
+        allowed_parent_root=allowed_parent_root,
+        reason="unit_test_reset",
+    )
+
+    assert summary["existed_before_reset"] is True
+    assert Path(summary["reset_run_root"]) == run_root.resolve()
+    assert run_root.exists()
+    assert not stale_artifact_path.exists()
+    assert sibling_artifact_path.exists()
+
+
+@pytest.mark.unit
+def test_reset_probe_runtime_run_root_rejects_paths_outside_allowed_parent(
+    tmp_path: Path,
+) -> None:
+    """校验 reset helper 拒绝删除允许父目录之外的路径.
+
+    Args:
+        tmp_path: 临时输出根目录.
+
+    Returns:
+        None.
+    """
+    allowed_parent_root = tmp_path / "runtime" / "runs"
+    outside_run_root = tmp_path / "other_runtime" / "runs" / "calibration"
+
+    with pytest.raises(ValueError, match="allowed_parent_root"):
+        reset_probe_runtime_run_root(
+            run_root=outside_run_root,
+            allowed_parent_root=allowed_parent_root,
+            reason="unit_test_reject",
+        )
 
 
 @pytest.mark.unit

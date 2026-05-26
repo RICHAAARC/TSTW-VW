@@ -22,6 +22,7 @@ from experiments.real_video_vae_latent_probe.runner import RealVideoVaeLatentRun
 from experiments.real_video_vae_latent_probe.output_layout import (
     build_real_video_vae_latent_output_paths,
 )
+from main.core.digest import compute_file_digest
 from main.core.records import RecordWriter
 from main.attacks.real_video_attack_registry import build_real_video_attack_registry
 from main.core.registry import load_json_config
@@ -702,8 +703,15 @@ def test_cached_reencoded_latent_artifact_uses_supplied_video_tensor(
 
     metadata = runner._cached_reencoded_latent_artifact(
         cache={},
-        video_metadata={"video_digest": "attacked-digest", "video_relpath": "artifacts/videos/attacked/sample.mp4"},
-        reference_sample=types.SimpleNamespace(),
+        video_metadata={
+            "video_digest": "attacked-digest",
+            "video_relpath": "artifacts/videos/attacked/sample.mp4",
+            "frame_count": 2,
+        },
+        reference_sample=types.SimpleNamespace(
+            sample_id="sample_dev_attacked_positive_000001",
+            latent_shape=(2, 4, 4, 4),
+        ),
         vae_runtime_backend=object(),
         vae_metadata={},
         output_root=tmp_path,
@@ -763,7 +771,7 @@ def test_runner_preserves_reference_latent_shape_across_attack_and_reencode(
         attacked_sample,
         {
             "latent_relpath": reencoded_relpath,
-            "latent_digest": "reencoded-digest",
+            "latent_digest": compute_file_digest(run_root / reencoded_relpath),
         },
     )
 
@@ -773,6 +781,46 @@ def test_runner_preserves_reference_latent_shape_across_attack_and_reencode(
     assert detection_sample.mechanism_trace["reference_latent_shape"] == [32, 4, 4, 4]
     assert detection_sample.mechanism_trace["latent_shape"] == [18, 4, 4, 4]
     assert detection_sample.latent_shape == (18, 4, 4, 4)
+
+
+@pytest.mark.unit
+def test_cached_reencoded_latent_artifact_rejects_spatial_shape_drift(
+    tmp_path: Path,
+) -> None:
+    """校验 re-encoded latent 缓存的空间分辨率不能偏离 reference sample.
+
+    Args:
+        tmp_path: 临时输出根目录.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    artifact_relpath = Path("artifacts/latents/reencoded/local_clip/sample.npy")
+    write_float_tensor_npy(
+        tmp_path / artifact_relpath,
+        (2, 4, 4, 4),
+        array("f", [0.0] * (2 * 4 * 4 * 4)),
+    )
+    reference_sample = types.SimpleNamespace(
+        sample_id="sample_dev_attacked_positive_000001",
+        latent_shape=(32, 4, 32, 32),
+    )
+
+    with pytest.raises(RuntimeError, match="channel/spatial shape drifted"):
+        runner._cached_reencoded_latent_artifact(
+            cache={},
+            video_metadata={
+                "video_digest": "attacked-video-digest",
+                "video_relpath": "artifacts/videos/attacked/sample.mp4",
+                "frame_count": 2,
+            },
+            reference_sample=reference_sample,
+            vae_runtime_backend=object(),
+            vae_metadata={},
+            output_root=tmp_path,
+            artifact_relpath=artifact_relpath,
+        )
 
 
 @pytest.mark.unit

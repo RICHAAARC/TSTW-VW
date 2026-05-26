@@ -172,6 +172,12 @@ class RealVideoVAELatentBackend(LatentBackend):
             not isinstance(target_frame_count, int) or target_frame_count < 1
         ):
             raise ValueError("target_frame_count must be a positive integer")
+        if (
+            not isinstance(latent_downsample_factor, int)
+            or isinstance(latent_downsample_factor, bool)
+            or latent_downsample_factor < 1
+        ):
+            raise ValueError("latent_downsample_factor must be a positive integer")
         if not isinstance(batch_size_frames, int) or batch_size_frames < 1:
             raise ValueError("batch_size_frames must be a positive integer")
 
@@ -183,9 +189,16 @@ class RealVideoVAELatentBackend(LatentBackend):
         self._vae_decode_mode = vae_decode_mode
         self._latent_shape = normalized_latent_shape
         self._latent_generation_seed = latent_generation_seed
+        self._latent_downsample_factor = int(latent_downsample_factor)
         self._target_frame_count = int(target_frame_count or normalized_latent_shape[0])
         if target_resolution is None:
-            self._target_resolution = (int(normalized_latent_shape[2]), int(normalized_latent_shape[3]))
+            if runtime_profile == "formal":
+                self._target_resolution = (
+                    int(normalized_latent_shape[2]) * self._latent_downsample_factor,
+                    int(normalized_latent_shape[3]) * self._latent_downsample_factor,
+                )
+            else:
+                self._target_resolution = (int(normalized_latent_shape[2]), int(normalized_latent_shape[3]))
         else:
             self._target_resolution = (int(target_resolution[0]), int(target_resolution[1]))
         self._frame_sampling_policy = frame_sampling_policy
@@ -234,6 +247,7 @@ class RealVideoVAELatentBackend(LatentBackend):
                 "vae_decode_mode": vae_decode_mode,
                 "target_frame_count": self._target_frame_count,
                 "target_resolution": list(self._target_resolution),
+                "latent_downsample_factor": self._latent_downsample_factor,
                 "frame_sampling_policy": self._frame_sampling_policy,
                 "batch_size_frames": self._batch_size_frames,
                 "dataset_manifest_path": None if self._dataset_manifest_path is None else str(self._dataset_manifest_path),
@@ -285,6 +299,11 @@ class RealVideoVAELatentBackend(LatentBackend):
             and cached_sample.latent_artifact_path is not None
             and Path(cached_sample.latent_artifact_path).exists()
         ):
+            self._validate_encoded_latent_shape(
+                cached_sample.latent_shape,
+                Path(cached_sample.latent_artifact_path),
+                "memory_sample_cache",
+            )
             return cached_sample
 
         source_video_relpath = (
@@ -332,7 +351,7 @@ class RealVideoVAELatentBackend(LatentBackend):
             "video_source_id": source_video_id,
             "video_source_relpath": source_video_relpath.as_posix(),
             "video_source_digest": source_video_metadata["video_digest"],
-            "video_frame_count": frames,
+            "video_frame_count": int(source_video_metadata["frame_count"]),
             "video_fps": self._video_fps,
             "video_resolution": [source_video_metadata["height"], source_video_metadata["width"]],
             "video_container": source_video_metadata["container"],
@@ -389,20 +408,22 @@ class RealVideoVAELatentBackend(LatentBackend):
         split: str,
         source_video_path: Path,
     ) -> tuple[dict[str, Any], str]:
-        if source_video_path.exists():
-            return {
-                "video_relpath": str(source_video_path.relative_to(self._output_root)).replace("\\", "/"),
-                "video_digest": compute_file_digest(source_video_path),
-                "frame_count": self._target_frame_count,
-                "fps": self._video_fps,
-                "height": self._target_resolution[0],
-                "width": self._target_resolution[1],
-                "codec": "libx264" if source_video_path.suffix.lower() == ".mp4" else "tensor_npy",
-                "container": "mp4" if source_video_path.suffix.lower() == ".mp4" else "npy",
-                "pixel_format": "yuv420p" if source_video_path.suffix.lower() == ".mp4" else "float32_nchw",
-            }, sample_id
-
         resolved_sample = self._resolve_dataset_sample(sample_id, split)
+        if source_video_path.exists():
+            source_video_metadata = self._read_existing_source_video_metadata(
+                source_video_path
+            )
+            self._validate_source_video_metadata(
+                source_video_metadata,
+                source_video_path,
+            )
+            source_video_id = (
+                sample_id
+                if resolved_sample is None
+                else str(resolved_sample.video_source_id)
+            )
+            return source_video_metadata, source_video_id
+
         if resolved_sample is None:
             if self._runtime_profile == "formal":
                 raise RuntimeError(
@@ -467,12 +488,18 @@ class RealVideoVAELatentBackend(LatentBackend):
     ) -> tuple[str, tuple[int, int, int, int]]:
         if encoded_latent_path.exists():
             cached_artifact = read_float_tensor_npy(encoded_latent_path)
-            return compute_file_digest(encoded_latent_path), (
+            cached_shape = (
                 int(cached_artifact.shape[0]),
                 int(cached_artifact.shape[1]),
                 int(cached_artifact.shape[2]),
                 int(cached_artifact.shape[3]),
             )
+            self._validate_encoded_latent_shape(
+                cached_shape,
+                encoded_latent_path,
+                "disk_encoded_latent_cache",
+            )
+            return compute_file_digest(encoded_latent_path), cached_shape
 
         from main.video.video_io import read_video_frames
 
@@ -488,24 +515,149 @@ class RealVideoVAELatentBackend(LatentBackend):
             standardized_video = read_video_frames(source_video_path).frames
         encoded_latent = self._vae_backend.encode_video(standardized_video)
         normalized_latent = self._normalize_encoded_latent(encoded_latent)
-
-        encoded_latent_path.parent.mkdir(parents=True, exist_ok=True)
-        write_float_tensor_npy(
-            encoded_latent_path,
-            (
-                int(normalized_latent.shape[0]),
-                int(normalized_latent.shape[1]),
-                int(normalized_latent.shape[2]),
-                int(normalized_latent.shape[3]),
-            ),
-            array("f", normalized_latent.astype("float32").reshape(-1).tolist()),
-        )
-        return compute_file_digest(encoded_latent_path), (
+        normalized_shape = (
             int(normalized_latent.shape[0]),
             int(normalized_latent.shape[1]),
             int(normalized_latent.shape[2]),
             int(normalized_latent.shape[3]),
         )
+        self._validate_encoded_latent_shape(
+            normalized_shape,
+            encoded_latent_path,
+            "fresh_encoded_latent",
+        )
+
+        encoded_latent_path.parent.mkdir(parents=True, exist_ok=True)
+        write_float_tensor_npy(
+            encoded_latent_path,
+            normalized_shape,
+            array("f", normalized_latent.astype("float32").reshape(-1).tolist()),
+        )
+        return compute_file_digest(encoded_latent_path), normalized_shape
+
+    def _read_existing_source_video_metadata(self, source_video_path: Path) -> dict[str, Any]:
+        """读取已存在的 source artifact 真实元数据, 避免用当前配置伪造旧缓存属性."""
+        if self._output_root is None:
+            raise ValueError("output_root must be set before reading source video metadata")
+        source_relpath = str(source_video_path.relative_to(self._output_root)).replace("\\", "/")
+        suffix = source_video_path.suffix.lower()
+        if suffix == ".mp4":
+            from main.video.video_io import read_video_frames
+
+            loaded_video = read_video_frames(source_video_path)
+            video_frames = loaded_video.frames
+            return {
+                "video_relpath": source_relpath,
+                "video_digest": compute_file_digest(source_video_path),
+                "frame_count": int(video_frames.shape[0]),
+                "fps": int(loaded_video.fps),
+                "height": int(video_frames.shape[1]),
+                "width": int(video_frames.shape[2]),
+                "codec": "libx264",
+                "container": "mp4",
+                "pixel_format": "yuv420p",
+            }
+        if suffix == ".npy":
+            tensor_artifact = read_float_tensor_npy(source_video_path)
+            if len(tensor_artifact.shape) != 4:
+                raise RuntimeError(
+                    f"cached source tensor must be 4D: path={source_video_path}, shape={tensor_artifact.shape}"
+                )
+            return {
+                "video_relpath": source_relpath,
+                "video_digest": compute_file_digest(source_video_path),
+                "frame_count": int(tensor_artifact.shape[0]),
+                "fps": int(self._video_fps),
+                "height": int(tensor_artifact.shape[2]),
+                "width": int(tensor_artifact.shape[3]),
+                "codec": "tensor_npy",
+                "container": "npy",
+                "pixel_format": "float32_nchw",
+            }
+        raise ValueError(f"unsupported cached source video suffix: {source_video_path.suffix}")
+
+    def _validate_source_video_metadata(
+        self,
+        source_video_metadata: dict[str, Any],
+        source_video_path: Path,
+    ) -> None:
+        """校验 source artifact 的真实输入尺寸, 阻断旧 run root 对新运行的污染."""
+        actual_shape = (
+            int(source_video_metadata["frame_count"]),
+            int(source_video_metadata["height"]),
+            int(source_video_metadata["width"]),
+        )
+        expected_shape = (
+            self._target_frame_count,
+            int(self._target_resolution[0]),
+            int(self._target_resolution[1]),
+        )
+        if actual_shape != expected_shape:
+            raise RuntimeError(
+                "cached source video metadata does not match the current runtime contract; "
+                f"path={source_video_path}, actual={actual_shape}, expected={expected_shape}"
+            )
+
+    def _strict_encoded_latent_shape_required(self) -> bool:
+        """判断当前 backend 是否必须把 encoded latent 形状绑定到正式 VAE 合同."""
+        return (
+            self._runtime_profile == "formal"
+            or self._vae_backend_name == "diffusers_autoencoder_kl_framewise"
+        )
+
+    def _expected_encoded_latent_shape(self) -> tuple[int, int, int, int]:
+        """根据视频目标分辨率与 VAE 下采样倍率计算正式 encoded latent 形状."""
+        target_height, target_width = self._target_resolution
+        if target_height % self._latent_downsample_factor != 0:
+            raise RuntimeError(
+                "target_resolution height must be divisible by latent_downsample_factor"
+            )
+        if target_width % self._latent_downsample_factor != 0:
+            raise RuntimeError(
+                "target_resolution width must be divisible by latent_downsample_factor"
+            )
+        expected_shape = (
+            self._target_frame_count,
+            int(self._latent_shape[1]),
+            int(target_height // self._latent_downsample_factor),
+            int(target_width // self._latent_downsample_factor),
+        )
+        configured_shape = (
+            self._target_frame_count,
+            int(self._latent_shape[1]),
+            int(self._latent_shape[2]),
+            int(self._latent_shape[3]),
+        )
+        if expected_shape != configured_shape:
+            raise RuntimeError(
+                "configured latent_shape does not match target_resolution / latent_downsample_factor; "
+                f"configured={configured_shape}, expected={expected_shape}"
+            )
+        return expected_shape
+
+    def _validate_encoded_latent_shape(
+        self,
+        latent_shape: tuple[int, int, int, int],
+        artifact_path: Path,
+        artifact_source: str,
+    ) -> None:
+        """校验 encoded latent 输入输出合同, 防止低分辨率缓存继续流入机制记录."""
+        if len(latent_shape) != 4 or any(int(dimension) < 1 for dimension in latent_shape):
+            raise RuntimeError(
+                f"encoded latent must be a positive 4D tensor: source={artifact_source}, "
+                f"path={artifact_path}, shape={latent_shape}"
+            )
+        if not self._strict_encoded_latent_shape_required():
+            return
+        expected_shape = self._expected_encoded_latent_shape()
+        actual_shape = tuple(int(dimension) for dimension in latent_shape)
+        if actual_shape != expected_shape:
+            raise RuntimeError(
+                "encoded latent shape does not match the current formal runtime contract; "
+                f"source={artifact_source}, path={artifact_path}, "
+                f"actual={actual_shape}, expected={expected_shape}. "
+                "Reset the run root before rerunning the notebook."
+            )
 
     def _resolve_dataset_sample(self, sample_id: str, split: str) -> Any | None:
         split_samples = self._resolved_samples_by_split.get(split, [])

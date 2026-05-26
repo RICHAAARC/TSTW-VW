@@ -1772,15 +1772,24 @@ class RealVideoVaeLatentRunner:
             )
             cached_metadata = reencoded_latent_cache.get(cache_key)
             if cached_metadata is not None:
+                self._validate_reencoded_latent_artifact_shape(
+                    output_root / cached_metadata["latent_relpath"],
+                    context.attacked_sample,
+                    context.attacked_video_metadata,
+                    "cross_event_memory_cache",
+                )
                 context.reencoded_latent_metadata = cached_metadata
                 continue
 
             output_path = output_root / context.reencoded_latent_relpath
             if output_path.exists():
-                metadata = {
-                    "latent_relpath": context.reencoded_latent_relpath.as_posix(),
-                    "latent_digest": compute_file_digest(output_path),
-                }
+                metadata = self._build_reencoded_latent_metadata_from_path(
+                    output_path,
+                    context.reencoded_latent_relpath,
+                    context.attacked_sample,
+                    context.attacked_video_metadata,
+                    "cross_event_disk_cache",
+                )
                 reencoded_latent_cache[cache_key] = metadata
                 context.reencoded_latent_metadata = metadata
                 continue
@@ -1830,6 +1839,13 @@ class RealVideoVaeLatentRunner:
                     reencoded_cache,
                     self._shared_reencoded_cache,
                 )
+                for result_context in result_contexts:
+                    self._validate_reencoded_latent_tensor_shape(
+                        encode_result.latent_tensor,
+                        result_context.attacked_sample,
+                        result_context.attacked_video_metadata,
+                        "cross_event_fresh_encode",
+                    )
                 output_path = output_root / encode_result.output_relpath
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 write_float_tensor_npy(
@@ -2727,14 +2743,23 @@ class RealVideoVaeLatentRunner:
         cache_key = (video_metadata["video_digest"], artifact_relpath.as_posix())
         cached_metadata = cache.get(cache_key)
         if cached_metadata is not None:
+            self._validate_reencoded_latent_artifact_shape(
+                output_root / cached_metadata["latent_relpath"],
+                reference_sample,
+                video_metadata,
+                "reencoded_memory_cache",
+            )
             return cached_metadata
 
         output_path = output_root / artifact_relpath
         if output_path.exists():
-            metadata = {
-                "latent_relpath": artifact_relpath.as_posix(),
-                "latent_digest": compute_file_digest(output_path),
-            }
+            metadata = self._build_reencoded_latent_metadata_from_path(
+                output_path,
+                artifact_relpath,
+                reference_sample,
+                video_metadata,
+                "reencoded_disk_cache",
+            )
             cache[cache_key] = metadata
             return metadata
 
@@ -2743,6 +2768,12 @@ class RealVideoVaeLatentRunner:
                 output_root / video_metadata["video_relpath"]
             )
         reencoded = self._encode_video_to_latent(video_tensor, vae_runtime_backend, vae_metadata)
+        self._validate_reencoded_latent_tensor_shape(
+            reencoded,
+            reference_sample,
+            video_metadata,
+            "reencoded_fresh_encode",
+        )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         write_float_tensor_npy(
             output_path,
@@ -2760,6 +2791,127 @@ class RealVideoVaeLatentRunner:
         }
         cache[cache_key] = metadata
         return metadata
+
+    def _build_reencoded_latent_metadata_from_path(
+        self,
+        artifact_path: Path,
+        artifact_relpath: Path,
+        reference_sample: LatentSample,
+        video_metadata: dict[str, Any] | None,
+        artifact_source: str,
+    ) -> dict[str, str]:
+        """从磁盘 latent artifact 构建元数据前先执行形状合同校验."""
+        self._validate_reencoded_latent_artifact_shape(
+            artifact_path,
+            reference_sample,
+            video_metadata,
+            artifact_source,
+        )
+        return {
+            "latent_relpath": artifact_relpath.as_posix(),
+            "latent_digest": compute_file_digest(artifact_path),
+        }
+
+    def _validate_reencoded_latent_artifact_shape(
+        self,
+        artifact_path: Path,
+        reference_sample: LatentSample,
+        video_metadata: dict[str, Any] | None,
+        artifact_source: str,
+    ) -> tuple[int, int, int, int]:
+        """读取 re-encoded latent 真实形状, 并阻断空间分辨率或帧数漂移."""
+        if not artifact_path.exists():
+            raise FileNotFoundError(artifact_path)
+        artifact = read_float_tensor_npy(artifact_path)
+        if len(artifact.shape) != 4:
+            raise RuntimeError(
+                "reencoded latent artifact must be 4D; "
+                f"source={artifact_source}, path={artifact_path}, shape={artifact.shape}"
+            )
+        latent_shape = (
+            int(artifact.shape[0]),
+            int(artifact.shape[1]),
+            int(artifact.shape[2]),
+            int(artifact.shape[3]),
+        )
+        self._validate_reencoded_latent_shape_contract(
+            latent_shape,
+            reference_sample,
+            video_metadata,
+            artifact_source,
+            artifact_path,
+        )
+        return latent_shape
+
+    def _validate_reencoded_latent_tensor_shape(
+        self,
+        latent_tensor: np.ndarray,
+        reference_sample: LatentSample,
+        video_metadata: dict[str, Any] | None,
+        artifact_source: str,
+    ) -> tuple[int, int, int, int]:
+        """校验刚由 VAE encode 得到的 latent tensor, 避免错误形状落盘."""
+        if not isinstance(latent_tensor, np.ndarray):
+            raise TypeError("reencoded latent tensor must be a numpy ndarray")
+        if latent_tensor.ndim != 4:
+            raise RuntimeError(
+                f"reencoded latent tensor must be 4D: source={artifact_source}, shape={latent_tensor.shape}"
+            )
+        latent_shape = (
+            int(latent_tensor.shape[0]),
+            int(latent_tensor.shape[1]),
+            int(latent_tensor.shape[2]),
+            int(latent_tensor.shape[3]),
+        )
+        self._validate_reencoded_latent_shape_contract(
+            latent_shape,
+            reference_sample,
+            video_metadata,
+            artifact_source,
+            None,
+        )
+        return latent_shape
+
+    def _validate_reencoded_latent_shape_contract(
+        self,
+        latent_shape: tuple[int, int, int, int],
+        reference_sample: LatentSample,
+        video_metadata: dict[str, Any] | None,
+        artifact_source: str,
+        artifact_path: Path | None,
+    ) -> None:
+        """把 re-encoded latent 的通道和空间维度绑定到原始 source latent."""
+        reference_shape = tuple(int(dimension) for dimension in reference_sample.latent_shape)
+        if len(reference_shape) != 4:
+            raise RuntimeError(
+                f"reference sample latent_shape must be 4D: sample_id={reference_sample.sample_id}, "
+                f"shape={reference_sample.latent_shape}"
+            )
+        actual_shape = tuple(int(dimension) for dimension in latent_shape)
+        if any(dimension < 1 for dimension in actual_shape):
+            raise RuntimeError(
+                f"reencoded latent shape dimensions must be positive: source={artifact_source}, "
+                f"path={artifact_path}, shape={actual_shape}"
+            )
+        if actual_shape[1:] != reference_shape[1:]:
+            raise RuntimeError(
+                "reencoded latent channel/spatial shape drifted from the reference sample; "
+                f"source={artifact_source}, path={artifact_path}, "
+                f"actual={actual_shape}, expected_channel_spatial={reference_shape[1:]}"
+            )
+        if video_metadata is None or "frame_count" not in video_metadata:
+            return
+        expected_frame_count = int(video_metadata["frame_count"])
+        if expected_frame_count < 1:
+            raise RuntimeError(
+                f"video frame_count must be positive for reencoded latent validation: {video_metadata}"
+            )
+        if actual_shape[0] != expected_frame_count:
+            raise RuntimeError(
+                "reencoded latent frame count does not match attacked video frame count; "
+                f"source={artifact_source}, path={artifact_path}, "
+                f"actual_frames={actual_shape[0]}, expected_frames={expected_frame_count}"
+            )
 
     def _cached_latent_copy(
         self,
@@ -2789,6 +2941,20 @@ class RealVideoVaeLatentRunner:
             int(artifact.shape[2]),
             int(artifact.shape[3]),
         )
+        self._validate_reencoded_latent_shape_contract(
+            latent_shape,
+            reference_sample,
+            None,
+            "build_reencoded_sample",
+            artifact_path,
+        )
+        actual_digest = compute_file_digest(artifact_path)
+        if actual_digest != reencoded_latent_metadata["latent_digest"]:
+            raise RuntimeError(
+                "reencoded latent metadata digest does not match the on-disk artifact; "
+                f"path={artifact_path}, metadata_digest={reencoded_latent_metadata['latent_digest']}, "
+                f"actual_digest={actual_digest}"
+            )
         mechanism_trace = dict(reference_sample.mechanism_trace or {})
         mechanism_trace.setdefault("reference_latent_shape", list(reference_sample.latent_shape))
         mechanism_trace.update(
