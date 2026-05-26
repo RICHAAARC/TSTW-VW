@@ -1117,9 +1117,41 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         if 1.0 not in normalized_candidates:
             normalized_candidates.append(1.0)
             normalized_candidates.sort()
+        normalized_candidates = self._filter_scale_candidates_for_speed_change(
+            normalized_candidates,
+            sample,
+        )
         if not normalized_candidates:
             raise ValueError("sync_search scale_candidates must contain positive numbers")
         return normalized_candidates
+
+    def _filter_scale_candidates_for_speed_change(
+        self,
+        scale_candidates: list[float],
+        sample: LatentSample | None,
+    ) -> list[float]:
+        if sample is None:
+            return scale_candidates
+        attack_params = sample.applied_attack_params or {}
+        speed_ratio = attack_params.get("speed_ratio")
+        if not isinstance(speed_ratio, (int, float)) or float(speed_ratio) <= 0.0:
+            return scale_candidates
+        normalized_speed_ratio = round(float(speed_ratio), 6)
+        if abs(normalized_speed_ratio - 1.0) <= 1e-9:
+            return [1.0]
+        if normalized_speed_ratio > 1.0:
+            filtered_candidates = [
+                scale_candidate
+                for scale_candidate in scale_candidates
+                if float(scale_candidate) >= 1.0
+            ]
+        else:
+            filtered_candidates = [
+                scale_candidate
+                for scale_candidate in scale_candidates
+                if float(scale_candidate) <= 1.0
+            ]
+        return filtered_candidates or [1.0]
 
     def _scale_search_enabled(self, sample: LatentSample | None = None) -> bool:
         sync_search_config = self._resolve_sync_search_config()

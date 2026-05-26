@@ -151,6 +151,101 @@ def test_negative_sample_uses_same_sync_search_configuration(tmp_path: Path) -> 
     assert detection_result.mechanism_trace["sync_ground_truth_offset"] == -8
 
 
+@pytest.mark.unit
+def test_speed_change_scale_search_uses_forward_attack_direction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate speed-change scale search excludes inverse-direction candidates.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    extractor = SyntheticProbeEvidenceExtractor(
+        method_variant="tubelet_sync",
+        method_config=TUBELET_SYNC_CONFIG,
+        enabled_evidence={"tubelet": True, "sync": True, "trajectory": False},
+        fusion_rule="sync_rescue_fusion",
+    )
+    speed_changed_sample = LatentSample(
+        sample_id="sample_test_speed_change_000001",
+        split="test",
+        sample_role="attacked_positive",
+        latent_shape=(13, 4, 16, 16),
+        latent_tensor_digest_random="digest_speed_change",
+        latent_generation_seed_random=19,
+        latent_backend_name="synthetic_backend",
+        latent_backend_status="ok",
+        latent_artifact_relpath="artifacts/latents/speed_change.npy",
+        latent_artifact_path="artifacts/latents/speed_change.npy",
+        mechanism_trace={
+            "reference_latent_shape": [16, 4, 16, 16],
+            "sync_ground_truth_scale": 1.25,
+        },
+        applied_attack_params={
+            "speed_ratio": 1.25,
+            "original_frame_count": 16,
+            "observed_frame_count": 13,
+            "ground_truth_scale": 1.25,
+        },
+    )
+    slowed_sample = replace(
+        speed_changed_sample,
+        applied_attack_params={
+            "speed_ratio": 0.8,
+            "original_frame_count": 16,
+            "observed_frame_count": 20,
+            "ground_truth_scale": 0.8,
+        },
+    )
+
+    assert extractor._resolve_scale_candidates(speed_changed_sample) == [1.0, 1.25]
+    assert extractor._resolve_scale_candidates(slowed_sample) == [0.8, 1.0]
+
+    monkeypatch.setattr(extractor, "_resolve_offset_candidates", lambda sample: [0])
+
+    def score_alignment_candidate(
+        descriptors: list[object],
+        tensor_artifact: object,
+        reference_descriptor_map: dict[tuple[int, int, int], object],
+        codebook: object,
+        offset_candidate: int,
+        scale_candidate: float,
+    ) -> dict[str, float | int]:
+        del descriptors, tensor_artifact, reference_descriptor_map, codebook, offset_candidate
+        candidate_score = {0.8: 0.99, 1.0: 0.2, 1.25: 0.7}[round(float(scale_candidate), 6)]
+        return {
+            "sync_alignment_matched_count": 8,
+            "sync_alignment_candidate_count": 8,
+            "sync_alignment_coverage_ratio": 1.0,
+            "sync_candidate_score_raw": candidate_score,
+            "sync_candidate_score_penalized": candidate_score,
+            "sync_candidate_score_hybrid": candidate_score,
+        }
+
+    monkeypatch.setattr(extractor, "_score_alignment_candidate", score_alignment_candidate)
+    alignment_scores, _candidate_metrics, search_score_rule = extractor._build_alignment_candidate_scores(
+        [],
+        object(),
+        {},
+        object(),
+        speed_changed_sample,
+    )
+    sync_result = extractor._build_sync_search_result(
+        alignment_scores,
+        speed_changed_sample.mechanism_trace or {},
+        speed_changed_sample,
+        search_score_rule,
+    )
+
+    assert (0, 0.8) not in alignment_scores
+    assert set(alignment_scores) == {(0, 1.0), (0, 1.25)}
+    assert sync_result["sync_estimated_scale"] == 1.25
+    assert sync_result["sync_scale_error"] == 0.0
+
+
 def test_sync_alignment_expands_offset_range_for_short_local_clip(tmp_path: Path) -> None:
     """Validate short local clips can search the full observable negative offset range.
 
