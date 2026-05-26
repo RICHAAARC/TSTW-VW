@@ -1139,12 +1139,15 @@ def export_probe_stage2_calibration_family_snapshot(
     else:
         raise FileNotFoundError(summary_source_path)
 
-    candidate_source_path = Path(
-        summary_payload.get(
-            "generated_tubelet_sync_candidate_config_path",
-            resolved_run_root / "artifacts" / "tubelet_sync_real_video_vae_candidate.json",
-        )
+    candidate_source_path_value = summary_payload.get(
+        "generated_tubelet_sync_candidate_config_path"
     )
+    if candidate_source_path_value is None:
+        candidate_source_path = (
+            resolved_run_root / "artifacts" / "tubelet_sync_real_video_vae_candidate.json"
+        )
+    else:
+        candidate_source_path = Path(candidate_source_path_value)
     candidate_copy_path = None
     if candidate_source_path.exists():
         candidate_copy_path = stage2_family_root / "tubelet_sync_real_video_vae_candidate.json"

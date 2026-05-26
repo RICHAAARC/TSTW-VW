@@ -687,6 +687,60 @@ def test_export_probe_stage2_calibration_family_snapshot_persists_summary_and_ca
 
 
 @pytest.mark.unit
+def test_export_probe_stage2_calibration_family_snapshot_skips_missing_candidate(
+    tmp_path: Path,
+) -> None:
+    """Validate calibration-only export succeeds when no sync candidate config was generated.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    family_root = tmp_path / "families" / "family_a"
+    calibration_run_root = tmp_path / "runs" / "stage2_calibration"
+    artifacts_root = calibration_run_root / "artifacts"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+
+    summary_path = artifacts_root / "stage2_mechanism_calibration_summary.json"
+    summary_path.write_text(
+        json.dumps(
+            {
+                "calibration_summary_path": str(summary_path),
+                "selection_completion_status": "incomplete_no_eligible_tubelet_sync_candidate",
+                "selection_blocking_reason": "no_tubelet_sync_candidate_passes_selection_gate",
+                "generated_tubelet_sync_candidate_config_path": None,
+                "selected_tubelet_sync_candidate": None,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = export_probe_stage2_calibration_family_snapshot(
+        family_root=family_root,
+        calibration_run_root=calibration_run_root,
+        calibration_summary={
+            "calibration_summary_path": str(summary_path),
+            "selection_completion_status": "incomplete_no_eligible_tubelet_sync_candidate",
+            "selection_blocking_reason": "no_tubelet_sync_candidate_passes_selection_gate",
+            "generated_tubelet_sync_candidate_config_path": None,
+            "selected_tubelet_sync_candidate": None,
+        },
+    )
+
+    stage2_family_root = family_root / "stage2_calibration"
+    assert summary["stage2_family_root"] == str(stage2_family_root)
+    assert summary["candidate_copy_path"] is None
+    assert summary["selected_tubelet_sync_candidate_present"] is False
+    assert (stage2_family_root / "stage2_mechanism_calibration_summary.json").exists()
+    assert not (stage2_family_root / "tubelet_sync_real_video_vae_candidate.json").exists()
+
+
+@pytest.mark.unit
 def test_write_probe_stage2_local_clip_sync_diagnostics_skips_without_selected_candidate(
     tmp_path: Path,
 ) -> None:
