@@ -11,6 +11,7 @@ import copy
 import hashlib
 import itertools
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,42 @@ DEFAULT_MECHANISM_CONFIG_PATH = ROOT / "configs" / "protocol" / "stage2_mechanis
 DEFAULT_OUTPUT_METHOD_CONFIG_PATH = (
     ROOT / "configs" / "method" / "tubelet_sync_real_video_vae_candidate.json"
 )
+
+
+def _remove_stale_stage2_calibration_artifacts(
+    *,
+    run_root_path: Path,
+    output_method_config_file: Path,
+) -> None:
+    """功能：清理阶段 2 calibration 复跑前的易污染旧产物。
+
+    Remove stale stage-two calibration artifacts before a rerun.
+
+    Args:
+        run_root_path: Calibration run-root path.
+        output_method_config_file: Candidate method-config output path.
+
+    Returns:
+        None.
+    """
+    stale_directory_paths = (
+        run_root_path / "artifacts" / "mechanism_calibration_workspace",
+        run_root_path / "artifacts" / "stage_runtime_shared_artifacts",
+        run_root_path / "artifacts" / "stage2_mechanism_calibration_timing_context",
+        run_root_path / "stages",
+    )
+    for stale_directory_path in stale_directory_paths:
+        if stale_directory_path.exists():
+            shutil.rmtree(stale_directory_path)
+
+    stale_artifact_paths = (
+        run_root_path / "artifacts" / "stage2_mechanism_calibration_summary.json",
+        run_root_path / "artifacts" / "stage2_mechanism_calibration_timing_summary.json",
+        output_method_config_file,
+    )
+    for stale_artifact_path in stale_artifact_paths:
+        if stale_artifact_path.exists():
+            stale_artifact_path.unlink()
 
 
 def run_stage2_mechanism_calibration(
@@ -125,6 +162,10 @@ def run_stage2_mechanism_calibration(
     )
     calibration_timing_root = (
         run_root_path / "artifacts" / "stage2_mechanism_calibration_timing_context"
+    )
+    _remove_stale_stage2_calibration_artifacts(
+        run_root_path=run_root_path,
+        output_method_config_file=output_method_config_file,
     )
     calibration_timing_recorder = RunTimingRecorder(
         calibration_timing_root,

@@ -247,10 +247,22 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "'run_stage2_local_clip_sync_forensics': False" in notebook_text
     assert "'package_non_formal_audit_bundle': False" in notebook_text
     assert "TL02_CONTROLLED_SYNC_WIDE_GRID" in notebook_text
+    assert "TL02_CONTROLLED_EMBEDDING_MARGINS = [0.25, 0.4, 0.6]" in notebook_text
     assert "TL02_CONTROLLED_SEARCH_STAGE_NAMES" in notebook_text
     assert "'lambda_sync': [0.0, 0.025]" in notebook_text
     assert "'sync_search_radius': [8, 12]" in notebook_text
     assert "'min_sync_alignment_coverage_ratio': [0.25, 0.5]" in notebook_text
+    assert (
+        "stage2_grid_override_payload['grid']['embedding_margin'] = "
+        "TL02_CONTROLLED_EMBEDDING_MARGINS"
+        in notebook_text
+    )
+    assert (
+        "stage_payload['grid']['embedding_margin'] = TL02_CONTROLLED_EMBEDDING_MARGINS"
+        in notebook_text
+    )
+    assert "stage_payload['grid'].pop('embedding_margin', None)" in notebook_text
+    assert "'embedding_margin': 'inherit_selected_anchor'" in notebook_text
     assert "stage2_controlled_search_stage_summary" in notebook_text
     assert (
         "tl02_controlled_validation_limits_sync_search_to_anchor_and_narrow_sync_wide"

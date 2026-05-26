@@ -828,3 +828,120 @@ def test_calibration_config_carries_non_default_embedding_margin() -> None:
     assert "_em600" in tubelet_only_config["method_variant"]
     assert tubelet_sync_config["embedding_margin"] == 0.6
     assert "_em600_" in tubelet_sync_config["method_variant"]
+
+
+@pytest.mark.unit
+def test_stage2_mechanism_calibration_runner_removes_stale_artifacts_before_rerun(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate reruns remove stale artifacts before generating fresh calibration outputs.
+
+    Args:
+        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    run_root = tmp_path / "mechanism_calibration_run"
+    artifacts_root = run_root / "artifacts"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    stale_summary_path = artifacts_root / "stage2_mechanism_calibration_summary.json"
+    stale_timing_summary_path = (
+        artifacts_root / "stage2_mechanism_calibration_timing_summary.json"
+    )
+    stale_workspace_marker_path = (
+        artifacts_root / "mechanism_calibration_workspace" / "stale_workspace_marker.json"
+    )
+    stale_workspace_marker_path.parent.mkdir(parents=True, exist_ok=True)
+    stale_workspace_marker_path.write_text(
+        json.dumps({"status": "stale_workspace"}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    stale_shared_artifacts_path = (
+        artifacts_root / "stage_runtime_shared_artifacts" / "stale_shared_artifact.json"
+    )
+    stale_shared_artifacts_path.parent.mkdir(parents=True, exist_ok=True)
+    stale_shared_artifacts_path.write_text(
+        json.dumps({"status": "stale_shared_artifact"}, ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+    stale_stage_marker_path = run_root / "stages" / "anchor_tubelet_only_wide" / "stale.txt"
+    stale_stage_marker_path.parent.mkdir(parents=True, exist_ok=True)
+    stale_stage_marker_path.write_text("stale-stage-output\n", encoding="utf-8")
+    stale_timing_events_path = (
+        artifacts_root
+        / "stage2_mechanism_calibration_timing_context"
+        / "runtime_profile"
+        / "run_timing_events.jsonl"
+    )
+    stale_timing_events_path.parent.mkdir(parents=True, exist_ok=True)
+    stale_timing_events_path.write_text(
+        json.dumps({"event_name": "stale_timing_event"}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    stale_candidate_path = tmp_path / "stale_candidate.json"
+    for stale_file_path in (
+        stale_summary_path,
+        stale_timing_summary_path,
+        stale_candidate_path,
+    ):
+        stale_file_path.write_text(
+            json.dumps({"status": "stale"}, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    def _fake_load_json_config(file_path: str | Path) -> dict[str, object]:
+        resolved_path = Path(file_path)
+        if resolved_path.name == "stage2_vae_mechanism_calibration_grid.json":
+            return {
+                "allowed_splits": ["dev"],
+                "forbidden_splits": ["test"],
+                "search_stages": [
+                    {
+                        "stage_name": "anchor_tubelet_only_wide",
+                        "selection_scope": "tubelet_only",
+                        "grid": {"tubelet_length": [1]},
+                    }
+                ],
+            }
+        return {}
+
+    def _raise_calibration_failure(**_: object) -> dict[str, object]:
+        raise RuntimeError("synthetic calibration failure")
+
+    monkeypatch.setattr(calibration_runner_module, "load_json_config", _fake_load_json_config)
+    monkeypatch.setattr(
+        calibration_runner_module,
+        "_build_calibration_protocol_config",
+        lambda **_: {"splits": ["dev"]},
+    )
+    monkeypatch.setattr(
+        calibration_runner_module,
+        "_build_calibration_runtime_config",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        calibration_runner_module,
+        "_run_staged_mechanism_calibration",
+        _raise_calibration_failure,
+    )
+
+    with pytest.raises(RuntimeError, match="synthetic calibration failure"):
+        run_stage2_mechanism_calibration(
+            run_root=run_root,
+            output_method_config_path=stale_candidate_path,
+        )
+
+    assert not stale_summary_path.exists()
+    assert not stale_timing_summary_path.exists()
+    assert not stale_candidate_path.exists()
+    assert not stale_shared_artifacts_path.exists()
+    assert not stale_stage_marker_path.exists()
+    assert not stale_workspace_marker_path.exists()
+    assert stale_timing_events_path.exists()
+    timing_events_text = stale_timing_events_path.read_text(encoding="utf-8")
+    assert "stale_timing_event" not in timing_events_text
+    assert "stage2_calibration_prepare_configs" in timing_events_text
