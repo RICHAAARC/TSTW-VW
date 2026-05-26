@@ -19,6 +19,10 @@ import pytest
 pytestmark = pytest.mark.quick
 
 from experiments.real_video_vae_latent_probe.runner import RealVideoVaeLatentRunner
+from experiments.real_video_vae_latent_probe.output_layout import (
+    build_real_video_vae_latent_output_paths,
+)
+from main.core.records import RecordWriter
 from main.attacks.real_video_attack_registry import build_real_video_attack_registry
 from main.core.registry import load_json_config
 from main.core.schema import LatentSample
@@ -156,6 +160,68 @@ def test_runner_formats_runtime_config_paths_for_repo_and_external_configs(
         == "configs/protocol/real_video_vae_latent_probe.json"
     )
     assert runner._format_runtime_config_path(external_config_path) == str(external_config_path)
+
+
+@pytest.mark.unit
+def test_runner_reset_incremental_outputs_clears_runner_outputs_only(tmp_path: Path) -> None:
+    """Validate reruns remove stale runner outputs without deleting notebook-owned artifacts.
+
+    Args:
+        tmp_path: Temporary output root.
+
+    Returns:
+        None.
+    """
+    runner = RealVideoVaeLatentRunner(ROOT)
+    output_root = tmp_path / "rerun_root"
+    output_paths = build_real_video_vae_latent_output_paths(output_root)
+    record_writer = RecordWriter(output_root)
+
+    output_paths.event_scores_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.event_scores_path.write_text("{}\n", encoding="utf-8")
+    output_paths.thresholds_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.thresholds_path.write_text("[]\n", encoding="utf-8")
+    output_paths.run_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.run_manifest_path.write_text("{}\n", encoding="utf-8")
+    output_paths.artifact_manifest_path.write_text("{}\n", encoding="utf-8")
+    output_paths.runtime_manifest_path.write_text("{}\n", encoding="utf-8")
+    output_paths.runtime_config_path.write_text("{}\n", encoding="utf-8")
+    session_model_manifest_path = output_root / "artifacts" / "session_model_manifest.json"
+    session_model_manifest_path.write_text("{}\n", encoding="utf-8")
+    (output_root / "runtime_profile" / "run_timing_summary.json").parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    (output_root / "runtime_profile" / "run_timing_summary.json").write_text(
+        "{}\n",
+        encoding="utf-8",
+    )
+    output_paths.main_tpr_fpr_table_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.main_tpr_fpr_table_path.write_text("a,b\n", encoding="utf-8")
+    output_paths.quality_robustness_tradeoff_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.quality_robustness_tradeoff_path.write_bytes(b"png")
+    output_paths.report_path.parent.mkdir(parents=True, exist_ok=True)
+    output_paths.report_path.write_text("report\n", encoding="utf-8")
+    output_paths.failure_case_gallery_path.mkdir(parents=True, exist_ok=True)
+    (output_paths.failure_case_gallery_path / "sample.txt").write_text(
+        "gallery\n",
+        encoding="utf-8",
+    )
+
+    runner._reset_incremental_outputs(record_writer)
+
+    assert not output_paths.event_scores_path.exists()
+    assert not output_paths.thresholds_path.exists()
+    assert not output_paths.run_manifest_path.exists()
+    assert not output_paths.artifact_manifest_path.exists()
+    assert not output_paths.runtime_manifest_path.exists()
+    assert not output_paths.runtime_config_path.exists()
+    assert session_model_manifest_path.exists()
+    assert not (output_root / "runtime_profile").exists()
+    assert not output_paths.main_tpr_fpr_table_path.parent.exists()
+    assert not output_paths.quality_robustness_tradeoff_path.parent.exists()
+    assert not output_paths.report_path.parent.exists()
+    assert not output_paths.failure_case_gallery_path.exists()
 
 
 @pytest.mark.unit

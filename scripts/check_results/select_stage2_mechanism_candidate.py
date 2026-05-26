@@ -9,11 +9,14 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 from experiments.real_video_vae_latent_probe.mechanism_audit import (
-    build_stage2_mechanism_audit_rows,
+    _build_threshold_index,
+    _resolved_decision_value,
 )
 from experiments.real_video_vae_latent_probe.mechanism_semantics import (
     build_anchor_selection_assessment,
@@ -120,22 +123,23 @@ def select_stage2_mechanism_candidate(
         raise ValueError("top_candidate_limit must be a positive integer")
 
     record_writer = RecordWriter(run_root_path)
-    event_score_records = record_writer.read_event_score_records()
-    if not event_score_records:
-        raise ValueError("event_score_records must not be empty")
     try:
         threshold_records = record_writer.read_threshold_records()
     except FileNotFoundError:
         threshold_records = []
 
-    audit_rows = build_stage2_mechanism_audit_rows(
-        event_score_records,
+    selection_snapshot = _build_selection_snapshot(
+        record_writer,
         threshold_records,
         allowed_splits=set(allowed_splits),
     )
+    if int(selection_snapshot["record_count"]) < 1:
+        raise ValueError("event_score_records must not be empty")
+
     tubelet_only_rows = _build_tubelet_only_calibration_grid_rows(
-        audit_rows,
-        event_score_records,
+        selection_snapshot["audit_lookup"],
+        selection_snapshot["candidate_variants_by_base"]["tubelet_only"],
+        selection_snapshot["representative_records"],
         mechanism_config,
     )
     selected_candidate = None
@@ -162,10 +166,11 @@ def select_stage2_mechanism_candidate(
             grid_config,
         )
         tubelet_sync_rows = _build_tubelet_sync_calibration_grid_rows(
-            audit_rows,
-            event_score_records,
+            selection_snapshot["audit_lookup"],
+            selection_snapshot["candidate_variants_by_base"]["tubelet_sync"],
+            selection_snapshot["representative_records"],
+            selection_snapshot["local_clip_sync_confident_negative_counts"],
             mechanism_config,
-            allowed_splits=set(allowed_splits),
             selected_candidate=selected_candidate,
         )
         if tubelet_sync_rows:
@@ -180,7 +185,7 @@ def select_stage2_mechanism_candidate(
             selection_completion_status = "incomplete_no_compatible_tubelet_sync_rows"
             selection_blocking_reason = "selected_anchor_not_covered_by_sync_stage_records"
             selection_blocking_details = _build_sync_stage_blocking_details(
-                event_score_records,
+                selection_snapshot["tubelet_sync_signatures"],
                 selected_candidate,
             )
         calibration_rows = list(tubelet_sync_rows)
@@ -194,10 +199,11 @@ def select_stage2_mechanism_candidate(
             grid_config,
         )
         tubelet_sync_rows = _build_tubelet_sync_calibration_grid_rows(
-            audit_rows,
-            event_score_records,
+            selection_snapshot["audit_lookup"],
+            selection_snapshot["candidate_variants_by_base"]["tubelet_sync"],
+            selection_snapshot["representative_records"],
+            selection_snapshot["local_clip_sync_confident_negative_counts"],
             mechanism_config,
-            allowed_splits=set(allowed_splits),
             selected_candidate=selected_candidate,
         )
         if tubelet_sync_rows:
@@ -212,11 +218,11 @@ def select_stage2_mechanism_candidate(
             selection_completion_status = "incomplete_no_compatible_tubelet_sync_rows"
             selection_blocking_reason = "selected_anchor_not_covered_by_sync_stage_records"
             selection_blocking_details = _build_sync_stage_blocking_details(
-                event_score_records,
+                selection_snapshot["tubelet_sync_signatures"],
                 selected_candidate,
             )
         calibration_rows = [*tubelet_only_rows, *tubelet_sync_rows]
-    observed_splits = sorted({str(record.get("split")) for record in event_score_records})
+    observed_splits = list(selection_snapshot["observed_splits"])
     observed_forbidden_splits = sorted(set(observed_splits) & set(forbidden_splits))
 
     candidate_payload = {
@@ -294,41 +300,230 @@ def select_stage2_mechanism_candidate(
     }
 
 
+def _build_selection_snapshot(
+    record_writer: RecordWriter,
+    threshold_records: list[dict[str, Any]],
+    *,
+    allowed_splits: set[str],
+) -> dict[str, Any]:
+    threshold_index = _build_threshold_index(threshold_records)
+    record_count = 0
+    representative_records: dict[str, dict[str, Any]] = {}
+    candidate_variants_by_base = {
+        "tubelet_only": set(),
+        "tubelet_sync": set(),
+    }
+    observed_splits: set[str] = set()
+    tubelet_sync_signatures: set[tuple[int, str, float]] = set()
+    local_clip_sync_confident_negative_counts: dict[str, int] = defaultdict(int)
+    grouped_metrics: dict[tuple[str, str, str], dict[str, Any]] = {}
+
+    for event_record in record_writer.iter_event_score_records():
+        record_count += 1
+        method_variant = str(event_record.get("method_variant"))
+        base_method_variant = str(
+            event_record.get("base_method_variant", event_record.get("method_variant"))
+        )
+        split_name = str(event_record.get("split"))
+        observed_splits.add(split_name)
+
+        if method_variant not in representative_records:
+            representative_records[method_variant] = event_record
+        if base_method_variant in candidate_variants_by_base:
+            candidate_variants_by_base[base_method_variant].add(method_variant)
+        if base_method_variant == "tubelet_sync":
+            tubelet_sync_signatures.add(_build_sync_stage_signature(event_record))
+
+        if split_name not in allowed_splits:
+            continue
+
+        attack_name = str(event_record.get("attack_name"))
+        sample_role = str(event_record.get("sample_role"))
+        group_key = (method_variant, attack_name, sample_role)
+        grouped_metrics.setdefault(
+            group_key,
+            _build_selection_group_state(event_record),
+        )
+        _update_selection_group_state(
+            grouped_metrics[group_key],
+            event_record,
+            threshold_index,
+        )
+        if (
+            base_method_variant == "tubelet_sync"
+            and attack_name == "local_clip"
+            and sample_role == "attacked_negative"
+            and bool(event_record.get("sync_confident"))
+        ):
+            local_clip_sync_confident_negative_counts[method_variant] += 1
+
+    return {
+        "record_count": record_count,
+        "audit_lookup": _build_selection_audit_lookup(grouped_metrics),
+        "representative_records": representative_records,
+        "candidate_variants_by_base": {
+            base_method_variant: set(method_variants)
+            for base_method_variant, method_variants in candidate_variants_by_base.items()
+        },
+        "observed_splits": sorted(observed_splits),
+        "tubelet_sync_signatures": set(tubelet_sync_signatures),
+        "local_clip_sync_confident_negative_counts": dict(
+            local_clip_sync_confident_negative_counts
+        ),
+    }
+
+
+def _build_selection_group_state(event_record: dict[str, Any]) -> dict[str, Any]:
+    mechanism_trace = event_record.get("mechanism_trace", {})
+    if not isinstance(mechanism_trace, dict):
+        mechanism_trace = {}
+    return {
+        "run_id": event_record.get("run_id"),
+        "construction_phase": mechanism_trace.get("construction_phase"),
+        "decision_sum": 0.0,
+        "decision_count": 0,
+        "quality_psnr_state": _build_selection_mean_state(
+            allow_positive_infinity=True,
+        ),
+        "quality_ssim_state": _build_selection_mean_state(),
+    }
+
+
+def _update_selection_group_state(
+    group_state: dict[str, Any],
+    event_record: dict[str, Any],
+    threshold_index: dict[str, Any],
+) -> None:
+    group_state["decision_sum"] += _resolved_decision_value(
+        event_record,
+        threshold_index,
+    )
+    group_state["decision_count"] += 1
+
+    quality_metrics = event_record.get("quality_metrics", {})
+    if not isinstance(quality_metrics, dict):
+        quality_metrics = {}
+    _update_selection_mean_state(
+        group_state["quality_psnr_state"],
+        quality_metrics.get("watermarked_video_psnr"),
+    )
+    _update_selection_mean_state(
+        group_state["quality_ssim_state"],
+        quality_metrics.get("watermarked_video_ssim"),
+    )
+
+
+def _build_selection_mean_state(*, allow_positive_infinity: bool = False) -> dict[str, Any]:
+    return {
+        "sum": 0.0,
+        "count": 0,
+        "positive_infinity_present": False,
+        "allow_positive_infinity": allow_positive_infinity,
+    }
+
+
+def _update_selection_mean_state(mean_state: dict[str, Any], field_value: Any) -> None:
+    numeric_value = _safe_float(field_value)
+    if numeric_value is None:
+        return
+    if math.isfinite(numeric_value):
+        mean_state["sum"] += numeric_value
+        mean_state["count"] += 1
+        return
+    if (
+        bool(mean_state.get("allow_positive_infinity"))
+        and math.isinf(numeric_value)
+        and numeric_value > 0
+    ):
+        mean_state["positive_infinity_present"] = True
+
+
+def _finalize_selection_mean_state(mean_state: dict[str, Any]) -> float | None:
+    if int(mean_state.get("count", 0)) < 1:
+        if bool(mean_state.get("positive_infinity_present")):
+            return math.inf
+        return None
+    if bool(mean_state.get("positive_infinity_present")):
+        return math.inf
+    return round(float(mean_state["sum"]) / int(mean_state["count"]), 6)
+
+
+def _selection_group_decision_rate(group_state: dict[str, Any] | None) -> float | None:
+    if not isinstance(group_state, dict):
+        return None
+    decision_count = int(group_state.get("decision_count", 0))
+    if decision_count < 1:
+        return None
+    return round(float(group_state["decision_sum"]) / decision_count, 6)
+
+
+def _build_selection_audit_lookup(
+    grouped_metrics: dict[tuple[str, str, str], dict[str, Any]],
+) -> dict[tuple[str, str, str], dict[str, Any]]:
+    audit_lookup: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for group_key, group_state in grouped_metrics.items():
+        method_variant, attack_name, sample_role = group_key
+        audit_lookup[group_key] = {
+            "run_id": group_state.get("run_id"),
+            "construction_phase": group_state.get("construction_phase"),
+            "method_variant": method_variant,
+            "attack_name": attack_name,
+            "sample_role": sample_role,
+            "clean_negative_FPR": _selection_group_decision_rate(
+                grouped_metrics.get((method_variant, attack_name, "clean_negative"))
+            ),
+            "attacked_negative_FPR": _selection_group_decision_rate(
+                grouped_metrics.get((method_variant, attack_name, "attacked_negative"))
+            ),
+            "clean_positive_TPR": _selection_group_decision_rate(
+                grouped_metrics.get(
+                    (method_variant, attack_name, "watermarked_positive")
+                )
+            ),
+            "attacked_positive_TPR": _selection_group_decision_rate(
+                grouped_metrics.get((method_variant, attack_name, "attacked_positive"))
+            ),
+            "quality_psnr_mean": _finalize_selection_mean_state(
+                group_state["quality_psnr_state"]
+            ),
+            "quality_ssim_mean": _finalize_selection_mean_state(
+                group_state["quality_ssim_state"]
+            ),
+        }
+    return audit_lookup
+
+
+def _build_sync_stage_signature(event_record: dict[str, Any]) -> tuple[int, str, float]:
+    return (
+        int(event_record.get("tubelet_length", 1)),
+        json.dumps(
+            event_record.get("mechanism_trace", {}).get("spatial_patch_size", [4, 4]),
+            ensure_ascii=False,
+        ),
+        round(float(_resolve_projection_support_weight(event_record) or 0.0), 6),
+    )
+
+
 def _build_tubelet_only_calibration_grid_rows(
-    audit_rows: list[dict[str, Any]],
-    event_score_records: list[dict[str, Any]],
+    audit_lookup: dict[tuple[str, str, str], dict[str, Any]],
+    candidate_variants: set[str],
+    representative_records: dict[str, dict[str, Any]],
     mechanism_config: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    lookup = {
-        (
-            str(row.get("method_variant")),
-            str(row.get("attack_name")),
-            str(row.get("sample_role")),
-        ): row
-        for row in audit_rows
-    }
     required_attacks = _read_string_list(mechanism_config, "required_mechanism_attacks")
-    candidate_variants = sorted(
-        {
-            str(record.get("method_variant"))
-            for record in event_score_records
-            if str(record.get("base_method_variant", record.get("method_variant")))
-            == "tubelet_only"
-        }
-    )
     rows: list[dict[str, Any]] = []
-    for method_variant in candidate_variants:
-        representative_record = _find_variant_record(event_score_records, method_variant)
+    for method_variant in sorted(candidate_variants):
+        representative_record = representative_records.get(method_variant)
         if representative_record is None:
             continue
-        no_attack_negative_row = lookup.get((method_variant, "no_attack", "clean_negative"), {})
-        no_attack_positive_row = lookup.get((method_variant, "no_attack", "watermarked_positive"), {})
-        temporal_crop_row = lookup.get((method_variant, "temporal_crop", "attacked_positive"), {})
-        frame_dropping_row = lookup.get((method_variant, "frame_dropping", "attacked_positive"), {})
-        local_clip_row = lookup.get((method_variant, "local_clip", "attacked_positive"), {})
+        no_attack_negative_row = audit_lookup.get((method_variant, "no_attack", "clean_negative"), {})
+        no_attack_positive_row = audit_lookup.get((method_variant, "no_attack", "watermarked_positive"), {})
+        temporal_crop_row = audit_lookup.get((method_variant, "temporal_crop", "attacked_positive"), {})
+        frame_dropping_row = audit_lookup.get((method_variant, "frame_dropping", "attacked_positive"), {})
+        local_clip_row = audit_lookup.get((method_variant, "local_clip", "attacked_positive"), {})
         attacked_negative_rates = [
             _safe_float(
-                lookup.get((method_variant, attack_name, "attacked_negative"), {}).get(
+                audit_lookup.get((method_variant, attack_name, "attacked_negative"), {}).get(
                     "attacked_negative_FPR"
                 )
             )
@@ -466,21 +661,14 @@ def _build_tubelet_only_calibration_grid_rows(
 
 
 def _build_tubelet_sync_calibration_grid_rows(
-    audit_rows: list[dict[str, Any]],
-    event_score_records: list[dict[str, Any]],
+    audit_lookup: dict[tuple[str, str, str], dict[str, Any]],
+    candidate_variants: set[str],
+    representative_records: dict[str, dict[str, Any]],
+    local_clip_sync_confident_negative_counts: dict[str, int],
     mechanism_config: dict[str, Any],
     *,
-    allowed_splits: set[str],
     selected_candidate: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    lookup = {
-        (
-            str(row.get("method_variant")),
-            str(row.get("attack_name")),
-            str(row.get("sample_role")),
-        ): row
-        for row in audit_rows
-    }
     required_attacks = _read_string_list(mechanism_config, "required_mechanism_attacks")
     selected_spatial_patch_size = list(
         selected_candidate["tubelet_partition"]["spatial_patch_size"]
@@ -495,17 +683,9 @@ def _build_tubelet_sync_calibration_grid_rows(
     )
     selected_tubelet_length = int(selected_candidate["tubelet_length"])
     tubelet_only_metrics = selected_candidate["metrics"]
-    candidate_variants = sorted(
-        {
-            str(record.get("method_variant"))
-            for record in event_score_records
-            if str(record.get("base_method_variant", record.get("method_variant")))
-            == "tubelet_sync"
-        }
-    )
     rows: list[dict[str, Any]] = []
-    for method_variant in candidate_variants:
-        representative_record = _find_variant_record(event_score_records, method_variant)
+    for method_variant in sorted(candidate_variants):
+        representative_record = representative_records.get(method_variant)
         if representative_record is None:
             continue
         spatial_patch_size = representative_record.get("mechanism_trace", {}).get(
@@ -520,14 +700,14 @@ def _build_tubelet_sync_calibration_grid_rows(
         if support_weight != selected_support_weight:
             continue
 
-        no_attack_negative_row = lookup.get((method_variant, "no_attack", "clean_negative"), {})
-        no_attack_positive_row = lookup.get((method_variant, "no_attack", "watermarked_positive"), {})
-        temporal_crop_row = lookup.get((method_variant, "temporal_crop", "attacked_positive"), {})
-        frame_dropping_row = lookup.get((method_variant, "frame_dropping", "attacked_positive"), {})
-        local_clip_row = lookup.get((method_variant, "local_clip", "attacked_positive"), {})
+        no_attack_negative_row = audit_lookup.get((method_variant, "no_attack", "clean_negative"), {})
+        no_attack_positive_row = audit_lookup.get((method_variant, "no_attack", "watermarked_positive"), {})
+        temporal_crop_row = audit_lookup.get((method_variant, "temporal_crop", "attacked_positive"), {})
+        frame_dropping_row = audit_lookup.get((method_variant, "frame_dropping", "attacked_positive"), {})
+        local_clip_row = audit_lookup.get((method_variant, "local_clip", "attacked_positive"), {})
         attacked_negative_rates = [
             _safe_float(
-                lookup.get((method_variant, attack_name, "attacked_negative"), {}).get(
+                audit_lookup.get((method_variant, attack_name, "attacked_negative"), {}).get(
                     "attacked_negative_FPR"
                 )
             )
@@ -576,12 +756,8 @@ def _build_tubelet_sync_calibration_grid_rows(
         no_attack_clean_positive_tpr = _safe_float(
             no_attack_positive_row.get("clean_positive_TPR")
         )
-        local_clip_sync_confident_negative_count = (
-            _count_local_clip_attacked_negative_sync_confident_records(
-                event_score_records,
-                method_variant=method_variant,
-                allowed_splits=allowed_splits,
-            )
+        local_clip_sync_confident_negative_count = int(
+            local_clip_sync_confident_negative_counts.get(method_variant, 0)
         )
         sync_semantics = build_sync_gain_assessment(
             absolute_tprs={
@@ -941,7 +1117,7 @@ def _select_tubelet_sync_candidate(
 
 
 def _build_sync_stage_blocking_details(
-    event_score_records: list[dict[str, Any]],
+    observed_sync_signatures: set[tuple[int, str, float]],
     selected_candidate: dict[str, Any],
 ) -> dict[str, Any]:
     selected_signature = {
@@ -958,28 +1134,13 @@ def _build_sync_stage_blocking_details(
             6,
         ),
     }
-    observed_sync_signatures = sorted(
-        {
-            (
-                int(record.get("tubelet_length", 1)),
-                json.dumps(
-                    record.get("mechanism_trace", {}).get("spatial_patch_size", [4, 4]),
-                    ensure_ascii=False,
-                ),
-                round(float(_resolve_projection_support_weight(record) or 0.0), 6),
-            )
-            for record in event_score_records
-            if str(record.get("base_method_variant", record.get("method_variant")))
-            == "tubelet_sync"
-        }
-    )
     normalized_signatures = [
         {
             "tubelet_length": signature[0],
             "spatial_patch_size": json.loads(signature[1]),
             "embedding_projection_support_weight": signature[2],
         }
-        for signature in observed_sync_signatures
+        for signature in sorted(observed_sync_signatures)
     ]
     matching_signature_count = sum(
         1
@@ -1721,9 +1882,12 @@ def _read_optional_grid_integer_list(
 
 
 def _safe_float(field_value: Any) -> float | None:
-    if not isinstance(field_value, (int, float)):
+    if field_value is None or field_value == "":
         return None
-    return round(float(field_value), 6)
+    try:
+        return round(float(field_value), 6)
+    except (TypeError, ValueError):
+        return None
 
 
 def _mean_numeric_values(values: list[float | None]) -> float | None:

@@ -11,6 +11,7 @@ import copy
 import importlib.util
 import json
 import platform
+import shutil
 import sys
 import threading
 import time
@@ -3384,6 +3385,8 @@ class RealVideoVaeLatentRunner:
         return [artifact_entries[key] for key in sorted(artifact_entries.keys())]
 
     def _reset_incremental_outputs(self, record_writer: RecordWriter) -> None:
+        output_root = record_writer.output_paths.root_path
+        output_paths = build_real_video_vae_latent_output_paths(output_root)
         event_scores_path = record_writer.output_paths.event_scores_path
         thresholds_path = record_writer.output_paths.thresholds_path
         event_scores_path.parent.mkdir(parents=True, exist_ok=True)
@@ -3392,6 +3395,23 @@ class RealVideoVaeLatentRunner:
             event_scores_path.unlink()
         if thresholds_path.exists():
             thresholds_path.unlink()
+        for runner_artifact_path in (
+            output_paths.run_manifest_path,
+            output_paths.artifact_manifest_path,
+            output_paths.runtime_manifest_path,
+            output_paths.runtime_config_path,
+        ):
+            if runner_artifact_path.exists():
+                runner_artifact_path.unlink()
+        for runner_directory in (
+            output_root / "runtime_profile",
+            output_root / "tables",
+            output_root / "figures",
+            output_root / "reports",
+            output_paths.failure_case_gallery_path,
+        ):
+            if runner_directory.exists():
+                shutil.rmtree(runner_directory)
 
     def _write_json(self, file_path: Path, payload: Any) -> None:
         file_path.parent.mkdir(parents=True, exist_ok=True)

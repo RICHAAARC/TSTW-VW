@@ -206,6 +206,25 @@ class RecordWriter:
             records.append(json.loads(raw_line))
         return records
 
+    def iter_event_score_records(self):
+        """功能：按行迭代读取 event-level score records。
+
+        Iterate governed event-level score records without materializing the full JSONL file.
+
+        Args:
+            None.
+
+        Returns:
+            An iterator of event score record dictionaries.
+        """
+        if not self.output_paths.event_scores_path.exists():
+            raise FileNotFoundError(self.output_paths.event_scores_path)
+        with self.output_paths.event_scores_path.open("r", encoding="utf-8") as handle:
+            for raw_line in handle:
+                if not raw_line.strip():
+                    continue
+                yield json.loads(raw_line)
+
     def read_threshold_records(self) -> list[dict[str, Any]]:
         """功能：读取 threshold records。
 
