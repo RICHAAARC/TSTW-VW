@@ -1689,11 +1689,18 @@ def _resolve_embedding_margin(event_record: dict[str, Any]) -> float:
 def _resolve_spatial_patch_size(event_record: dict[str, Any]) -> list[int]:
     """解析候选记录使用的空间 patch 尺寸.
 
-    通用写法是优先读取 `mechanism_trace.spatial_patch_size`. 本项目历史
-    calibration 结果中存在部分记录没有显式写出该字段的情况, 因此这里增加
-    项目特定 fallback: 从 `method_variant` 中的 `sp08x08` 语义 token 解析.
+    通用写法是直接读取结构化 trace 字段. 本项目 calibration 结果已经出现
+    过 `method_variant` 的 `sp08x08` 语义 token 与
+    `mechanism_trace.spatial_patch_size` 不一致的历史记录. 因此这里采用项目
+    特定的保守策略: 只要 method variant 名称包含明确的 `spHxW` token, 就
+    优先使用名称中的语义配置; 当名称缺少该 token 时, 才回退到 trace 字段.
     这样可以避免 selector 把未饱和 anchor 错误降级为默认 `[4, 4]`.
     """
+    parsed_value = _parse_spatial_patch_size_from_variant_name(
+        str(event_record.get("method_variant", ""))
+    )
+    if parsed_value is not None:
+        return parsed_value
     mechanism_trace = event_record.get("mechanism_trace", {})
     if isinstance(mechanism_trace, dict):
         field_value = mechanism_trace.get("spatial_patch_size")
@@ -1703,11 +1710,6 @@ def _resolve_spatial_patch_size(event_record: dict[str, Any]) -> list[int]:
             and all(isinstance(size, int) and size > 0 for size in field_value)
         ):
             return [int(field_value[0]), int(field_value[1])]
-    parsed_value = _parse_spatial_patch_size_from_variant_name(
-        str(event_record.get("method_variant", ""))
-    )
-    if parsed_value is not None:
-        return parsed_value
     return [4, 4]
 
 

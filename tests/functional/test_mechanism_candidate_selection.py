@@ -84,6 +84,25 @@ def test_spatial_patch_size_falls_back_to_variant_name_token() -> None:
     assert spatial_patch_size == [8, 8]
 
 
+def test_spatial_patch_size_prefers_variant_name_when_trace_conflicts() -> None:
+    """验证名称语义与历史 trace 冲突时优先保留 method variant 配置.
+
+    该测试覆盖阶段 2 calibration 中已经出现过的实际路径: anchor 名称为
+    `sp08x08`, 但 trace 中遗留了 `[4, 4]`. selector 必须优先信任方法名称,
+    否则后续 sync scan 会继续生成 `sp04x04` 候选, 无法验证真实目标参数.
+    """
+    spatial_patch_size = _resolve_spatial_patch_size(
+        {
+            "method_variant": "tubelet_only_cal_tl08_sp08x08_w005_em1000",
+            "mechanism_trace": {
+                "spatial_patch_size": [4, 4],
+            },
+        }
+    )
+
+    assert spatial_patch_size == [8, 8]
+
+
 def test_tubelet_only_anchor_selection_prefers_stronger_signal_over_extra_headroom() -> None:
     """Validate tubelet-only anchor ranking prefers stronger signal when status is unchanged.
 
