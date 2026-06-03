@@ -1935,3 +1935,116 @@ python -m pytest -q tests/functional/test_mechanism_candidate_selection.py：12 
 python -m pytest -q：325 passed，67 deselected，3 warnings；
 python tools/harness/run_all_audits.py：17 pass，0 fail。
 ```
+
+### （五）当前状态保存（2026-05-27）
+
+结论：**该结果只能判定为“部分合格”，不能判定为阶段 2 机制完整合格。**
+
+## 1. 已合格部分：污染 / 漂移 bug 已被修复
+
+本次结果中，之前的关键错误已经消失：
+
+- `reference_latent_shape` 全部为：
+
+```text
+[32, 4, 32, 32]
+```
+
+- `payload_projection_count` 全部为：
+
+```text
+1024
+```
+
+这与 formal 配置一致：`256x256` 视频经 VAE 下采样 8 倍后得到 `32x32` latent。  
+之前错误结果是 `[32,4,4,4]` 和 `payload_projection_count=16`，本次没有复现。
+
+同时：
+
+- `reference_latent_shape_source = mechanism_trace`
+- `reference_latent_shape_fallback_used = False`
+- `tubelet_projection_coverage_ratio = 1.0`
+- `recomputed_delta_vs_recorded_S_tubelet = 0.0`
+
+因此，**旧缓存污染、latent shape 漂移、fallback 伪造 shape 这类 bug 当前没有出现。**
+
+## 2. tubelet_only anchor 取证：合格
+
+选中的 tubelet-only anchor 为：
+
+```text
+tubelet_only_cal_tl02_sp04x04_w025
+```
+
+关键指标：
+
+| 指标 | 数值 | 判断 |
+|---|---:|---|
+| clean negative FPR | 0.0 | 合格 |
+| attacked negative FPR | 0.0 | 合格 |
+| no_attack positive TPR | 1.0 | 合格 |
+| temporal_crop positive TPR | 1.0 | 合格 |
+| frame_dropping positive TPR | 1.0 | 合格 |
+| local_clip positive TPR | 0.9875 | 合格 |
+| dev watermarked_positive 决策 | 20/20 true | 合格 |
+| clean_negative 决策 | 40/40 false | 合格 |
+
+所以如果本次目标是：**验证 tubelet_only anchor 在修复 shape bug 后是否成立**，答案是：**合格**。
+
+## 3. 不合格部分：tubelet_sync 机制目标未完成
+
+总 summary 中：
+
+```text
+calibration_completion_status = anchor_only_partial_selection
+selection_completion_status = incomplete_no_eligible_tubelet_sync_candidate
+selection_blocking_reason = no_tubelet_sync_candidate_passes_selection_gate
+selected_tubelet_sync_candidate = null
+```
+
+sync wide scan 中所有 top tubelet_sync candidate 都是：
+
+```text
+candidate_eligible = false
+candidate_selection_status = insufficient_signal
+sync_rescue_decision = FAIL
+sync_leakage_decision = PASS
+```
+
+并且最佳 sync candidate 的增益为：
+
+```text
+temporal_crop_sync_gain = 0.0
+local_clip_sync_gain = 0.0
+mean_temporal_sync_gain = 0.0
+```
+
+也就是说：**sync 没有相对 tubelet_only 产生增益**。这不是缓存污染问题，而是当前实验设定下 tubelet_only anchor 已经接近饱和，sync 没有机会表现出 rescue gain。
+
+## 4. 总体判断
+
+| 审计目标 | 判断 |
+|---|---|
+| latent shape 污染是否修复 | 合格 |
+| tubelet_only anchor 是否成立 | 合格 |
+| stage 2 tubelet_sync 机制是否完成 | 不合格 |
+| 是否可支持 “tubelet_sync beats tubelet_only” claim | 不可以 |
+| 是否可以进入完整阶段 2 机制验收 | 不建议 |
+
+## 5. 下一步建议
+
+不要继续用当前同一组参数反复重跑期待 sync 入选。当前结果说明：
+
+- bug 已修复；
+- anchor 已过强；
+- sync 没有增益空间。
+
+下一步应改为：**设计一个不饱和的 anchor 场景**，让 temporal_crop 或 local_clip 下 tubelet_only 留出失败空间，再检验 tubelet_sync 是否能 rescue。当前结果适合作为“shape 修复 + tubelet_only anchor 成立”的证据，但不适合作为阶段 2 完整机制完成证据。
+
+当前已推进的工程入口为 notebook 侧新增受治理 calibration target：
+
+```text
+tl02_unsaturated_anchor_validation
+```
+
+其目标是固定在 stage2 calibration-only 语境下，先构造非饱和 tubelet-only anchor（更长 tubelet、更粗 spatial patch、更保守 support 与中高 embedding margin），再在同一 anchor 签名下执行窄范围 `sync_wide_scan`，验证 `tubelet_sync` 是否出现可审计 rescue 增益。

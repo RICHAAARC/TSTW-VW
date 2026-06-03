@@ -258,6 +258,13 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TL02_CONTROLLED_SYNC_WIDE_GRID" in notebook_text
     assert "TL02_CONTROLLED_EMBEDDING_MARGINS = [0.25, 0.4, 0.6]" in notebook_text
     assert "TL02_CONTROLLED_SEARCH_STAGE_NAMES" in notebook_text
+    assert "TL02_UNSATURATED_ANCHOR_TUBELET_LENGTHS = [4, 8]" in notebook_text
+    assert "TL02_UNSATURATED_ANCHOR_SPATIAL_PATCH_SIZES = [[4, 4], [8, 8]]" in notebook_text
+    assert "TL02_UNSATURATED_ANCHOR_SUPPORT_WEIGHTS = [0.45, 0.75]" in notebook_text
+    assert "TL02_UNSATURATED_ANCHOR_EMBEDDING_MARGINS = [0.5, 0.75]" in notebook_text
+    assert "TL02_UNSATURATED_SYNC_WIDE_GRID" in notebook_text
+    assert "TL02_UNSATURATED_SEARCH_STAGE_NAMES" in notebook_text
+    assert "tl02_unsaturated_anchor_validation" in notebook_text
     assert "'lambda_sync': [0.0, 0.025]" in notebook_text
     assert "'sync_search_radius': [8, 12]" in notebook_text
     assert "'min_sync_alignment_coverage_ratio': [0.25, 0.5]" in notebook_text
@@ -275,6 +282,10 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "stage2_controlled_search_stage_summary" in notebook_text
     assert (
         "tl02_controlled_validation_limits_sync_search_to_anchor_and_narrow_sync_wide"
+        in notebook_text
+    )
+    assert (
+        "tl02_unsaturated_anchor_validation_limits_sync_search_to_unsaturated_anchor_and_sync_wide"
         in notebook_text
     )
     assert "run_timer = run_timing_workflow.start_run_timing(" in notebook_text
