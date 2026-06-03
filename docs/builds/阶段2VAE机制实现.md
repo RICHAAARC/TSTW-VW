@@ -2048,3 +2048,135 @@ tl02_unsaturated_anchor_validation
 ```
 
 其目标是固定在 stage2 calibration-only 语境下，先构造非饱和 tubelet-only anchor（更长 tubelet、更粗 spatial patch、更保守 support 与中高 embedding margin），再在同一 anchor 签名下执行窄范围 `sync_wide_scan`，验证 `tubelet_sync` 是否出现可审计 rescue 增益。
+
+### （六）当前状态保存（2026-06-03 unsaturated anchor probe 更新）
+
+本次新增结果对应 family 为：
+
+```text
+real_video_vae_latent_probe__formal__davis2017_trainval480p__20260603T071820Z__e76625c
+```
+
+当前已回灌的 calibration 摘要位于：
+
+```text
+G:\我的云端硬盘\TSTW\results\families\real_video_vae_latent_probe__formal__davis2017_trainval480p__20260603T071820Z__e76625c\stage2_calibration\stage2_mechanism_calibration_summary.json
+```
+
+该次结果不是 formal 全量 family，也不是中途异常中断；它是 governed notebook 当前默认 target `tubelet_unsaturated_anchor_probe` 产生的一次 calibration-only anchor 探针快照。family 根目录只导出了：
+
+```text
+stage2_calibration/
+```
+
+其核心状态为：
+
+```text
+calibration_completion_status = anchor_only_partial_selection
+calibration_blocking_reason = staged_search_missing_tubelet_sync_candidate
+selection_completion_status = complete
+search_stage_count = 1
+selected_tubelet_sync_candidate = null
+```
+
+这表示本轮运行按设计完成了单阶段 `anchor_tubelet_only_wide` 搜索，并在 anchor-only 语义下正常结束；当前没有进入 `sync_wide_scan` / `sync_refine_scan`，因此该结果不能被解读为 stage 2 mechanism 完整通过，也不能被解读为 sync 候选搜索失败导致的异常中断。
+
+## 1. 本次结果首先证明：anchor-only probe 路线已经跑通
+
+本轮只运行了 1 个 search stage，并生成了 25 个 tubelet-only anchor variants。当前自动选中的 anchor 为：
+
+```text
+tubelet_only_cal_tl08_sp08x08_w010_em750
+```
+
+其关键指标为：
+
+| 指标 | 数值 | 判断 |
+|---|---:|---|
+| no_attack clean negative FPR | 0.0 | 合格 |
+| no_attack clean positive TPR | 1.0 | 合格 |
+| max attacked negative FPR | 0.0 | 合格 |
+| temporal_crop absolute TPR | 0.5 | 有信号 |
+| local_clip absolute TPR | 1.0 | 已饱和 |
+| temporal_crop anchor headroom | 0.5 | 仍有空间 |
+| local_clip anchor headroom | 0.0 | 无空间 |
+
+因此，这次结果至少可以支持以下两点：
+
+- `tubelet_unsaturated_anchor_probe` 这条 notebook 默认 calibration-only 路线已经稳定落地；
+- 当前网格中确实能找到 FPR 受控、质量未塌缩、且至少在部分 temporal attack 上保留 headroom 的 anchor。
+
+## 2. 本次结果同时证明：当前网格里已经出现更像“非饱和 frontier”的候选
+
+虽然自动选中的最强 anchor 是 `w010_em750`，但 top anchor 列表中已经出现更弱、也更适合作为后续 sync 验证起点的候选，例如：
+
+```text
+tubelet_only_cal_tl08_sp08x08_w005_em1000
+```
+
+其关键指标为：
+
+| 指标 | 数值 | 判断 |
+|---|---:|---|
+| no_attack clean negative FPR | 0.0 | 合格 |
+| no_attack clean positive TPR | 0.5 | 刚过 gate |
+| max attacked negative FPR | 0.0 | 合格 |
+| temporal_crop absolute TPR | 0.25 | 明显未饱和 |
+| local_clip absolute TPR | 0.4375 | 明显未饱和 |
+| temporal_crop anchor headroom | 0.75 | 空间较大 |
+| local_clip anchor headroom | 0.5625 | 空间较大 |
+
+这说明当前最重要的新结论不是“sync 仍然没跑”，而是：
+
+```text
+非饱和 anchor frontier 已经被成功扫到；
+当前阻塞点开始从“有没有 headroom anchor”转移到“如何固定一个真正适合做 sync 验证的 anchor”。
+```
+
+换句话说，2026-05-27 的结论主要是“需要设计一个不饱和 anchor 场景”；而 2026-06-03 的新增结果已经把这个问题推进到下一步：
+
+```text
+不饱和 anchor 场景并非空想，当前网格里已经存在；
+下一步不应继续只看 strongest anchor，而应显式固定 unsaturated frontier anchor 再跑 sync。
+```
+
+## 3. 当前总体判断
+
+| 审计目标 | 判断 |
+|---|---|
+| anchor-only calibration probe 是否按设计完成 | 合格 |
+| 当前 family 是否属于 formal 全量结果 | 否 |
+| 当前结果是否已经给出 tubelet_sync 机制结论 | 否 |
+| 当前结果是否证明 non-saturated anchor frontier 存在 | 是 |
+| 当前 selector 是否已经把最适合 sync 验证的 unsaturated anchor 固定下来 | 否 |
+
+因此，本轮结果的最准确定位应为：
+
+```text
+它不是阶段 2 机制完成证据；
+它是“headroom anchor 已经出现”的证据；
+它把下一步工作重点从“继续盲扫 anchor”收口到“固定 unsaturated anchor 后进入窄范围 sync_wide 验证”。
+```
+
+## 4. 下一步建议
+
+当前最优先的后续方向应改写为：
+
+```text
+先固定 unsaturated frontier anchor，再执行 sync_wide_scan；
+而不是继续沿用当前 strongest anchor，或直接把 anchor-only partial 结果误当成 mechanism 负结论。
+```
+
+更具体地说，下一步应优先推进：
+
+- 在 notebook / workflow / selector 路径中增加“显式固定 unsaturated anchor”的受治理入口，而不是只返回 selection_score 最高的 strongest anchor；
+- 以 `tubelet_only_cal_tl08_sp08x08_w005_em1000` 或同等 headroom 候选为起点，执行同一 anchor 签名下的窄范围 `sync_wide_scan`；
+- 重点审计 `temporal_crop_sync_gain`、`local_clip_sync_gain`、`selected_tubelet_sync_candidate` 与 `candidate_eligible`，判断 sync 是否在非饱和 anchor 上首次出现可审计增益；
+- 若固定 unsaturated anchor 后仍然 `local_clip_sync_gain = 0.0` 且 `selected_tubelet_sync_candidate = null`，则后续 root cause 应转回 sync evidence / scoring 本身，而不是继续扩大 anchor 网格。
+
+当前一句话结论应更新为：
+
+```text
+本次结果仍然只能支持“部分合格，非阶段 2 机制完整合格”；
+但它已经把后续方向明确收口到“固定非饱和 anchor，再做 sync 验证”，而不是继续泛化地重复扫 anchor。
+```
