@@ -156,6 +156,7 @@ def select_stage2_mechanism_candidate(
         selected_candidate = _select_tubelet_only_candidate(
             tubelet_only_rows,
             mechanism_config,
+            grid_config,
         )
         calibration_rows = list(tubelet_only_rows)
     elif selection_scope == "tubelet_sync":
@@ -196,6 +197,7 @@ def select_stage2_mechanism_candidate(
         selected_candidate = _select_tubelet_only_candidate(
             tubelet_only_rows,
             mechanism_config,
+            grid_config,
         )
         sync_scan_seed = _build_tubelet_sync_scan_seed(
             selected_candidate,
@@ -904,10 +906,18 @@ def _build_tubelet_sync_calibration_grid_rows(
 def _select_tubelet_only_candidate(
     calibration_rows: list[dict[str, Any]],
     mechanism_config: dict[str, Any],
+    grid_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not calibration_rows:
         raise ValueError("calibration_rows must not be empty")
-    selected_row = calibration_rows[0]
+    fixed_anchor_config = _resolve_fixed_tubelet_only_anchor_config(grid_config)
+    if fixed_anchor_config is None:
+        selected_row = calibration_rows[0]
+    else:
+        selected_row = _select_fixed_tubelet_only_anchor_row(
+            calibration_rows,
+            fixed_anchor_config,
+        )
     candidate_eligible = bool(selected_row.get("candidate_eligible"))
     return {
         "candidate_status": _resolve_tubelet_only_candidate_status(selected_row),
@@ -1195,6 +1205,89 @@ def _build_sync_stage_blocking_details(
         "observed_sync_stage_signatures": normalized_signatures,
         "matching_sync_stage_signature_count": matching_signature_count,
     }
+
+
+def _resolve_fixed_tubelet_only_anchor_config(
+    grid_config: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """读取受治理的固定 anchor 配置, 用于避免 selector 误选已饱和 anchor.
+
+    该函数属于项目特定写法. 它只影响 dev / calibration 阶段的候选选择,
+    不改变阈值校准规则, 也不读取 test split.
+    """
+    if not isinstance(grid_config, dict):
+        return None
+    selection_policy = str(grid_config.get("anchor_selection_policy", "")).strip()
+    fixed_anchor = grid_config.get("fixed_tubelet_only_anchor")
+    if fixed_anchor is None and selection_policy != "fixed_unsaturated_anchor":
+        return None
+    if not isinstance(fixed_anchor, dict):
+        raise ValueError("fixed_tubelet_only_anchor must be a dictionary when configured")
+    return fixed_anchor
+
+
+def _select_fixed_tubelet_only_anchor_row(
+    calibration_rows: list[dict[str, Any]],
+    fixed_anchor_config: dict[str, Any],
+) -> dict[str, Any]:
+    """从候选表中选择与固定 anchor 配置完全匹配的行.
+
+    这里采用精确匹配而不是近邻匹配, 目的是让 notebook 多次运行时能够复现
+    同一个未饱和 anchor, 从而把运行预算集中到 sync 参数验证上.
+    """
+    for candidate_row in calibration_rows:
+        if _tubelet_only_row_matches_fixed_anchor(candidate_row, fixed_anchor_config):
+            return candidate_row
+    raise ValueError(
+        "fixed_tubelet_only_anchor did not match any generated tubelet-only row"
+    )
+
+
+def _tubelet_only_row_matches_fixed_anchor(
+    candidate_row: dict[str, Any],
+    fixed_anchor_config: dict[str, Any],
+) -> bool:
+    expected_method_variant = fixed_anchor_config.get("method_variant")
+    if isinstance(expected_method_variant, str) and expected_method_variant:
+        return str(candidate_row.get("method_variant")) == expected_method_variant
+
+    expected_tubelet_length = fixed_anchor_config.get("tubelet_length")
+    expected_spatial_patch_size = fixed_anchor_config.get("spatial_patch_size")
+    expected_support_weight = fixed_anchor_config.get(
+        "embedding_projection_support_weight"
+    )
+    expected_embedding_margin = fixed_anchor_config.get("embedding_margin")
+
+    if expected_tubelet_length is not None and int(candidate_row["tubelet_length"]) != int(
+        expected_tubelet_length
+    ):
+        return False
+    if expected_spatial_patch_size is not None:
+        try:
+            row_spatial_patch_size = json.loads(str(candidate_row["spatial_patch_size"]))
+        except json.JSONDecodeError:
+            return False
+        if list(row_spatial_patch_size) != list(expected_spatial_patch_size):
+            return False
+    if expected_support_weight is not None and not _numeric_values_match(
+        candidate_row.get("embedding_projection_support_weight"),
+        expected_support_weight,
+    ):
+        return False
+    if expected_embedding_margin is not None and not _numeric_values_match(
+        candidate_row.get("embedding_margin"),
+        expected_embedding_margin,
+    ):
+        return False
+    return True
+
+
+def _numeric_values_match(left_value: Any, right_value: Any) -> bool:
+    left_float = _safe_float(left_value)
+    right_float = _safe_float(right_value)
+    if left_float is None or right_float is None:
+        return False
+    return abs(float(left_float) - float(right_float)) <= 1e-6
 
 
 def _build_tubelet_sync_scan_seed(

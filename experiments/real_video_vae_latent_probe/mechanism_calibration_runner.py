@@ -1001,7 +1001,7 @@ def _build_stage_grid_config(
     grid_config: dict[str, Any],
     stage_config: dict[str, Any],
 ) -> dict[str, Any]:
-    return {
+    stage_grid_config = {
         "construction_phase": grid_config.get("construction_phase", "real_video_vae_latent_probe"),
         "calibration_purpose": stage_config.get(
             "calibration_purpose",
@@ -1014,6 +1014,19 @@ def _build_stage_grid_config(
         "selection_scope": str(stage_config["selection_scope"]),
         "grid": copy.deepcopy(stage_config["grid"]),
     }
+    for optional_field_name in (
+        "anchor_selection_policy",
+        "fixed_tubelet_only_anchor",
+    ):
+        if optional_field_name in stage_config:
+            stage_grid_config[optional_field_name] = copy.deepcopy(
+                stage_config[optional_field_name]
+            )
+        elif optional_field_name in grid_config:
+            stage_grid_config[optional_field_name] = copy.deepcopy(
+                grid_config[optional_field_name]
+            )
+    return stage_grid_config
 
 
 def _resolve_top_candidate_limit(

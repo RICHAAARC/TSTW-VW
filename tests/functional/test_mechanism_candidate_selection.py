@@ -226,6 +226,99 @@ def test_tubelet_only_anchor_selection_prefers_stronger_signal_over_extra_headro
     )
 
 
+def test_tubelet_only_anchor_selection_can_fix_unsaturated_anchor() -> None:
+    """验证固定未饱和 anchor 配置可以覆盖默认排序.
+
+    该测试属于功能级 quick 测试. 它只构造轻量内存表格, 不运行真实 VAE,
+    用于保证 notebook 下一轮可以固定历史结果中已经出现的 headroom anchor.
+    """
+    mechanism_config = {
+        "required_mechanism_attacks": [
+            "no_attack",
+            "temporal_crop",
+            "frame_dropping",
+            "local_clip",
+        ],
+        "max_clean_negative_fpr": 0.05,
+        "max_attacked_negative_fpr": 0.1,
+        "min_no_attack_clean_positive_tpr": 0.5,
+        "require_quality_not_collapsed": True,
+        "min_watermarked_video_psnr": 20.0,
+        "min_watermarked_video_ssim": 0.5,
+    }
+    calibration_rows = [
+        {
+            "method_variant": "tubelet_only_cal_tl08_sp08x08_w010_em750",
+            "base_method_variant": "tubelet_only",
+            "tubelet_length": 8,
+            "spatial_patch_size": "[8, 8]",
+            "embedding_projection_support_weight": 0.1,
+            "embedding_margin": 0.75,
+            "candidate_eligible": True,
+            "fpr_controlled": True,
+            "quality_not_collapsed": True,
+            "candidate_selection_status": "strong_anchor_with_headroom",
+            "absolute_rescue_status": "local_clip_absolute_success",
+            "negative_leakage_status": "controlled",
+            "no_attack_clean_negative_fpr": 0.0,
+            "no_attack_clean_positive_tpr": 1.0,
+            "max_attacked_negative_fpr": 0.0,
+            "temporal_crop_absolute_tpr": 0.5,
+            "local_clip_absolute_tpr": 1.0,
+            "temporal_crop_anchor_headroom": 0.5,
+            "local_clip_anchor_headroom": 0.0,
+            "temporal_crop_attacked_positive_tpr": 0.5,
+            "frame_dropping_attacked_positive_tpr": 0.75,
+            "local_clip_attacked_positive_tpr": 1.0,
+            "quality_psnr_mean": float("inf"),
+            "quality_ssim_mean": 1.0,
+        },
+        {
+            "method_variant": "tubelet_only_cal_tl08_sp08x08_w005_em1000",
+            "base_method_variant": "tubelet_only",
+            "tubelet_length": 8,
+            "spatial_patch_size": "[8, 8]",
+            "embedding_projection_support_weight": 0.05,
+            "embedding_margin": 1.0,
+            "candidate_eligible": True,
+            "fpr_controlled": True,
+            "quality_not_collapsed": True,
+            "candidate_selection_status": "strong_anchor_with_headroom",
+            "absolute_rescue_status": "no_absolute_rescue",
+            "negative_leakage_status": "controlled",
+            "no_attack_clean_negative_fpr": 0.0,
+            "no_attack_clean_positive_tpr": 0.5,
+            "max_attacked_negative_fpr": 0.0,
+            "temporal_crop_absolute_tpr": 0.25,
+            "local_clip_absolute_tpr": 0.4375,
+            "temporal_crop_anchor_headroom": 0.75,
+            "local_clip_anchor_headroom": 0.5625,
+            "temporal_crop_attacked_positive_tpr": 0.25,
+            "frame_dropping_attacked_positive_tpr": 0.5,
+            "local_clip_attacked_positive_tpr": 0.4375,
+            "quality_psnr_mean": float("inf"),
+            "quality_ssim_mean": 1.0,
+        },
+    ]
+
+    selected_candidate = _select_tubelet_only_candidate(
+        calibration_rows,
+        mechanism_config,
+        {
+            "anchor_selection_policy": "fixed_unsaturated_anchor",
+            "fixed_tubelet_only_anchor": {
+                "tubelet_length": 8,
+                "spatial_patch_size": [8, 8],
+                "embedding_projection_support_weight": 0.05,
+                "embedding_margin": 1.0,
+            },
+        },
+    )
+
+    assert selected_candidate["method_variant"] == "tubelet_only_cal_tl08_sp08x08_w005_em1000"
+    assert selected_candidate["metrics"]["local_clip_anchor_headroom"] == pytest.approx(0.5625)
+
+
 def test_tubelet_sync_scan_seed_uses_selected_candidate_defaults_for_missing_stage_grid_fields() -> None:
     """Validate tubelet_sync scan seed tolerates stage-local refine grids.
 
