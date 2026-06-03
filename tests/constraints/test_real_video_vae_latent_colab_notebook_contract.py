@@ -254,7 +254,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "'reset_stage2_mechanism_calibration_run_root': True" in notebook_text
     assert "'run_stage2_local_clip_sync_forensics': False" in notebook_text
     assert "'package_non_formal_audit_bundle': False" in notebook_text
-    assert "'stage2_calibration_target': 'tubelet_unsaturated_anchor_probe'" in notebook_text
+    assert "'stage2_calibration_target': 'tubelet_rescue_expanded_search'" in notebook_text
     assert "selected_tubelet_anchor_forensics.csv" in notebook_text
     assert "selected_tubelet_anchor_forensics_summary.json" in notebook_text
     assert "TL02_CONTROLLED_SYNC_WIDE_GRID" in notebook_text
@@ -277,8 +277,15 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "'anchor_selection_policy': 'fixed_unsaturated_anchor'" in notebook_text
     assert "TUBELET_UNSATURATED_ANCHOR_PROBE_SYNC_WIDE_GRID" in notebook_text
     assert "TUBELET_UNSATURATED_ANCHOR_PROBE_SEARCH_STAGE_NAMES" in notebook_text
+    assert "TUBELET_RESCUE_EXPANDED_SYNC_GRID" in notebook_text
+    assert "TUBELET_RESCUE_EXPANDED_FIXED_ANCHORS" in notebook_text
+    assert "TUBELET_RESCUE_EXPANDED_SEARCH_STAGE_NAMES" in notebook_text
+    assert "'lambda_sync': [0.025, 0.05, 0.1, 0.15, 0.25, 0.4]" in notebook_text
+    assert "'min_sync_candidate_score': [0.0, 0.35, 0.55, 0.75]" in notebook_text
+    assert "multi_fixed_anchor_frontier_then_high_lambda_sync_scan" in notebook_text
     assert "tl02_unsaturated_anchor_validation" in notebook_text
     assert "tubelet_unsaturated_anchor_probe" in notebook_text
+    assert "tubelet_rescue_expanded_search" in notebook_text
     assert "'lambda_sync': [0.0, 0.025]" in notebook_text
     assert "'sync_search_radius': [8, 12]" in notebook_text
     assert "'min_sync_alignment_coverage_ratio': [0.25, 0.5]" in notebook_text
