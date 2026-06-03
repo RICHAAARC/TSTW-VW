@@ -783,6 +783,124 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
 
 
 @pytest.mark.unit
+def test_stage2_mechanism_calibration_runner_supports_anchor_only_search_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate staged search supports an anchor-only probe plan.
+
+    Args:
+        tmp_path: Temporary output root.
+        monkeypatch: Pytest monkeypatch fixture.
+
+    Returns:
+        None.
+    """
+    captured_runner_calls: list[dict[str, object]] = []
+
+    class _FakeRunner:
+        def __init__(self, repository_root: str | Path) -> None:
+            self._repository_root = str(repository_root)
+
+        def run(self, **kwargs: object) -> dict[str, object]:
+            captured_runner_calls.append(
+                {
+                    "repository_root": self._repository_root,
+                    "kwargs": dict(kwargs),
+                }
+            )
+            return {"status": "ok"}
+
+    monkeypatch.setattr(calibration_runner_module, "RealVideoVaeLatentRunner", _FakeRunner)
+
+    anchor_candidate = {
+        "candidate_status": "eligible_candidate_selected",
+        "method_variant": "tubelet_only_probe_tl08_sp08x08_w010_m100",
+        "base_method_variant": "tubelet_only",
+        "tubelet_length": 8,
+        "tubelet_partition": {"spatial_patch_size": [8, 8]},
+        "score_calibration": {"embedding_projection_support_weight": 0.1},
+        "embedding_margin": 1.0,
+        "metrics": {
+            "no_attack_clean_negative_fpr": 0.0,
+            "no_attack_clean_positive_tpr": 1.0,
+            "max_attacked_negative_fpr": 0.0,
+            "temporal_crop_attacked_positive_tpr": 0.75,
+            "frame_dropping_attacked_positive_tpr": 0.85,
+            "local_clip_attacked_positive_tpr": 0.7,
+            "temporal_crop_anchor_headroom": 0.25,
+            "local_clip_anchor_headroom": 0.3,
+        },
+    }
+
+    def _fake_select_stage2_mechanism_candidate(**kwargs: object) -> dict[str, object]:
+        stage_name = Path(str(kwargs["run_root"])).name
+        assert stage_name == "anchor_tubelet_only_wide"
+        return {
+            "selection_scope": "tubelet_only",
+            "selection_completion_status": "complete",
+            "selection_blocking_reason": None,
+            "selection_blocking_details": None,
+            "output_path": str(tmp_path / f"{stage_name}_selected_candidate.json"),
+            "report_path": str(tmp_path / f"{stage_name}_selected_candidate.md"),
+            "grid_output_path": str(tmp_path / f"{stage_name}_selected_candidate.csv"),
+            "selected_tubelet_only_candidate": anchor_candidate,
+            "selected_tubelet_sync_candidate": None,
+            "tubelet_sync_scan_seed": None,
+            "top_tubelet_only_candidates": [anchor_candidate],
+            "top_tubelet_sync_candidates": [],
+            "parameter_interval_summary": {"tubelet_only": {}, "tubelet_sync": {}},
+        }
+
+    monkeypatch.setattr(
+        calibration_runner_module,
+        "select_stage2_mechanism_candidate",
+        _fake_select_stage2_mechanism_candidate,
+    )
+
+    grid_config = json.loads(
+        Path(calibration_runner_module.DEFAULT_GRID_CONFIG_PATH).read_text(encoding="utf-8")
+    )
+    grid_config["search_stages"] = [grid_config["search_stages"][0]]
+    grid_config_path = tmp_path / "grid_anchor_only_probe.json"
+    grid_config_path.write_text(
+        json.dumps(grid_config, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    candidate_method_config_path = tmp_path / "anchor_only_candidate.json"
+    summary = run_stage2_mechanism_calibration(
+        run_root=tmp_path / "mcal_anchor_only_probe",
+        runtime_profile="formal",
+        samples_per_role=2,
+        batch_size_frames=8,
+        grid_config_path=grid_config_path,
+        output_method_config_path=candidate_method_config_path,
+    )
+
+    assert len(captured_runner_calls) == 1
+    assert Path(captured_runner_calls[0]["kwargs"]["output_root"]).name == (
+        "anchor_tubelet_only_wide"
+    )
+    assert summary["calibration_completion_status"] == "anchor_only_partial_selection"
+    assert summary["calibration_blocking_reason"] == (
+        "staged_search_missing_tubelet_sync_candidate"
+    )
+    assert summary["search_terminated_early"] is False
+    assert summary["terminated_before_stage_name"] is None
+    assert summary["selection_completion_status"] == "complete"
+    assert summary["search_stage_count"] == 1
+    assert summary["search_stage_summaries"][0]["stage_name"] == "anchor_tubelet_only_wide"
+    assert summary["selected_tubelet_only_candidate"]["method_variant"] == anchor_candidate[
+        "method_variant"
+    ]
+    assert summary["selected_tubelet_sync_candidate"] is None
+    assert summary["generated_tubelet_sync_candidate_config_path"] is None
+    assert Path(summary["timing_summary_path"]).exists()
+    assert not candidate_method_config_path.exists()
+
+
+@pytest.mark.unit
 def test_calibration_config_carries_non_default_embedding_margin() -> None:
     """Validate calibration configs preserve non-default embedding margin values.
 

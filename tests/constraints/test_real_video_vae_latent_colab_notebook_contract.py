@@ -249,10 +249,12 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TSTW_RESET_STAGE2_MECHANISM_CALIBRATION_RUN_ROOT" in notebook_text
     assert "probe_workflow.reset_probe_runtime_run_root(" in notebook_text
     assert "reset_run_root=False" in notebook_text
+    assert "'samples_per_role_override': 4" in notebook_text
     assert "'run_tubelet_anchor_forensics': True" in notebook_text
     assert "'reset_stage2_mechanism_calibration_run_root': True" in notebook_text
     assert "'run_stage2_local_clip_sync_forensics': False" in notebook_text
     assert "'package_non_formal_audit_bundle': False" in notebook_text
+    assert "'stage2_calibration_target': 'tubelet_unsaturated_anchor_probe'" in notebook_text
     assert "selected_tubelet_anchor_forensics.csv" in notebook_text
     assert "selected_tubelet_anchor_forensics_summary.json" in notebook_text
     assert "TL02_CONTROLLED_SYNC_WIDE_GRID" in notebook_text
@@ -264,7 +266,16 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TL02_UNSATURATED_ANCHOR_EMBEDDING_MARGINS = [0.5, 0.75]" in notebook_text
     assert "TL02_UNSATURATED_SYNC_WIDE_GRID" in notebook_text
     assert "TL02_UNSATURATED_SEARCH_STAGE_NAMES" in notebook_text
+    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_TUBELET_LENGTHS = [8, 16]" in notebook_text
+    assert (
+        "TUBELET_UNSATURATED_ANCHOR_PROBE_SPATIAL_PATCH_SIZES = [[8, 8], [16, 16]]"
+        in notebook_text
+    )
+    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_SUPPORT_WEIGHTS = [0.05, 0.1, 0.25]" in notebook_text
+    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_EMBEDDING_MARGINS = [0.75, 1.0]" in notebook_text
+    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_SEARCH_STAGE_NAMES" in notebook_text
     assert "tl02_unsaturated_anchor_validation" in notebook_text
+    assert "tubelet_unsaturated_anchor_probe" in notebook_text
     assert "'lambda_sync': [0.0, 0.025]" in notebook_text
     assert "'sync_search_radius': [8, 12]" in notebook_text
     assert "'min_sync_alignment_coverage_ratio': [0.25, 0.5]" in notebook_text
@@ -288,6 +299,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
         "tl02_unsaturated_anchor_validation_limits_sync_search_to_unsaturated_anchor_and_sync_wide"
         in notebook_text
     )
+    assert "tubelet_unsaturated_anchor_probe_runs_anchor_only_before_sync" in notebook_text
     assert "run_timer = run_timing_workflow.start_run_timing(" in notebook_text
     assert "runtime_profile_workflow.capture_colab_environment(" in notebook_text
     assert "runtime_profile_workflow.profile_drive_io(" in notebook_text
