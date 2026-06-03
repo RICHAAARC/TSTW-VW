@@ -5,8 +5,12 @@
   "top_candidate_limit": 8,
   "anchor_selection_policy": "fixed_unsaturated_anchor",
   "fixed_tubelet_only_anchor": {
+    "method_variant": "tubelet_only_cal_tl08_sp08x08_w005_em1000",
     "tubelet_length": 8,
-    "spatial_patch_size": [8, 8],
+    "spatial_patch_size": [
+      8,
+      8
+    ],
     "embedding_projection_support_weight": 0.05,
     "embedding_margin": 1.0
   },
@@ -22,7 +26,10 @@
       8
     ],
     "spatial_patch_size": [
-      [8, 8]
+      [
+        8,
+        8
+      ]
     ],
     "embedding_projection_support_weight": [
       0.05
@@ -72,7 +79,10 @@
           8
         ],
         "spatial_patch_size": [
-          [8, 8]
+          [
+            8,
+            8
+          ]
         ],
         "embedding_projection_support_weight": [
           0.05

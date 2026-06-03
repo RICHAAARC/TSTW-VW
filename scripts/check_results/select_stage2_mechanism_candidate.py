@@ -1238,8 +1238,22 @@ def _select_fixed_tubelet_only_anchor_row(
     for candidate_row in calibration_rows:
         if _tubelet_only_row_matches_fixed_anchor(candidate_row, fixed_anchor_config):
             return candidate_row
+    available_anchor_summaries = [
+        {
+            "method_variant": row.get("method_variant"),
+            "tubelet_length": row.get("tubelet_length"),
+            "spatial_patch_size": row.get("spatial_patch_size"),
+            "embedding_projection_support_weight": row.get(
+                "embedding_projection_support_weight"
+            ),
+            "embedding_margin": row.get("embedding_margin"),
+        }
+        for row in calibration_rows[:20]
+    ]
     raise ValueError(
-        "fixed_tubelet_only_anchor did not match any generated tubelet-only row"
+        "fixed_tubelet_only_anchor did not match any generated tubelet-only row; "
+        f"fixed_anchor={fixed_anchor_config}; "
+        f"available_anchor_preview={available_anchor_summaries}"
     )
 
 
