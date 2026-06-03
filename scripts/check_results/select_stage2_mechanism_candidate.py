@@ -508,7 +508,7 @@ def _build_sync_stage_signature(event_record: dict[str, Any]) -> tuple[int, str,
     return (
         int(event_record.get("tubelet_length", 1)),
         json.dumps(
-            event_record.get("mechanism_trace", {}).get("spatial_patch_size", [4, 4]),
+            _resolve_spatial_patch_size(event_record),
             ensure_ascii=False,
         ),
         round(float(_resolve_projection_support_weight(event_record) or 0.0), 6),
@@ -584,10 +584,7 @@ def _build_tubelet_only_calibration_grid_rows(
                 ),
                 "tubelet_length": int(representative_record.get("tubelet_length", 1)),
                 "spatial_patch_size": json.dumps(
-                    representative_record.get("mechanism_trace", {}).get(
-                        "spatial_patch_size",
-                        [4, 4],
-                    ),
+                    _resolve_spatial_patch_size(representative_record),
                     ensure_ascii=False,
                 ),
                 "embedding_projection_support_weight": _resolve_projection_support_weight(
@@ -705,10 +702,7 @@ def _build_tubelet_sync_calibration_grid_rows(
         representative_record = representative_records.get(method_variant)
         if representative_record is None:
             continue
-        spatial_patch_size = representative_record.get("mechanism_trace", {}).get(
-            "spatial_patch_size",
-            [4, 4],
-        )
+        spatial_patch_size = _resolve_spatial_patch_size(representative_record)
         support_weight = _resolve_projection_support_weight(representative_record)
         embedding_margin = _resolve_embedding_margin(representative_record)
         if int(representative_record.get("tubelet_length", 1)) != selected_tubelet_length:
@@ -1690,6 +1684,45 @@ def _resolve_embedding_margin(event_record: dict[str, Any]) -> float:
     if parsed_value is not None:
         return parsed_value
     return round(float(DEFAULT_EMBEDDING_MARGIN), 6)
+
+
+def _resolve_spatial_patch_size(event_record: dict[str, Any]) -> list[int]:
+    """解析候选记录使用的空间 patch 尺寸.
+
+    通用写法是优先读取 `mechanism_trace.spatial_patch_size`. 本项目历史
+    calibration 结果中存在部分记录没有显式写出该字段的情况, 因此这里增加
+    项目特定 fallback: 从 `method_variant` 中的 `sp08x08` 语义 token 解析.
+    这样可以避免 selector 把未饱和 anchor 错误降级为默认 `[4, 4]`.
+    """
+    mechanism_trace = event_record.get("mechanism_trace", {})
+    if isinstance(mechanism_trace, dict):
+        field_value = mechanism_trace.get("spatial_patch_size")
+        if (
+            isinstance(field_value, list)
+            and len(field_value) == 2
+            and all(isinstance(size, int) and size > 0 for size in field_value)
+        ):
+            return [int(field_value[0]), int(field_value[1])]
+    parsed_value = _parse_spatial_patch_size_from_variant_name(
+        str(event_record.get("method_variant", ""))
+    )
+    if parsed_value is not None:
+        return parsed_value
+    return [4, 4]
+
+
+def _parse_spatial_patch_size_from_variant_name(
+    method_variant: str,
+) -> list[int] | None:
+    variant_tokens = method_variant.split("_")
+    for token in variant_tokens:
+        if not token.startswith("sp") or "x" not in token:
+            continue
+        patch_payload = token[2:]
+        height_text, _, width_text = patch_payload.partition("x")
+        if height_text.isdigit() and width_text.isdigit():
+            return [int(height_text), int(width_text)]
+    return None
 
 
 def _parse_projection_support_weight_from_variant_name(

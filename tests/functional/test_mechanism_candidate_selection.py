@@ -20,6 +20,7 @@ from scripts.check_results.select_stage2_mechanism_candidate import (
     _build_tubelet_sync_scan_seed,
     _resolve_embedding_margin,
     _resolve_projection_support_weight,
+    _resolve_spatial_patch_size,
     _select_tubelet_only_candidate,
     select_stage2_mechanism_candidate,
 )
@@ -64,6 +65,23 @@ def test_embedding_margin_falls_back_to_variant_name_token() -> None:
     )
 
     assert embedding_margin == 0.6
+
+
+def test_spatial_patch_size_falls_back_to_variant_name_token() -> None:
+    """验证缺少 trace 字段时可以从 method_variant 解析空间 patch 尺寸.
+
+    该测试覆盖阶段 2 calibration 中已经出现过的历史路径: 记录里缺少
+    `mechanism_trace.spatial_patch_size`, 但 method variant 名称包含
+    `sp08x08`. selector 必须保留该语义, 否则 sync 阶段会误扫 `sp04x04`.
+    """
+    spatial_patch_size = _resolve_spatial_patch_size(
+        {
+            "method_variant": "tubelet_only_cal_tl08_sp08x08_w005_em1000",
+            "mechanism_trace": {},
+        }
+    )
+
+    assert spatial_patch_size == [8, 8]
 
 
 def test_tubelet_only_anchor_selection_prefers_stronger_signal_over_extra_headroom() -> None:
