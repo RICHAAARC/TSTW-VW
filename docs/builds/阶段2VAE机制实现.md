@@ -2180,3 +2180,68 @@ tubelet_only_cal_tl08_sp08x08_w005_em1000
 本次结果仍然只能支持“部分合格，非阶段 2 机制完整合格”；
 但它已经把后续方向明确收口到“固定非饱和 anchor，再做 sync 验证”，而不是继续泛化地重复扫 anchor。
 ```
+
+---
+
+## 十五、2026-06-04 搜索空间治理收口与 notebook 入口去参数化
+
+本节用于登记 2026-06-03 至 2026-06-04 阶段 2 VAE mechanism calibration 的已确认负结果和当前代码治理结论。该内容只作为历史寻找记录保存, 不再作为默认运行路径。
+
+### （一）已移出默认运行路径的参数方向
+
+以下方向已经通过历史结果确认不适合作为下一轮默认搜索入口, 后续不应再由 notebook 默认进入:
+
+```text
+1. tl02_controlled_validation / tl02_unsaturated_anchor_validation:
+   tl02 要么 anchor 过弱, 要么在修复 shape 污染后 tubelet_only 接近饱和, sync 没有可审计增益空间。
+
+2. tubelet_unsaturated_anchor_probe 的单 anchor 窄扫:
+   固定 tubelet_only_cal_tl08_sp08x08_w005_em1000 后, sync 只能得到 local_clip_sync_gain = 0.0625,
+   temporal_crop_sync_gain = 0.0, mean_temporal_sync_gain = 0.020833, 不能通过 mechanism gate。
+
+3. sync_refine_scan 作为默认第三阶段:
+   历史结果中出现 selected_anchor_not_covered_by_sync_stage_records, 说明该 refine 路径可能在 seed 与 anchor 签名不一致时浪费运行资源。
+   后续默认搜索不再包含该阶段, 只保留在需要专项诊断时手动恢复。
+
+4. notebook 内部通过 stage2_calibration_target 生成 override grid:
+   该方式曾因环境变量映射错误导致 manual config 显示正确但实际回退到基础 grid。
+   后续 notebook 不再内置参数网格或 target 分支, 只读取仓库中的 calibration grid 配置文件。
+```
+
+### （二）当前默认搜索方案
+
+当前默认配置收口到:
+
+```text
+configs/ablation/stage2_vae_mechanism_calibration_grid.json
+```
+
+该配置直接定义多 anchor frontier 与对应 sync 搜索阶段, notebook 不再生成临时 override grid。当前默认 anchor frontier 为:
+
+```text
+tubelet_only_cal_tl08_sp08x08_w005_em1000
+tubelet_only_cal_tl08_sp08x08_w006_em1000
+tubelet_only_cal_tl08_sp08x08_w007_em1000
+tubelet_only_cal_tl08_sp08x08_w008_em1000
+```
+
+每个 anchor 后接一个 `tubelet_sync` 搜索阶段, 以减少重复修改 notebook 的风险, 并让每次参数调整只发生在仓库配置文件中。
+
+### （三）notebook 入口治理结论
+
+`paper_workflow/run_real_video_vae_latent_probe.ipynb` 当前只作为运行流程脚本:
+
+```text
+1. 设置 Colab / Drive / runtime / dataset / model 等运行环境;
+2. 从仓库配置文件读取 stage2 mechanism calibration grid;
+3. 调用 repository module 执行 runner、selector、forensics、packager;
+4. 不再在 notebook 中显式保存 anchor 网格、sync 网格或 stage target 分支。
+```
+
+后续如果需要更换参数或搜索空间, 只修改:
+
+```text
+configs/ablation/stage2_vae_mechanism_calibration_grid.json
+```
+
+然后在 Colab 中重新拉取仓库代码即可运行, 不需要再手动编辑 notebook。该设计属于通用工程写法: notebook 保持为稳定入口, 参数搜索空间由仓库配置治理; 同时也属于本项目特定治理要求: formal 输出仍由 repository modules 生成, notebook 不直接写 records、thresholds、tables、reports。

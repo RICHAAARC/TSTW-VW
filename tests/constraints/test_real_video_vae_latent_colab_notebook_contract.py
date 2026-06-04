@@ -29,6 +29,9 @@ RUN_WORKFLOW_PATH = (
     / "notebook_utils"
     / "real_video_vae_latent_probe_workflow.py"
 )
+STAGE2_CALIBRATION_GRID_PATH = (
+    ROOT / "configs" / "ablation" / "stage2_vae_mechanism_calibration_grid.json"
+)
 BUILD_REQUIRED_STEP_KEYS = [
     "00_runtime_identity_and_user_config",
     "01_mount_google_drive",
@@ -246,6 +249,8 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TSTW_RUN_MAIN_FORMAL" in notebook_text
     assert "TSTW_PACKAGE_NON_FORMAL_AUDIT_BUNDLE" in notebook_text
     assert "TSTW_RUN_TUBELET_ANCHOR_FORENSICS" in notebook_text
+    assert "'effective_manual_env'" in notebook_text
+    assert "TSTW_STAGE2_MECHANISM_CALIBRATION_GRID_PATH" in notebook_text
     assert "TSTW_RESET_STAGE2_MECHANISM_CALIBRATION_RUN_ROOT" in notebook_text
     assert "probe_workflow.reset_probe_runtime_run_root(" in notebook_text
     assert "reset_run_root=False" in notebook_text
@@ -254,65 +259,17 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "'reset_stage2_mechanism_calibration_run_root': True" in notebook_text
     assert "'run_stage2_local_clip_sync_forensics': False" in notebook_text
     assert "'package_non_formal_audit_bundle': False" in notebook_text
-    assert "'stage2_calibration_target': 'tubelet_rescue_expanded_search'" in notebook_text
     assert "selected_tubelet_anchor_forensics.csv" in notebook_text
     assert "selected_tubelet_anchor_forensics_summary.json" in notebook_text
-    assert "TL02_CONTROLLED_SYNC_WIDE_GRID" in notebook_text
-    assert "TL02_CONTROLLED_EMBEDDING_MARGINS = [0.25, 0.4, 0.6]" in notebook_text
-    assert "TL02_CONTROLLED_SEARCH_STAGE_NAMES" in notebook_text
-    assert "TL02_UNSATURATED_ANCHOR_TUBELET_LENGTHS = [4, 8]" in notebook_text
-    assert "TL02_UNSATURATED_ANCHOR_SPATIAL_PATCH_SIZES = [[4, 4], [8, 8]]" in notebook_text
-    assert "TL02_UNSATURATED_ANCHOR_SUPPORT_WEIGHTS = [0.45, 0.75]" in notebook_text
-    assert "TL02_UNSATURATED_ANCHOR_EMBEDDING_MARGINS = [0.5, 0.75]" in notebook_text
-    assert "TL02_UNSATURATED_SYNC_WIDE_GRID" in notebook_text
-    assert "TL02_UNSATURATED_SEARCH_STAGE_NAMES" in notebook_text
-    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_TUBELET_LENGTHS = [8]" in notebook_text
-    assert (
-        "TUBELET_UNSATURATED_ANCHOR_PROBE_SPATIAL_PATCH_SIZES = [[8, 8]]"
-        in notebook_text
-    )
-    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_SUPPORT_WEIGHTS = [0.05]" in notebook_text
-    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_EMBEDDING_MARGINS = [1.0]" in notebook_text
-    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_FIXED_ANCHOR" in notebook_text
-    assert "'anchor_selection_policy': 'fixed_unsaturated_anchor'" in notebook_text
-    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_SYNC_WIDE_GRID" in notebook_text
-    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_SEARCH_STAGE_NAMES" in notebook_text
-    assert "TUBELET_RESCUE_EXPANDED_SYNC_GRID" in notebook_text
-    assert "TUBELET_RESCUE_EXPANDED_FIXED_ANCHORS" in notebook_text
-    assert "TUBELET_RESCUE_EXPANDED_SEARCH_STAGE_NAMES" in notebook_text
-    assert "'lambda_sync': [0.025, 0.05, 0.1, 0.15, 0.25, 0.4]" in notebook_text
-    assert "'min_sync_candidate_score': [0.0, 0.35, 0.55, 0.75]" in notebook_text
-    assert "multi_fixed_anchor_frontier_then_high_lambda_sync_scan" in notebook_text
-    assert "tl02_unsaturated_anchor_validation" in notebook_text
-    assert "tubelet_unsaturated_anchor_probe" in notebook_text
-    assert "tubelet_rescue_expanded_search" in notebook_text
-    assert "'lambda_sync': [0.0, 0.025]" in notebook_text
-    assert "'sync_search_radius': [8, 12]" in notebook_text
-    assert "'min_sync_alignment_coverage_ratio': [0.25, 0.5]" in notebook_text
-    assert (
-        "stage2_grid_override_payload['grid']['embedding_margin'] = "
-        "TL02_CONTROLLED_EMBEDDING_MARGINS"
-        in notebook_text
-    )
-    assert (
-        "stage_payload['grid']['embedding_margin'] = TL02_CONTROLLED_EMBEDDING_MARGINS"
-        in notebook_text
-    )
-    assert "stage_payload['grid'].pop('embedding_margin', None)" in notebook_text
-    assert "'embedding_margin': 'inherit_selected_anchor'" in notebook_text
     assert "stage2_controlled_search_stage_summary" in notebook_text
-    assert (
-        "tl02_controlled_validation_limits_sync_search_to_anchor_and_narrow_sync_wide"
-        in notebook_text
-    )
-    assert (
-        "tl02_unsaturated_anchor_validation_limits_sync_search_to_unsaturated_anchor_and_sync_wide"
-        in notebook_text
-    )
-    assert (
-        "tubelet_unsaturated_anchor_probe_runs_fixed_anchor_then_narrow_sync_wide"
-        in notebook_text
-    )
+    assert "stage2_grid_config_preview" in notebook_text
+    assert "stage2_search_stage_preview" in notebook_text
+    assert "stage2_vae_mechanism_calibration_grid__" not in notebook_text
+    assert "TL02_CONTROLLED_SYNC_WIDE_GRID" not in notebook_text
+    assert "TUBELET_RESCUE_EXPANDED_SYNC_GRID" not in notebook_text
+    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_SYNC_WIDE_GRID" not in notebook_text
+    assert "STAGE2_CALIBRATION_TARGET" not in notebook_text
+    assert "stage2_calibration_target" not in notebook_text
     assert "run_timer = run_timing_workflow.start_run_timing(" in notebook_text
     assert "runtime_profile_workflow.capture_colab_environment(" in notebook_text
     assert "runtime_profile_workflow.profile_drive_io(" in notebook_text
@@ -384,6 +341,47 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "/content/TSTW_runtime" in notebook_text
     assert "/content/drive/MyDrive" in notebook_text
     assert "raw_dataset_download_manifest.json" not in notebook_text
+
+
+def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameterization() -> None:
+    """验证阶段 2 搜索空间由仓库配置文件治理, 而不是由 notebook 内联生成.
+
+    该约束属于项目特定写法: notebook 只作为 Colab 运行入口, 每次调整
+    anchor frontier 或 sync 网格时只修改 JSON 配置文件, 避免再次进入已经
+    确认失败的 notebook target / override grid 分支.
+    """
+    grid_config = json.loads(STAGE2_CALIBRATION_GRID_PATH.read_text(encoding="utf-8"))
+    search_stage_names = [
+        str(stage_payload["stage_name"])
+        for stage_payload in grid_config["search_stages"]
+    ]
+
+    assert grid_config["campaign_mode"] == "staged_search"
+    assert "sync_refine_scan" not in search_stage_names
+    assert search_stage_names == [
+        "anchor_balanced_headroom",
+        "sync_balanced_headroom",
+        "anchor_support_slight_lift",
+        "sync_support_slight_lift",
+        "anchor_support_mid_lift",
+        "sync_support_mid_lift",
+        "anchor_support_high_lift",
+        "sync_support_high_lift",
+    ]
+    assert grid_config["grid"]["embedding_projection_support_weight"] == [
+        0.05,
+        0.06,
+        0.07,
+        0.08,
+    ]
+    assert grid_config["grid"]["lambda_sync"] == [
+        0.025,
+        0.05,
+        0.1,
+        0.15,
+        0.25,
+        0.4,
+    ]
 
 
 def test_real_video_vae_latent_notebook_cells_use_python_metadata() -> None:

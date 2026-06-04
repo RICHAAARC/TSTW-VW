@@ -164,7 +164,7 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
                     "tubelet_sync": {},
                 },
             }
-        if stage_name == "sync_wide_scan":
+        if stage_name == "sync_custom_scan":
             return {
                 "selection_scope": "tubelet_sync",
                 "output_path": str(tmp_path / f"{stage_name}_selected_candidate.json"),
@@ -285,7 +285,7 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     assert ablation_config_path.exists()
     assert calibration_summary_path.exists()
     assert summary["campaign_mode"] == "staged_search"
-    assert summary["search_stage_count"] == 3
+    assert summary["search_stage_count"] == 8
     assert Path(summary["search_stage_plan_path"]).exists()
 
     protocol_payload = json.loads(protocol_config_path.read_text(encoding="utf-8"))
@@ -334,11 +334,16 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     assert "min_sync_alignment_coverage_ratio" in generated_sync_config["sync_search"]
     assert "min_sync_alignment_matched_count" in generated_sync_config["sync_search"]
 
-    assert len(captured_runner_calls) == 3
+    assert len(captured_runner_calls) == 8
     assert [Path(call["kwargs"]["output_root"]).name for call in captured_runner_calls] == [
-        "anchor_tubelet_only_wide",
-        "sync_wide_scan",
-        "sync_refine_scan",
+        "anchor_balanced_headroom",
+        "sync_balanced_headroom",
+        "anchor_support_slight_lift",
+        "sync_support_slight_lift",
+        "anchor_support_mid_lift",
+        "sync_support_mid_lift",
+        "anchor_support_high_lift",
+        "sync_support_high_lift",
     ]
     for runner_call in captured_runner_calls:
         runner_kwargs = runner_call["kwargs"]
@@ -348,18 +353,22 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
         assert runner_kwargs["samples_per_role"] == 2
         assert runner_kwargs["batch_size_frames"] == 8
 
-    assert len(selector_calls) == 3
+    assert len(selector_calls) == 8
     assert [str(call["selection_scope"]) for call in selector_calls] == [
         "tubelet_only",
         "tubelet_sync",
+        "tubelet_only",
+        "tubelet_sync",
+        "tubelet_only",
+        "tubelet_sync",
+        "tubelet_only",
         "tubelet_sync",
     ]
-    assert selector_calls[1]["selected_tubelet_only_candidate"]["method_variant"] == anchor_candidate[
-        "method_variant"
-    ]
-    assert selector_calls[2]["selected_tubelet_only_candidate"]["method_variant"] == anchor_candidate[
-        "method_variant"
-    ]
+    for selector_call in selector_calls:
+        if str(selector_call["selection_scope"]) == "tubelet_sync":
+            assert selector_call["selected_tubelet_only_candidate"]["method_variant"] == anchor_candidate[
+                "method_variant"
+            ]
 
     candidate_method_config = json.loads(
         candidate_method_config_path.read_text(encoding="utf-8")
@@ -402,9 +411,9 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     timing_summary_payload = json.loads(
         Path(summary["timing_summary_path"]).read_text(encoding="utf-8")
     )
-    assert timing_summary_payload["search_stage_count"] == 3
+    assert timing_summary_payload["search_stage_count"] == 8
     assert timing_summary_payload["stage_timing_summaries"][0]["stage_name"] == (
-        "anchor_tubelet_only_wide"
+        "anchor_balanced_headroom"
     )
     assert timing_summary_payload["calibration_timing_summary"]["event_count"] >= 7
 
@@ -414,7 +423,7 @@ def test_stage2_mechanism_calibration_runner_continues_refine_scan_from_sync_sca
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Validate default staged search can refine from tubelet_sync_scan_seed.
+    """Validate custom staged search can refine from tubelet_sync_scan_seed.
 
     Args:
         tmp_path: Temporary output root.
@@ -520,7 +529,7 @@ def test_stage2_mechanism_calibration_runner_continues_refine_scan_from_sync_sca
 
     def _fake_select_stage2_mechanism_candidate(**kwargs: object) -> dict[str, object]:
         stage_name = Path(str(kwargs["run_root"])).name
-        if stage_name == "anchor_tubelet_only_wide":
+        if stage_name == "anchor_custom_headroom":
             return {
                 "selection_scope": "tubelet_only",
                 "selection_completion_status": "complete",
@@ -536,7 +545,7 @@ def test_stage2_mechanism_calibration_runner_continues_refine_scan_from_sync_sca
                 "top_tubelet_sync_candidates": [],
                 "parameter_interval_summary": {"tubelet_only": {}, "tubelet_sync": {}},
             }
-        if stage_name == "sync_wide_scan":
+        if stage_name == "sync_custom_scan":
             return {
                 "selection_scope": "tubelet_sync",
                 "selection_completion_status": "incomplete_no_eligible_tubelet_sync_candidate",
@@ -574,20 +583,38 @@ def test_stage2_mechanism_calibration_runner_continues_refine_scan_from_sync_sca
         _fake_select_stage2_mechanism_candidate,
     )
 
+    grid_config = json.loads(
+        Path(calibration_runner_module.DEFAULT_GRID_CONFIG_PATH).read_text(encoding="utf-8")
+    )
+    anchor_stage = dict(grid_config["search_stages"][0])
+    sync_scan_stage = dict(grid_config["search_stages"][1])
+    sync_seed_stage = dict(grid_config["search_stages"][1])
+    anchor_stage["stage_name"] = "anchor_custom_headroom"
+    sync_scan_stage["stage_name"] = "sync_custom_scan"
+    sync_seed_stage["stage_name"] = "sync_seed_refinement"
+    sync_seed_stage["candidate_source"] = "tubelet_sync_scan_seed"
+    grid_config["search_stages"] = [anchor_stage, sync_scan_stage, sync_seed_stage]
+    grid_config_path = tmp_path / "grid_custom_sync_seed_refinement.json"
+    grid_config_path.write_text(
+        json.dumps(grid_config, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
     candidate_method_config_path = tmp_path / "candidate_from_scan_seed.json"
     summary = run_stage2_mechanism_calibration(
         run_root=tmp_path / "mcal_scan_seed_refine",
         runtime_profile="formal",
         samples_per_role=2,
         batch_size_frames=8,
+        grid_config_path=grid_config_path,
         output_method_config_path=candidate_method_config_path,
     )
 
     assert len(captured_runner_calls) == 3
     assert [Path(call["kwargs"]["output_root"]).name for call in captured_runner_calls] == [
-        "anchor_tubelet_only_wide",
-        "sync_wide_scan",
-        "sync_refine_scan",
+        "anchor_custom_headroom",
+        "sync_custom_scan",
+        "sync_seed_refinement",
     ]
     assert summary["search_terminated_early"] is False
     assert summary["terminated_before_stage_name"] is None
@@ -598,6 +625,7 @@ def test_stage2_mechanism_calibration_runner_continues_refine_scan_from_sync_sca
     assert summary["search_stage_summaries"][1]["tubelet_sync_scan_seed"][
         "seed_method_config"
     ]["tubelet_length"] == anchor_candidate["tubelet_length"]
+    assert summary["search_stage_summaries"][2]["stage_name"] == "sync_seed_refinement"
     assert summary["search_stage_summaries"][2]["selected_tubelet_sync_candidate"][
         "method_variant"
     ] == refined_sync_candidate["method_variant"]
@@ -609,7 +637,7 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Validate staged search returns a governed partial summary when sync wide rows are incompatible with the anchor.
+    """Validate staged search returns a governed partial summary when sync rows are incompatible with the anchor.
 
     Args:
         tmp_path: Temporary output root.
@@ -653,7 +681,7 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
 
     def _fake_select_stage2_mechanism_candidate(**kwargs: object) -> dict[str, object]:
         stage_name = Path(str(kwargs["run_root"])).name
-        if stage_name == "anchor_tubelet_only_wide":
+        if stage_name == "anchor_balanced_headroom":
             return {
                 "selection_scope": "tubelet_only",
                 "selection_completion_status": "complete",
@@ -734,9 +762,7 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
     grid_config = json.loads(
         Path(calibration_runner_module.DEFAULT_GRID_CONFIG_PATH).read_text(encoding="utf-8")
     )
-    for stage_payload in grid_config["search_stages"]:
-        if stage_payload["stage_name"] == "sync_refine_scan":
-            stage_payload["candidate_source"] = "selected_tubelet_sync_candidate"
+    grid_config["search_stages"] = grid_config["search_stages"][:2]
     grid_config_path = tmp_path / "grid_requires_selected_sync_candidate.json"
     grid_config_path.write_text(
         json.dumps(grid_config, ensure_ascii=False, indent=2) + "\n",
@@ -755,13 +781,13 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
 
     assert len(captured_runner_calls) == 2
     assert [Path(call["kwargs"]["output_root"]).name for call in captured_runner_calls] == [
-        "anchor_tubelet_only_wide",
-        "sync_wide_scan",
+        "anchor_balanced_headroom",
+        "sync_balanced_headroom",
     ]
     assert summary["calibration_completion_status"] == "anchor_only_partial_selection"
     assert summary["calibration_blocking_reason"] == "selected_anchor_not_covered_by_sync_stage_records"
-    assert summary["search_terminated_early"] is True
-    assert summary["terminated_before_stage_name"] == "sync_refine_scan"
+    assert summary["search_terminated_early"] is False
+    assert summary["terminated_before_stage_name"] is None
     assert summary["selected_tubelet_only_candidate"]["method_variant"] == anchor_candidate[
         "method_variant"
     ]
@@ -835,7 +861,7 @@ def test_stage2_mechanism_calibration_runner_supports_anchor_only_search_plan(
 
     def _fake_select_stage2_mechanism_candidate(**kwargs: object) -> dict[str, object]:
         stage_name = Path(str(kwargs["run_root"])).name
-        assert stage_name == "anchor_tubelet_only_wide"
+        assert stage_name == "anchor_balanced_headroom"
         return {
             "selection_scope": "tubelet_only",
             "selection_completion_status": "complete",
@@ -880,7 +906,7 @@ def test_stage2_mechanism_calibration_runner_supports_anchor_only_search_plan(
 
     assert len(captured_runner_calls) == 1
     assert Path(captured_runner_calls[0]["kwargs"]["output_root"]).name == (
-        "anchor_tubelet_only_wide"
+        "anchor_balanced_headroom"
     )
     assert summary["calibration_completion_status"] == "anchor_only_partial_selection"
     assert summary["calibration_blocking_reason"] == (
@@ -890,7 +916,7 @@ def test_stage2_mechanism_calibration_runner_supports_anchor_only_search_plan(
     assert summary["terminated_before_stage_name"] is None
     assert summary["selection_completion_status"] == "complete"
     assert summary["search_stage_count"] == 1
-    assert summary["search_stage_summaries"][0]["stage_name"] == "anchor_tubelet_only_wide"
+    assert summary["search_stage_summaries"][0]["stage_name"] == "anchor_balanced_headroom"
     assert summary["selected_tubelet_only_candidate"]["method_variant"] == anchor_candidate[
         "method_variant"
     ]

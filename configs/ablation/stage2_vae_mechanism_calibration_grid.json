@@ -32,10 +32,16 @@
       ]
     ],
     "embedding_projection_support_weight": [
-      0.05
+      0.05,
+      0.06,
+      0.07,
+      0.08
     ],
     "embedding_margin": [
       1.0
+    ],
+    "fusion_rule": [
+      "sync_rescue_fusion"
     ],
     "lambda_sync": [
       0.025,
@@ -48,9 +54,6 @@
     "sync_search_radius": [
       8,
       12
-    ],
-    "fusion_rule": [
-      "sync_rescue_fusion"
     ],
     "min_sync_positive_margin": [
       0.0,
@@ -74,10 +77,21 @@
   },
   "search_stages": [
     {
-      "stage_name": "anchor_tubelet_only_wide",
+      "stage_name": "anchor_balanced_headroom",
       "selection_scope": "tubelet_only",
-      "include_frame_prc_baseline": true,
-      "top_candidate_limit": 8,
+      "include_frame_prc_baseline": false,
+      "top_candidate_limit": 16,
+      "anchor_selection_policy": "fixed_unsaturated_anchor",
+      "fixed_tubelet_only_anchor": {
+        "method_variant": "tubelet_only_cal_tl08_sp08x08_w005_em1000",
+        "tubelet_length": 8,
+        "spatial_patch_size": [
+          8,
+          8
+        ],
+        "embedding_projection_support_weight": 0.05,
+        "embedding_margin": 1.0
+      },
       "grid": {
         "tubelet_length": [
           8
@@ -97,7 +111,7 @@
       }
     },
     {
-      "stage_name": "sync_wide_scan",
+      "stage_name": "sync_balanced_headroom",
       "selection_scope": "tubelet_sync",
       "candidate_source": "selected_tubelet_only_candidate",
       "include_frame_prc_baseline": false,
@@ -140,16 +154,56 @@
       }
     },
     {
-      "stage_name": "sync_refine_scan",
-      "selection_scope": "tubelet_sync",
-      "candidate_source": "tubelet_sync_scan_seed",
+      "stage_name": "anchor_support_slight_lift",
+      "selection_scope": "tubelet_only",
       "include_frame_prc_baseline": false,
-      "top_candidate_limit": 8,
+      "top_candidate_limit": 16,
+      "anchor_selection_policy": "fixed_unsaturated_anchor",
+      "fixed_tubelet_only_anchor": {
+        "method_variant": "tubelet_only_cal_tl08_sp08x08_w006_em1000",
+        "tubelet_length": 8,
+        "spatial_patch_size": [
+          8,
+          8
+        ],
+        "embedding_projection_support_weight": 0.06,
+        "embedding_margin": 1.0
+      },
       "grid": {
+        "tubelet_length": [
+          8
+        ],
+        "spatial_patch_size": [
+          [
+            8,
+            8
+          ]
+        ],
+        "embedding_projection_support_weight": [
+          0.06
+        ],
+        "embedding_margin": [
+          1.0
+        ]
+      }
+    },
+    {
+      "stage_name": "sync_support_slight_lift",
+      "selection_scope": "tubelet_sync",
+      "candidate_source": "selected_tubelet_only_candidate",
+      "include_frame_prc_baseline": false,
+      "top_candidate_limit": 16,
+      "grid": {
+        "fusion_rule": [
+          "sync_rescue_fusion"
+        ],
         "lambda_sync": [
           0.025,
           0.05,
-          0.075
+          0.1,
+          0.15,
+          0.25,
+          0.4
         ],
         "sync_search_radius": [
           8,
@@ -158,19 +212,175 @@
         "min_sync_positive_margin": [
           0.0,
           0.03,
-          0.06
+          0.06,
+          0.09
         ],
         "min_sync_alignment_coverage_ratio": [
-          0.125,
-          0.25
+          0.0625,
+          0.125
         ],
         "min_sync_alignment_matched_count": [
-          1,
-          2
+          1
         ],
         "min_sync_candidate_score": [
           0.0,
-          0.55
+          0.35,
+          0.55,
+          0.75
+        ]
+      }
+    },
+    {
+      "stage_name": "anchor_support_mid_lift",
+      "selection_scope": "tubelet_only",
+      "include_frame_prc_baseline": false,
+      "top_candidate_limit": 16,
+      "anchor_selection_policy": "fixed_unsaturated_anchor",
+      "fixed_tubelet_only_anchor": {
+        "method_variant": "tubelet_only_cal_tl08_sp08x08_w007_em1000",
+        "tubelet_length": 8,
+        "spatial_patch_size": [
+          8,
+          8
+        ],
+        "embedding_projection_support_weight": 0.07,
+        "embedding_margin": 1.0
+      },
+      "grid": {
+        "tubelet_length": [
+          8
+        ],
+        "spatial_patch_size": [
+          [
+            8,
+            8
+          ]
+        ],
+        "embedding_projection_support_weight": [
+          0.07
+        ],
+        "embedding_margin": [
+          1.0
+        ]
+      }
+    },
+    {
+      "stage_name": "sync_support_mid_lift",
+      "selection_scope": "tubelet_sync",
+      "candidate_source": "selected_tubelet_only_candidate",
+      "include_frame_prc_baseline": false,
+      "top_candidate_limit": 16,
+      "grid": {
+        "fusion_rule": [
+          "sync_rescue_fusion"
+        ],
+        "lambda_sync": [
+          0.025,
+          0.05,
+          0.1,
+          0.15,
+          0.25,
+          0.4
+        ],
+        "sync_search_radius": [
+          8,
+          12
+        ],
+        "min_sync_positive_margin": [
+          0.0,
+          0.03,
+          0.06,
+          0.09
+        ],
+        "min_sync_alignment_coverage_ratio": [
+          0.0625,
+          0.125
+        ],
+        "min_sync_alignment_matched_count": [
+          1
+        ],
+        "min_sync_candidate_score": [
+          0.0,
+          0.35,
+          0.55,
+          0.75
+        ]
+      }
+    },
+    {
+      "stage_name": "anchor_support_high_lift",
+      "selection_scope": "tubelet_only",
+      "include_frame_prc_baseline": false,
+      "top_candidate_limit": 16,
+      "anchor_selection_policy": "fixed_unsaturated_anchor",
+      "fixed_tubelet_only_anchor": {
+        "method_variant": "tubelet_only_cal_tl08_sp08x08_w008_em1000",
+        "tubelet_length": 8,
+        "spatial_patch_size": [
+          8,
+          8
+        ],
+        "embedding_projection_support_weight": 0.08,
+        "embedding_margin": 1.0
+      },
+      "grid": {
+        "tubelet_length": [
+          8
+        ],
+        "spatial_patch_size": [
+          [
+            8,
+            8
+          ]
+        ],
+        "embedding_projection_support_weight": [
+          0.08
+        ],
+        "embedding_margin": [
+          1.0
+        ]
+      }
+    },
+    {
+      "stage_name": "sync_support_high_lift",
+      "selection_scope": "tubelet_sync",
+      "candidate_source": "selected_tubelet_only_candidate",
+      "include_frame_prc_baseline": false,
+      "top_candidate_limit": 16,
+      "grid": {
+        "fusion_rule": [
+          "sync_rescue_fusion"
+        ],
+        "lambda_sync": [
+          0.025,
+          0.05,
+          0.1,
+          0.15,
+          0.25,
+          0.4
+        ],
+        "sync_search_radius": [
+          8,
+          12
+        ],
+        "min_sync_positive_margin": [
+          0.0,
+          0.03,
+          0.06,
+          0.09
+        ],
+        "min_sync_alignment_coverage_ratio": [
+          0.0625,
+          0.125
+        ],
+        "min_sync_alignment_matched_count": [
+          1
+        ],
+        "min_sync_candidate_score": [
+          0.0,
+          0.35,
+          0.55,
+          0.75
         ]
       }
     }
