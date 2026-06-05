@@ -254,14 +254,14 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TSTW_RESET_STAGE2_MECHANISM_CALIBRATION_RUN_ROOT" in notebook_text
     assert "probe_workflow.reset_probe_runtime_run_root(" in notebook_text
     assert "reset_run_root=False" in notebook_text
-    assert "'samples_per_role_override': None" in notebook_text
-    assert "'run_main_formal': True" in notebook_text
-    assert "'run_stage2_mechanism_calibration': False" in notebook_text
+    assert "'samples_per_role_override': 20" in notebook_text
+    assert "'run_main_formal': False" in notebook_text
+    assert "'run_stage2_mechanism_calibration': True" in notebook_text
     assert "'run_tubelet_anchor_forensics': True" in notebook_text
-    assert "'reset_stage2_mechanism_calibration_run_root': False" in notebook_text
-    assert "'run_stage2_local_clip_sync_forensics': False" in notebook_text
-    assert "'package_non_formal_audit_bundle': False" in notebook_text
-    assert "'require_stage2_mechanism_pass': True" in notebook_text
+    assert "'reset_stage2_mechanism_calibration_run_root': True" in notebook_text
+    assert "'run_stage2_local_clip_sync_forensics': True" in notebook_text
+    assert "'package_non_formal_audit_bundle': True" in notebook_text
+    assert "'require_stage2_mechanism_pass': False" in notebook_text
     assert "selected_tubelet_anchor_forensics.csv" in notebook_text
     assert "selected_tubelet_anchor_forensics_summary.json" in notebook_text
     assert "stage2_controlled_search_stage_summary" in notebook_text
@@ -347,11 +347,13 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
 
 
 def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameterization() -> None:
-    """???? 2 ?????????????, ???? notebook ????.
+    """验证阶段 2 搜索空间由配置文件拥有, notebook 不内联候选窗口。
 
-    ???????????: notebook ??? Colab ????, ????
-    anchor frontier ? sync ?????? JSON ??????????????
-    ? w005 focused refinement, ????????????? broad search ???
+    Args:
+        None.
+
+    Returns:
+        None.
     """
     grid_config = json.loads(STAGE2_CALIBRATION_GRID_PATH.read_text(encoding="utf-8"))
     search_stage_names = [
@@ -361,26 +363,31 @@ def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameteriza
 
     assert grid_config["campaign_mode"] == "staged_search"
     assert "sync_refine_scan" not in search_stage_names
+    assert "fixed_tubelet_only_anchor" not in grid_config
+    assert grid_config["anchor_selection_policy"] == "formal_sample_strict_fpr_anchor"
     assert search_stage_names == [
-        "anchor_balanced_headroom",
-        "sync_headroom_refine",
+        "formal_anchor_diag",
+        "formal_sync_diag",
     ]
-    assert grid_config["fixed_tubelet_only_anchor"]["method_variant"] == (
-        "tubelet_only_cal_tl08_sp08x08_w005_em1000"
-    )
-    assert grid_config["grid"]["embedding_projection_support_weight"] == [0.05]
+    assert grid_config["grid"]["tubelet_length"] == [4, 8, 16]
+    assert grid_config["grid"]["spatial_patch_size"] == [[4, 4], [8, 8]]
+    assert grid_config["grid"]["embedding_projection_support_weight"] == [
+        0.03,
+        0.05,
+        0.07,
+    ]
+    assert grid_config["grid"]["embedding_margin"] == [0.8, 1.0, 1.2]
     assert grid_config["grid"]["lambda_sync"] == [
+        0.01,
         0.015,
         0.025,
         0.04,
-        0.06,
     ]
-    assert grid_config["grid"]["sync_search_radius"] == [8, 10, 12]
+    assert grid_config["grid"]["sync_search_radius"] == [6, 8, 10]
     assert grid_config["grid"]["min_sync_candidate_score"] == [
         0.25,
         0.35,
         0.45,
-        0.55,
     ]
 
 

@@ -2446,3 +2446,220 @@ records / thresholds / tables / reports / manifest 均可重建
 
 如果该 completion run 通过, 阶段 2 VAE 机制证明即可进入收尾整理与阶段推进评审。
 
+
+
+## 十八、2026-06-05 formal completion 运行失败记录与候选状态回退
+
+### 18.1 结果来源
+
+本轮记录来自用户保存的 Colab runtime 压缩包:
+
+```text
+G:\我的云端硬盘\TSTW
+esults\TSTW_runtime_runs_20260605_080700.zip
+```
+
+对应 run root 为:
+
+```text
+/content/TSTW_runtime/runs/real_video_vae_latent_probe_formal
+```
+
+本轮实际使用的 commit 为:
+
+```text
+9789775
+```
+
+该运行不是 workspace 准备失败, 也不是 runner 中途崩溃。主 formal runner 已经完成, 并产出了 records、thresholds、tables、reports、runtime manifest 与 artifact manifest。
+
+### 18.2 formal checker 结果
+
+`formal_validation_summary.json` 的核心结论为:
+
+```text
+status = false
+record_count = 4200
+threshold_count = 3
+Stage2ImplementationDecision = INCONCLUSIVE
+RealVideoVaeLatentDecision = INCONCLUSIVE
+BlockingReasons = [clean_negative_fpr_controlled]
+NextAllowedStage = remain_in_real_video_vae_latent_probe
+```
+
+required paths 全部存在:
+
+```text
+event_scores = true
+thresholds = true
+main_tpr_fpr_table = true
+real_video_attack_breakdown = true
+quality_table = true
+temporal_consistency_table = true
+real_video_vae_latent_governance_summary = true
+report = true
+runtime_manifest = true
+artifact_manifest = true
+```
+
+因此, 该结果应登记为: 正式 completion run 产物完整, 但 formal gate 未通过。
+
+### 18.3 关键指标
+
+主表 `main_tpr_fpr_table.csv` 中与失败直接相关的指标为:
+
+```text
+frame_prc no_attack clean_negative_FPR = 0.0
+frame_prc no_attack clean_positive_TPR = 1.0
+
+tubelet_only no_attack clean_negative_FPR = 0.05
+tubelet_only no_attack clean_positive_TPR = 0.4
+
+tubelet_sync no_attack clean_negative_FPR = 0.05
+tubelet_sync no_attack clean_positive_TPR = 0.4
+```
+
+由于 formal gate 使用 `target_fpr = 0.001`, `tubelet_only` 与 `tubelet_sync` 在 test clean_negative 上出现 1/20 false positive, 导致 empirical clean FPR 为 0.05, 从而触发 `clean_negative_fpr_controlled` 阻断。
+
+机制审计文件 `stage2_mechanism_decision.json` 的核心结论为:
+
+```text
+Stage2MechanismDecision = INCONCLUSIVE
+SyncRescueDecision = FAIL
+SyncLeakageDecision = PASS
+SyncCandidateSelectionStatus = insufficient_signal
+RecommendedNextAction = stage2_implementation_fix
+```
+
+机制阻断原因为:
+
+```text
+sync_positive_negative_score_gap_low
+tubelet_only_no_attack_positive_tpr_low
+tubelet_only_not_above_frame_prc
+tubelet_sync_no_attack_positive_tpr_low
+tubelet_sync_not_above_tubelet_only_temporal
+```
+
+关键机制指标为:
+
+```text
+tubelet_only_gain_over_frame_prc = -0.1725
+tubelet_sync_gain_over_tubelet_only_temporal = 0.016667
+sync_positive_negative_score_gap = -0.000995
+```
+
+按 attack 展开的同步增益显示:
+
+```text
+temporal_crop: tubelet_only = 0.2, tubelet_sync = 0.2, sync_gain = 0.0
+local_clip: tubelet_only = 0.2125, tubelet_sync = 0.2625, sync_gain = 0.05
+frame_dropping: tubelet_only = 0.45, tubelet_sync = 0.45, sync_gain = 0.0
+```
+
+该结果说明: focused refinement 中的 candidate 在小样本校准集上出现了正向趋势, 但在 formal 样本量与完整 test split 下未能稳定复现阶段 2 机制证明所需的分离度、no-attack 正样本召回和同步救援增益。
+
+### 18.4 候选状态修正
+
+上一节第 17 节将 `tubelet_sync_cal_tl08_sp08x08_w005_em1000_sr08_ls015_mg000_cv062_mc01_cs250_frsync_rescue` 作为 completion run 候选冻结。根据本轮 formal completion 结果, 该判断需要回退为:
+
+```text
+候选状态 = calibration_candidate_not_formal_passed
+是否可作为阶段 2 完成证明默认 candidate = false
+是否保留为历史搜索记录 = true
+是否建议原样重跑 = false
+```
+
+该候选仍有历史价值: 它说明 `local_clip` 上存在少量 sync 增益, 且同步泄漏没有失控。但它不能支撑阶段 2 completion claim, 因为 formal 结果同时暴露了 clean FPR、no-attack positive TPR、sync score gap 和 temporal attack sync gain 不足。
+
+### 18.5 工程结论
+
+1. notebook 的 formal checker 报错是预期行为, 不是 notebook cell bug。
+2. 本轮运行已完成产物生成, 失败发生在正式门禁判断阶段。
+3. 之前小样本通过不能视为阶段 2 机制成立, 只能视为候选方向提示。
+4. 后续不应原样重复运行该 candidate。
+5. 下一步应转向 formal-sample-aware 的小范围机制诊断, 优先修复正负分离度与 no-attack 正样本召回, 再重新执行完整 completion run。
+
+
+## 十九、2026-06-05 配置清理与下一轮 formal-sample-aware 诊断搜索决策
+
+### 19.1 清理原因
+
+上一轮 formal completion run 已证明 `tubelet_sync_cal_tl08_sp08x08_w005_em1000_sr08_ls015_mg000_cv062_mc01_cs250_frsync_rescue` 不能作为阶段 2 完成证明候选。若继续把它保留为仓库默认 candidate, 后续 notebook 会反复进入已验证失败路径, 造成时间和算力浪费。
+
+因此本次将失败候选从默认运行配置中移除。失败窗口、候选参数和 formal 失败指标仅保留在本文档第 17 节和第 18 节作为历史搜索记录。
+
+### 19.2 已清理的默认路径
+
+本次配置决策为:
+
+```text
+删除失败候选的默认 method override
+删除失败候选作为 mechanism default candidate 的登记
+删除失败候选 runtime config 与 anchor config
+notebook 默认不再运行 completion formal gate
+notebook 默认进入 20 样本机制诊断校准
+```
+
+具体含义为:
+
+1. `configs/ablation/real_video_vae_latent_ablation.json` 不再引用失败候选的 `method_config_paths`。
+2. `configs/ablation/real_video_vae_latent_ablation.json` 不再登记 `mechanism_default_candidate_method_config_path`。
+3. `configs/method/real_video_tubelet_only_anchor.json`、`configs/method/real_video_tubelet_sync_candidate_runtime.json`、`configs/method/tubelet_sync_real_video_vae_candidate.json` 不再作为默认静态配置保留。
+4. 下一轮 calibration 若发现新候选, 可重新生成 `configs/method/tubelet_sync_real_video_vae_candidate.json`; 生成前该文件不代表已通过 formal 的 candidate。
+
+### 19.3 下一轮搜索口径
+
+下一轮搜索改为 formal-sample-aware 诊断搜索:
+
+```text
+samples_per_role_override = 20
+run_main_formal = false
+run_stage2_mechanism_calibration = true
+reset_stage2_mechanism_calibration_run_root = true
+require_stage2_mechanism_pass = false
+run_stage2_local_clip_sync_forensics = true
+package_non_formal_audit_bundle = true
+```
+
+这一配置的目标不是直接宣布阶段 2 通过, 而是在 formal 样本量下筛掉小样本假阳性候选, 输出可用于判断下一步的 candidate grid、diagnostics、forensics 和 non-formal audit bundle。
+
+### 19.4 新的候选选择门槛
+
+下一轮校准将 formal 已知失败条件提前纳入选择门槛:
+
+```text
+max_clean_negative_fpr = 0.0
+max_attacked_negative_fpr = 0.0
+min_no_attack_clean_positive_tpr = 0.5
+min_mean_temporal_sync_gain = 0.05
+min_tubelet_sync_gain_over_tubelet_only_temporal = 0.1
+min_sync_positive_negative_score_gap = 0.05
+```
+
+这些门槛的设计目的在于: 不再允许 clean negative FPR = 0.05 的候选进入 completion 候选池, 也不再允许 no-attack 正样本召回不足或 sync gain 只在小样本局部成立的候选进入默认完成路径。
+
+### 19.5 收缩后的搜索空间
+
+下一轮 anchor 诊断空间为:
+
+```text
+tubelet_length = [4, 8, 16]
+spatial_patch_size = [[4, 4], [8, 8]]
+embedding_projection_support_weight = [0.03, 0.05, 0.07]
+embedding_margin = [0.8, 1.0, 1.2]
+```
+
+下一轮 sync 诊断空间为:
+
+```text
+lambda_sync = [0.01, 0.015, 0.025, 0.04]
+sync_search_radius = [6, 8, 10]
+min_sync_positive_margin = [0.0, 0.02]
+min_sync_alignment_coverage_ratio = [0.0625, 0.125]
+min_sync_alignment_matched_count = [1, 2]
+min_sync_candidate_score = [0.25, 0.35, 0.45]
+fusion_rule = sync_rescue_fusion
+```
+
+该搜索空间属于诊断性收缩搜索, 而不是重新扩大盲搜。其重点是检查是否存在同时满足低 FPR、no-attack 正样本召回和 temporal/local clip sync gain 的参数区域。

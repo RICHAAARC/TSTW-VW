@@ -370,8 +370,8 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
 
     assert len(captured_runner_calls) == 2
     assert [Path(call["kwargs"]["output_root"]).name for call in captured_runner_calls] == [
-        "anchor_balanced_headroom",
-        "sync_headroom_refine",
+        "formal_anchor_diag",
+        "formal_sync_diag",
     ]
     for runner_call in captured_runner_calls:
         runner_kwargs = runner_call["kwargs"]
@@ -433,7 +433,7 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     )
     assert timing_summary_payload["search_stage_count"] == 2
     assert timing_summary_payload["stage_timing_summaries"][0]["stage_name"] == (
-        "anchor_balanced_headroom"
+        "formal_anchor_diag"
     )
     assert timing_summary_payload["calibration_timing_summary"]["event_count"] >= 7
 
@@ -701,7 +701,7 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
 
     def _fake_select_stage2_mechanism_candidate(**kwargs: object) -> dict[str, object]:
         stage_name = Path(str(kwargs["run_root"])).name
-        if stage_name == "anchor_balanced_headroom":
+        if stage_name == "formal_anchor_diag":
             return {
                 "selection_scope": "tubelet_only",
                 "selection_completion_status": "complete",
@@ -801,8 +801,8 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
 
     assert len(captured_runner_calls) == 2
     assert [Path(call["kwargs"]["output_root"]).name for call in captured_runner_calls] == [
-        "anchor_balanced_headroom",
-        "sync_headroom_refine",
+        "formal_anchor_diag",
+        "formal_sync_diag",
     ]
     assert summary["calibration_completion_status"] == "anchor_only_partial_selection"
     assert summary["calibration_blocking_reason"] == "selected_anchor_not_covered_by_sync_stage_records"
@@ -881,7 +881,7 @@ def test_stage2_mechanism_calibration_runner_supports_anchor_only_search_plan(
 
     def _fake_select_stage2_mechanism_candidate(**kwargs: object) -> dict[str, object]:
         stage_name = Path(str(kwargs["run_root"])).name
-        assert stage_name == "anchor_balanced_headroom"
+        assert stage_name == "formal_anchor_diag"
         return {
             "selection_scope": "tubelet_only",
             "selection_completion_status": "complete",
@@ -926,7 +926,7 @@ def test_stage2_mechanism_calibration_runner_supports_anchor_only_search_plan(
 
     assert len(captured_runner_calls) == 1
     assert Path(captured_runner_calls[0]["kwargs"]["output_root"]).name == (
-        "anchor_balanced_headroom"
+        "formal_anchor_diag"
     )
     assert summary["calibration_completion_status"] == "anchor_only_partial_selection"
     assert summary["calibration_blocking_reason"] == (
@@ -936,7 +936,7 @@ def test_stage2_mechanism_calibration_runner_supports_anchor_only_search_plan(
     assert summary["terminated_before_stage_name"] is None
     assert summary["selection_completion_status"] == "complete"
     assert summary["search_stage_count"] == 1
-    assert summary["search_stage_summaries"][0]["stage_name"] == "anchor_balanced_headroom"
+    assert summary["search_stage_summaries"][0]["stage_name"] == "formal_anchor_diag"
     assert summary["selected_tubelet_only_candidate"]["method_variant"] == anchor_candidate[
         "method_variant"
     ]

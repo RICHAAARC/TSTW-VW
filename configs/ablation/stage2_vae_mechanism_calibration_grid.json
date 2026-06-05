@@ -1,19 +1,9 @@
 {
   "construction_phase": "real_video_vae_latent_probe",
-  "calibration_purpose": "stage2_mechanism_effect_calibration",
+  "calibration_purpose": "stage2_formal_sample_mechanism_diagnostic_calibration",
   "campaign_mode": "staged_search",
-  "top_candidate_limit": 24,
-  "anchor_selection_policy": "fixed_unsaturated_anchor",
-  "fixed_tubelet_only_anchor": {
-    "method_variant": "tubelet_only_cal_tl08_sp08x08_w005_em1000",
-    "tubelet_length": 8,
-    "spatial_patch_size": [
-      8,
-      8
-    ],
-    "embedding_projection_support_weight": 0.05,
-    "embedding_margin": 1.0
-  },
+  "top_candidate_limit": 12,
+  "anchor_selection_policy": "formal_sample_strict_fpr_anchor",
   "allowed_splits": [
     "dev",
     "calibration"
@@ -23,136 +13,145 @@
   ],
   "grid": {
     "tubelet_length": [
-      8
+      4,
+      8,
+      16
     ],
     "spatial_patch_size": [
+      [
+        4,
+        4
+      ],
       [
         8,
         8
       ]
     ],
     "embedding_projection_support_weight": [
-      0.05
+      0.03,
+      0.05,
+      0.07
     ],
     "embedding_margin": [
-      1.0
+      0.8,
+      1.0,
+      1.2
     ],
     "fusion_rule": [
       "sync_rescue_fusion"
     ],
     "lambda_sync": [
+      0.01,
       0.015,
       0.025,
-      0.04,
-      0.06
+      0.04
     ],
     "sync_search_radius": [
+      6,
       8,
-      10,
-      12
+      10
     ],
     "min_sync_positive_margin": [
       0.0,
-      0.02,
-      0.03
+      0.02
     ],
     "min_sync_alignment_coverage_ratio": [
       0.0625,
       0.125
     ],
     "min_sync_alignment_matched_count": [
-      1
+      1,
+      2
     ],
     "min_sync_candidate_score": [
       0.25,
       0.35,
-      0.45,
-      0.55
+      0.45
     ]
   },
   "search_stages": [
     {
-      "stage_name": "anchor_balanced_headroom",
+      "stage_name": "formal_anchor_diag",
       "selection_scope": "tubelet_only",
-      "include_frame_prc_baseline": false,
-      "top_candidate_limit": 24,
-      "anchor_selection_policy": "fixed_unsaturated_anchor",
-      "fixed_tubelet_only_anchor": {
-        "method_variant": "tubelet_only_cal_tl08_sp08x08_w005_em1000",
-        "tubelet_length": 8,
-        "spatial_patch_size": [
-          8,
-          8
-        ],
-        "embedding_projection_support_weight": 0.05,
-        "embedding_margin": 1.0
-      },
+      "include_frame_prc_baseline": true,
+      "top_candidate_limit": 12,
+      "anchor_selection_policy": "formal_sample_strict_fpr_anchor",
       "grid": {
         "tubelet_length": [
-          8
+          4,
+          8,
+          16
         ],
         "spatial_patch_size": [
+          [
+            4,
+            4
+          ],
           [
             8,
             8
           ]
         ],
         "embedding_projection_support_weight": [
-          0.05
+          0.03,
+          0.05,
+          0.07
         ],
         "embedding_margin": [
-          1.0
+          0.8,
+          1.0,
+          1.2
         ]
       }
     },
     {
-      "stage_name": "sync_headroom_refine",
+      "stage_name": "formal_sync_diag",
       "selection_scope": "tubelet_sync",
       "candidate_source": "selected_tubelet_only_candidate",
       "include_frame_prc_baseline": false,
-      "top_candidate_limit": 24,
+      "top_candidate_limit": 12,
       "grid": {
         "fusion_rule": [
           "sync_rescue_fusion"
         ],
         "lambda_sync": [
+          0.01,
           0.015,
           0.025,
-          0.04,
-          0.06
+          0.04
         ],
         "sync_search_radius": [
+          6,
           8,
-          10,
-          12
+          10
         ],
         "min_sync_positive_margin": [
           0.0,
-          0.02,
-          0.03
+          0.02
         ],
         "min_sync_alignment_coverage_ratio": [
           0.0625,
           0.125
         ],
         "min_sync_alignment_matched_count": [
-          1
+          1,
+          2
         ],
         "min_sync_candidate_score": [
           0.25,
           0.35,
-          0.45,
-          0.55
+          0.45
         ]
       }
     }
   ],
   "selection_metrics": [
+    "no_attack_clean_negative_fpr",
     "no_attack_clean_positive_tpr",
-    "clean_negative_fpr",
     "max_attacked_negative_fpr",
-    "temporal_crop_attacked_positive_tpr",
-    "frame_dropping_attacked_positive_tpr",
-    "local_clip_attacked_positive_tpr"
+    "temporal_crop_sync_gain",
+    "local_clip_sync_gain",
+    "mean_temporal_sync_gain",
+    "sync_confident_attacked_negative_count"
   ]
 }

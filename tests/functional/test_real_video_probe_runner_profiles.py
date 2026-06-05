@@ -126,21 +126,10 @@ def test_real_video_formal_ablation_uses_repo_default_tubelet_sync_config() -> N
         config for config in runtime_method_configs if config["method_variant"] == "tubelet_sync"
     )
 
-    assert resolved_paths["tubelet_sync"] == (
-        ROOT / "configs" / "method" / "real_video_tubelet_sync_candidate_runtime.json"
-    )
+    assert resolved_paths["tubelet_sync"] == ROOT / "configs" / "method" / "tubelet_sync.json"
     assert tubelet_sync_config["target_construction_phase"] == "real_video_vae_latent_probe"
     assert tubelet_sync_config["method_status"] == "formal_real_video_vae_probe_runtime"
-    assert tubelet_sync_config["tubelet_length"] == 8
-    assert tubelet_sync_config["lambda_sync"] == 0.015
-    assert tubelet_sync_config["score_calibration"]["embedding_projection_support_weight"] == 0.05
-    assert tubelet_sync_config["tubelet_partition"]["spatial_patch_size"] == [8, 8]
-    assert tubelet_sync_config["sync_search"]["offset_search_min"] == -8
-    assert tubelet_sync_config["sync_search"]["offset_search_max"] == 8
-    assert tubelet_sync_config["sync_search"]["min_sync_positive_margin"] == 0.0
-    assert tubelet_sync_config["sync_search"]["min_sync_alignment_matched_count"] == 1
-    assert tubelet_sync_config["sync_search"]["min_sync_alignment_coverage_ratio"] == 0.0625
-    assert tubelet_sync_config["sync_search"]["min_sync_candidate_score"] == 0.25
+    assert tubelet_sync_config["method_variant"] == "tubelet_sync"
 
 
 @pytest.mark.unit
