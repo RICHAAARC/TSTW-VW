@@ -22,6 +22,40 @@ pytestmark = pytest.mark.quick
 
 
 @pytest.mark.unit
+def test_stage2_mechanism_calibration_summary_prefers_successful_sync_candidate() -> None:
+    """?????????????? sync ??, ????????? stage.
+
+    ???????????: staged search ??????? sync ??,
+    ???? stage ??????????????????, ??????
+    ??? 2 ???????????
+    """
+    summary_fields = calibration_runner_module._build_calibration_summary_selection_fields(
+        {
+            "selection_completion_status": "incomplete_no_eligible_tubelet_sync_candidate",
+            "selection_blocking_reason": "no_tubelet_sync_candidate_passes_selection_gate",
+            "selection_blocking_details": {"failed_stage": "later_exploration"},
+            "selected_tubelet_sync_candidate": {
+                "method_variant": "tubelet_sync_cal_tl08_sp08x08_w005_em1000_sr08_ls025",
+                "candidate_selection_status": "eligible",
+                "negative_leakage_status": "controlled",
+                "metrics": {
+                    "local_clip_sync_gain": 0.1875,
+                    "max_attacked_negative_fpr": 0.0,
+                },
+            },
+        }
+    )
+
+    assert summary_fields["selection_completion_status"] == "complete"
+    assert summary_fields["selection_blocking_reason"] is None
+    assert summary_fields["selection_blocking_details"] is None
+    assert summary_fields["selected_sync_candidate_status"] == "eligible"
+    assert summary_fields["selected_sync_negative_leakage_status"] == "controlled"
+    assert summary_fields["selected_sync_local_clip_gain"] == 0.1875
+    assert summary_fields["selected_sync_max_attacked_negative_fpr"] == 0.0
+
+
+@pytest.mark.unit
 def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_method(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -285,7 +319,7 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     assert ablation_config_path.exists()
     assert calibration_summary_path.exists()
     assert summary["campaign_mode"] == "staged_search"
-    assert summary["search_stage_count"] == 8
+    assert summary["search_stage_count"] == 2
     assert Path(summary["search_stage_plan_path"]).exists()
 
     protocol_payload = json.loads(protocol_config_path.read_text(encoding="utf-8"))
@@ -334,16 +368,10 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     assert "min_sync_alignment_coverage_ratio" in generated_sync_config["sync_search"]
     assert "min_sync_alignment_matched_count" in generated_sync_config["sync_search"]
 
-    assert len(captured_runner_calls) == 8
+    assert len(captured_runner_calls) == 2
     assert [Path(call["kwargs"]["output_root"]).name for call in captured_runner_calls] == [
         "anchor_balanced_headroom",
-        "sync_balanced_headroom",
-        "anchor_support_slight_lift",
-        "sync_support_slight_lift",
-        "anchor_support_mid_lift",
-        "sync_support_mid_lift",
-        "anchor_support_high_lift",
-        "sync_support_high_lift",
+        "sync_headroom_refine",
     ]
     for runner_call in captured_runner_calls:
         runner_kwargs = runner_call["kwargs"]
@@ -353,22 +381,14 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
         assert runner_kwargs["samples_per_role"] == 2
         assert runner_kwargs["batch_size_frames"] == 8
 
-    assert len(selector_calls) == 8
+    assert len(selector_calls) == 2
     assert [str(call["selection_scope"]) for call in selector_calls] == [
         "tubelet_only",
         "tubelet_sync",
-        "tubelet_only",
-        "tubelet_sync",
-        "tubelet_only",
-        "tubelet_sync",
-        "tubelet_only",
-        "tubelet_sync",
     ]
-    for selector_call in selector_calls:
-        if str(selector_call["selection_scope"]) == "tubelet_sync":
-            assert selector_call["selected_tubelet_only_candidate"]["method_variant"] == anchor_candidate[
-                "method_variant"
-            ]
+    assert selector_calls[1]["selected_tubelet_only_candidate"]["method_variant"] == anchor_candidate[
+        "method_variant"
+    ]
 
     candidate_method_config = json.loads(
         candidate_method_config_path.read_text(encoding="utf-8")
@@ -411,7 +431,7 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     timing_summary_payload = json.loads(
         Path(summary["timing_summary_path"]).read_text(encoding="utf-8")
     )
-    assert timing_summary_payload["search_stage_count"] == 8
+    assert timing_summary_payload["search_stage_count"] == 2
     assert timing_summary_payload["stage_timing_summaries"][0]["stage_name"] == (
         "anchor_balanced_headroom"
     )
@@ -782,7 +802,7 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
     assert len(captured_runner_calls) == 2
     assert [Path(call["kwargs"]["output_root"]).name for call in captured_runner_calls] == [
         "anchor_balanced_headroom",
-        "sync_balanced_headroom",
+        "sync_headroom_refine",
     ]
     assert summary["calibration_completion_status"] == "anchor_only_partial_selection"
     assert summary["calibration_blocking_reason"] == "selected_anchor_not_covered_by_sync_stage_records"

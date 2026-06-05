@@ -450,6 +450,9 @@ def _run_staged_mechanism_calibration(
     total_generated_method_variant_count = 0
     selected_tubelet_only_candidate: dict[str, Any] | None = None
     selected_tubelet_sync_candidate: dict[str, Any] | None = None
+    selected_tubelet_sync_selection_payload: dict[str, Any] | None = None
+    selected_tubelet_sync_stage_name: str | None = None
+    selected_tubelet_sync_stage_ablation_config_path: str | None = None
     tubelet_sync_scan_seed: dict[str, Any] | None = None
     final_stage_selection_payload: dict[str, Any] | None = None
     search_terminated_early = False
@@ -568,6 +571,9 @@ def _run_staged_mechanism_calibration(
             selected_tubelet_sync_candidate = stage_selection_payload[
                 "selected_tubelet_sync_candidate"
             ]
+            selected_tubelet_sync_selection_payload = stage_selection_payload
+            selected_tubelet_sync_stage_name = stage_name
+            selected_tubelet_sync_stage_ablation_config_path = str(stage_ablation_config_path)
         if stage_selection_payload.get("tubelet_sync_scan_seed") is not None:
             tubelet_sync_scan_seed = stage_selection_payload["tubelet_sync_scan_seed"]
         final_stage_selection_payload = stage_selection_payload
@@ -646,21 +652,25 @@ def _run_staged_mechanism_calibration(
         raise ValueError("staged mechanism calibration must produce at least one stage summary")
 
     generated_candidate_config_path: str | None = None
-    calibration_completion_status = final_stage_selection_payload.get(
+    selected_output_payload = (
+        selected_tubelet_sync_selection_payload
+        if selected_tubelet_sync_selection_payload is not None
+        else final_stage_selection_payload
+    )
+    calibration_completion_status = selected_output_payload.get(
         "selection_completion_status",
         "complete",
     )
-    calibration_blocking_reason = final_stage_selection_payload.get(
-        "selection_blocking_reason"
-    )
-    calibration_blocking_details = final_stage_selection_payload.get(
-        "selection_blocking_details"
-    )
+    calibration_blocking_reason = selected_output_payload.get("selection_blocking_reason")
+    calibration_blocking_details = selected_output_payload.get("selection_blocking_details")
     if selected_tubelet_sync_candidate is not None:
+        calibration_completion_status = "complete"
+        calibration_blocking_reason = None
+        calibration_blocking_details = None
         with calibration_timing_recorder.event(
             "stage2_calibration_candidate_write",
             event_group="stage2_mechanism_calibration",
-            stage_name=str(stage_summaries[-1]["stage_name"]),
+            stage_name=str(selected_tubelet_sync_stage_name or stage_summaries[-1]["stage_name"]),
             selection_scope="tubelet_sync",
         ):
             candidate_method_config = _build_tubelet_sync_candidate_method_config(
@@ -707,11 +717,14 @@ def _run_staged_mechanism_calibration(
         "grid_config_path": str(grid_config_file),
         "protocol_config_path": str(protocol_config_path),
         "runtime_config_path": str(runtime_config_file),
-        "ablation_config_path": str(stage_summaries[-1]["ablation_config_path"]),
+        "ablation_config_path": str(
+            selected_tubelet_sync_stage_ablation_config_path
+            or stage_summaries[-1]["ablation_config_path"]
+        ),
         "generated_method_variant_count": total_generated_method_variant_count,
-        "selected_candidate_output_path": str(final_stage_selection_payload["output_path"]),
-        "selected_report_path": str(final_stage_selection_payload["report_path"]),
-        "selected_grid_output_path": str(final_stage_selection_payload["grid_output_path"]),
+        "selected_candidate_output_path": str(selected_output_payload["output_path"]),
+        "selected_report_path": str(selected_output_payload["report_path"]),
+        "selected_grid_output_path": str(selected_output_payload["grid_output_path"]),
         "selected_tubelet_only_candidate": selected_tubelet_only_candidate,
         "selected_tubelet_sync_candidate": selected_tubelet_sync_candidate,
         "tubelet_sync_scan_seed": final_stage_selection_payload.get("tubelet_sync_scan_seed"),
@@ -758,6 +771,9 @@ def _build_calibration_summary_selection_fields(
             "selected_sync_max_attacked_negative_fpr": None,
         }
 
+    selection_completion_status = "complete"
+    selection_blocking_reason = None
+    selection_blocking_details = None
     selected_metrics = selected_tubelet_sync_candidate.get("metrics")
     if not isinstance(selected_metrics, dict):
         selected_metrics = {}

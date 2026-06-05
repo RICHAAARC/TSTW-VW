@@ -344,11 +344,11 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
 
 
 def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameterization() -> None:
-    """验证阶段 2 搜索空间由仓库配置文件治理, 而不是由 notebook 内联生成.
+    """???? 2 ?????????????, ???? notebook ????.
 
-    该约束属于项目特定写法: notebook 只作为 Colab 运行入口, 每次调整
-    anchor frontier 或 sync 网格时只修改 JSON 配置文件, 避免再次进入已经
-    确认失败的 notebook target / override grid 分支.
+    ???????????: notebook ??? Colab ????, ????
+    anchor frontier ? sync ?????? JSON ??????????????
+    ? w005 focused refinement, ????????????? broad search ???
     """
     grid_config = json.loads(STAGE2_CALIBRATION_GRID_PATH.read_text(encoding="utf-8"))
     search_stage_names = [
@@ -360,27 +360,24 @@ def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameteriza
     assert "sync_refine_scan" not in search_stage_names
     assert search_stage_names == [
         "anchor_balanced_headroom",
-        "sync_balanced_headroom",
-        "anchor_support_slight_lift",
-        "sync_support_slight_lift",
-        "anchor_support_mid_lift",
-        "sync_support_mid_lift",
-        "anchor_support_high_lift",
-        "sync_support_high_lift",
+        "sync_headroom_refine",
     ]
-    assert grid_config["grid"]["embedding_projection_support_weight"] == [
-        0.05,
-        0.06,
-        0.07,
-        0.08,
-    ]
+    assert grid_config["fixed_tubelet_only_anchor"]["method_variant"] == (
+        "tubelet_only_cal_tl08_sp08x08_w005_em1000"
+    )
+    assert grid_config["grid"]["embedding_projection_support_weight"] == [0.05]
     assert grid_config["grid"]["lambda_sync"] == [
+        0.015,
         0.025,
-        0.05,
-        0.1,
-        0.15,
+        0.04,
+        0.06,
+    ]
+    assert grid_config["grid"]["sync_search_radius"] == [8, 10, 12]
+    assert grid_config["grid"]["min_sync_candidate_score"] == [
         0.25,
-        0.4,
+        0.35,
+        0.45,
+        0.55,
     ]
 
 

@@ -1,4 +1,4 @@
-# 阶段 2 VAE 机制实现修复说明
+﻿# 阶段 2 VAE 机制实现修复说明
 
 ## 一、任务定位
 
@@ -2245,3 +2245,99 @@ configs/ablation/stage2_vae_mechanism_calibration_grid.json
 ```
 
 然后在 Colab 中重新拉取仓库代码即可运行, 不需要再手动编辑 notebook。该设计属于通用工程写法: notebook 保持为稳定入口, 参数搜索空间由仓库配置治理; 同时也属于本项目特定治理要求: formal 输出仍由 repository modules 生成, notebook 不直接写 records、thresholds、tables、reports。
+
+## 十六、2026-06-05 本次 1540 候选搜索结果与后续收缩决策
+
+### 16.1 本次结果目录
+
+本次检查的结果目录为:
+
+```text
+G:\我的云端硬盘\TSTW\results\families\real_video_vae_latent_probe__formal__davis2017_trainval480p__20260604T013252Z__5977a65
+```
+
+该目录仅包含 `stage2_calibration/` 输出, 表明本次运行主要执行阶段 2 mechanism calibration 路径。最后关键文件写入时间为 2026-06-05 02:28:46, 结合 family id 中的 UTC 时间 `20260604T013252Z`, 本次运行耗时约 16小时56分钟。该耗时与实际生成的 1540 个 method variant 候选一致, 不属于卡死。
+
+### 16.2 关键候选与指标
+
+本次 broad search 的实际规模为:
+
+```text
+campaign_mode = staged_search
+search_stage_count = 8
+generated_method_variant_count = 1540
+```
+
+本次搜索已经找到一个受控 FPR 下具备 temporal crop 与 local clip 增益的 `tubelet_sync` 候选:
+
+```text
+tubelet_sync_cal_tl08_sp08x08_w005_em1000_sr08_ls025_mg000_cv062_mc01_cs350_frsync_rescue
+```
+
+该候选写入到:
+
+```text
+stage2_calibration\tubelet_sync_real_video_vae_candidate.json
+```
+
+其核心指标为:
+
+```text
+max_attacked_negative_fpr = 0.0
+temporal_crop_sync_gain = 0.25
+frame_dropping_sync_gain = 0.0
+local_clip_sync_gain = 0.1875
+mean_temporal_sync_gain = 0.145833
+temporal_crop_attacked_positive_tpr = 0.25
+local_clip_attacked_positive_tpr = 0.625
+```
+
+该候选对应的 anchor 为:
+
+```text
+tubelet_only_cal_tl08_sp08x08_w005_em1000
+```
+
+anchor 指标为:
+
+```text
+max_attacked_negative_fpr = 0.0
+temporal_crop_attacked_positive_tpr = 0.0
+frame_dropping_attacked_positive_tpr = 0.5
+local_clip_attacked_positive_tpr = 0.4375
+```
+
+因此, 本次结果已经提供了阶段 2 机制证明所需的核心方向: 在 `w005` anchor 下, `tubelet_sync` 能够在 `max_attacked_negative_fpr = 0.0` 的条件下提升 temporal crop 与 local clip 的 attacked positive TPR。
+
+### 16.3 失败路径与原因
+
+本次 broad search 后续更高 support anchor 分支不再继续作为默认搜索路径:
+
+```text
+w006 sync: incomplete_no_eligible_tubelet_sync_candidate
+w007 sync: incomplete_no_eligible_tubelet_sync_candidate
+w008 sync: incomplete_no_eligible_tubelet_sync_candidate
+```
+
+其中 `w008` anchor 本身已经接近饱和:
+
+```text
+temporal_crop_attacked_positive_tpr = 0.5
+frame_dropping_attacked_positive_tpr = 1.0
+local_clip_attacked_positive_tpr = 1.0
+max_attacked_negative_fpr = 0.0
+```
+
+该现象说明高 support anchor 的主要问题不是 FPR 失控, 而是 anchor 已经过强或局部饱和, 导致 sync 分支难以再形成可审计的增益。继续 broad search `w006 / w007 / w008` 会消耗大量时间, 并且会让最后失败 stage 覆盖前面已经成功的 `w005` sync 候选, 不利于完成阶段 2 机制证明。
+
+### 16.4 后续收缩决策
+
+默认搜索空间收缩为 `w005 focused refinement`:
+
+1. 保留 `tubelet_only_cal_tl08_sp08x08_w005_em1000` 作为唯一 anchor。
+2. 只围绕已成功的 `sync_rescue_fusion` 候选做局部精扫。
+3. 移除默认路径中的 `w006 / w007 / w008` sync broad search。
+4. 修正机制校准 summary 聚合逻辑: 如果任一 sync stage 已经选出合格 `selected_tubelet_sync_candidate`, 顶层 `calibration_completion_status` 应以该成功候选为准, 不得被后续失败 stage 覆盖。
+
+预计下一次运行候选数将从 1540 降低到约 289 个, 运行时间应明显缩短, 同时更可能直接产出用于阶段 2 机制证明的稳定候选与完成状态。
+
