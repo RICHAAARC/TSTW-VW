@@ -16,10 +16,27 @@
   },
   "tubelet_length_sweep_variant": "tubelet_only",
   "tubelet_length_sweep_debug_real_video": [],
-  "tubelet_length_sweep_tiny": [1, 4],
-  "tubelet_length_sweep_smoke": [1, 4],
-  "tubelet_length_sweep_proof": [1, 2, 4, 8, 16],
-  "tubelet_length_sweep_formal": [1, 2, 4, 8, 16],
+  "tubelet_length_sweep_tiny": [
+    1,
+    4
+  ],
+  "tubelet_length_sweep_smoke": [
+    1,
+    4
+  ],
+  "tubelet_length_sweep_proof": [
+    1,
+    2,
+    4,
+    8,
+    16
+  ],
+  "tubelet_length_sweep_formal": [],
   "shared_target_fpr": 0.001,
-  "shared_table_builder_name": "table_builder"
+  "shared_table_builder_name": "table_builder",
+  "mechanism_default_candidate_method_config_path": "configs/method/tubelet_sync_real_video_vae_candidate.json",
+  "method_config_paths": {
+    "tubelet_only": "configs/method/real_video_tubelet_only_anchor.json",
+    "tubelet_sync": "configs/method/real_video_tubelet_sync_candidate_runtime.json"
+  }
 }

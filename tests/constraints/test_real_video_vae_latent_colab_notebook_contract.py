@@ -254,11 +254,14 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TSTW_RESET_STAGE2_MECHANISM_CALIBRATION_RUN_ROOT" in notebook_text
     assert "probe_workflow.reset_probe_runtime_run_root(" in notebook_text
     assert "reset_run_root=False" in notebook_text
-    assert "'samples_per_role_override': 4" in notebook_text
+    assert "'samples_per_role_override': None" in notebook_text
+    assert "'run_main_formal': True" in notebook_text
+    assert "'run_stage2_mechanism_calibration': False" in notebook_text
     assert "'run_tubelet_anchor_forensics': True" in notebook_text
-    assert "'reset_stage2_mechanism_calibration_run_root': True" in notebook_text
+    assert "'reset_stage2_mechanism_calibration_run_root': False" in notebook_text
     assert "'run_stage2_local_clip_sync_forensics': False" in notebook_text
     assert "'package_non_formal_audit_bundle': False" in notebook_text
+    assert "'require_stage2_mechanism_pass': True" in notebook_text
     assert "selected_tubelet_anchor_forensics.csv" in notebook_text
     assert "selected_tubelet_anchor_forensics_summary.json" in notebook_text
     assert "stage2_controlled_search_stage_summary" in notebook_text

@@ -48,6 +48,13 @@ $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
 python -m pytest -q -s | Tee-Object audit_reports/pytest_output.txt
 ```
 
+## UTF-8 Build Requirement
+
+- 仓库内受治理文本文件、notebook JSON、配置 JSON、Markdown、Python 脚本与审计报告必须使用 `UTF-8`。
+- 编辑器保存文件时必须使用 `UTF-8`；仓库提供 `.editorconfig` 与 `.vscode/settings.json` 作为开发工具默认配置。
+- Windows PowerShell 与 cmd 启动时应使用 UTF-8 控制台输入输出，并设置 `PYTHONUTF8=1` 与 `PYTHONIOENCODING=utf-8`。
+- 所有新增仓库文本读写代码应显式声明 `encoding="utf-8"`，不得依赖本地默认代码页。
+
 ## Audit Gate
 
 PowerShell 示例：

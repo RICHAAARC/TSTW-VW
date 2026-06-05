@@ -655,8 +655,6 @@ def test_run_probe_method_variant_splits_launches_governed_method_allowlists(
             "frame_prc",
             "tubelet_only",
             "tubelet_sync",
-            "tubelet_only_lt01",
-            "tubelet_only_lt02",
         ],
         method_variant_split_count=2,
         python_executable="python",
@@ -664,12 +662,12 @@ def test_run_probe_method_variant_splits_launches_governed_method_allowlists(
 
     assert len(captured_commands) == 2
     assert "--method-variants" in captured_commands[0]
-    assert captured_commands[0][-3:] == ["frame_prc", "tubelet_only", "tubelet_sync"]
-    assert captured_commands[1][-2:] == ["tubelet_only_lt01", "tubelet_only_lt02"]
+    assert captured_commands[0][-2:] == ["frame_prc", "tubelet_sync"]
+    assert captured_commands[1][-1:] == ["tubelet_only"]
     assert merge_calls["run_root"] == str(tmp_path / "run_root")
     assert merge_calls["method_variant_split_run_roots"] == [
-        str(tmp_path / "run_root" / "method_variant_splits" / "split_01_main_variants"),
-        str(tmp_path / "run_root" / "method_variant_splits" / "split_02_tubelet_sweep"),
+        str(tmp_path / "run_root" / "method_variant_splits" / "split_01"),
+        str(tmp_path / "run_root" / "method_variant_splits" / "split_02"),
     ]
     assert result["method_variant_split_count"] == 2
 

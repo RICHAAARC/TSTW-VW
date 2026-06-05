@@ -23,6 +23,8 @@ UTF8_GOVERNED_SCAN_ROOTS = (
     "AGENTS.md",
     "README.md",
     ".gitignore",
+    ".editorconfig",
+    ".vscode",
     "pyproject.toml",
     "sitecustomize.py",
     ".codex",

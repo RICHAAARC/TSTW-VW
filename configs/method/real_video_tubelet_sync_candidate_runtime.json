@@ -1,0 +1,41 @@
+{
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "target_construction_phase": "real_video_vae_latent_probe",
+  "method_family": "temporal_tubelet_watermark",
+  "method_variant": "tubelet_sync",
+  "method_status": "formal_real_video_vae_probe_candidate_runtime",
+  "enable_frame_prc": false,
+  "enable_tubelet": true,
+  "enable_sync": true,
+  "enable_trajectory": false,
+  "tubelet_length": 8,
+  "score_calibration": {
+    "embedding_projection_support_weight": 0.05
+  },
+  "sync_search": {
+    "offset_search_min": -8,
+    "offset_search_max": 8,
+    "enable_scale_search": true,
+    "scale_candidates": [
+      0.8,
+      1.0,
+      1.25
+    ],
+    "scale_search_snap_radius": 3,
+    "coverage_penalty_enabled": true,
+    "min_sync_positive_margin": 0.0,
+    "min_sync_alignment_coverage_ratio": 0.0625,
+    "min_sync_alignment_matched_count": 1,
+    "min_sync_candidate_score": 0.25
+  },
+  "lambda_sync": 0.015,
+  "fusion_rule": "sync_rescue_fusion",
+  "base_method_variant": "tubelet_sync",
+  "embedding_margin": 1.0,
+  "tubelet_partition": {
+    "spatial_patch_size": [
+      8,
+      8
+    ]
+  }
+}

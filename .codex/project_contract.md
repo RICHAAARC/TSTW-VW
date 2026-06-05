@@ -123,6 +123,8 @@
 - Checked-in governed text files under `AGENTS.md`, `README.md`, `.gitignore`, `pyproject.toml`, `sitecustomize.py`, `.codex/`, `configs/`, `docs/`, `experiments/`, `main/`, `paper_workflow/`, `scripts/`, `tests/`, and `tools/` must use `UTF-8`.
 - Runtime code, harness code, scripts, and tests must explicitly pass `encoding="utf-8"` when repository text I/O APIs support an explicit text encoding.
 - Introducing non-`UTF-8` checked-in text files, or relying on local code-page defaults that can reintroduce mojibake, is a blocking violation.
+- Project build, notebook, and local development entrypoints must preserve `UTF-8` from editor save, shell startup, Python subprocess I/O, JSON serialization, and test/audit execution.
+- Windows development shells must be initialized with UTF-8 console input/output and should set `PYTHONUTF8=1` plus `PYTHONIOENCODING=utf-8` before repository scripts are launched.
 
 ## Current-Stage Prohibitions
 

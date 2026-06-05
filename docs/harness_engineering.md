@@ -29,6 +29,8 @@
 - Harness 脚本仅依赖 Python 标准库。
 - `audit_reports/` 仅作为运行时审计输出目录，不属于正式论文 `outputs/`。
 - 受治理文本文件默认使用 `UTF-8`；仓库文本读写应显式声明 `encoding="utf-8"`，避免依赖本地默认代码页。
+- 项目构建、notebook 运行、脚本执行与开发工具保存文件时必须保持 `UTF-8`；不得依赖 Windows 本地 ANSI 代码页、PowerShell 默认输入编码或 cmd 默认活动代码页。
+- Windows 终端入口应在启动时设置 `chcp 65001`、PowerShell `Console` 输入输出编码、`PYTHONUTF8=1` 与 `PYTHONIOENCODING=utf-8`，确保中文注释、notebook JSON 与审计报告不会被本地代码页替换成问号。
 - harness、governance docs 与 notebook contract 必须保持统一的并行语义：先按 `shard_count` / `shard_index` 选择 outer shard，再按 `worker_count` 对该 shard 内部做本地并行；不得把 `worker_count` 当作额外 shard 数，也不得把 `shard_count` / `shard_index` 当作线程数解释。
 - 当前阶段允许 synthetic / placeholder 驱动的最小 mechanism runtime，但这些实现不应继续占据 `main/` 的最终发布边界。
 - 当前阶段不创建 `minimal_release/`，也不允许将 `paper_workflow/` 变成唯一 formal 入口。

@@ -48,6 +48,8 @@ def test_project_contract_mentions_utf8_encoding_governance() -> None:
     assert "text encoding governance" in text
     assert "utf-8" in text
     assert "mojibake" in text
+    assert "pythonutf8=1" in text
+    assert "pythonioencoding=utf-8" in text
 
 
 def test_file_organization_contract_mentions_release_boundaries() -> None:
@@ -76,6 +78,17 @@ def test_harness_engineering_mentions_utf8_encoding_gate() -> None:
     text = _read("docs/harness_engineering.md").lower()
     assert "audit_utf8_encoding_contract.py" in text
     assert "utf-8" in text
+    assert "chcp 65001" in text
+    assert "pythonutf8=1" in text
+
+
+def test_readme_declares_utf8_build_requirement() -> None:
+    text = _read("README.md").lower()
+    assert "utf-8 build requirement" in text
+    assert ".editorconfig" in text
+    assert ".vscode/settings.json" in text
+    assert "pythonutf8=1" in text
+    assert "pythonioencoding=utf-8" in text
 
 
 def test_harness_engineering_mentions_shard_and_worker_parallel_semantics() -> None:

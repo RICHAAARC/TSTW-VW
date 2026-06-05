@@ -2341,3 +2341,108 @@ max_attacked_negative_fpr = 0.0
 
 预计下一次运行候选数将从 1540 降低到约 289 个, 运行时间应明显缩短, 同时更可能直接产出用于阶段 2 机制证明的稳定候选与完成状态。
 
+
+## 十七、2026-06-05 focused refinement 完成结果与阶段 2 completion run 配置
+
+### 17.1 最新结果目录
+
+本次检查的结果目录为:
+
+```text
+G:\我的云端硬盘\TSTW\results\families\real_video_vae_latent_probe__formal__davis2017_trainval480p__20260605T010044Z__ea47560
+```
+
+该结果来自收缩后的 `w005 focused refinement` 搜索空间。相比上一轮 1540 个候选的 broad search, 本轮实际运行规模为:
+
+```text
+campaign_mode = staged_search
+search_stage_count = 2
+generated_method_variant_count = 289
+```
+
+顶层机制校准状态已经闭合:
+
+```text
+calibration_completion_status = complete
+selection_completion_status = complete
+calibration_blocking_reason = null
+selection_blocking_reason = null
+search_terminated_early = false
+```
+
+### 17.2 冻结的阶段 2 candidate
+
+本轮选出的 candidate 为:
+
+```text
+tubelet_sync_cal_tl08_sp08x08_w005_em1000_sr08_ls015_mg000_cv062_mc01_cs250_frsync_rescue
+```
+
+关键参数为:
+
+```text
+tubelet_length = 8
+spatial_patch_size = [8, 8]
+embedding_projection_support_weight = 0.05
+embedding_margin = 1.0
+lambda_sync = 0.015
+sync_search_radius = 8
+min_sync_positive_margin = 0.0
+min_sync_alignment_coverage_ratio = 0.0625
+min_sync_alignment_matched_count = 1
+min_sync_candidate_score = 0.25
+fusion_rule = sync_rescue_fusion
+```
+
+其机制指标为:
+
+```text
+max_attacked_negative_fpr = 0.0
+temporal_crop_sync_gain = 0.25
+frame_dropping_sync_gain = 0.0
+local_clip_sync_gain = 0.25
+mean_temporal_sync_gain = 0.166667
+temporal_crop_attacked_positive_tpr = 0.25
+local_clip_attacked_positive_tpr = 0.6875
+```
+
+对应 anchor 为:
+
+```text
+tubelet_only_cal_tl08_sp08x08_w005_em1000
+```
+
+anchor 指标为:
+
+```text
+max_attacked_negative_fpr = 0.0
+temporal_crop_attacked_positive_tpr = 0.0
+frame_dropping_attacked_positive_tpr = 0.5
+local_clip_attacked_positive_tpr = 0.4375
+```
+
+因此, focused refinement 结果证明: 在 FPR 保持为 0.0 的条件下, `tubelet_sync` 将 temporal crop 从 0.0 提升到 0.25, 将 local clip 从 0.4375 提升到 0.6875。
+
+### 17.3 代码冻结决策
+
+根据本轮结果, 项目默认配置进入阶段 2 completion run 路径:
+
+1. `configs/method/tubelet_sync_real_video_vae_candidate.json` 保存原始校准 candidate, 用于追踪 candidate 身份与参数来源。
+2. `configs/method/real_video_tubelet_sync_candidate_runtime.json` 使用相同参数作为 real-video formal completion run 的 `tubelet_sync` override 配置, 并保留 `method_variant = tubelet_sync`, 以便 mechanism audit 能够按主方法名聚合 records。
+3. `configs/method/real_video_tubelet_only_anchor.json` 保存对应的 `w005` anchor 参数, 并通过 ablation `method_config_paths` 作为主 formal run 中的 `tubelet_only` 对照组。
+4. `configs/ablation/real_video_vae_latent_ablation.json` 在 formal profile 中关闭 tubelet length sweep, 阶段 2 completion run 只运行 `frame_prc / tubelet_only / tubelet_sync` 三个主方法, 避免把额外 sweep 成本混入机制证明闭合测试。
+5. `paper_workflow/run_real_video_vae_latent_probe.ipynb` 默认切换为主 formal completion run: 执行 main formal、跳过 calibration、要求 formal checker 与 stage 2 mechanism audit 均通过。
+
+### 17.4 下一次运行目标
+
+下一次 notebook 运行应产出完整 family 包, 而不只是 `stage2_calibration/` 快照。预期完成条件为:
+
+```text
+formal_validation_summary.status = true
+Stage2MechanismDecision = PASS
+selected_sync_method_variant = tubelet_sync
+records / thresholds / tables / reports / manifest 均可重建
+```
+
+如果该 completion run 通过, 阶段 2 VAE 机制证明即可进入收尾整理与阶段推进评审。
+

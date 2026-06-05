@@ -12,7 +12,10 @@ pytestmark = [pytest.mark.constraint, pytest.mark.unit]
 
 from pathlib import Path
 
-from tools.harness.audits.audit_utf8_encoding_contract import run_audit
+from tools.harness.audits.audit_utf8_encoding_contract import (
+    UTF8_GOVERNED_SCAN_ROOTS,
+    run_audit,
+)
 from tools.harness.run_all_audits import AUDIT_MODULE_NAMES
 
 
@@ -42,6 +45,11 @@ def test_utf8_encoding_audit_accepts_utf8_governed_files(tmp_path: Path) -> None
 
     assert report["decision"] == "pass"
     assert report["violations"] == []
+
+
+def test_utf8_encoding_audit_covers_editor_and_tool_settings() -> None:
+    assert ".editorconfig" in UTF8_GOVERNED_SCAN_ROOTS
+    assert ".vscode" in UTF8_GOVERNED_SCAN_ROOTS
 
 
 def test_utf8_encoding_audit_rejects_non_utf8_governed_files(tmp_path: Path) -> None:
