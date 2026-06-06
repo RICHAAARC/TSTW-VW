@@ -89,6 +89,9 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
 
     anchor_candidate = {
         "candidate_status": "fpr_controlled_candidate_selected",
+        "candidate_eligible": True,
+        "fpr_controlled": True,
+        "quality_not_collapsed": True,
         "method_variant": "tubelet_only_calibration_tl01_sp04x04_w045",
         "tubelet_length": 1,
         "tubelet_partition": {"spatial_patch_size": [4, 4]},
@@ -326,6 +329,12 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     runtime_payload = json.loads(runtime_config_path.read_text(encoding="utf-8"))
     assert protocol_payload["splits"] == ["dev", "calibration"]
     assert protocol_payload["splits_by_profile"]["formal"] == ["dev", "calibration"]
+    assert protocol_payload["threshold_protocol"][
+        "tubelet_length_threshold_guard_band_multiplier_by_profile"
+    ]["formal"]["default"] == 0.75
+    assert protocol_payload["threshold_protocol"][
+        "sync_threshold_guard_band_multiplier_by_profile"
+    ]["formal"] == 0.75
     assert runtime_payload["quality_metrics"]["enable_lpips"] is False
     assert runtime_payload["quality_metrics"]["enable_clip_similarity"] is False
     assert runtime_payload["quality_metrics"]["enabled_attack_names"] == ["no_attack"]
@@ -471,6 +480,9 @@ def test_stage2_mechanism_calibration_runner_continues_refine_scan_from_sync_sca
 
     anchor_candidate = {
         "candidate_status": "fpr_controlled_candidate_selected",
+        "candidate_eligible": True,
+        "fpr_controlled": True,
+        "quality_not_collapsed": True,
         "method_variant": "tubelet_only_cal_tl02_sp04x04_w025",
         "tubelet_length": 2,
         "tubelet_partition": {"spatial_patch_size": [4, 4]},
@@ -799,21 +811,24 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
         output_method_config_path=candidate_method_config_path,
     )
 
-    assert len(captured_runner_calls) == 2
+    assert len(captured_runner_calls) == 1
     assert [Path(call["kwargs"]["output_root"]).name for call in captured_runner_calls] == [
         "formal_anchor_diag",
-        "formal_sync_diag",
     ]
     assert summary["calibration_completion_status"] == "anchor_only_partial_selection"
-    assert summary["calibration_blocking_reason"] == "selected_anchor_not_covered_by_sync_stage_records"
-    assert summary["search_terminated_early"] is False
-    assert summary["terminated_before_stage_name"] is None
+    assert (
+        summary["calibration_blocking_reason"]
+        == "selected_tubelet_only_candidate_not_eligible_for_sync"
+    )
+    assert summary["calibration_blocking_details"]["candidate_eligible"] is False
+    assert summary["search_terminated_early"] is True
+    assert summary["terminated_before_stage_name"] == "formal_sync_diag"
     assert summary["selected_tubelet_only_candidate"]["method_variant"] == anchor_candidate[
         "method_variant"
     ]
     assert summary["selected_tubelet_sync_candidate"] is None
-    assert summary["selection_completion_status"] == "incomplete_no_compatible_tubelet_sync_rows"
-    assert summary["selection_blocking_reason"] == "selected_anchor_not_covered_by_sync_stage_records"
+    assert summary["selection_completion_status"] == "complete"
+    assert summary["selection_blocking_reason"] is None
     assert summary["selected_sync_method_variant"] is None
     assert summary["selected_sync_candidate_status"] is None
     assert summary["selected_sync_negative_leakage_status"] is None
@@ -822,10 +837,7 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
     assert summary["generated_tubelet_sync_candidate_config_path"] is None
     assert Path(summary["timing_summary_path"]).exists()
     assert not candidate_method_config_path.exists()
-    assert summary["search_stage_count"] == 2
-    assert summary["search_stage_summaries"][1]["selection_completion_status"] == (
-        "incomplete_no_compatible_tubelet_sync_rows"
-    )
+    assert summary["search_stage_count"] == 1
 
 
 @pytest.mark.unit

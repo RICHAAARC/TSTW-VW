@@ -181,6 +181,9 @@ def run_stage2_mechanism_calibration(
             protocol_config=protocol_config,
             runtime_profile=runtime_profile,
             allowed_splits=allowed_splits,
+            threshold_protocol_overrides=grid_config.get(
+                "threshold_protocol_overrides"
+            ),
         )
         calibration_workspace_root.mkdir(parents=True, exist_ok=True)
         _write_json(temp_protocol_config_path, calibration_protocol_config)
@@ -629,6 +632,26 @@ def _run_staged_mechanism_calibration(
             }
         )
         if (
+            selection_scope == "tubelet_only"
+            and _strict_anchor_required_before_sync(
+                grid_config=grid_config,
+                stage_config=stage_config,
+            )
+            and not _candidate_is_eligible(selected_tubelet_only_candidate)
+        ):
+            next_sync_stage = _resolve_next_sync_stage_name(
+                search_stages,
+                stage_index,
+            )
+            if next_sync_stage is not None:
+                search_terminated_early = True
+                termination_reason = "selected_tubelet_only_candidate_not_eligible_for_sync"
+                termination_details = _build_anchor_early_stop_details(
+                    selected_tubelet_only_candidate,
+                )
+                terminated_before_stage_name = next_sync_stage
+                break
+        if (
             selection_scope == "tubelet_sync"
             and stage_selection_payload.get("selected_tubelet_sync_candidate") is None
         ):
@@ -967,6 +990,89 @@ def _resolve_next_required_sync_stage_name(
     return None
 
 
+def _resolve_next_sync_stage_name(
+    search_stages: list[dict[str, Any]],
+    completed_stage_index: int,
+) -> str | None:
+    """解析当前 stage 之后第一个 sync stage 名称。
+
+    Args:
+        search_stages: 受治理的 staged search 配置。
+        completed_stage_index: 已完成 stage 的 1-based 序号。
+
+    Returns:
+        下一个 `tubelet_sync` stage 名称；若不存在则返回 None。
+    """
+    for stage_config in search_stages[completed_stage_index:]:
+        if str(stage_config.get("selection_scope")) == "tubelet_sync":
+            return str(stage_config["stage_name"])
+    return None
+
+
+def _strict_anchor_required_before_sync(
+    *,
+    grid_config: dict[str, Any],
+    stage_config: dict[str, Any],
+) -> bool:
+    """判断进入 sync stage 前是否必须要求 anchor eligible。
+
+    Args:
+        grid_config: 全局 calibration grid 配置。
+        stage_config: 当前 stage 配置。
+
+    Returns:
+        True 表示 anchor 不合格时应提前停止，避免继续运行 sync 搜索。
+    """
+    if "strict_anchor_required_before_sync" in stage_config:
+        return bool(stage_config["strict_anchor_required_before_sync"])
+    return bool(grid_config.get("strict_anchor_required_before_sync", False))
+
+
+def _candidate_is_eligible(candidate_payload: dict[str, Any] | None) -> bool:
+    """判断候选是否通过 selector 的 eligible gate。
+
+    Args:
+        candidate_payload: selector 返回的候选负载。
+
+    Returns:
+        True 表示候选可进入后续机制搜索；False 表示只能作为历史诊断记录。
+    """
+    return isinstance(candidate_payload, dict) and bool(
+        candidate_payload.get("candidate_eligible")
+    )
+
+
+def _build_anchor_early_stop_details(
+    candidate_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """构造 anchor early-stop 的可审计摘要。
+
+    Args:
+        candidate_payload: selector 返回的 tubelet-only anchor 候选。
+
+    Returns:
+        JSON-safe 的 early-stop 诊断字段。
+    """
+    if not isinstance(candidate_payload, dict):
+        return {
+            "selected_tubelet_only_candidate_present": False,
+            "candidate_eligible": False,
+        }
+    return {
+        "selected_tubelet_only_candidate_present": True,
+        "candidate_eligible": bool(candidate_payload.get("candidate_eligible")),
+        "candidate_status": candidate_payload.get("candidate_status"),
+        "candidate_selection_status": candidate_payload.get(
+            "candidate_selection_status"
+        ),
+        "fpr_controlled": candidate_payload.get("fpr_controlled"),
+        "quality_not_collapsed": candidate_payload.get("quality_not_collapsed"),
+        "method_variant": candidate_payload.get("method_variant"),
+        "metrics": candidate_payload.get("metrics", {}),
+        "selection_gate": candidate_payload.get("selection_gate", {}),
+    }
+
+
 def _read_search_stages(grid_config: dict[str, Any]) -> list[dict[str, Any]]:
     search_stages = grid_config.get("search_stages")
     if search_stages is None:
@@ -1033,6 +1139,8 @@ def _build_stage_grid_config(
     for optional_field_name in (
         "anchor_selection_policy",
         "fixed_tubelet_only_anchor",
+        "strict_anchor_required_before_sync",
+        "threshold_protocol_overrides",
     ):
         if optional_field_name in stage_config:
             stage_grid_config[optional_field_name] = copy.deepcopy(
@@ -1471,12 +1579,115 @@ def _build_calibration_protocol_config(
     protocol_config: dict[str, Any],
     runtime_profile: str,
     allowed_splits: list[str],
+    threshold_protocol_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     calibration_protocol_config = copy.deepcopy(protocol_config)
     calibration_protocol_config["splits"] = list(allowed_splits)
     calibration_protocol_config.setdefault("splits_by_profile", {})
     calibration_protocol_config["splits_by_profile"][runtime_profile] = list(allowed_splits)
+    if threshold_protocol_overrides is not None:
+        _apply_threshold_protocol_overrides(
+            calibration_protocol_config,
+            threshold_protocol_overrides,
+        )
     return calibration_protocol_config
+
+
+def _apply_threshold_protocol_overrides(
+    protocol_config: dict[str, Any],
+    threshold_protocol_overrides: dict[str, Any],
+) -> None:
+    """将校准搜索专用 threshold override 合并到临时 protocol 配置。
+
+    Args:
+        protocol_config: 待修改的临时 protocol 配置。
+        threshold_protocol_overrides: 来自 calibration grid 的阈值协议覆盖项。
+
+    Returns:
+        None。函数会原地修改 `protocol_config`。
+
+    Raises:
+        TypeError: 当 override 不是字典时抛出。
+        ValueError: 当 override 试图修改 split 语义或攻击特定阈值时抛出。
+    """
+    if not isinstance(threshold_protocol_overrides, dict):
+        raise TypeError("threshold_protocol_overrides must be a dictionary")
+    threshold_protocol = protocol_config.setdefault("threshold_protocol", {})
+    if not isinstance(threshold_protocol, dict):
+        raise TypeError("protocol_config.threshold_protocol must be a dictionary")
+
+    allowed_override_fields = {
+        "sync_threshold_guard_band_multiplier_by_profile",
+        "tubelet_length_threshold_guard_band_multiplier_by_profile",
+        "validation_target_fpr_by_profile",
+    }
+    forbidden_override_fields = {
+        "calibration_split",
+        "calibration_negative_roles",
+        "test_split",
+        "test_threshold_update_allowed",
+        "allow_attack_specific_threshold",
+        "target_fpr_placeholder",
+        "threshold_quantile_rule",
+    }
+    unknown_fields = (
+        set(threshold_protocol_overrides)
+        - allowed_override_fields
+        - forbidden_override_fields
+    )
+    if unknown_fields:
+        raise ValueError(
+            "unsupported threshold_protocol_overrides fields: "
+            + ", ".join(sorted(unknown_fields))
+        )
+    forbidden_fields_present = set(threshold_protocol_overrides) & forbidden_override_fields
+    if forbidden_fields_present:
+        raise ValueError(
+            "threshold_protocol_overrides must not modify threshold split or target semantics: "
+            + ", ".join(sorted(forbidden_fields_present))
+        )
+
+    for field_name in allowed_override_fields:
+        if field_name not in threshold_protocol_overrides:
+            continue
+        override_value = threshold_protocol_overrides[field_name]
+        if not isinstance(override_value, dict):
+            raise TypeError(
+                f"threshold_protocol_overrides.{field_name} must be a dictionary"
+            )
+        existing_value = threshold_protocol.get(field_name, {})
+        if not isinstance(existing_value, dict):
+            existing_value = {}
+        threshold_protocol[field_name] = _deep_merge_dicts(
+            existing_value,
+            override_value,
+        )
+
+
+def _deep_merge_dicts(
+    base_payload: dict[str, Any],
+    override_payload: dict[str, Any],
+) -> dict[str, Any]:
+    """递归合并两个字典, 用于保留 profile 层级的默认配置。
+
+    Args:
+        base_payload: 原始配置。
+        override_payload: 覆盖配置。
+
+    Returns:
+        合并后的新字典。
+    """
+    merged_payload = copy.deepcopy(base_payload)
+    for key, value in override_payload.items():
+        if (
+            key in merged_payload
+            and isinstance(merged_payload[key], dict)
+            and isinstance(value, dict)
+        ):
+            merged_payload[key] = _deep_merge_dicts(merged_payload[key], value)
+        else:
+            merged_payload[key] = copy.deepcopy(value)
+    return merged_payload
 
 
 def _build_calibration_runtime_config(

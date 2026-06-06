@@ -365,6 +365,17 @@ def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameteriza
     assert "sync_refine_scan" not in search_stage_names
     assert "fixed_tubelet_only_anchor" not in grid_config
     assert grid_config["anchor_selection_policy"] == "formal_sample_strict_fpr_anchor"
+    assert grid_config["strict_anchor_required_before_sync"] is True
+    threshold_overrides = grid_config["threshold_protocol_overrides"]
+    assert threshold_overrides[
+        "tubelet_length_threshold_guard_band_multiplier_by_profile"
+    ]["formal"]["default"] == 0.75
+    assert threshold_overrides[
+        "tubelet_length_threshold_guard_band_multiplier_by_profile"
+    ]["formal"]["length_ge_16"] == 1.0
+    assert threshold_overrides[
+        "sync_threshold_guard_band_multiplier_by_profile"
+    ]["formal"] == 0.75
     assert search_stage_names == [
         "formal_anchor_diag",
         "formal_sync_diag",

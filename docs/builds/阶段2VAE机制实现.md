@@ -2663,3 +2663,80 @@ fusion_rule = sync_rescue_fusion
 ```
 
 该搜索空间属于诊断性收缩搜索, 而不是重新扩大盲搜。其重点是检查是否存在同时满足低 FPR、no-attack 正样本召回和 temporal/local clip sync gain 的参数区域。
+
+
+## 二十、2026-06-06 `TSTW_runtime_runs_20260606_053856` 中断运行判断与 runner 修正依据
+
+### 20.1 结果位置与完成状态
+
+本次检查对象为:
+
+```text
+G:\我的云端硬盘\TSTW\results\TSTW_runtime_runs_20260606_053856.zip
+```
+
+该压缩包中未发现完整的 `stage2_mechanism_calibration_summary.json`。从 runtime 记录判断, 本次运行已经完成 `formal_anchor_diag`, 随后进入 `formal_sync_diag`, 并在 sync 阶段被手动中断。
+
+关键耗时为:
+
+```text
+formal_anchor_diag runner = 18962.64053 秒, 约 5.27 小时
+formal_sync_diag runner = 55443.279297 秒, 约 15.40 小时, KeyboardInterrupt 中断
+```
+
+因此, 本次运行不是正常完成的阶段 2 机制证明结果, 而是一次具有诊断价值的 partial run。其主要价值在于确认当前搜索瓶颈已经前移到 anchor 阶段。
+
+### 20.2 anchor 阶段诊断结论
+
+`formal_anchor_diag` 的 grid 规模为 54 行。聚合结果显示:
+
+```text
+eligible anchors = 0
+FPR controlled anchors = 0
+max_attacked_negative_fpr = 0.025, 覆盖全部 anchor rows
+no_attack_clean_negative_fpr = 0.0 或 0.025
+no_attack_clean_positive_tpr 最大约 0.75
+```
+
+相对较好的方向集中在:
+
+```text
+tubelet_length = 4
+embedding_projection_support_weight = 0.07
+embedding_margin = 1.0 或 1.2
+spatial_patch_size = [4, 4] 或 [8, 8]
+```
+
+但所有 anchor 至少存在 `1/40` 的 attacked-negative 误报, 即 `max_attacked_negative_fpr = 0.025`。在当前 strict gate 要求 `max_attacked_negative_fpr = 0.0` 的条件下, 这些 anchor 均不能成为 eligible candidate。
+
+### 20.3 为什么 sync 阶段属于白跑
+
+本轮运行中 `formal_sync_diag` 已经继续运行约 15.40 小时, 但 anchor 阶段没有任何 eligible candidate。此时继续 sync 搜索的工程价值很低, 原因是:
+
+1. sync 阶段需要依赖可接受的 tubelet-only anchor 作为机制锚点。
+2. anchor 的 attacked-negative FPR 已经泄漏, sync 搜索即使产生局部增益, 也无法直接补足 strict low-FPR 门槛。
+3. 当前阶段 2 的机制证明目标要求低 FPR 与同步救援同时成立, 不能用 FPR 不合格的 anchor 作为完成证明基础。
+
+因此, 当 anchor 阶段没有 eligible candidate 时, runner 应提前停止, 并输出可审计的 partial summary, 而不是继续进入长时间 sync 搜索。
+
+### 20.4 本次代码修正决策
+
+根据本次 partial run, 项目代码采用两项修正:
+
+```text
+1. calibration runner 支持 threshold_protocol_overrides
+2. calibration runner 支持 strict_anchor_required_before_sync early-stop
+```
+
+第一项修正用于在 calibration grid 中提高 threshold guard band, 使下一轮搜索可以尝试压低 attacked-negative FPR 泄漏。该 override 只允许修改 guard band 与验证 profile 相关字段, 不允许修改 calibration split、negative roles、test threshold update 或 attack-specific threshold 等固定低 FPR 协议语义。
+
+第二项修正用于在 anchor 阶段无 eligible candidate 时提前停止, 避免再次浪费约 15 小时进入 sync 阶段。该行为属于工程效率修正, 不改变阶段 2 机制证明的科学判定标准。
+
+### 20.5 下一轮运行预期
+
+下一轮运行应优先验证 guard band 是否能把 attacked-negative FPR 从 `0.025` 压到 `0.0`。预期分为两种情况:
+
+1. 若 anchor 仍无 eligible candidate, runner 将在 `formal_anchor_diag` 后 early-stop, 并输出 partial summary 指明 FPR 泄漏仍未解决。
+2. 若 anchor 出现 eligible candidate, runner 才会进入 `formal_sync_diag`, 用于验证 temporal crop 或 local clip 下的 sync rescue gain 是否能支撑阶段 2 机制证明。
+
+因此, 后续不应继续扩大 sync 搜索作为首要方向。当前首要方向是用更严格的 threshold guard band 和已收缩的 anchor 搜索空间解决 attacked-negative FPR 泄漏。

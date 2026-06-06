@@ -153,5 +153,18 @@
     "local_clip_sync_gain",
     "mean_temporal_sync_gain",
     "sync_confident_attacked_negative_count"
-  ]
+  ],
+  "strict_anchor_required_before_sync": true,
+  "threshold_protocol_overrides": {
+    "tubelet_length_threshold_guard_band_multiplier_by_profile": {
+      "formal": {
+        "default": 0.75,
+        "length_ge_08": 0.75,
+        "length_ge_16": 1.0
+      }
+    },
+    "sync_threshold_guard_band_multiplier_by_profile": {
+      "formal": 0.75
+    }
+  }
 }
