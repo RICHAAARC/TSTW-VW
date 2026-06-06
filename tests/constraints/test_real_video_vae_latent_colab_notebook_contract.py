@@ -380,25 +380,28 @@ def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameteriza
         "formal_anchor_diag",
         "formal_sync_diag",
     ]
-    assert grid_config["grid"]["tubelet_length"] == [4, 8, 16]
+    assert grid_config["calibration_purpose"] == (
+        "stage2_anchor_positive_signal_recovery_after_guard_band"
+    )
+    assert grid_config["grid"]["tubelet_length"] == [4]
     assert grid_config["grid"]["spatial_patch_size"] == [[4, 4], [8, 8]]
     assert grid_config["grid"]["embedding_projection_support_weight"] == [
-        0.03,
-        0.05,
         0.07,
+        0.08,
+        0.09,
+        0.10,
+        0.12,
     ]
-    assert grid_config["grid"]["embedding_margin"] == [0.8, 1.0, 1.2]
+    assert grid_config["grid"]["embedding_margin"] == [1.0, 1.2]
     assert grid_config["grid"]["lambda_sync"] == [
         0.01,
         0.015,
         0.025,
-        0.04,
     ]
-    assert grid_config["grid"]["sync_search_radius"] == [6, 8, 10]
+    assert grid_config["grid"]["sync_search_radius"] == [6, 8]
     assert grid_config["grid"]["min_sync_candidate_score"] == [
         0.25,
         0.35,
-        0.45,
     ]
 
 

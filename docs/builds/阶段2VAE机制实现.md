@@ -2740,3 +2740,131 @@ spatial_patch_size = [4, 4] 或 [8, 8]
 2. 若 anchor 出现 eligible candidate, runner 才会进入 `formal_sync_diag`, 用于验证 temporal crop 或 local clip 下的 sync rescue gain 是否能支撑阶段 2 机制证明。
 
 因此, 后续不应继续扩大 sync 搜索作为首要方向。当前首要方向是用更严格的 threshold guard band 和已收缩的 anchor 搜索空间解决 attacked-negative FPR 泄漏。
+
+
+## 二十一、2026-06-07 `20260606T091150Z__0b83ee9` anchor-first 诊断结果与下一轮搜索收缩
+
+### 21.1 结果位置
+
+本次检查对象为:
+
+```text
+G:\我的云端硬盘\TSTW\results\families\real_video_vae_latent_probe__formal__davis2017_trainval480p__20260606T091150Z__0b83ee9
+G:\我的云端硬盘\TSTW\results\TSTW_runtime_runs_20260606_143444.zip
+```
+
+本次运行仅产出 `stage2_calibration/` 与 non-formal audit bundle, 未进入主 formal completion。该行为符合当前阶段的诊断目标。
+
+### 21.2 runner 路径判断
+
+本次机制校准 summary 的关键状态为:
+
+```text
+calibration_completion_status = anchor_only_partial_selection
+calibration_blocking_reason = selected_tubelet_only_candidate_not_eligible_for_sync
+selection_completion_status = complete
+selection_blocking_reason = null
+search_terminated_early = true
+terminated_before_stage_name = formal_sync_diag
+search_stage_count = 1
+generated_method_variant_count = 55
+selected_tubelet_sync_candidate = null
+```
+
+该结果说明两项工程修正均已生效:
+
+```text
+threshold_protocol_overrides 已进入临时 protocol 配置
+strict_anchor_required_before_sync 已阻止无效 sync 搜索
+```
+
+因此, 本次不是 notebook 错误, 也不是异常中断。runner 已经在 anchor 不合格时正确 early-stop, 避免再次白跑约 15 小时 sync 阶段。
+
+### 21.3 本次最优 anchor 与指标
+
+本次选出的 best-effort anchor 为:
+
+```text
+tubelet_only_cal_tl04_sp04x04_w007_em1000
+```
+
+其核心指标为:
+
+```text
+candidate_eligible = false
+fpr_controlled = true
+quality_not_collapsed = true
+no_attack_clean_negative_fpr = 0.0
+max_attacked_negative_fpr = 0.0
+no_attack_clean_positive_tpr = 0.3
+temporal_crop_attacked_positive_tpr = 0.1
+frame_dropping_attacked_positive_tpr = 0.3
+local_clip_attacked_positive_tpr = 0.05
+```
+
+该结果相对于上一轮 `max_attacked_negative_fpr = 0.025` 的状态有明确进展: attacked-negative FPR 泄漏已经被压到 `0.0`。但该 anchor 仍不能进入 sync, 因为 no-attack clean positive TPR 只有 `0.3`, 低于阶段 2 当前候选门槛。
+
+### 21.4 当前瓶颈变化
+
+根据本次结果, 阶段 2 的首要瓶颈已经从:
+
+```text
+attacked-negative FPR 泄漏
+```
+
+转移为:
+
+```text
+strict threshold 下 positive signal 不足
+```
+
+这意味着后续不应扩大 sync 搜索。sync 搜索必须依赖 eligible tubelet-only anchor, 而当前最接近可用的 anchor 是 `tubelet_length = 4`, `embedding_projection_support_weight = 0.07`, `embedding_margin = 1.0 或 1.2`, `spatial_patch_size = [4, 4] 或 [8, 8]` 这一邻域。
+
+### 21.5 下一轮配置决策
+
+下一轮配置收缩为 `tl04 high-support anchor recovery`:
+
+```text
+tubelet_length = [4]
+spatial_patch_size = [[4, 4], [8, 8]]
+embedding_projection_support_weight = [0.07, 0.08, 0.09, 0.10, 0.12]
+embedding_margin = [1.0, 1.2]
+```
+
+该搜索空间的目标是验证更高 support weight 是否能够在保持 `max_attacked_negative_fpr = 0.0` 的同时, 将 `no_attack_clean_positive_tpr` 从 `0.3` 推高到 `0.5` 或以上。
+
+若下一轮 anchor 仍未 eligible, runner 会继续在 anchor 后 early-stop。若下一轮 anchor 变为 eligible, 才进入紧凑 sync 搜索。sync 搜索空间同步收缩为:
+
+```text
+lambda_sync = [0.01, 0.015, 0.025]
+sync_search_radius = [6, 8]
+min_sync_positive_margin = [0.0, 0.02]
+min_sync_alignment_coverage_ratio = [0.0625]
+min_sync_alignment_matched_count = [1]
+min_sync_candidate_score = [0.25, 0.35]
+fusion_rule = sync_rescue_fusion
+```
+
+该配置属于诊断性高命中率搜索, 不是重新 broad search。其判断逻辑是: 先确认 anchor positive signal 是否可恢复; 若可恢复, 再用较小 sync 网格验证是否存在 temporal crop 或 local clip 的同步救援增益。
+
+### 21.6 运行时间预估
+
+本次 anchor stage 55 个候选耗时约 5.33 小时。下一轮 anchor stage 约为 20 个候选加 frame baseline, 因此若 anchor 仍不通过, 预计耗时为:
+
+```text
+约 2-3 小时
+```
+
+若 anchor 通过并进入紧凑 sync stage, sync 网格约 24 个候选, 预计总耗时为:
+
+```text
+约 4-7 小时
+```
+
+若 Colab Drive I/O、视频攻击物化或 L4 资源波动较大, 实际时间可能上浮到:
+
+```text
+约 8-10 小时
+```
+
+但按照当前 early-stop 与收缩后的搜索空间, 正常情况下不应再次出现 20 小时以上仍无结论的运行。
