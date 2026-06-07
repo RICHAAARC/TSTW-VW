@@ -1,9 +1,9 @@
 {
   "construction_phase": "real_video_vae_latent_probe",
-  "calibration_purpose": "stage2_sync_rescuable_anchor_mechanism_diagnostic",
+  "calibration_purpose": "stage2_fixed_anchor_sync_rescue_completion_diagnostic",
   "campaign_mode": "staged_search",
-  "top_candidate_limit": 8,
-  "anchor_selection_policy": "sync_rescuable_anchor",
+  "top_candidate_limit": 4,
+  "anchor_selection_policy": "fixed_unsaturated_anchor",
   "allowed_splits": [
     "dev",
     "calibration"
@@ -19,53 +19,40 @@
       [
         4,
         4
-      ],
-      [
-        8,
-        8
       ]
     ],
     "embedding_projection_support_weight": [
-      0.08,
-      0.09,
-      0.1
+      0.09
     ],
     "embedding_margin": [
-      1.0,
-      1.2
+      1.0
     ],
     "fusion_rule": [
       "sync_rescue_fusion"
     ],
     "lambda_sync": [
-      0.005,
       0.01,
-      0.015,
       0.025,
       0.04
     ],
     "sync_search_radius": [
       6,
-      8,
-      10
+      8
     ],
     "min_sync_positive_margin": [
       0.0,
-      0.01,
-      0.02
+      0.01
     ],
     "min_sync_alignment_coverage_ratio": [
       0.03125,
-      0.0625,
-      0.125
+      0.0625
     ],
     "min_sync_alignment_matched_count": [
       1
     ],
     "min_sync_candidate_score": [
       0.15,
-      0.25,
-      0.35
+      0.25
     ]
   },
   "search_stages": [
@@ -73,8 +60,8 @@
       "stage_name": "formal_anchor_diag",
       "selection_scope": "tubelet_only",
       "include_frame_prc_baseline": true,
-      "top_candidate_limit": 8,
-      "anchor_selection_policy": "sync_rescuable_anchor",
+      "top_candidate_limit": 4,
+      "anchor_selection_policy": "fixed_unsaturated_anchor",
       "grid": {
         "tubelet_length": [
           4
@@ -83,28 +70,24 @@
           [
             4,
             4
-          ],
-          [
-            8,
-            8
           ]
         ],
         "embedding_projection_support_weight": [
-          0.08,
-          0.09,
-          0.1
+          0.09
         ],
         "embedding_margin": [
-          1.0,
-          1.2
+          1.0
         ]
       },
-      "sync_rescuable_anchor_selection": {
-        "min_no_attack_clean_positive_tpr": 0.5,
-        "max_no_attack_clean_positive_tpr": 0.8,
-        "target_no_attack_clean_positive_tpr": 0.6,
-        "min_temporal_crop_anchor_headroom": 0.45,
-        "min_local_clip_anchor_headroom": 0.45
+      "calibration_purpose": "stage2_fixed_anchor_confirmation_diagnostic",
+      "fixed_tubelet_only_anchor": {
+        "tubelet_length": 4,
+        "spatial_patch_size": [
+          4,
+          4
+        ],
+        "embedding_projection_support_weight": 0.09,
+        "embedding_margin": 1.0
       }
     },
     {
@@ -112,42 +95,37 @@
       "selection_scope": "tubelet_sync",
       "candidate_source": "selected_tubelet_only_candidate",
       "include_frame_prc_baseline": false,
-      "top_candidate_limit": 8,
+      "top_candidate_limit": 4,
       "grid": {
         "fusion_rule": [
           "sync_rescue_fusion"
         ],
         "lambda_sync": [
-          0.005,
           0.01,
-          0.015,
           0.025,
           0.04
         ],
         "sync_search_radius": [
           6,
-          8,
-          10
+          8
         ],
         "min_sync_positive_margin": [
           0.0,
-          0.01,
-          0.02
+          0.01
         ],
         "min_sync_alignment_coverage_ratio": [
           0.03125,
-          0.0625,
-          0.125
+          0.0625
         ],
         "min_sync_alignment_matched_count": [
           1
         ],
         "min_sync_candidate_score": [
           0.15,
-          0.25,
-          0.35
+          0.25
         ]
-      }
+      },
+      "calibration_purpose": "stage2_fixed_anchor_sync_rescue_completion_diagnostic"
     }
   ],
   "selection_metrics": [
@@ -172,11 +150,13 @@
       "formal": 0.75
     }
   },
-  "sync_rescuable_anchor_selection": {
-    "min_no_attack_clean_positive_tpr": 0.5,
-    "max_no_attack_clean_positive_tpr": 0.8,
-    "target_no_attack_clean_positive_tpr": 0.6,
-    "min_temporal_crop_anchor_headroom": 0.45,
-    "min_local_clip_anchor_headroom": 0.45
+  "fixed_tubelet_only_anchor": {
+    "tubelet_length": 4,
+    "spatial_patch_size": [
+      4,
+      4
+    ],
+    "embedding_projection_support_weight": 0.09,
+    "embedding_margin": 1.0
   }
 }

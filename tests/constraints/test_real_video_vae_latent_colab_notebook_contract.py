@@ -363,14 +363,13 @@ def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameteriza
 
     assert grid_config["campaign_mode"] == "staged_search"
     assert "sync_refine_scan" not in search_stage_names
-    assert "fixed_tubelet_only_anchor" not in grid_config
-    assert grid_config["anchor_selection_policy"] == "sync_rescuable_anchor"
-    assert grid_config["sync_rescuable_anchor_selection"] == {
-        "min_no_attack_clean_positive_tpr": 0.5,
-        "max_no_attack_clean_positive_tpr": 0.8,
-        "target_no_attack_clean_positive_tpr": 0.6,
-        "min_temporal_crop_anchor_headroom": 0.45,
-        "min_local_clip_anchor_headroom": 0.45,
+    assert grid_config["anchor_selection_policy"] == "fixed_unsaturated_anchor"
+    assert "sync_rescuable_anchor_selection" not in grid_config
+    assert grid_config["fixed_tubelet_only_anchor"] == {
+        "tubelet_length": 4,
+        "spatial_patch_size": [4, 4],
+        "embedding_projection_support_weight": 0.09,
+        "embedding_margin": 1.0,
     }
     assert grid_config["strict_anchor_required_before_sync"] is True
     threshold_overrides = grid_config["threshold_protocol_overrides"]
@@ -388,34 +387,22 @@ def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameteriza
         "formal_sync_diag",
     ]
     assert grid_config["calibration_purpose"] == (
-        "stage2_sync_rescuable_anchor_mechanism_diagnostic"
+        "stage2_fixed_anchor_sync_rescue_completion_diagnostic"
     )
     assert grid_config["grid"]["tubelet_length"] == [4]
-    assert grid_config["grid"]["spatial_patch_size"] == [[4, 4], [8, 8]]
-    assert grid_config["grid"]["embedding_projection_support_weight"] == [
-        0.08,
-        0.09,
-        0.10,
-    ]
-    assert grid_config["grid"]["embedding_margin"] == [1.0, 1.2]
-    assert grid_config["grid"]["lambda_sync"] == [
-        0.005,
-        0.01,
-        0.015,
-        0.025,
-        0.04,
-    ]
-    assert grid_config["grid"]["sync_search_radius"] == [6, 8, 10]
-    assert grid_config["grid"]["min_sync_positive_margin"] == [0.0, 0.01, 0.02]
+    assert grid_config["grid"]["spatial_patch_size"] == [[4, 4]]
+    assert grid_config["grid"]["embedding_projection_support_weight"] == [0.09]
+    assert grid_config["grid"]["embedding_margin"] == [1.0]
+    assert grid_config["grid"]["lambda_sync"] == [0.01, 0.025, 0.04]
+    assert grid_config["grid"]["sync_search_radius"] == [6, 8]
+    assert grid_config["grid"]["min_sync_positive_margin"] == [0.0, 0.01]
     assert grid_config["grid"]["min_sync_alignment_coverage_ratio"] == [
         0.03125,
         0.0625,
-        0.125,
     ]
     assert grid_config["grid"]["min_sync_candidate_score"] == [
         0.15,
         0.25,
-        0.35,
     ]
 
 

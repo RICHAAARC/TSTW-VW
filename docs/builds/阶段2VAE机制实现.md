@@ -3028,3 +3028,87 @@ formal_sync_diag ≈ 2.79 小时
 ```
 
 正常情况下仍不应回到 20 小时以上无结论的状态。
+
+## 23. 2026-06-08 中断包 `TSTW_runtime_runs_20260607_224048.zip` 诊断
+
+### 23.1 结论
+
+本次运行在约 16 小时后被人工中断，运行包位于:
+
+```text
+G:\我的云端硬盘\TSTW\results\TSTW_runtime_runs_20260607_224048.zip
+```
+
+该包没有产出完整的阶段 2 机制证明结果。缺失的关键产物包括:
+
+```text
+stage2_mechanism_calibration_summary.json
+stage2_mechanism_calibration_timing_summary.json
+formal_sync_diag/records/event_scores.jsonl
+formal_sync_diag/tables/stage2_mechanism_calibration_grid.csv
+formal_sync_diag/runtime_profile/run_timing_summary.json
+```
+
+因此, 本次结果不能用于判定阶段 2 机制证明通过或失败, 只能作为一次中断诊断记录。
+
+### 23.2 已完成部分
+
+`formal_anchor_diag` 已完整完成, 总记录耗时约 2842.96 秒, 即约 47.4 分钟。anchor 阶段成功选中了固定目标邻域内的候选:
+
+```text
+tubelet_only_cal_tl04_sp04x04_w009_em1000
+no_attack_clean_positive_tpr = 0.6
+max_attacked_negative_fpr = 0.0
+temporal_crop_anchor_headroom = 0.65
+local_clip_anchor_headroom = 0.6
+```
+
+该候选仍然是当前阶段 2 收尾测试的合理 anchor, 因为它已经满足 FPR 约束和 clean positive TPR 下限, 同时保留了 temporal crop 与 local clip 的可提升空间。
+
+### 23.3 中断原因
+
+`formal_sync_diag` 已进入检测与质量指标循环, 但在写出 `event_scores.jsonl` 和聚合表之前被中断。其 `run_timing_events.jsonl` 显示:
+
+```text
+runner_detect invocation_count = 120120
+runner_detect elapsed_seconds = 12380.67 秒, 约 3.44 小时
+runner_quality_metrics invocation_count = 120120
+runner_quality_metrics elapsed_seconds = 1294.75 秒, 约 21.6 分钟
+```
+
+这说明主要问题不是 notebook cell 或 GPU 假死, 而是 sync 搜索空间过大, 且当前 runner 在 sync stage 完成前没有可复用的中间 records checkpoint。中断发生在 records 写出之前, 所以无法从该包恢复完整 sync 选择结果。
+
+### 23.4 搜索空间修正
+
+本次后续构建不再继续使用 405 级别的 sync 搜索空间。该窗口已登记为失败运行窗口, 后续仅作为历史记录保留。
+
+新的默认策略改为固定已验证 anchor, 并只运行收缩后的 sync rescue 完成测试:
+
+```text
+anchor_selection_policy = fixed_unsaturated_anchor
+fixed_tubelet_only_anchor = tl04, spatial_patch_size [4, 4], support_weight 0.09, embedding_margin 1.0
+lambda_sync = [0.01, 0.025, 0.04]
+sync_search_radius = [6, 8]
+min_sync_positive_margin = [0.0, 0.01]
+min_sync_alignment_coverage_ratio = [0.03125, 0.0625]
+min_sync_alignment_matched_count = [1]
+min_sync_candidate_score = [0.15, 0.25]
+```
+
+该配置对应 48 个 sync 方法配置, 相比原先 405 个方法配置减少约 88.1%。其目标不是继续广泛搜索, 而是验证已知合理 anchor 下是否能稳定产出阶段 2 机制证明闭环。
+
+### 23.5 下一次运行预期
+
+若 Colab 能复用已经物化的 dataset、攻击视频与 latent 缓存, 预计下一次运行时间约为:
+
+```text
+2-4 小时
+```
+
+若 Drive I/O 较慢或缓存未命中, 预计上浮到:
+
+```text
+4-6 小时
+```
+
+若超过 8 小时仍未写出 `formal_sync_diag/runtime_profile/run_timing_events.jsonl` 的新事件, 应优先中断并检查运行路径, 不建议再次等待到 16 小时。
