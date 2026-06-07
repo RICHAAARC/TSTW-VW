@@ -2868,3 +2868,163 @@ fusion_rule = sync_rescue_fusion
 ```
 
 但按照当前 early-stop 与收缩后的搜索空间, 正常情况下不应再次出现 20 小时以上仍无结论的运行。
+
+
+## 二十二、2026-06-07 `20260606T182709Z__c28e2c4` 结果判断与 sync-rescuable anchor 策略
+
+### 22.1 结果位置
+
+本次检查对象为:
+
+```text
+G:\我的云端硬盘\TSTW\results\families\real_video_vae_latent_probe__formal__davis2017_trainval480p__20260606T182709Z__c28e2c4
+G:\我的云端硬盘\TSTW\results\TSTW_runtime_runs_20260606_231452.zip
+```
+
+本次运行已经完成两个 staged search:
+
+```text
+formal_anchor_diag
+formal_sync_diag
+```
+
+顶层状态为:
+
+```text
+calibration_completion_status = anchor_only_partial_selection
+calibration_blocking_reason = no_tubelet_sync_candidate_passes_selection_gate
+selection_completion_status = incomplete_no_eligible_tubelet_sync_candidate
+search_terminated_early = false
+search_stage_count = 2
+generated_method_variant_count = 45
+selected_tubelet_sync_candidate = null
+```
+
+这说明 runner 路径正确: anchor 已通过, 因此进入 sync; 但 sync 未通过机制选择门槛。
+
+### 22.2 本次关键进展
+
+本次最优 anchor 为:
+
+```text
+tubelet_only_cal_tl04_sp04x04_w012_em1000
+```
+
+核心指标为:
+
+```text
+candidate_eligible = true
+fpr_controlled = true
+quality_not_collapsed = true
+no_attack_clean_negative_fpr = 0.0
+max_attacked_negative_fpr = 0.0
+no_attack_clean_positive_tpr = 0.9
+temporal_crop_attacked_positive_tpr = 0.8
+frame_dropping_attacked_positive_tpr = 0.85
+local_clip_attacked_positive_tpr = 0.75
+```
+
+该结果证明上一轮的 positive signal recovery 方向有效: 高 support weight 能在 strict FPR 下恢复 anchor positive TPR。
+
+### 22.3 当前失败原因
+
+sync stage 24 个候选全部未通过:
+
+```text
+candidate_eligible = false, 24 / 24
+fpr_controlled = true, 24 / 24
+negative_leakage_status = controlled, 24 / 24
+sync_rescue_decision = FAIL, 24 / 24
+candidate_selection_status = insufficient_signal, 24 / 24
+```
+
+典型 sync 指标为:
+
+```text
+temporal_crop_sync_gain = 0.0
+local_clip_sync_gain = 0.0
+mean_temporal_sync_gain = 0.016667
+```
+
+该现象说明 `w012` anchor 已经过强。它本身已经达到 `temporal_crop_attacked_positive_tpr = 0.8` 与 `local_clip_attacked_positive_tpr = 0.75`, 留给 sync rescue 的 headroom 不足, 因此不适合作为阶段 2 同步机制增益证明的 anchor。
+
+### 22.4 下一轮代码与配置决策
+
+本次将 selector 与 grid 更新为 `sync_rescuable_anchor` 策略。该策略的目标不是选择最强 anchor, 而是选择:
+
+```text
+FPR 受控
+candidate_eligible = true
+no_attack clean positive TPR 达标
+但 temporal_crop / local_clip 仍保留足够 headroom
+```
+
+当前默认策略参数为:
+
+```text
+min_no_attack_clean_positive_tpr = 0.5
+max_no_attack_clean_positive_tpr = 0.8
+target_no_attack_clean_positive_tpr = 0.6
+min_temporal_crop_anchor_headroom = 0.45
+min_local_clip_anchor_headroom = 0.45
+```
+
+基于本次 anchor grid, 该策略会优先选择类似 `w009` 的 anchor:
+
+```text
+no_attack_clean_positive_tpr = 0.6
+max_attacked_negative_fpr = 0.0
+temporal_crop_attacked_positive_tpr = 0.35
+local_clip_attacked_positive_tpr = 0.4
+```
+
+它比 `w012` 更适合验证 sync rescue, 因为它已经满足 anchor 合格门槛, 但仍保留 temporal/local clip 提升空间。
+
+### 22.5 下一轮搜索空间
+
+下一轮 anchor 搜索空间保持在 `tl04` 的可用邻域:
+
+```text
+tubelet_length = [4]
+spatial_patch_size = [[4, 4], [8, 8]]
+embedding_projection_support_weight = [0.08, 0.09, 0.10]
+embedding_margin = [1.0, 1.2]
+```
+
+下一轮 sync 搜索空间扩大到较紧凑但更有覆盖度的范围:
+
+```text
+lambda_sync = [0.005, 0.01, 0.015, 0.025, 0.04]
+sync_search_radius = [6, 8, 10]
+min_sync_positive_margin = [0.0, 0.01, 0.02]
+min_sync_alignment_coverage_ratio = [0.03125, 0.0625, 0.125]
+min_sync_alignment_matched_count = [1]
+min_sync_candidate_score = [0.15, 0.25, 0.35]
+fusion_rule = sync_rescue_fusion
+```
+
+该配置的预期是: 用 `w009 / w010` 这类有 headroom 的 eligible anchor 进入 sync, 而不是继续围绕过强的 `w012` 做无增益搜索。
+
+### 22.6 运行时间预估
+
+上一轮实际耗时为:
+
+```text
+formal_anchor_diag ≈ 1.96 小时
+formal_sync_diag ≈ 2.79 小时
+总计 ≈ 4.75 小时
+```
+
+下一轮 anchor 候选数约 12 个, sync 候选数约 135 个。由于 sync 阶段可复用已物化的攻击与 latent 产物, 预计耗时为:
+
+```text
+约 6-10 小时
+```
+
+若 Colab Drive I/O 或检测循环较慢, 可能上浮到:
+
+```text
+约 10-12 小时
+```
+
+正常情况下仍不应回到 20 小时以上无结论的状态。

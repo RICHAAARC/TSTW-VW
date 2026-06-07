@@ -356,6 +356,94 @@ def test_tubelet_only_anchor_selection_can_fix_unsaturated_anchor() -> None:
     assert selected_candidate["metrics"]["local_clip_anchor_headroom"] == pytest.approx(0.5625)
 
 
+def test_tubelet_only_anchor_selection_prefers_sync_rescuable_anchor() -> None:
+    """验证 selector 可以避开过强 anchor, 选择更适合 sync 增益证明的 anchor.
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    mechanism_config = {
+        "max_clean_negative_fpr": 0.05,
+        "max_attacked_negative_fpr": 0.1,
+        "min_no_attack_clean_positive_tpr": 0.5,
+        "require_quality_not_collapsed": True,
+        "min_watermarked_video_psnr": 20.0,
+        "min_watermarked_video_ssim": 0.5,
+    }
+    calibration_rows = [
+        {
+            "method_variant": "tubelet_only_cal_tl04_sp04x04_w012_em1000",
+            "base_method_variant": "tubelet_only",
+            "tubelet_length": 4,
+            "spatial_patch_size": "[4, 4]",
+            "embedding_projection_support_weight": 0.12,
+            "embedding_margin": 1.0,
+            "candidate_eligible": True,
+            "fpr_controlled": True,
+            "quality_not_collapsed": True,
+            "candidate_selection_status": "strong_anchor_with_headroom",
+            "absolute_rescue_status": "local_clip_absolute_success",
+            "negative_leakage_status": "controlled",
+            "no_attack_clean_negative_fpr": 0.0,
+            "no_attack_clean_positive_tpr": 0.9,
+            "max_attacked_negative_fpr": 0.0,
+            "temporal_crop_absolute_tpr": 0.8,
+            "local_clip_absolute_tpr": 0.75,
+            "temporal_crop_anchor_headroom": 0.2,
+            "local_clip_anchor_headroom": 0.25,
+            "temporal_crop_attacked_positive_tpr": 0.8,
+            "frame_dropping_attacked_positive_tpr": 0.85,
+            "local_clip_attacked_positive_tpr": 0.75,
+        },
+        {
+            "method_variant": "tubelet_only_cal_tl04_sp04x04_w009_em1000",
+            "base_method_variant": "tubelet_only",
+            "tubelet_length": 4,
+            "spatial_patch_size": "[4, 4]",
+            "embedding_projection_support_weight": 0.09,
+            "embedding_margin": 1.0,
+            "candidate_eligible": True,
+            "fpr_controlled": True,
+            "quality_not_collapsed": True,
+            "candidate_selection_status": "strong_anchor_with_headroom",
+            "absolute_rescue_status": "no_absolute_rescue",
+            "negative_leakage_status": "controlled",
+            "no_attack_clean_negative_fpr": 0.0,
+            "no_attack_clean_positive_tpr": 0.6,
+            "max_attacked_negative_fpr": 0.0,
+            "temporal_crop_absolute_tpr": 0.35,
+            "local_clip_absolute_tpr": 0.4,
+            "temporal_crop_anchor_headroom": 0.65,
+            "local_clip_anchor_headroom": 0.6,
+            "temporal_crop_attacked_positive_tpr": 0.35,
+            "frame_dropping_attacked_positive_tpr": 0.6,
+            "local_clip_attacked_positive_tpr": 0.4,
+        },
+    ]
+
+    selected_candidate = _select_tubelet_only_candidate(
+        calibration_rows,
+        mechanism_config,
+        {
+            "anchor_selection_policy": "sync_rescuable_anchor",
+            "sync_rescuable_anchor_selection": {
+                "min_no_attack_clean_positive_tpr": 0.5,
+                "max_no_attack_clean_positive_tpr": 0.8,
+                "target_no_attack_clean_positive_tpr": 0.6,
+                "min_temporal_crop_anchor_headroom": 0.45,
+                "min_local_clip_anchor_headroom": 0.45,
+            },
+        },
+    )
+
+    assert selected_candidate["method_variant"] == "tubelet_only_cal_tl04_sp04x04_w009_em1000"
+    assert selected_candidate["metrics"]["temporal_crop_anchor_headroom"] == pytest.approx(0.65)
+    assert selected_candidate["metrics"]["local_clip_anchor_headroom"] == pytest.approx(0.6)
+
+
 def test_tubelet_sync_scan_seed_uses_selected_candidate_defaults_for_missing_stage_grid_fields() -> None:
     """Validate tubelet_sync scan seed tolerates stage-local refine grids.
 

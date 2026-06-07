@@ -905,13 +905,18 @@ def _select_tubelet_only_candidate(
     if not calibration_rows:
         raise ValueError("calibration_rows must not be empty")
     fixed_anchor_config = _resolve_fixed_tubelet_only_anchor_config(grid_config)
-    if fixed_anchor_config is None:
-        selected_row = calibration_rows[0]
-    else:
+    if fixed_anchor_config is not None:
         selected_row = _select_fixed_tubelet_only_anchor_row(
             calibration_rows,
             fixed_anchor_config,
         )
+    elif _resolve_anchor_selection_policy(grid_config) == "sync_rescuable_anchor":
+        selected_row = _select_sync_rescuable_tubelet_only_anchor_row(
+            calibration_rows,
+            grid_config,
+        )
+    else:
+        selected_row = calibration_rows[0]
     candidate_eligible = bool(selected_row.get("candidate_eligible"))
     return {
         "candidate_status": _resolve_tubelet_only_candidate_status(selected_row),
@@ -983,6 +988,132 @@ def _resolve_tubelet_only_candidate_status(selected_row: dict[str, Any]) -> str:
     if bool(selected_row.get("fpr_controlled")):
         return "fpr_controlled_best_effort_candidate_selected"
     return "best_effort_candidate_selected"
+
+
+def _resolve_anchor_selection_policy(grid_config: dict[str, Any] | None) -> str:
+    """解析受治理的 anchor 选择策略。
+
+    Args:
+        grid_config: calibration grid 配置。
+
+    Returns:
+        anchor_selection_policy 字符串；未配置时返回空字符串。
+    """
+    if not isinstance(grid_config, dict):
+        return ""
+    return str(grid_config.get("anchor_selection_policy", "")).strip()
+
+
+def _select_sync_rescuable_tubelet_only_anchor_row(
+    calibration_rows: list[dict[str, Any]],
+    grid_config: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """选择适合后续 sync rescue 的 tubelet-only anchor。
+
+    该函数属于项目特定写法。它不改变 threshold 校准规则, 也不读取 test split,
+    只是在 dev / calibration 诊断结果中避免选择已经过强、sync headroom 过小的 anchor。
+
+    Args:
+        calibration_rows: tubelet-only 候选表。
+        grid_config: calibration grid 配置。
+
+    Returns:
+        最适合进入 sync 搜索的 anchor 行。
+    """
+    policy_config = _resolve_sync_rescuable_anchor_policy_config(grid_config)
+    filtered_rows = [
+        row
+        for row in calibration_rows
+        if _tubelet_only_row_matches_sync_rescuable_policy(row, policy_config)
+    ]
+    candidate_rows = filtered_rows if filtered_rows else list(calibration_rows)
+    candidate_rows.sort(
+        key=lambda row: (
+            0 if bool(row.get("candidate_eligible")) else 1,
+            0 if bool(row.get("fpr_controlled")) else 1,
+            _anchor_candidate_status_rank(str(row.get("candidate_selection_status") or "")),
+            _distance_from_target(
+                _safe_float(row.get("no_attack_clean_positive_tpr")),
+                policy_config["target_no_attack_clean_positive_tpr"],
+            ),
+            -float(_anchor_headroom_score(row) or 0.0),
+            float(row.get("embedding_projection_support_weight") or 0.0),
+            float(row.get("embedding_margin") or DEFAULT_EMBEDDING_MARGIN),
+            str(row.get("spatial_patch_size") or ""),
+        )
+    )
+    return candidate_rows[0]
+
+
+def _resolve_sync_rescuable_anchor_policy_config(
+    grid_config: dict[str, Any] | None,
+) -> dict[str, float]:
+    """读取 sync-rescuable anchor 选择参数。
+
+    Args:
+        grid_config: calibration grid 配置。
+
+    Returns:
+        已补齐默认值的策略配置。
+    """
+    raw_config: dict[str, Any] = {}
+    if isinstance(grid_config, dict) and isinstance(
+        grid_config.get("sync_rescuable_anchor_selection"),
+        dict,
+    ):
+        raw_config = grid_config["sync_rescuable_anchor_selection"]
+    return {
+        "min_no_attack_clean_positive_tpr": _safe_float(
+            raw_config.get("min_no_attack_clean_positive_tpr")
+        )
+        or 0.5,
+        "max_no_attack_clean_positive_tpr": _safe_float(
+            raw_config.get("max_no_attack_clean_positive_tpr")
+        )
+        or 0.85,
+        "target_no_attack_clean_positive_tpr": _safe_float(
+            raw_config.get("target_no_attack_clean_positive_tpr")
+        )
+        or 0.6,
+        "min_temporal_crop_anchor_headroom": _safe_float(
+            raw_config.get("min_temporal_crop_anchor_headroom")
+        )
+        or 0.35,
+        "min_local_clip_anchor_headroom": _safe_float(
+            raw_config.get("min_local_clip_anchor_headroom")
+        )
+        or 0.35,
+    }
+
+
+def _tubelet_only_row_matches_sync_rescuable_policy(
+    row: dict[str, Any],
+    policy_config: dict[str, float],
+) -> bool:
+    """判断 anchor 行是否保留足够 sync rescue 空间。"""
+    if not bool(row.get("candidate_eligible")):
+        return False
+    if not bool(row.get("fpr_controlled")):
+        return False
+    no_attack_tpr = _safe_float(row.get("no_attack_clean_positive_tpr"))
+    temporal_headroom = _safe_float(row.get("temporal_crop_anchor_headroom"))
+    local_clip_headroom = _safe_float(row.get("local_clip_anchor_headroom"))
+    if no_attack_tpr is None or temporal_headroom is None or local_clip_headroom is None:
+        return False
+    return (
+        policy_config["min_no_attack_clean_positive_tpr"]
+        <= no_attack_tpr
+        <= policy_config["max_no_attack_clean_positive_tpr"]
+        and temporal_headroom >= policy_config["min_temporal_crop_anchor_headroom"]
+        and local_clip_headroom >= policy_config["min_local_clip_anchor_headroom"]
+    )
+
+
+def _distance_from_target(value: float | None, target_value: float) -> float:
+    """计算数值到目标值的距离, None 会被视为不可取的大距离。"""
+    if value is None:
+        return 1_000_000.0
+    return abs(float(value) - float(target_value))
 
 
 def _select_tubelet_sync_candidate(
