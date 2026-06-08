@@ -220,11 +220,6 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
             )
             sync_result["sync_search_score_rule"] = search_score_rule
             mechanism_trace.update(sync_result)
-            evidence_scores["S_sync"] = self._build_sync_support_score(
-                float(sync_result["S_sync_positive_margin"]),
-            )
-            sync_confidence_trace = self._build_sync_confidence_trace(sync_result)
-            mechanism_trace.update(sync_confidence_trace)
             aligned_tubelet_projections = self._align_tubelet_projections(
                 descriptors,
                 tensor_artifact,
@@ -249,6 +244,15 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 max(0.0, S_payload_aligned - S_payload_unaligned),
                 6,
             )
+            evidence_scores["S_sync"] = self._build_sync_support_score(
+                float(sync_result["S_sync_positive_margin"]),
+            )
+            sync_confidence_trace = self._build_sync_confidence_trace_for_gate_rule(
+                sync_result=sync_result,
+                S_payload_aligned=S_payload_aligned,
+                S_payload_rescue_gain=S_payload_rescue_gain,
+            )
+            mechanism_trace.update(sync_confidence_trace)
             sync_rescue_applied = bool(sync_confidence_trace["sync_confident"])
         else:
             mechanism_trace.update(
@@ -278,10 +282,13 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                     "sync_candidate_score_hybrid": None,
                     "sync_confident": False,
                     "sync_confidence_failure_reason": "sync_disabled",
+                    "sync_confidence_gate_rule": None,
                     "sync_confidence_min_margin": None,
                     "sync_confidence_min_coverage_ratio": None,
                     "sync_confidence_min_matched_count": None,
                     "sync_confidence_min_candidate_score": None,
+                    "sync_confidence_min_payload_rescue_gain": None,
+                    "sync_confidence_min_aligned_payload_score": None,
                     "sync_confidence_score_field": None,
                 }
             )
@@ -967,11 +974,99 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
         return {
             "sync_confident": not failure_reasons,
             "sync_confidence_failure_reason": ";".join(failure_reasons) or None,
+            "sync_confidence_gate_rule": "candidate_score_gate",
             "sync_confidence_min_margin": round(float(min_margin), 6),
             "sync_confidence_min_coverage_ratio": round(float(min_coverage_ratio), 6),
             "sync_confidence_min_matched_count": min_matched_count,
             "sync_confidence_min_candidate_score": round(float(min_candidate_score), 6),
+            "sync_confidence_min_payload_rescue_gain": None,
+            "sync_confidence_min_aligned_payload_score": None,
             "sync_confidence_score_field": score_field,
+        }
+
+    def _build_sync_confidence_trace_for_gate_rule(
+        self,
+        *,
+        sync_result: dict[str, object],
+        S_payload_aligned: float,
+        S_payload_rescue_gain: float,
+    ) -> dict[str, object]:
+        gate_rule = self._resolve_sync_confidence_gate_rule()
+        if gate_rule == "candidate_score_gate":
+            return self._build_sync_confidence_trace(sync_result)
+        return self._build_aligned_payload_safety_confidence_trace(
+            sync_result=sync_result,
+            S_payload_aligned=S_payload_aligned,
+            S_payload_rescue_gain=S_payload_rescue_gain,
+        )
+
+    def _resolve_sync_confidence_gate_rule(self) -> str:
+        sync_search_config = self._method_config.get("sync_search", {})
+        gate_rule = "candidate_score_gate"
+        if isinstance(sync_search_config, dict):
+            configured_gate_rule = sync_search_config.get("sync_confidence_gate_rule")
+            if configured_gate_rule is not None:
+                gate_rule = str(configured_gate_rule).strip()
+        if gate_rule not in {
+            "candidate_score_gate",
+            "aligned_payload_safety_gate",
+        }:
+            raise ValueError(
+                "sync_search.sync_confidence_gate_rule must be one of: "
+                "candidate_score_gate, aligned_payload_safety_gate"
+            )
+        return gate_rule
+
+    def _build_aligned_payload_safety_confidence_trace(
+        self,
+        *,
+        sync_result: dict[str, object],
+        S_payload_aligned: float,
+        S_payload_rescue_gain: float,
+    ) -> dict[str, object]:
+        min_rescue_gain = self._resolve_sync_confidence_value(
+            "min_payload_rescue_gain",
+            0.01,
+        )
+        min_aligned_payload_score = self._resolve_sync_confidence_value(
+            "min_aligned_payload_score",
+            0.1,
+        )
+        min_coverage_ratio = self._resolve_sync_confidence_value(
+            "min_sync_alignment_coverage_ratio",
+            0.125,
+        )
+        min_matched_count = int(
+            self._resolve_sync_confidence_value(
+                "min_sync_alignment_matched_count",
+                64.0,
+            )
+        )
+        coverage_ratio = float(sync_result.get("sync_alignment_coverage_ratio") or 0.0)
+        matched_count = int(sync_result.get("sync_alignment_matched_count") or 0)
+        failure_reasons: list[str] = []
+        if float(S_payload_rescue_gain) < float(min_rescue_gain):
+            failure_reasons.append("payload_rescue_gain_below_gate")
+        if float(S_payload_aligned) < float(min_aligned_payload_score):
+            failure_reasons.append("aligned_payload_score_below_gate")
+        if coverage_ratio < float(min_coverage_ratio):
+            failure_reasons.append("sync_coverage_below_gate")
+        if matched_count < min_matched_count:
+            failure_reasons.append("sync_matched_count_below_gate")
+        return {
+            "sync_confident": not failure_reasons,
+            "sync_confidence_failure_reason": ";".join(failure_reasons) or None,
+            "sync_confidence_gate_rule": "aligned_payload_safety_gate",
+            "sync_confidence_min_margin": None,
+            "sync_confidence_min_coverage_ratio": round(float(min_coverage_ratio), 6),
+            "sync_confidence_min_matched_count": min_matched_count,
+            "sync_confidence_min_candidate_score": None,
+            "sync_confidence_min_payload_rescue_gain": round(float(min_rescue_gain), 6),
+            "sync_confidence_min_aligned_payload_score": round(
+                float(min_aligned_payload_score),
+                6,
+            ),
+            "sync_confidence_score_field": "S_payload_aligned",
         }
 
     def _build_sync_search_result(

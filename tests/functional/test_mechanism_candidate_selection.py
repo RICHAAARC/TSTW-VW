@@ -2587,11 +2587,12 @@ def test_mechanism_candidate_selector_prefers_strict_sync_seal_over_higher_gain_
                     tubelet_length=2,
                     attack_name="temporal_crop",
                     sample_role="attacked_negative",
-                    decision=False,
+                    decision=True,
                     s_sync=0.19,
                     fusion_rule="sync_rescue_fusion",
                     lambda_sync=0.025,
                     sync_confident=True,
+                    sync_rescue_applied=True,
                 ),
                 _build_event_record(
                     split_name=split_name,
@@ -2872,6 +2873,7 @@ def _build_event_record(
     sync_confidence_min_coverage_ratio: float = 0.5,
     sync_confidence_min_matched_count: int = 1,
     sync_confident: bool | None = None,
+    sync_rescue_applied: bool | None = None,
 ) -> dict[str, object]:
     event_record: dict[str, object] = {
         "run_id": "real_video_vae_latent_probe_formal",
@@ -2913,4 +2915,8 @@ def _build_event_record(
     }
     if sync_confident is not None:
         event_record["mechanism_trace"]["sync_confident"] = bool(sync_confident)
+    if sync_rescue_applied is not None:
+        event_record["mechanism_trace"]["sync_rescue_applied"] = bool(
+            sync_rescue_applied
+        )
     return event_record

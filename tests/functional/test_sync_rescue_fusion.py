@@ -490,6 +490,71 @@ def test_sync_confidence_can_gate_on_minimum_candidate_score() -> None:
 
 
 @pytest.mark.unit
+def test_aligned_payload_safety_gate_checks_payload_and_coverage() -> None:
+    """验证 aligned payload gate 同时约束 payload 增益和对齐覆盖。"""
+    gated_config = copy.deepcopy(TUBELET_SYNC_CONFIG)
+    gated_config["sync_search"] = {
+        **gated_config["sync_search"],
+        "sync_confidence_gate_rule": "aligned_payload_safety_gate",
+        "min_payload_rescue_gain": 0.02,
+        "min_aligned_payload_score": 0.1,
+        "min_sync_alignment_coverage_ratio": 0.125,
+        "min_sync_alignment_matched_count": 64,
+    }
+
+    extractor = SyntheticProbeEvidenceExtractor(
+        method_variant="tubelet_sync",
+        method_config=gated_config,
+        enabled_evidence={"tubelet": True, "sync": True, "trajectory": False},
+        fusion_rule="sync_rescue_fusion",
+    )
+    sync_result = {
+        "sync_alignment_coverage_ratio": 0.125,
+        "sync_alignment_matched_count": 64,
+    }
+
+    low_gain_trace = extractor._build_sync_confidence_trace_for_gate_rule(
+        sync_result=sync_result,
+        S_payload_aligned=0.11,
+        S_payload_rescue_gain=0.01,
+    )
+    low_score_trace = extractor._build_sync_confidence_trace_for_gate_rule(
+        sync_result=sync_result,
+        S_payload_aligned=0.09,
+        S_payload_rescue_gain=0.03,
+    )
+    low_coverage_trace = extractor._build_sync_confidence_trace_for_gate_rule(
+        sync_result={
+            "sync_alignment_coverage_ratio": 0.0625,
+            "sync_alignment_matched_count": 64,
+        },
+        S_payload_aligned=0.11,
+        S_payload_rescue_gain=0.03,
+    )
+    passing_trace = extractor._build_sync_confidence_trace_for_gate_rule(
+        sync_result=sync_result,
+        S_payload_aligned=0.11,
+        S_payload_rescue_gain=0.03,
+    )
+
+    assert low_gain_trace["sync_confident"] is False
+    assert "payload_rescue_gain_below_gate" in str(
+        low_gain_trace["sync_confidence_failure_reason"]
+    )
+    assert low_score_trace["sync_confident"] is False
+    assert "aligned_payload_score_below_gate" in str(
+        low_score_trace["sync_confidence_failure_reason"]
+    )
+    assert low_coverage_trace["sync_confident"] is False
+    assert "sync_coverage_below_gate" in str(
+        low_coverage_trace["sync_confidence_failure_reason"]
+    )
+    assert passing_trace["sync_confident"] is True
+    assert passing_trace["sync_confidence_gate_rule"] == "aligned_payload_safety_gate"
+    assert passing_trace["sync_confidence_score_field"] == "S_payload_aligned"
+
+
+@pytest.mark.unit
 def test_reliable_offset_alignment_can_create_payload_rescue_gain(tmp_path: Path) -> None:
     cropped_sample = _build_sync_embedded_crop(tmp_path)
     sync_result = build_method_from_config(TUBELET_SYNC_CONFIG).detect(

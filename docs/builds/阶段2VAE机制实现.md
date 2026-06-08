@@ -1,4 +1,4 @@
-﻿# 阶段 2 VAE 机制实现修复说明
+# 阶段 2 VAE 机制实现修复说明
 
 ## 一、任务定位
 
@@ -3112,3 +3112,86 @@ min_sync_candidate_score = [0.15, 0.25]
 ```
 
 若超过 8 小时仍未写出 `formal_sync_diag/runtime_profile/run_timing_events.jsonl` 的新事件, 应优先中断并检查运行路径, 不建议再次等待到 16 小时。
+
+## 24. 2026-06-08 gate 策略重构记录
+
+### 24.1 已确认失败路径
+
+基于 20260608 runtime zip 的机制级诊断, `sync_candidate_score` 在 positive 与 attacked negative 之间不具备足够判别性。旧逻辑把 `sync_candidate_score` 同时用于 alignment candidate 排序和 `sync_rescue_applied` gate, 导致两个职责混合:
+
+```text
+旧逻辑: sync 分数高 => 允许 rescue
+新逻辑: sync 分数只负责找 offset / scale, 是否 rescue 交给 aligned payload safety gate
+```
+
+因此, `sync_candidate_score_gate` 不再作为阶段 2 默认 rescue gate。`sync_candidate_score` 保留为 alignment search 内部排序分数、trace 字段和事后解释字段, 但默认搜索空间不再搜索 `min_sync_candidate_score`。
+
+### 24.2 新默认机制
+
+阶段 2 默认 gate 改为:
+
+```text
+sync_confidence_gate_rule = aligned_payload_safety_gate
+```
+
+该 gate 同时要求:
+
+```text
+S_payload_rescue_gain >= min_payload_rescue_gain
+S_payload_aligned >= min_aligned_payload_score
+sync_alignment_coverage_ratio >= min_sync_alignment_coverage_ratio
+sync_alignment_matched_count >= min_sync_alignment_matched_count
+```
+
+同时 selector 增加方法级 negative safety 统计。如果 calibration negative 中存在任何样本在 sync rescue 后 `S_final >= threshold`, 则该 `tubelet_sync` method variant 不可成为 eligible candidate。
+
+### 24.3 当前默认搜索空间
+
+已将 `configs/ablation/stage2_vae_mechanism_calibration_grid.json` 收缩为 4 个 sync candidate:
+
+```text
+anchor = tubelet_only_cal_tl04_sp04x04_w009_em1000
+lambda_sync = [0.01]
+sync_search_radius = [8]
+min_sync_positive_margin = [0.0]
+min_sync_alignment_coverage_ratio = [0.125]
+min_sync_alignment_matched_count = [64]
+sync_confidence_gate_rule = [aligned_payload_safety_gate]
+min_aligned_rescue_gain = [0.01, 0.02]
+min_aligned_score_gate = [0.095, 0.10]
+min_sync_candidate_score = removed from default grid
+```
+
+该搜索空间的目标不是继续大范围寻参, 而是验证新的职责拆分是否能把已观察到的 `S_payload_aligned` 判别信号真正接入 `S_final`, 同时保持 calibration negative safety。
+
+### 24.4 新增输出统计
+
+selector 表格新增以下关键列, 用于判断下一轮是否已经接近阶段 2 机制证明闭环:
+
+```text
+aligned_payload_clean_negative_fpr
+aligned_payload_attacked_negative_fpr
+aligned_payload_positive_tpr
+aligned_payload_temporal_crop_tpr
+aligned_payload_local_clip_tpr
+sync_rescue_applied_positive_rate
+sync_rescue_applied_attacked_negative_rate
+negative_rescue_over_threshold_count
+aligned_payload_negative_safety_status
+aligned_payload_clean_negative_over_threshold_count
+aligned_payload_attacked_negative_over_threshold_count
+```
+
+判定优先级如下:
+
+```text
+1. aligned_payload_negative_safety_status 必须为 PASS
+2. negative_rescue_over_threshold_count 必须为 0
+3. attacked negative FPR 必须保持受控
+4. temporal crop 或 local clip 的 sync gain 必须达到阶段 2 机制要求
+```
+
+### 24.5 下一轮运行建议
+
+下一轮可以直接运行 notebook。预期运行时间应显著低于 48 个 candidate 的旧窗口。若缓存命中, 预计约 1-3 小时; 若 Drive I/O 或 latent 缓存未命中, 预计约 3-6 小时。若超过 8 小时仍未看到 `formal_sync_diag/records/event_scores.jsonl` 或 runtime timing 持续增长, 应优先中断并检查是否又进入了非默认旧搜索空间。
+

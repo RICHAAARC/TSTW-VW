@@ -1274,9 +1274,25 @@ def _build_stage_seed_candidate_from_sync_scan_seed(
                 parameter_scan,
                 "min_sync_alignment_matched_count",
             ),
-            "min_sync_candidate_score": _resolve_sync_scan_seed_first_numeric(
+            "min_sync_candidate_score": _resolve_optional_sync_scan_seed_first_numeric(
                 parameter_scan,
                 "min_sync_candidate_score",
+                0.0,
+            ),
+            "sync_confidence_gate_rule": _resolve_optional_sync_scan_seed_first_string(
+                parameter_scan,
+                "sync_confidence_gate_rule",
+                "candidate_score_gate",
+            ),
+            "min_payload_rescue_gain": _resolve_optional_sync_scan_seed_first_numeric(
+                parameter_scan,
+                "min_payload_rescue_gain",
+                0.01,
+            ),
+            "min_aligned_payload_score": _resolve_optional_sync_scan_seed_first_numeric(
+                parameter_scan,
+                "min_aligned_payload_score",
+                0.1,
             ),
         },
     }
@@ -1306,6 +1322,17 @@ def _resolve_sync_scan_seed_first_string(
     return str(field_value)
 
 
+def _resolve_optional_sync_scan_seed_first_string(
+    parameter_scan: dict[str, Any],
+    field_name: str,
+    default_value: str,
+) -> str:
+    field_value = parameter_scan.get(field_name)
+    if field_value is None:
+        return str(default_value)
+    return _resolve_sync_scan_seed_first_string(parameter_scan, field_name)
+
+
 def _resolve_sync_scan_seed_first_numeric(
     parameter_scan: dict[str, Any],
     field_name: str,
@@ -1316,6 +1343,17 @@ def _resolve_sync_scan_seed_first_numeric(
             f"tubelet_sync_scan_seed.parameter_scan.{field_name}[0] must be numeric"
         )
     return round(float(field_value), 6)
+
+
+def _resolve_optional_sync_scan_seed_first_numeric(
+    parameter_scan: dict[str, Any],
+    field_name: str,
+    default_value: float,
+) -> float:
+    field_value = parameter_scan.get(field_name)
+    if field_value is None:
+        return round(float(default_value), 6)
+    return _resolve_sync_scan_seed_first_numeric(parameter_scan, field_name)
 
 
 def _resolve_sync_scan_seed_first_integer(
@@ -1428,6 +1466,21 @@ def _build_stage_generated_method_configs(
         "min_sync_candidate_score",
         [seed_sync_defaults["min_sync_candidate_score"]],
     )
+    sync_confidence_gate_rules = _read_optional_grid_string_list(
+        stage_grid,
+        "sync_confidence_gate_rule",
+        [seed_sync_defaults["sync_confidence_gate_rule"]],
+    )
+    min_payload_rescue_gains = _read_optional_grid_numeric_alias_list(
+        stage_grid,
+        ("min_aligned_rescue_gain", "min_payload_rescue_gain"),
+        [seed_sync_defaults["min_payload_rescue_gain"]],
+    )
+    min_aligned_payload_scores = _read_optional_grid_numeric_alias_list(
+        stage_grid,
+        ("min_aligned_score_gate", "min_aligned_payload_score"),
+        [seed_sync_defaults["min_aligned_payload_score"]],
+    )
     for (
         embedding_margin,
         lambda_sync,
@@ -1437,6 +1490,9 @@ def _build_stage_generated_method_configs(
         min_sync_coverage_ratio,
         min_sync_matched_count,
         min_sync_candidate_score,
+        sync_confidence_gate_rule,
+        min_payload_rescue_gain,
+        min_aligned_payload_score,
     ) in itertools.product(
         embedding_margins,
         lambda_sync_values,
@@ -1446,6 +1502,9 @@ def _build_stage_generated_method_configs(
         min_sync_coverage_ratios,
         min_sync_matched_counts,
         min_sync_candidate_scores,
+        sync_confidence_gate_rules,
+        min_payload_rescue_gains,
+        min_aligned_payload_scores,
     ):
         generated_method_configs.append(
             _build_tubelet_sync_calibration_config(
@@ -1461,6 +1520,9 @@ def _build_stage_generated_method_configs(
                 min_sync_coverage_ratio=min_sync_coverage_ratio,
                 min_sync_matched_count=min_sync_matched_count,
                 min_sync_candidate_score=min_sync_candidate_score,
+                sync_confidence_gate_rule=sync_confidence_gate_rule,
+                min_payload_rescue_gain=min_payload_rescue_gain,
+                min_aligned_payload_score=min_aligned_payload_score,
             )
         )
     return generated_method_configs
@@ -1550,6 +1612,30 @@ def _resolve_seed_sync_defaults(
                 candidate_sync_search.get(
                     "min_sync_candidate_score",
                     template_sync_search.get("min_sync_candidate_score", 0.0),
+                )
+            ),
+            6,
+        ),
+        "sync_confidence_gate_rule": str(
+            candidate_sync_search.get(
+                "sync_confidence_gate_rule",
+                template_sync_search.get("sync_confidence_gate_rule", "candidate_score_gate"),
+            )
+        ),
+        "min_payload_rescue_gain": round(
+            float(
+                candidate_sync_search.get(
+                    "min_payload_rescue_gain",
+                    template_sync_search.get("min_payload_rescue_gain", 0.01),
+                )
+            ),
+            6,
+        ),
+        "min_aligned_payload_score": round(
+            float(
+                candidate_sync_search.get(
+                    "min_aligned_payload_score",
+                    template_sync_search.get("min_aligned_payload_score", 0.1),
                 )
             ),
             6,
@@ -1761,6 +1847,21 @@ def _build_generated_method_configs(
         "min_sync_candidate_score",
         [0.0],
     )
+    sync_confidence_gate_rules = _read_optional_grid_string_list(
+        grid_payload,
+        "sync_confidence_gate_rule",
+        ["candidate_score_gate"],
+    )
+    min_payload_rescue_gains = _read_optional_grid_numeric_alias_list(
+        grid_payload,
+        ("min_aligned_rescue_gain", "min_payload_rescue_gain"),
+        [0.01],
+    )
+    min_aligned_payload_scores = _read_optional_grid_numeric_alias_list(
+        grid_payload,
+        ("min_aligned_score_gate", "min_aligned_payload_score"),
+        [0.1],
+    )
 
     generated_method_configs: list[dict[str, Any]] = [
         _build_frame_prc_baseline_config(frame_prc_template)
@@ -1789,6 +1890,9 @@ def _build_generated_method_configs(
             min_sync_coverage_ratio,
             min_sync_matched_count,
             min_sync_candidate_score,
+            sync_confidence_gate_rule,
+            min_payload_rescue_gain,
+            min_aligned_payload_score,
         ) in itertools.product(
             embedding_margins,
             lambda_sync_values,
@@ -1798,6 +1902,9 @@ def _build_generated_method_configs(
             min_sync_coverage_ratios,
             min_sync_matched_counts,
             min_sync_candidate_scores,
+            sync_confidence_gate_rules,
+            min_payload_rescue_gains,
+            min_aligned_payload_scores,
         ):
             generated_method_configs.append(
                 _build_tubelet_sync_calibration_config(
@@ -1813,6 +1920,9 @@ def _build_generated_method_configs(
                     min_sync_coverage_ratio=min_sync_coverage_ratio,
                     min_sync_matched_count=min_sync_matched_count,
                     min_sync_candidate_score=min_sync_candidate_score,
+                    sync_confidence_gate_rule=sync_confidence_gate_rule,
+                    min_payload_rescue_gain=min_payload_rescue_gain,
+                    min_aligned_payload_score=min_aligned_payload_score,
                 )
             )
     return generated_method_configs
@@ -1911,6 +2021,9 @@ def _build_tubelet_sync_calibration_config(
     min_sync_coverage_ratio: float,
     min_sync_matched_count: int,
     min_sync_candidate_score: float,
+    sync_confidence_gate_rule: str = "candidate_score_gate",
+    min_payload_rescue_gain: float = 0.01,
+    min_aligned_payload_score: float = 0.1,
 ) -> dict[str, Any]:
     calibration_config = copy.deepcopy(tubelet_sync_template)
     calibration_config["target_construction_phase"] = "real_video_vae_latent_probe"
@@ -1928,6 +2041,9 @@ def _build_tubelet_sync_calibration_config(
         min_sync_coverage_ratio=min_sync_coverage_ratio,
         min_sync_matched_count=min_sync_matched_count,
         min_sync_candidate_score=min_sync_candidate_score,
+        sync_confidence_gate_rule=sync_confidence_gate_rule,
+        min_payload_rescue_gain=min_payload_rescue_gain,
+        min_aligned_payload_score=min_aligned_payload_score,
     )
     calibration_config["tubelet_length"] = int(tubelet_length)
     calibration_config["embedding_margin"] = round(float(embedding_margin), 6)
@@ -1955,6 +2071,17 @@ def _build_tubelet_sync_calibration_config(
     )
     calibration_config["sync_search"]["min_sync_candidate_score"] = round(
         float(min_sync_candidate_score),
+        6,
+    )
+    calibration_config["sync_search"]["sync_confidence_gate_rule"] = str(
+        sync_confidence_gate_rule
+    )
+    calibration_config["sync_search"]["min_payload_rescue_gain"] = round(
+        float(min_payload_rescue_gain),
+        6,
+    )
+    calibration_config["sync_search"]["min_aligned_payload_score"] = round(
+        float(min_aligned_payload_score),
         6,
     )
     calibration_config["lambda_sync"] = round(float(lambda_sync), 6)
@@ -1991,6 +2118,9 @@ def _build_tubelet_sync_variant_name(
     min_sync_coverage_ratio: float,
     min_sync_matched_count: int,
     min_sync_candidate_score: float,
+    sync_confidence_gate_rule: str,
+    min_payload_rescue_gain: float,
+    min_aligned_payload_score: float,
 ) -> str:
     fusion_rule_token_map = {
         "sync_rescue_fusion": "sync_rescue",
@@ -2005,6 +2135,14 @@ def _build_tubelet_sync_variant_name(
         candidate_score_token = (
             f"cs{int(round(float(min_sync_candidate_score) * 1000)):03d}_"
         )
+    gate_rule_token_map = {
+        "candidate_score_gate": "grcscore",
+        "aligned_payload_safety_gate": "grapsafe",
+    }
+    gate_rule_token = gate_rule_token_map.get(
+        str(sync_confidence_gate_rule),
+        str(sync_confidence_gate_rule).replace("_gate", "")[:12],
+    )
     return (
         "tubelet_sync_cal_"
         f"tl{int(tubelet_length):02d}_"
@@ -2017,6 +2155,9 @@ def _build_tubelet_sync_variant_name(
         f"cv{int(round(float(min_sync_coverage_ratio) * 1000)):03d}_"
         f"mc{int(min_sync_matched_count):02d}_"
         f"{candidate_score_token}"
+        f"{gate_rule_token}_"
+        f"rg{int(round(float(min_payload_rescue_gain) * 1000)):03d}_"
+        f"as{int(round(float(min_aligned_payload_score) * 1000)):03d}_"
         f"fr{fusion_rule_token}"
     )
 
@@ -2089,6 +2230,9 @@ def _build_tubelet_sync_candidate_method_config(
         "min_sync_alignment_coverage_ratio",
         "min_sync_alignment_matched_count",
         "min_sync_candidate_score",
+        "sync_confidence_gate_rule",
+        "min_payload_rescue_gain",
+        "min_aligned_payload_score",
     ):
         if field_name in selected_candidate["sync_search"]:
             calibration_config["sync_search"][field_name] = selected_candidate[
@@ -2123,6 +2267,17 @@ def _read_optional_grid_numeric_list(
     if not resolved_values:
         raise ValueError(f"grid field {field_name} must contain numeric values")
     return resolved_values
+
+
+def _read_optional_grid_numeric_alias_list(
+    payload: dict[str, Any],
+    field_names: tuple[str, ...],
+    default_values: list[float],
+) -> list[float]:
+    for field_name in field_names:
+        if field_name in payload:
+            return _read_optional_grid_numeric_list(payload, field_name, default_values)
+    return _read_optional_grid_numeric_list(payload, field_names[0], default_values)
 
 
 def _read_optional_grid_integer_list(

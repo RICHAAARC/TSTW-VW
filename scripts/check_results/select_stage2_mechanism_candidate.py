@@ -17,6 +17,7 @@ from typing import Any
 from experiments.real_video_vae_latent_probe.mechanism_audit import (
     _build_threshold_index,
     _resolved_decision_value,
+    _resolve_threshold_value,
 )
 from experiments.real_video_vae_latent_probe.mechanism_semantics import (
     build_anchor_selection_assessment,
@@ -48,9 +49,23 @@ CALIBRATION_GRID_COLUMNS = [
     "min_sync_alignment_coverage_ratio",
     "min_sync_alignment_matched_count",
     "min_sync_candidate_score",
+    "sync_confidence_gate_rule",
+    "min_payload_rescue_gain",
+    "min_aligned_payload_score",
     "no_attack_clean_negative_fpr",
     "no_attack_clean_positive_tpr",
     "max_attacked_negative_fpr",
+    "aligned_payload_clean_negative_fpr",
+    "aligned_payload_attacked_negative_fpr",
+    "aligned_payload_positive_tpr",
+    "aligned_payload_temporal_crop_tpr",
+    "aligned_payload_local_clip_tpr",
+    "sync_rescue_applied_positive_rate",
+    "sync_rescue_applied_attacked_negative_rate",
+    "negative_rescue_over_threshold_count",
+    "aligned_payload_negative_safety_status",
+    "aligned_payload_clean_negative_over_threshold_count",
+    "aligned_payload_attacked_negative_over_threshold_count",
     "temporal_crop_attacked_positive_tpr",
     "frame_dropping_attacked_positive_tpr",
     "local_clip_attacked_positive_tpr",
@@ -174,6 +189,7 @@ def select_stage2_mechanism_candidate(
             selection_snapshot["candidate_variants_by_base"]["tubelet_sync"],
             selection_snapshot["representative_records"],
             selection_snapshot["sync_confident_attacked_negative_counts"],
+            selection_snapshot["method_safety_metrics"],
             mechanism_config,
             selected_candidate=selected_candidate,
         )
@@ -208,6 +224,7 @@ def select_stage2_mechanism_candidate(
             selection_snapshot["candidate_variants_by_base"]["tubelet_sync"],
             selection_snapshot["representative_records"],
             selection_snapshot["sync_confident_attacked_negative_counts"],
+            selection_snapshot["method_safety_metrics"],
             mechanism_config,
             selected_candidate=selected_candidate,
         )
@@ -321,6 +338,9 @@ def _build_selection_snapshot(
     observed_splits: set[str] = set()
     tubelet_sync_signatures: set[tuple[int, str, float, float]] = set()
     sync_confident_attacked_negative_counts: dict[str, int] = defaultdict(int)
+    method_safety_metrics: dict[str, dict[str, Any]] = defaultdict(
+        _build_method_safety_state
+    )
     grouped_metrics: dict[tuple[str, str, str], dict[str, Any]] = {}
 
     for event_record in record_writer.iter_event_score_records():
@@ -354,6 +374,12 @@ def _build_selection_snapshot(
             event_record,
             threshold_index,
         )
+        if base_method_variant == "tubelet_sync":
+            _update_method_safety_state(
+                method_safety_metrics[method_variant],
+                event_record,
+                threshold_index,
+            )
         if (
             base_method_variant == "tubelet_sync"
             and sample_role == "attacked_negative"
@@ -374,6 +400,10 @@ def _build_selection_snapshot(
         "sync_confident_attacked_negative_counts": dict(
             sync_confident_attacked_negative_counts
         ),
+        "method_safety_metrics": {
+            method_variant: _finalize_method_safety_state(method_safety_state)
+            for method_variant, method_safety_state in method_safety_metrics.items()
+        },
     }
 
 
@@ -390,6 +420,56 @@ def _build_selection_group_state(event_record: dict[str, Any]) -> dict[str, Any]
             allow_positive_infinity=True,
         ),
         "quality_ssim_state": _build_selection_mean_state(),
+        "aligned_payload_decision_sum": 0.0,
+        "aligned_payload_decision_count": 0,
+        "sync_rescue_applied_sum": 0.0,
+        "sync_rescue_applied_count": 0,
+    }
+
+
+def _build_method_safety_state() -> dict[str, Any]:
+    return {
+        "negative_rescue_over_threshold_count": 0,
+        "aligned_payload_clean_negative_over_threshold_count": 0,
+        "aligned_payload_attacked_negative_over_threshold_count": 0,
+    }
+
+
+def _update_method_safety_state(
+    method_safety_state: dict[str, Any],
+    event_record: dict[str, Any],
+    threshold_index: dict[str, Any],
+) -> None:
+    sample_role = str(event_record.get("sample_role"))
+    split_name = str(event_record.get("split"))
+    if sample_role not in {"clean_negative", "attacked_negative"}:
+        return
+    if _aligned_payload_decision_value(event_record, threshold_index) > 0.0:
+        if sample_role == "clean_negative":
+            method_safety_state[
+                "aligned_payload_clean_negative_over_threshold_count"
+            ] += 1
+        else:
+            method_safety_state[
+                "aligned_payload_attacked_negative_over_threshold_count"
+            ] += 1
+    if (
+        split_name == "calibration"
+        and _record_sync_rescue_applied(event_record)
+        and _resolved_decision_value(event_record, threshold_index) > 0.0
+    ):
+        method_safety_state["negative_rescue_over_threshold_count"] += 1
+
+
+def _finalize_method_safety_state(method_safety_state: dict[str, Any]) -> dict[str, Any]:
+    negative_rescue_count = int(
+        method_safety_state.get("negative_rescue_over_threshold_count", 0)
+    )
+    return {
+        **method_safety_state,
+        "aligned_payload_negative_safety_status": (
+            "PASS" if negative_rescue_count == 0 else "FAIL"
+        ),
     }
 
 
@@ -398,6 +478,29 @@ def _record_sync_confident(event_record: dict[str, Any]) -> bool:
     if isinstance(mechanism_trace, dict) and "sync_confident" in mechanism_trace:
         return bool(mechanism_trace.get("sync_confident"))
     return bool(event_record.get("sync_confident"))
+
+
+def _record_sync_rescue_applied(event_record: dict[str, Any]) -> bool:
+    mechanism_trace = event_record.get("mechanism_trace", {})
+    if isinstance(mechanism_trace, dict) and "sync_rescue_applied" in mechanism_trace:
+        return bool(mechanism_trace.get("sync_rescue_applied"))
+    return bool(event_record.get("sync_rescue_applied"))
+
+
+def _aligned_payload_decision_value(
+    event_record: dict[str, Any],
+    threshold_index: dict[str, Any],
+) -> float:
+    threshold_value = _resolve_threshold_value(event_record, threshold_index)
+    if threshold_value is None:
+        return 0.0
+    mechanism_trace = event_record.get("mechanism_trace", {})
+    if not isinstance(mechanism_trace, dict):
+        return 0.0
+    aligned_payload_score = _safe_float(mechanism_trace.get("S_payload_aligned"))
+    if aligned_payload_score is None:
+        return 0.0
+    return 1.0 if float(aligned_payload_score) >= float(threshold_value) else 0.0
 
 
 def _update_selection_group_state(
@@ -410,6 +513,16 @@ def _update_selection_group_state(
         threshold_index,
     )
     group_state["decision_count"] += 1
+    if _resolve_threshold_value(event_record, threshold_index) is not None:
+        group_state["aligned_payload_decision_sum"] += _aligned_payload_decision_value(
+            event_record,
+            threshold_index,
+        )
+        group_state["aligned_payload_decision_count"] += 1
+    group_state["sync_rescue_applied_sum"] += 1.0 if _record_sync_rescue_applied(
+        event_record
+    ) else 0.0
+    group_state["sync_rescue_applied_count"] += 1
 
     quality_metrics = event_record.get("quality_metrics", {})
     if not isinstance(quality_metrics, dict):
@@ -468,6 +581,20 @@ def _selection_group_decision_rate(group_state: dict[str, Any] | None) -> float 
     return round(float(group_state["decision_sum"]) / decision_count, 6)
 
 
+def _selection_group_rate(
+    group_state: dict[str, Any] | None,
+    *,
+    sum_field_name: str,
+    count_field_name: str,
+) -> float | None:
+    if not isinstance(group_state, dict):
+        return None
+    decision_count = int(group_state.get(count_field_name, 0))
+    if decision_count < 1:
+        return None
+    return round(float(group_state.get(sum_field_name, 0.0)) / decision_count, 6)
+
+
 def _build_selection_audit_lookup(
     grouped_metrics: dict[tuple[str, str, str], dict[str, Any]],
 ) -> dict[tuple[str, str, str], dict[str, Any]]:
@@ -493,6 +620,50 @@ def _build_selection_audit_lookup(
             ),
             "attacked_positive_TPR": _selection_group_decision_rate(
                 grouped_metrics.get((method_variant, attack_name, "attacked_positive"))
+            ),
+            "aligned_payload_clean_negative_FPR": _selection_group_rate(
+                grouped_metrics.get((method_variant, attack_name, "clean_negative")),
+                sum_field_name="aligned_payload_decision_sum",
+                count_field_name="aligned_payload_decision_count",
+            ),
+            "aligned_payload_attacked_negative_FPR": _selection_group_rate(
+                grouped_metrics.get((method_variant, attack_name, "attacked_negative")),
+                sum_field_name="aligned_payload_decision_sum",
+                count_field_name="aligned_payload_decision_count",
+            ),
+            "aligned_payload_clean_positive_TPR": _selection_group_rate(
+                grouped_metrics.get(
+                    (method_variant, attack_name, "watermarked_positive")
+                ),
+                sum_field_name="aligned_payload_decision_sum",
+                count_field_name="aligned_payload_decision_count",
+            ),
+            "aligned_payload_attacked_positive_TPR": _selection_group_rate(
+                grouped_metrics.get((method_variant, attack_name, "attacked_positive")),
+                sum_field_name="aligned_payload_decision_sum",
+                count_field_name="aligned_payload_decision_count",
+            ),
+            "sync_rescue_applied_clean_negative_rate": _selection_group_rate(
+                grouped_metrics.get((method_variant, attack_name, "clean_negative")),
+                sum_field_name="sync_rescue_applied_sum",
+                count_field_name="sync_rescue_applied_count",
+            ),
+            "sync_rescue_applied_attacked_negative_rate": _selection_group_rate(
+                grouped_metrics.get((method_variant, attack_name, "attacked_negative")),
+                sum_field_name="sync_rescue_applied_sum",
+                count_field_name="sync_rescue_applied_count",
+            ),
+            "sync_rescue_applied_clean_positive_rate": _selection_group_rate(
+                grouped_metrics.get(
+                    (method_variant, attack_name, "watermarked_positive")
+                ),
+                sum_field_name="sync_rescue_applied_sum",
+                count_field_name="sync_rescue_applied_count",
+            ),
+            "sync_rescue_applied_attacked_positive_rate": _selection_group_rate(
+                grouped_metrics.get((method_variant, attack_name, "attacked_positive")),
+                sum_field_name="sync_rescue_applied_sum",
+                count_field_name="sync_rescue_applied_count",
             ),
             "quality_psnr_mean": _finalize_selection_mean_state(
                 group_state["quality_psnr_state"]
@@ -675,6 +846,7 @@ def _build_tubelet_sync_calibration_grid_rows(
     candidate_variants: set[str],
     representative_records: dict[str, dict[str, Any]],
     sync_confident_attacked_negative_counts: dict[str, int],
+    method_safety_metrics: dict[str, dict[str, Any]],
     mechanism_config: dict[str, Any],
     *,
     selected_candidate: dict[str, Any],
@@ -729,6 +901,24 @@ def _build_tubelet_sync_calibration_grid_rows(
             if attack_name != "no_attack"
         ]
         max_attacked_negative_fpr = _max_numeric_value(attacked_negative_rates)
+        aligned_payload_attacked_negative_rates = [
+            _safe_float(
+                audit_lookup.get((method_variant, attack_name, "attacked_negative"), {}).get(
+                    "aligned_payload_attacked_negative_FPR"
+                )
+            )
+            for attack_name in required_attacks
+            if attack_name != "no_attack"
+        ]
+        sync_rescue_attacked_negative_rates = [
+            _safe_float(
+                audit_lookup.get((method_variant, attack_name, "attacked_negative"), {}).get(
+                    "sync_rescue_applied_attacked_negative_rate"
+                )
+            )
+            for attack_name in required_attacks
+            if attack_name != "no_attack"
+        ]
         temporal_crop_positive_tpr = _safe_float(
             temporal_crop_row.get("attacked_positive_TPR")
         )
@@ -773,6 +963,54 @@ def _build_tubelet_sync_calibration_grid_rows(
         sync_confident_attacked_negative_count = int(
             sync_confident_attacked_negative_counts.get(method_variant, 0)
         )
+        method_safety = method_safety_metrics.get(method_variant, {})
+        aligned_payload_clean_negative_fpr = _safe_float(
+            no_attack_negative_row.get("aligned_payload_clean_negative_FPR")
+        )
+        aligned_payload_attacked_negative_fpr = _max_numeric_value(
+            aligned_payload_attacked_negative_rates
+        )
+        aligned_payload_positive_tpr = _safe_float(
+            no_attack_positive_row.get("aligned_payload_clean_positive_TPR")
+        )
+        aligned_payload_temporal_crop_tpr = _safe_float(
+            temporal_crop_row.get("aligned_payload_attacked_positive_TPR")
+        )
+        aligned_payload_local_clip_tpr = _safe_float(
+            local_clip_row.get("aligned_payload_attacked_positive_TPR")
+        )
+        sync_rescue_applied_positive_rate = _mean_numeric_values(
+            [
+                _safe_float(
+                    no_attack_positive_row.get(
+                        "sync_rescue_applied_clean_positive_rate"
+                    )
+                ),
+                _safe_float(
+                    temporal_crop_row.get(
+                        "sync_rescue_applied_attacked_positive_rate"
+                    )
+                ),
+                _safe_float(
+                    local_clip_row.get("sync_rescue_applied_attacked_positive_rate")
+                ),
+            ]
+        )
+        sync_rescue_applied_attacked_negative_rate = _max_numeric_value(
+            sync_rescue_attacked_negative_rates
+        )
+        negative_rescue_over_threshold_count = int(
+            method_safety.get("negative_rescue_over_threshold_count", 0)
+        )
+        aligned_payload_negative_safety_status = str(
+            method_safety.get("aligned_payload_negative_safety_status", "PASS")
+        )
+        aligned_payload_clean_negative_over_threshold_count = int(
+            method_safety.get("aligned_payload_clean_negative_over_threshold_count", 0)
+        )
+        aligned_payload_attacked_negative_over_threshold_count = int(
+            method_safety.get("aligned_payload_attacked_negative_over_threshold_count", 0)
+        )
         sync_semantics = build_sync_gain_assessment(
             absolute_tprs={
                 "temporal_crop": temporal_crop_positive_tpr,
@@ -816,9 +1054,41 @@ def _build_tubelet_sync_calibration_grid_rows(
                 "min_sync_candidate_score": sync_confidence_config[
                     "min_sync_candidate_score"
                 ],
+                "sync_confidence_gate_rule": sync_confidence_config[
+                    "sync_confidence_gate_rule"
+                ],
+                "min_payload_rescue_gain": sync_confidence_config[
+                    "min_payload_rescue_gain"
+                ],
+                "min_aligned_payload_score": sync_confidence_config[
+                    "min_aligned_payload_score"
+                ],
                 "no_attack_clean_negative_fpr": clean_negative_fpr,
                 "no_attack_clean_positive_tpr": no_attack_clean_positive_tpr,
                 "max_attacked_negative_fpr": max_attacked_negative_fpr,
+                "aligned_payload_clean_negative_fpr": aligned_payload_clean_negative_fpr,
+                "aligned_payload_attacked_negative_fpr": (
+                    aligned_payload_attacked_negative_fpr
+                ),
+                "aligned_payload_positive_tpr": aligned_payload_positive_tpr,
+                "aligned_payload_temporal_crop_tpr": aligned_payload_temporal_crop_tpr,
+                "aligned_payload_local_clip_tpr": aligned_payload_local_clip_tpr,
+                "sync_rescue_applied_positive_rate": sync_rescue_applied_positive_rate,
+                "sync_rescue_applied_attacked_negative_rate": (
+                    sync_rescue_applied_attacked_negative_rate
+                ),
+                "negative_rescue_over_threshold_count": (
+                    negative_rescue_over_threshold_count
+                ),
+                "aligned_payload_negative_safety_status": (
+                    aligned_payload_negative_safety_status
+                ),
+                "aligned_payload_clean_negative_over_threshold_count": (
+                    aligned_payload_clean_negative_over_threshold_count
+                ),
+                "aligned_payload_attacked_negative_over_threshold_count": (
+                    aligned_payload_attacked_negative_over_threshold_count
+                ),
                 "temporal_crop_attacked_positive_tpr": temporal_crop_positive_tpr,
                 "frame_dropping_attacked_positive_tpr": frame_dropping_positive_tpr,
                 "local_clip_attacked_positive_tpr": local_clip_positive_tpr,
@@ -873,7 +1143,7 @@ def _build_tubelet_sync_calibration_grid_rows(
                     temporal_crop_sync_gain,
                     local_clip_sync_gain,
                     mean_temporal_sync_gain,
-                    sync_confident_attacked_negative_count,
+                    aligned_payload_negative_safety_status,
                     mechanism_config,
                 ),
                 "selection_score": _selection_score(
@@ -1177,6 +1447,34 @@ def _select_tubelet_sync_candidate(
             if isinstance(parsed_min_sync_candidate_score, (int, float))
             else 0.0
         )
+    resolved_sync_confidence_gate_rule = selected_row.get("sync_confidence_gate_rule")
+    if not isinstance(resolved_sync_confidence_gate_rule, str):
+        parsed_sync_confidence_gate_rule = parsed_payload.get(
+            "sync_confidence_gate_rule"
+        )
+        resolved_sync_confidence_gate_rule = (
+            str(parsed_sync_confidence_gate_rule)
+            if isinstance(parsed_sync_confidence_gate_rule, str)
+            else "candidate_score_gate"
+        )
+    resolved_min_payload_rescue_gain = selected_row.get("min_payload_rescue_gain")
+    if not isinstance(resolved_min_payload_rescue_gain, (int, float)):
+        parsed_min_payload_rescue_gain = parsed_payload.get("min_payload_rescue_gain")
+        resolved_min_payload_rescue_gain = (
+            float(parsed_min_payload_rescue_gain)
+            if isinstance(parsed_min_payload_rescue_gain, (int, float))
+            else 0.01
+        )
+    resolved_min_aligned_payload_score = selected_row.get("min_aligned_payload_score")
+    if not isinstance(resolved_min_aligned_payload_score, (int, float)):
+        parsed_min_aligned_payload_score = parsed_payload.get(
+            "min_aligned_payload_score"
+        )
+        resolved_min_aligned_payload_score = (
+            float(parsed_min_aligned_payload_score)
+            if isinstance(parsed_min_aligned_payload_score, (int, float))
+            else 0.1
+        )
     return {
         "candidate_status": (
             "sync_gain_candidate_selected"
@@ -1210,6 +1508,9 @@ def _select_tubelet_sync_candidate(
                 resolved_min_sync_alignment_matched_count
             ),
             "min_sync_candidate_score": float(resolved_min_sync_candidate_score),
+            "sync_confidence_gate_rule": str(resolved_sync_confidence_gate_rule),
+            "min_payload_rescue_gain": float(resolved_min_payload_rescue_gain),
+            "min_aligned_payload_score": float(resolved_min_aligned_payload_score),
         },
         "metrics": {
             "no_attack_clean_negative_fpr": selected_row[
@@ -1495,6 +1796,21 @@ def _build_tubelet_sync_scan_seed(
                 "min_sync_candidate_score",
                 [selected_candidate_sync_defaults["min_sync_candidate_score"]],
             ),
+            "sync_confidence_gate_rule": _read_optional_grid_string_list(
+                grid,
+                "sync_confidence_gate_rule",
+                [selected_candidate_sync_defaults["sync_confidence_gate_rule"]],
+            ),
+            "min_payload_rescue_gain": _read_optional_grid_numeric_alias_list(
+                grid,
+                ("min_aligned_rescue_gain", "min_payload_rescue_gain"),
+                [selected_candidate_sync_defaults["min_payload_rescue_gain"]],
+            ),
+            "min_aligned_payload_score": _read_optional_grid_numeric_alias_list(
+                grid,
+                ("min_aligned_score_gate", "min_aligned_payload_score"),
+                [selected_candidate_sync_defaults["min_aligned_payload_score"]],
+            ),
         },
         "rationale": [
             "reuse_tubelet_only_candidate_for_no_attack_recovery",
@@ -1545,7 +1861,7 @@ def _is_tubelet_sync_candidate_eligible(
     temporal_crop_sync_gain: float | None,
     local_clip_sync_gain: float | None,
     mean_temporal_sync_gain: float | None,
-    sync_confident_attacked_negative_count: int,
+    aligned_payload_negative_safety_status: str,
     mechanism_config: dict[str, Any],
 ) -> bool:
     if not _is_tubelet_only_candidate_eligible(
@@ -1557,7 +1873,7 @@ def _is_tubelet_sync_candidate_eligible(
         mechanism_config,
     ):
         return False
-    if int(sync_confident_attacked_negative_count) > 0:
+    if str(aligned_payload_negative_safety_status) != "PASS":
         return False
     sync_semantics = build_sync_gain_assessment(
         absolute_tprs={
@@ -1693,6 +2009,20 @@ def _parse_tubelet_sync_variant_name(method_variant: str) -> dict[str, Any]:
                 int(token[2:]) / 1000.0,
                 6,
             )
+        elif token == "grcscore":
+            parsed_payload["sync_confidence_gate_rule"] = "candidate_score_gate"
+        elif token == "grapsafe":
+            parsed_payload["sync_confidence_gate_rule"] = "aligned_payload_safety_gate"
+        elif token.startswith("rg") and token[2:].isdigit():
+            parsed_payload["min_payload_rescue_gain"] = round(
+                int(token[2:]) / 1000.0,
+                6,
+            )
+        elif token.startswith("as") and token[2:].isdigit():
+            parsed_payload["min_aligned_payload_score"] = round(
+                int(token[2:]) / 1000.0,
+                6,
+            )
         elif token.startswith("fr"):
             fusion_rule_token = token[2:]
             if fusion_rule_token == "sync":
@@ -1766,6 +2096,27 @@ def _resolve_selected_candidate_sync_defaults(
         if isinstance(min_sync_candidate_score, (int, float))
         else 0.0
     )
+    sync_confidence_gate_rule = sync_search.get(
+        "sync_confidence_gate_rule",
+        "candidate_score_gate",
+    )
+    default_sync_confidence_gate_rule = (
+        str(sync_confidence_gate_rule)
+        if isinstance(sync_confidence_gate_rule, str) and sync_confidence_gate_rule
+        else "candidate_score_gate"
+    )
+    min_payload_rescue_gain = sync_search.get("min_payload_rescue_gain", 0.01)
+    default_min_payload_rescue_gain = (
+        round(float(min_payload_rescue_gain), 6)
+        if isinstance(min_payload_rescue_gain, (int, float))
+        else 0.01
+    )
+    min_aligned_payload_score = sync_search.get("min_aligned_payload_score", 0.1)
+    default_min_aligned_payload_score = (
+        round(float(min_aligned_payload_score), 6)
+        if isinstance(min_aligned_payload_score, (int, float))
+        else 0.1
+    )
     return {
         "fusion_rule": default_fusion_rule,
         "lambda_sync": default_lambda_sync,
@@ -1774,6 +2125,9 @@ def _resolve_selected_candidate_sync_defaults(
         "min_sync_alignment_coverage_ratio": default_min_sync_alignment_coverage_ratio,
         "min_sync_alignment_matched_count": default_min_sync_alignment_matched_count,
         "min_sync_candidate_score": default_min_sync_candidate_score,
+        "sync_confidence_gate_rule": default_sync_confidence_gate_rule,
+        "min_payload_rescue_gain": default_min_payload_rescue_gain,
+        "min_aligned_payload_score": default_min_aligned_payload_score,
     }
 
 
@@ -1878,7 +2232,9 @@ def _parse_embedding_margin_from_variant_name(
     return None
 
 
-def _resolve_sync_confidence_config(event_record: dict[str, Any]) -> dict[str, float | int]:
+def _resolve_sync_confidence_config(
+    event_record: dict[str, Any],
+) -> dict[str, float | int | str]:
     mechanism_trace = event_record.get("mechanism_trace", {})
     if not isinstance(mechanism_trace, dict):
         mechanism_trace = {}
@@ -1913,12 +2269,53 @@ def _resolve_sync_confidence_config(event_record: dict[str, Any]) -> dict[str, f
         parsed_field_name="min_sync_candidate_score",
         default_value=0.0,
     )
+    gate_rule = _resolve_string_sync_confidence_value(
+        mechanism_trace,
+        parsed_payload,
+        trace_field_name="sync_confidence_gate_rule",
+        parsed_field_name="sync_confidence_gate_rule",
+        default_value="candidate_score_gate",
+    )
+    min_payload_rescue_gain = _resolve_numeric_sync_confidence_value(
+        mechanism_trace,
+        parsed_payload,
+        trace_field_name="sync_confidence_min_payload_rescue_gain",
+        parsed_field_name="min_payload_rescue_gain",
+        default_value=0.01,
+    )
+    min_aligned_payload_score = _resolve_numeric_sync_confidence_value(
+        mechanism_trace,
+        parsed_payload,
+        trace_field_name="sync_confidence_min_aligned_payload_score",
+        parsed_field_name="min_aligned_payload_score",
+        default_value=0.1,
+    )
     return {
         "min_sync_positive_margin": min_margin,
         "min_sync_alignment_coverage_ratio": min_coverage_ratio,
         "min_sync_alignment_matched_count": min_matched_count,
         "min_sync_candidate_score": min_candidate_score,
+        "sync_confidence_gate_rule": gate_rule,
+        "min_payload_rescue_gain": min_payload_rescue_gain,
+        "min_aligned_payload_score": min_aligned_payload_score,
     }
+
+
+def _resolve_string_sync_confidence_value(
+    mechanism_trace: dict[str, Any],
+    parsed_payload: dict[str, Any],
+    *,
+    trace_field_name: str,
+    parsed_field_name: str,
+    default_value: str,
+) -> str:
+    field_value = mechanism_trace.get(trace_field_name)
+    if isinstance(field_value, str) and field_value:
+        return str(field_value)
+    parsed_value = parsed_payload.get(parsed_field_name)
+    if isinstance(parsed_value, str) and parsed_value:
+        return str(parsed_value)
+    return str(default_value)
 
 
 def _resolve_numeric_sync_confidence_value(
@@ -2191,6 +2588,17 @@ def _read_optional_grid_numeric_list(
     if not resolved_values:
         raise ValueError(f"grid field {field_name} must contain numeric values")
     return resolved_values
+
+
+def _read_optional_grid_numeric_alias_list(
+    payload: dict[str, Any],
+    field_names: tuple[str, ...],
+    default_values: list[float],
+) -> list[float]:
+    for field_name in field_names:
+        if field_name in payload:
+            return _read_optional_grid_numeric_list(payload, field_name, default_values)
+    return _read_optional_grid_numeric_list(payload, field_names[0], default_values)
 
 
 def _read_optional_grid_integer_list(

@@ -387,23 +387,25 @@ def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameteriza
         "formal_sync_diag",
     ]
     assert grid_config["calibration_purpose"] == (
-        "stage2_fixed_anchor_sync_rescue_completion_diagnostic"
+        "stage2_aligned_payload_safety_gate_completion_diagnostic"
     )
     assert grid_config["grid"]["tubelet_length"] == [4]
     assert grid_config["grid"]["spatial_patch_size"] == [[4, 4]]
     assert grid_config["grid"]["embedding_projection_support_weight"] == [0.09]
     assert grid_config["grid"]["embedding_margin"] == [1.0]
-    assert grid_config["grid"]["lambda_sync"] == [0.01, 0.025, 0.04]
-    assert grid_config["grid"]["sync_search_radius"] == [6, 8]
-    assert grid_config["grid"]["min_sync_positive_margin"] == [0.0, 0.01]
-    assert grid_config["grid"]["min_sync_alignment_coverage_ratio"] == [
-        0.03125,
-        0.0625,
+    assert grid_config["grid"]["lambda_sync"] == [0.01]
+    assert grid_config["grid"]["sync_search_radius"] == [8]
+    assert grid_config["grid"]["min_sync_positive_margin"] == [0.0]
+    assert grid_config["grid"]["min_sync_alignment_coverage_ratio"] == [0.125]
+    assert grid_config["grid"]["min_sync_alignment_matched_count"] == [64]
+    assert grid_config["grid"]["sync_confidence_gate_rule"] == [
+        "aligned_payload_safety_gate"
     ]
-    assert grid_config["grid"]["min_sync_candidate_score"] == [
-        0.15,
-        0.25,
-    ]
+    assert grid_config["grid"]["min_aligned_rescue_gain"] == [0.01, 0.02]
+    assert grid_config["grid"]["min_aligned_score_gate"] == [0.095, 0.1]
+    assert "min_payload_rescue_gain" not in grid_config["grid"]
+    assert "min_aligned_payload_score" not in grid_config["grid"]
+    assert "min_sync_candidate_score" not in grid_config["grid"]
 
 
 def test_real_video_vae_latent_notebook_cells_use_python_metadata() -> None:

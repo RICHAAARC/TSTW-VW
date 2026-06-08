@@ -1,6 +1,6 @@
 {
   "construction_phase": "real_video_vae_latent_probe",
-  "calibration_purpose": "stage2_fixed_anchor_sync_rescue_completion_diagnostic",
+  "calibration_purpose": "stage2_aligned_payload_safety_gate_completion_diagnostic",
   "campaign_mode": "staged_search",
   "top_candidate_limit": 4,
   "anchor_selection_policy": "fixed_unsaturated_anchor",
@@ -31,28 +31,30 @@
       "sync_rescue_fusion"
     ],
     "lambda_sync": [
-      0.01,
-      0.025,
-      0.04
+      0.01
     ],
     "sync_search_radius": [
-      6,
       8
     ],
     "min_sync_positive_margin": [
-      0.0,
-      0.01
+      0.0
     ],
     "min_sync_alignment_coverage_ratio": [
-      0.03125,
-      0.0625
+      0.125
     ],
     "min_sync_alignment_matched_count": [
-      1
+      64
     ],
-    "min_sync_candidate_score": [
-      0.15,
-      0.25
+    "sync_confidence_gate_rule": [
+      "aligned_payload_safety_gate"
+    ],
+    "min_aligned_rescue_gain": [
+      0.01,
+      0.02
+    ],
+    "min_aligned_score_gate": [
+      0.095,
+      0.1
     ]
   },
   "search_stages": [
@@ -101,41 +103,51 @@
           "sync_rescue_fusion"
         ],
         "lambda_sync": [
-          0.01,
-          0.025,
-          0.04
+          0.01
         ],
         "sync_search_radius": [
-          6,
           8
         ],
         "min_sync_positive_margin": [
-          0.0,
-          0.01
+          0.0
         ],
         "min_sync_alignment_coverage_ratio": [
-          0.03125,
-          0.0625
+          0.125
         ],
         "min_sync_alignment_matched_count": [
-          1
+          64
         ],
-        "min_sync_candidate_score": [
-          0.15,
-          0.25
+        "sync_confidence_gate_rule": [
+          "aligned_payload_safety_gate"
+        ],
+        "min_aligned_rescue_gain": [
+          0.01,
+          0.02
+        ],
+        "min_aligned_score_gate": [
+          0.095,
+          0.1
         ]
       },
-      "calibration_purpose": "stage2_fixed_anchor_sync_rescue_completion_diagnostic"
+      "calibration_purpose": "stage2_aligned_payload_safety_gate_completion_diagnostic"
     }
   ],
   "selection_metrics": [
     "no_attack_clean_negative_fpr",
     "no_attack_clean_positive_tpr",
     "max_attacked_negative_fpr",
+    "aligned_payload_clean_negative_fpr",
+    "aligned_payload_attacked_negative_fpr",
+    "aligned_payload_positive_tpr",
+    "aligned_payload_temporal_crop_tpr",
+    "aligned_payload_local_clip_tpr",
+    "sync_rescue_applied_positive_rate",
+    "sync_rescue_applied_attacked_negative_rate",
+    "negative_rescue_over_threshold_count",
+    "aligned_payload_negative_safety_status",
     "temporal_crop_sync_gain",
     "local_clip_sync_gain",
-    "mean_temporal_sync_gain",
-    "sync_confident_attacked_negative_count"
+    "mean_temporal_sync_gain"
   ],
   "strict_anchor_required_before_sync": true,
   "threshold_protocol_overrides": {

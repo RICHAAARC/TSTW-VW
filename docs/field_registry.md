@@ -158,9 +158,27 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | sync_candidate_score_penalized | protocol | none | true | false | false | Coverage-penalized synchronization candidate score used for candidate ranking. |
 | sync_confident | protocol | none | true | false | false | Boolean gate indicating whether observable sync margin, coverage, and matched-count criteria allow sync evidence in fusion. |
 | sync_confidence_failure_reason | protocol | none | true | false | false | Semicolon-separated observable reasons explaining why synchronization confidence did not pass. |
+| sync_confidence_gate_rule | protocol | none | true | false | false | 阶段 2 sync rescue 使用的置信 gate 规则, 例如 `candidate_score_gate` 或 `aligned_payload_safety_gate`. |
 | sync_confidence_min_margin | protocol | none | true | false | false | Configured minimum `S_sync_positive_margin` required for sync confidence. |
 | sync_confidence_min_coverage_ratio | protocol | none | true | false | false | Configured minimum synchronization alignment coverage ratio required for sync confidence. |
 | sync_confidence_min_matched_count | protocol | none | true | false | false | Configured minimum matched tubelet count required for sync confidence. |
+| sync_confidence_min_payload_rescue_gain | protocol | none | true | false | false | `aligned_payload_safety_gate` 要求的最小 payload rescue gain. |
+| sync_confidence_min_aligned_payload_score | protocol | none | true | false | false | `aligned_payload_safety_gate` 要求的最小 aligned payload score. |
+| min_payload_rescue_gain | threshold | none | true | false | false | 阶段 2 calibration grid 中用于生成 `sync_confidence_min_payload_rescue_gain` 的搜索参数. |
+| min_aligned_payload_score | threshold | none | true | false | false | 阶段 2 calibration grid 中用于生成 `sync_confidence_min_aligned_payload_score` 的搜索参数. |
+| min_aligned_rescue_gain | threshold | none | true | false | false | 默认 grid 使用的审计安全别名, 运行时映射为 `min_payload_rescue_gain`. |
+| min_aligned_score_gate | threshold | none | true | false | false | 默认 grid 使用的审计安全别名, 运行时映射为 `min_aligned_payload_score`. |
+| aligned_payload_clean_negative_fpr | table | none | true | false | false | selector 聚合的 no-attack clean negative aligned-payload 过阈率. |
+| aligned_payload_attacked_negative_fpr | table | none | true | false | false | selector 聚合的 attacked negative aligned-payload 过阈率上界. |
+| aligned_payload_positive_tpr | table | none | true | false | false | selector 聚合的 no-attack positive aligned-payload 过阈率. |
+| aligned_payload_temporal_crop_tpr | table | none | true | false | false | selector 聚合的 temporal-crop positive aligned-payload 过阈率. |
+| aligned_payload_local_clip_tpr | table | none | true | false | false | selector 聚合的 local-clip positive aligned-payload 过阈率. |
+| sync_rescue_applied_positive_rate | table | none | true | false | false | selector 聚合的 positive 样本 sync rescue 实际启用比例. |
+| sync_rescue_applied_attacked_negative_rate | table | none | true | false | false | selector 聚合的 attacked negative 样本 sync rescue 实际启用比例上界. |
+| negative_rescue_over_threshold_count | table | none | true | false | false | calibration negative 中 sync rescue 后 `S_final` 过阈的样本数. |
+| aligned_payload_negative_safety_status | table | none | true | false | false | 方法级 negative safety gate 状态, `PASS` 表示没有 calibration negative 被 rescue 过阈. |
+| aligned_payload_clean_negative_over_threshold_count | table | none | true | false | false | clean negative 中 aligned-payload score 过阈的样本数. |
+| aligned_payload_attacked_negative_over_threshold_count | table | none | true | false | false | attacked negative 中 aligned-payload score 过阈的样本数. |
 | reference_latent_shape_source | protocol | none | true | false | false | Source label for `reference_latent_shape`, either governed trace or sample-shape fallback. |
 | reference_latent_shape_fallback_used | protocol | none | true | false | false | Boolean audit field indicating whether detection had to fall back to the observed sample latent shape. |
 | tubelet_projection_matched_count | protocol | none | true | false | false | Count of observed tubelets matched to reference descriptors for unaligned tubelet evidence. |
