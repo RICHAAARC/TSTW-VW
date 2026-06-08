@@ -122,7 +122,6 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
             "min_sync_positive_margin": 0.0,
             "min_sync_alignment_coverage_ratio": 0.25,
             "min_sync_alignment_matched_count": 2,
-            "min_sync_candidate_score": 0.0,
         },
         "metrics": {
             "no_attack_clean_negative_fpr": 0.0,
@@ -156,7 +155,6 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
             "min_sync_positive_margin": 0.12,
             "min_sync_alignment_coverage_ratio": 0.125,
             "min_sync_alignment_matched_count": 4,
-            "min_sync_candidate_score": 0.55,
         },
         "metrics": {
             "no_attack_clean_negative_fpr": 0.0,
@@ -232,7 +230,6 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
                         "min_sync_positive_margin": [0.0, 0.05, 0.12],
                         "min_sync_alignment_coverage_ratio": [0.125, 0.25, 0.5],
                         "min_sync_alignment_matched_count": [1, 2, 4],
-                        "min_sync_candidate_score": [0.0],
                     },
                 },
                 "top_tubelet_only_candidates": [],
@@ -279,7 +276,6 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
                     "min_sync_positive_margin": [0.0, 0.03, 0.06, 0.09, 0.12],
                     "min_sync_alignment_coverage_ratio": [0.125, 0.2, 0.3, 0.4, 0.5],
                     "min_sync_alignment_matched_count": [1, 2, 3, 4],
-                    "min_sync_candidate_score": [0.0, 0.55],
                 },
             },
             "top_tubelet_only_candidates": [],
@@ -414,7 +410,6 @@ def test_stage2_mechanism_calibration_runner_builds_temp_configs_and_candidate_m
     assert candidate_method_config["sync_search"]["min_sync_positive_margin"] == 0.12
     assert candidate_method_config["sync_search"]["min_sync_alignment_coverage_ratio"] == 0.125
     assert candidate_method_config["sync_search"]["min_sync_alignment_matched_count"] == 4
-    assert candidate_method_config["sync_search"]["min_sync_candidate_score"] == 0.55
     assert summary["generated_tubelet_sync_candidate_config_path"] == str(
         candidate_method_config_path
     )
@@ -513,7 +508,6 @@ def test_stage2_mechanism_calibration_runner_continues_refine_scan_from_sync_sca
             "min_sync_positive_margin": 0.12,
             "min_sync_alignment_coverage_ratio": 0.125,
             "min_sync_alignment_matched_count": 3,
-            "min_sync_candidate_score": 0.55,
         },
         "metrics": {
             "no_attack_clean_negative_fpr": 0.0,
@@ -555,7 +549,6 @@ def test_stage2_mechanism_calibration_runner_continues_refine_scan_from_sync_sca
                 "min_sync_positive_margin": [0.0, 0.05, 0.12],
                 "min_sync_alignment_coverage_ratio": [0.125, 0.25, 0.5],
                 "min_sync_alignment_matched_count": [1, 2, 4],
-                "min_sync_candidate_score": [0.0],
             },
         }
 
@@ -777,7 +770,6 @@ def test_stage2_mechanism_calibration_runner_returns_anchor_only_partial_summary
                     "min_sync_positive_margin": [0.0, 0.05, 0.12],
                     "min_sync_alignment_coverage_ratio": [0.125, 0.25, 0.5],
                     "min_sync_alignment_matched_count": [1, 2, 4],
-                    "min_sync_candidate_score": [0.0],
                 },
             },
             "top_tubelet_only_candidates": [],
@@ -997,7 +989,6 @@ def test_calibration_config_carries_non_default_embedding_margin() -> None:
         min_sync_margin=0.0,
         min_sync_coverage_ratio=0.25,
         min_sync_matched_count=1,
-        min_sync_candidate_score=0.0,
     )
 
     assert tubelet_only_config["embedding_margin"] == 0.6

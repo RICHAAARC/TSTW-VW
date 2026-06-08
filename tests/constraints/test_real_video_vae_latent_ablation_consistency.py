@@ -76,5 +76,6 @@ def test_real_video_vae_latent_ablation_uses_confirmed_stage2_candidate_for_fina
     assert sync_config["sync_search"]["sync_confidence_gate_rule"] == (
         "aligned_payload_safety_gate"
     )
+    assert "min_sync_candidate_score" not in sync_config["sync_search"]
     assert sync_config["sync_search"]["min_payload_rescue_gain"] == 0.01
     assert sync_config["sync_search"]["min_aligned_payload_score"] == 0.095

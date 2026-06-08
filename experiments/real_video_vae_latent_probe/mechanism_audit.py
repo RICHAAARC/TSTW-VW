@@ -76,6 +76,7 @@ STAGE2_SYNC_GAIN_COLUMNS = [
 ]
 DEFAULT_MECHANISM_CONFIG_PATH = Path("configs/protocol/stage2_mechanism_gate.json")
 TEMPORAL_ATTACKS = {"temporal_crop", "frame_dropping", "local_clip", "speed_change"}
+STAGE2_MECHANISM_PROTOCOL = "aligned_payload_safety"
 
 
 def run_stage2_mechanism_audit(
@@ -386,22 +387,6 @@ def build_stage2_sync_gain_rows(
                 ),
             }
         )
-        rows.append(
-            {
-                "attack_name": attack_name,
-                "metric_name": "S_sync_positive_negative_gap",
-                "tubelet_only_value": None,
-                "tubelet_sync_value": _sync_positive_negative_gap(selected_records, attack_name),
-                "sync_gain": _sync_positive_negative_gap(selected_records, attack_name),
-                "negative_fpr_delta": negative_fpr_delta,
-                "positive_count": _relevant_positive_count(selected_records, "tubelet_sync", attack_name),
-                "negative_count": _relevant_negative_count(selected_records, "tubelet_sync", attack_name),
-                "mechanism_signal_status": _mechanism_signal_status(
-                    _sync_positive_negative_gap(selected_records, attack_name),
-                    negative_fpr_delta,
-                ),
-            }
-        )
     return rows
 
 
@@ -436,6 +421,7 @@ def build_stage2_mechanism_decision(
     target_fpr: float | None,
 ) -> dict[str, Any]:
     """Build the stage-two mechanism gate decision from governed records."""
+    mechanism_protocol = _resolve_stage2_mechanism_protocol(mechanism_config)
     implementation_decision = str(
         governance_summary_row.get("real_video_vae_latent_decision", "INCONCLUSIVE")
     )
@@ -552,13 +538,6 @@ def build_stage2_mechanism_decision(
     if sync_semantics["sync_rescue_decision"] == "FAIL":
         blocking_reasons.append("tubelet_sync_not_above_tubelet_only_temporal")
 
-    min_sync_gap = _safe_float(mechanism_config.get("min_sync_positive_negative_score_gap"))
-    mean_sync_gap = _mean(
-        [_sync_positive_negative_gap(test_records, attack_name) for attack_name in temporal_attacks or required_attacks]
-    )
-    if min_sync_gap is not None and (mean_sync_gap is None or mean_sync_gap < min_sync_gap):
-        blocking_reasons.append("sync_positive_negative_score_gap_low")
-
     require_quality_not_collapsed = bool(mechanism_config.get("require_quality_not_collapsed", False))
     min_psnr = _safe_float(mechanism_config.get("min_watermarked_video_psnr"))
     min_ssim = _safe_float(mechanism_config.get("min_watermarked_video_ssim"))
@@ -624,6 +603,7 @@ def build_stage2_mechanism_decision(
     return {
         "run_id": event_score_records[0].get("run_id") if event_score_records else None,
         "construction_phase": mechanism_config.get("construction_phase", "real_video_vae_latent_probe"),
+        "stage2_mechanism_protocol": mechanism_protocol,
         "target_fpr": resolved_target_fpr,
         "Stage2ImplementationDecision": implementation_decision,
         "Stage2MechanismDecision": mechanism_decision,
@@ -645,7 +625,6 @@ def build_stage2_mechanism_decision(
             "tubelet_sync_required_attack_gain_count": sync_semantics[
                 "positive_gain_attack_count"
             ],
-            "sync_positive_negative_score_gap": _round_or_none(mean_sync_gap),
             "mean_watermarked_video_psnr": _round_or_none(mean_psnr),
             "mean_watermarked_video_ssim": _round_or_none(mean_ssim),
         },
@@ -673,6 +652,7 @@ def build_stage2_mechanism_report_text(
             "# Stage2 Mechanism Audit Report",
             "",
             "## Decisions",
+            f"- stage2_mechanism_protocol: {decision_payload['stage2_mechanism_protocol']}",
             f"- Stage2ImplementationDecision: {decision_payload['Stage2ImplementationDecision']}",
             f"- Stage2MechanismDecision: {decision_payload['Stage2MechanismDecision']}",
             f"- Stage2MechanismBlockingReasons: {', '.join(decision_payload['Stage2MechanismBlockingReasons']) or 'none'}",
@@ -704,6 +684,31 @@ def build_stage2_mechanism_report_text(
             ],
         ]
     ) + "\n"
+
+
+def _resolve_stage2_mechanism_protocol(mechanism_config: dict[str, Any]) -> str:
+    """解析阶段 2 机制证明协议, 并在启动时阻断旧 sync gap 口径。"""
+    protocol = str(
+        mechanism_config.get("stage2_mechanism_protocol", STAGE2_MECHANISM_PROTOCOL)
+    ).strip()
+    if protocol != STAGE2_MECHANISM_PROTOCOL:
+        raise ValueError(
+            "stage2_mechanism_protocol must be aligned_payload_safety"
+        )
+    forbidden_keys = [
+        key_name
+        for key_name in (
+            "min_sync_positive_negative_score_gap",
+            "sync_positive_negative_score_gap_min",
+        )
+        if key_name in mechanism_config
+    ]
+    if forbidden_keys:
+        raise ValueError(
+            "阶段 2 aligned_payload_safety 协议禁止使用旧 sync score gap 阻塞字段: "
+            + ", ".join(sorted(forbidden_keys))
+        )
+    return protocol
 
 
 def _read_single_csv_row(path: Path) -> dict[str, Any]:

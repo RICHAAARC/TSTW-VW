@@ -479,7 +479,6 @@ def test_tubelet_sync_scan_seed_uses_selected_candidate_defaults_for_missing_sta
     assert seed_payload["parameter_scan"]["min_sync_positive_margin"] == [0.0]
     assert seed_payload["parameter_scan"]["min_sync_alignment_coverage_ratio"] == [0.5]
     assert seed_payload["parameter_scan"]["min_sync_alignment_matched_count"] == [1]
-    assert seed_payload["parameter_scan"]["min_sync_candidate_score"] == [0.0]
 
 
 def test_mechanism_candidate_selector_streams_event_score_records(
@@ -1187,7 +1186,6 @@ def test_mechanism_candidate_selector_uses_dev_and_calibration_only(
     assert result["tubelet_sync_scan_seed"]["seed_method_config"]["tubelet_length"] == 1
     assert result["tubelet_sync_scan_seed"]["parameter_scan"]["lambda_sync"] == [0.0, 0.1]
     assert result["tubelet_sync_scan_seed"]["parameter_scan"]["min_sync_positive_margin"] == [0.0, 0.12]
-    assert result["tubelet_sync_scan_seed"]["parameter_scan"]["min_sync_candidate_score"] == [0.0]
     assert result["selected_tubelet_sync_candidate"] is None
     assert result["selection_completion_status"] == "incomplete_no_eligible_tubelet_sync_candidate"
     assert result["selection_blocking_reason"] == "no_tubelet_sync_candidate_passes_selection_gate"
@@ -2663,20 +2661,12 @@ def test_mechanism_candidate_selector_prefers_strict_sync_seal_over_higher_gain_
         encoding="utf-8",
     )
 
-    result = select_stage2_mechanism_candidate(
-        run_root=run_root,
-        grid_config_path=grid_config_path,
-        mechanism_config_path=mechanism_config_path,
-    )
-
-    assert result["selected_tubelet_only_candidate"]["method_variant"] == (
-        "tubelet_only_strict_sync_anchor"
-    )
-    assert result["selected_tubelet_sync_candidate"]["method_variant"] == (
-        "tubelet_sync_cal_tl02_sp04x04_w025_sr08_ls025_mg000_cv062_mc01_cs600_frsync_rescue"
-    )
-    assert result["selected_tubelet_sync_candidate"]["sync_search"]["min_sync_candidate_score"] == 0.6
-    assert result["selection_completion_status"] == "complete"
+    with pytest.raises(ValueError, match="min_sync_candidate_score"):
+        select_stage2_mechanism_candidate(
+            run_root=run_root,
+            grid_config_path=grid_config_path,
+            mechanism_config_path=mechanism_config_path,
+        )
 
 
 def test_mechanism_candidate_selector_reports_incompatible_sync_stage_rows(

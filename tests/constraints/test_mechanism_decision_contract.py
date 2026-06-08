@@ -13,10 +13,19 @@ import pytest
 from experiments.real_video_vae_latent_probe.mechanism_audit import (
     build_stage2_mechanism_decision,
 )
+from main.core.registry import load_json_config
 from scripts.check_results import select_stage2_mechanism_candidate
 
 
 pytestmark = [pytest.mark.constraint, pytest.mark.unit]
+
+
+def test_default_stage2_mechanism_gate_uses_aligned_payload_protocol() -> None:
+    """验证默认 mechanism gate 配置不再包含旧 sync score gap 阻塞口径。"""
+    mechanism_config = load_json_config("configs/protocol/stage2_mechanism_gate.json")
+
+    assert mechanism_config["stage2_mechanism_protocol"] == "aligned_payload_safety"
+    assert "min_sync_positive_negative_score_gap" not in mechanism_config
 
 
 def test_stage2_mechanism_decision_inconclusive_when_sample_counts_insufficient() -> None:
@@ -61,7 +70,6 @@ def test_stage2_mechanism_decision_inconclusive_when_sample_counts_insufficient(
         "min_no_attack_clean_positive_tpr": 0.5,
         "min_tubelet_only_gain_over_frame_prc": 0.0,
         "min_tubelet_sync_gain_over_tubelet_only_temporal": 0.1,
-        "min_sync_positive_negative_score_gap": 0.05,
         "require_quality_not_collapsed": True,
         "min_watermarked_video_psnr": 20.0,
         "min_watermarked_video_ssim": 0.5,
@@ -138,6 +146,82 @@ def test_mechanism_decision_blocks_when_any_variant_exceeds_attacked_negative_fp
 
     assert result["Stage2MechanismDecision"] == "FAIL"
     assert "attacked_negative_fpr_not_controlled" in result["Stage2MechanismBlockingReasons"]
+
+
+def test_mechanism_decision_rejects_legacy_sync_score_gap_gate() -> None:
+    """验证 aligned payload 协议启动时直接阻断旧 sync score gap 门禁字段。"""
+    with pytest.raises(ValueError, match="min_sync_positive_negative_score_gap"):
+        build_stage2_mechanism_decision(
+            event_score_records=[],
+            threshold_records=[],
+            mechanism_config={
+                "construction_phase": "real_video_vae_latent_probe",
+                "stage2_mechanism_protocol": "aligned_payload_safety",
+                "min_sync_positive_negative_score_gap": 0.05,
+            },
+            governance_summary_row={"real_video_vae_latent_decision": "PASS"},
+            runtime_config={},
+            target_fpr=0.001,
+        )
+
+
+def test_mechanism_decision_passes_without_sync_score_gap_requirement() -> None:
+    """验证 Stage2MechanismDecision 只依赖 aligned payload 安全口径, 不再要求 S_sync 正负可分。"""
+    required_variants = ["frame_prc", "tubelet_only", "tubelet_sync"]
+    event_score_records = []
+    for method_variant in required_variants:
+        for attack_name in ("no_attack", "temporal_crop", "local_clip"):
+            for sample_role, decision in (
+                ("clean_negative" if attack_name == "no_attack" else "attacked_negative", False),
+                ("watermarked_positive" if attack_name == "no_attack" else "attacked_positive", True),
+            ):
+                record = _build_decision_event_record(
+                    method_variant=method_variant,
+                    attack_name=attack_name,
+                    sample_role=sample_role,
+                    decision=decision if method_variant == "tubelet_sync" else False,
+                )
+                if method_variant == "tubelet_only" and sample_role.endswith("positive"):
+                    record["decision"] = attack_name == "no_attack"
+                    record["evidence_scores"]["S_final"] = 0.8 if attack_name == "no_attack" else 0.1
+                if method_variant == "frame_prc" and sample_role.endswith("positive"):
+                    record["decision"] = False
+                    record["evidence_scores"]["S_final"] = 0.1
+                if method_variant == "tubelet_sync":
+                    record["evidence_scores"]["S_sync"] = -1.0
+                event_score_records.append(record)
+    result = build_stage2_mechanism_decision(
+        event_score_records=event_score_records,
+        threshold_records=[],
+        mechanism_config={
+            "construction_phase": "real_video_vae_latent_probe",
+            "stage2_mechanism_protocol": "aligned_payload_safety",
+            "minimum_positive_count_per_key": 1,
+            "minimum_negative_count_per_key": 1,
+            "required_main_variants": required_variants,
+            "required_mechanism_attacks": ["no_attack", "temporal_crop", "local_clip"],
+            "required_sync_gain_attacks": ["temporal_crop", "local_clip"],
+            "sync_gain_policy": "any_required_temporal_attack",
+            "min_required_sync_gain_attack_count": 1,
+            "max_clean_negative_fpr": 0.0,
+            "max_attacked_negative_fpr": 0.0,
+            "min_no_attack_clean_positive_tpr": 0.0,
+            "min_mean_temporal_sync_gain": 0.0,
+            "require_quality_not_collapsed": False,
+        },
+        governance_summary_row={
+            "real_video_vae_latent_decision": "PASS",
+            "next_allowed_stage": "trajectory_statistic_probe",
+        },
+        runtime_config={
+            "quality_metrics": {"enable_lpips": True, "enable_clip_similarity": True},
+            "temporal_metrics": {"enable_motion_consistency": True},
+        },
+        target_fpr=0.001,
+    )
+
+    assert result["Stage2MechanismDecision"] == "PASS"
+    assert "sync_positive_negative_score_gap_low" not in result["Stage2MechanismBlockingReasons"]
 
 
 def test_mechanism_candidate_selector_has_no_local_clip_only_sync_confident_counter() -> None:

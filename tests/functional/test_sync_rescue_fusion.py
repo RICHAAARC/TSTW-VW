@@ -435,22 +435,12 @@ def test_local_clip_sync_search_defaults_to_hybrid_no_prior_runtime_selection(
 
 
 @pytest.mark.unit
-def test_sync_confidence_can_gate_on_minimum_candidate_score() -> None:
-    """Validate sync confidence can require a minimum selected candidate score.
-
-    Args:
-        None.
-
-    Returns:
-        None.
-    """
+def test_candidate_score_gate_is_rejected() -> None:
+    """验证旧 candidate score gate 被启动前阻断, 避免再次进入错误路径。"""
     gated_config = copy.deepcopy(TUBELET_SYNC_CONFIG)
     gated_config["sync_search"] = {
         **gated_config["sync_search"],
-        "min_sync_positive_margin": 0.12,
-        "min_sync_alignment_coverage_ratio": 0.25,
-        "min_sync_alignment_matched_count": 3,
-        "min_sync_candidate_score": 0.55,
+        "sync_confidence_gate_rule": "candidate_score_gate",
     }
 
     extractor = SyntheticProbeEvidenceExtractor(
@@ -460,33 +450,15 @@ def test_sync_confidence_can_gate_on_minimum_candidate_score() -> None:
         fusion_rule="sync_rescue_fusion",
     )
 
-    leaking_like_trace = extractor._build_sync_confidence_trace(
-        {
-            "sync_search_score_rule": "hybrid_no_prior",
-            "S_sync_positive_margin": 0.233373,
-            "sync_alignment_coverage_ratio": 0.375,
-            "sync_alignment_matched_count": 6,
-            "sync_candidate_score_hybrid": 0.532451,
-        }
-    )
-    rescued_positive_trace = extractor._build_sync_confidence_trace(
-        {
-            "sync_search_score_rule": "hybrid_no_prior",
-            "S_sync_positive_margin": 0.139795,
-            "sync_alignment_coverage_ratio": 0.25,
-            "sync_alignment_matched_count": 4,
-            "sync_candidate_score_hybrid": 0.639795,
-        }
-    )
-
-    assert leaking_like_trace["sync_confident"] is False
-    assert (
-        leaking_like_trace["sync_confidence_failure_reason"]
-        == "sync_candidate_score_below_gate"
-    )
-    assert leaking_like_trace["sync_confidence_min_candidate_score"] == 0.55
-    assert leaking_like_trace["sync_confidence_score_field"] == "sync_candidate_score_hybrid"
-    assert rescued_positive_trace["sync_confident"] is True
+    with pytest.raises(ValueError, match="aligned_payload_safety_gate"):
+        extractor._build_sync_confidence_trace_for_gate_rule(
+            sync_result={
+                "sync_alignment_coverage_ratio": 1.0,
+                "sync_alignment_matched_count": 64,
+            },
+            S_payload_aligned=0.2,
+            S_payload_rescue_gain=0.02,
+        )
 
 
 @pytest.mark.unit
@@ -557,7 +529,13 @@ def test_aligned_payload_safety_gate_checks_payload_and_coverage() -> None:
 @pytest.mark.unit
 def test_reliable_offset_alignment_can_create_payload_rescue_gain(tmp_path: Path) -> None:
     cropped_sample = _build_sync_embedded_crop(tmp_path)
-    sync_result = build_method_from_config(TUBELET_SYNC_CONFIG).detect(
+    aligned_payload_config = copy.deepcopy(TUBELET_SYNC_CONFIG)
+    aligned_payload_config["sync_search"] = {
+        **aligned_payload_config["sync_search"],
+        "sync_confidence_gate_rule": "aligned_payload_safety_gate",
+        "min_sync_alignment_matched_count": 32,
+    }
+    sync_result = build_method_from_config(aligned_payload_config).detect(
         cropped_sample,
         threshold_record=None,
     )

@@ -3744,3 +3744,40 @@ Stage2MechanismDecision = PASS
 5. aligned payload safety gate 的 mechanism_trace 字段是否在 main formal records 中完整出现。
 ```
 
+## 2026-06-09 阶段 2 aligned payload 机制口径固化
+
+本次重构将阶段 2 机制证明协议固化为 `aligned_payload_safety`。项目默认代码不再允许使用旧的 `sync_candidate_score` gate 或 `S_sync` 正负 gap 作为机制证明阻塞条件。
+
+### 已固化的工程规则
+
+1. `configs/protocol/stage2_mechanism_gate.json` 新增并固定 `stage2_mechanism_protocol = aligned_payload_safety`。
+2. `Stage2MechanismDecision` 不再读取 `min_sync_positive_negative_score_gap`。
+3. 如果 mechanism config 中出现 `min_sync_positive_negative_score_gap`, audit 会在启动阶段直接报错。
+4. 如果 calibration grid 或 staged search grid 中出现 `min_sync_candidate_score`, selector / calibration runner 会在启动阶段直接报错。
+5. `sync_confidence_gate_rule` 默认和唯一允许值为 `aligned_payload_safety_gate`。
+6. final formal audit 的通过依据收敛为 sync rescue gain、negative leakage safety、候选 eligible 状态、样本量、质量门禁和 implementation pass, 不再使用旧 sync score gap。
+
+### 对 20260608T153114Z runtime records 的重建验证
+
+基于:
+
+```text
+G:\我的云端硬盘\TSTW\results\TSTW_runtime_runs_20260608_165100.zip
+```
+
+仅解压其中 records / thresholds / tables / runtime_config 后, 使用当前仓库代码重新运行 `run_stage2_mechanism_audit()`。重建结果为:
+
+```text
+stage2_mechanism_protocol = aligned_payload_safety
+Stage2ImplementationDecision = PASS
+Stage2MechanismDecision = PASS
+Stage2MechanismBlockingReasons = []
+RecommendedNextAction = trajectory_statistic_probe
+NextAllowedStageByMechanism = trajectory_statistic_probe
+SyncRescueDecision = PASS
+SyncLeakageDecision = PASS
+SyncCandidateSelectionStatus = eligible
+```
+
+该结果说明: 20260608T153114Z 运行本身没有进入 runtime 错误路径; 原始 FAIL 来自旧机制判定口径残留。当前重构后, 同一批 governed records 可以在 aligned payload safety 协议下得到合理的 Stage2MechanismDecision = PASS。
+

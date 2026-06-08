@@ -161,7 +161,7 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | sync_candidate_score_penalized | protocol | none | true | false | false | Coverage-penalized synchronization candidate score used for candidate ranking. |
 | sync_confident | protocol | none | true | false | false | Boolean gate indicating whether observable sync margin, coverage, and matched-count criteria allow sync evidence in fusion. |
 | sync_confidence_failure_reason | protocol | none | true | false | false | Semicolon-separated observable reasons explaining why synchronization confidence did not pass. |
-| sync_confidence_gate_rule | protocol | none | true | false | false | 阶段 2 sync rescue 使用的置信 gate 规则, 例如 `candidate_score_gate` 或 `aligned_payload_safety_gate`. |
+| sync_confidence_gate_rule | protocol | none | true | false | false | 阶段 2 sync rescue 使用的置信 gate 规则, 当前唯一允许值为 `aligned_payload_safety_gate`. |
 | sync_confidence_min_margin | protocol | none | true | false | false | Configured minimum `S_sync_positive_margin` required for sync confidence. |
 | sync_confidence_min_coverage_ratio | protocol | none | true | false | false | Configured minimum synchronization alignment coverage ratio required for sync confidence. |
 | sync_confidence_min_matched_count | protocol | none | true | false | false | Configured minimum matched tubelet count required for sync confidence. |
@@ -335,6 +335,7 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | required_mechanism_attacks | governance | none | true | false | false | Ordered attack roster that must be covered before the stage-two mechanism gate can PASS. |
 | sync_gain_policy | governance | none | true | false | false | Governed sync-gain aggregation policy used to interpret required sync rescue attacks as all-of, any-of, or any-of plus mean floor. |
 | required_sync_gain_attacks | governance | none | true | false | false | Ordered governed attack subset used when evaluating sync rescue gain and saturation semantics. |
+| stage2_mechanism_protocol | governance | none | true | false | false | 阶段 2 机制证明协议, 当前唯一允许值为 `aligned_payload_safety`. |
 | min_required_sync_gain_attack_count | governance | none | true | false | false | Minimum number of governed sync rescue attacks that must show positive gain under the configured sync_gain_policy. |
 | max_clean_negative_fpr | governance | none | true | false | false | Maximum allowed clean-negative FPR used by the stage-two mechanism gate. |
 | max_attacked_negative_fpr | governance | none | true | false | false | Maximum allowed attacked-negative FPR used by the stage-two mechanism gate. |
@@ -342,7 +343,6 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | min_no_attack_clean_positive_tpr | governance | none | true | false | false | Minimum required no-attack clean-positive TPR used by the stage-two mechanism gate. |
 | min_tubelet_only_gain_over_frame_prc | governance | none | true | false | false | Minimum required gain of `tubelet_only` over `frame_prc` used by the stage-two mechanism gate. |
 | min_tubelet_sync_gain_over_tubelet_only_temporal | governance | none | true | false | false | Minimum required temporal gain of `tubelet_sync` over `tubelet_only` used by the stage-two mechanism gate. |
-| min_sync_positive_negative_score_gap | governance | none | true | false | false | Minimum required positive-negative `S_sync` score gap used by the stage-two mechanism gate. |
 | sync_gain_saturation_threshold | governance | none | true | false | false | Governed attacked-positive TPR threshold used to classify an anchor as saturated for sync incremental-gain semantics. |
 | absolute_rescue_tpr_threshold | governance | none | true | false | false | Governed attacked-positive TPR threshold used to declare absolute rescue success for sync semantics. |
 | leakage_exceeded_multiplier | governance | none | true | false | false | Governed multiplier above max_attacked_negative_fpr used to distinguish leakage_risk from leakage_exceeded. |

@@ -48,7 +48,6 @@ CALIBRATION_GRID_COLUMNS = [
     "min_sync_positive_margin",
     "min_sync_alignment_coverage_ratio",
     "min_sync_alignment_matched_count",
-    "min_sync_candidate_score",
     "sync_confidence_gate_rule",
     "min_payload_rescue_gain",
     "min_aligned_payload_score",
@@ -100,6 +99,31 @@ CALIBRATION_GRID_COLUMNS = [
 ]
 
 
+def _validate_aligned_payload_selection_protocol(
+    grid_config: dict[str, Any],
+    mechanism_config: dict[str, Any],
+) -> None:
+    """在 selector 启动前阻断旧 sync candidate score 搜索和旧 gate。"""
+    if mechanism_config.get("stage2_mechanism_protocol", "aligned_payload_safety") != (
+        "aligned_payload_safety"
+    ):
+        raise ValueError("stage2_mechanism_protocol must be aligned_payload_safety")
+    if "min_sync_positive_negative_score_gap" in mechanism_config:
+        raise ValueError("min_sync_positive_negative_score_gap is forbidden")
+    grids = [grid_config.get("grid", {})]
+    for stage_config in grid_config.get("search_stages", []):
+        if isinstance(stage_config, dict):
+            grids.append(stage_config.get("grid", {}))
+    for grid_payload in grids:
+        if not isinstance(grid_payload, dict):
+            continue
+        if "min_sync_candidate_score" in grid_payload:
+            raise ValueError("min_sync_candidate_score is forbidden")
+        gate_rules = grid_payload.get("sync_confidence_gate_rule", [])
+        if gate_rules and gate_rules != ["aligned_payload_safety_gate"]:
+            raise ValueError("sync_confidence_gate_rule must be aligned_payload_safety_gate")
+
+
 def select_stage2_mechanism_candidate(
     *,
     run_root: str | Path,
@@ -134,6 +158,7 @@ def select_stage2_mechanism_candidate(
 
     grid_config = load_json_config(grid_config_path)
     mechanism_config = load_json_config(mechanism_config_path)
+    _validate_aligned_payload_selection_protocol(grid_config, mechanism_config)
     allowed_splits = _read_string_list(grid_config, "allowed_splits")
     forbidden_splits = _read_string_list(grid_config, "forbidden_splits")
     if set(allowed_splits) & set(forbidden_splits):
@@ -1118,9 +1143,6 @@ def _build_tubelet_sync_calibration_grid_rows(
                 "min_sync_alignment_matched_count": sync_confidence_config[
                     "min_sync_alignment_matched_count"
                 ],
-                "min_sync_candidate_score": sync_confidence_config[
-                    "min_sync_candidate_score"
-                ],
                 "sync_confidence_gate_rule": sync_confidence_config[
                     "sync_confidence_gate_rule"
                 ],
@@ -1516,14 +1538,6 @@ def _select_tubelet_sync_candidate(
             if isinstance(parsed_min_sync_alignment_matched_count, int)
             else 1
         )
-    resolved_min_sync_candidate_score = selected_row.get("min_sync_candidate_score")
-    if not isinstance(resolved_min_sync_candidate_score, (int, float)):
-        parsed_min_sync_candidate_score = parsed_payload.get("min_sync_candidate_score")
-        resolved_min_sync_candidate_score = (
-            float(parsed_min_sync_candidate_score)
-            if isinstance(parsed_min_sync_candidate_score, (int, float))
-            else 0.0
-        )
     resolved_sync_confidence_gate_rule = selected_row.get("sync_confidence_gate_rule")
     if not isinstance(resolved_sync_confidence_gate_rule, str):
         parsed_sync_confidence_gate_rule = parsed_payload.get(
@@ -1532,7 +1546,7 @@ def _select_tubelet_sync_candidate(
         resolved_sync_confidence_gate_rule = (
             str(parsed_sync_confidence_gate_rule)
             if isinstance(parsed_sync_confidence_gate_rule, str)
-            else "candidate_score_gate"
+            else "aligned_payload_safety_gate"
         )
     resolved_min_payload_rescue_gain = selected_row.get("min_payload_rescue_gain")
     if not isinstance(resolved_min_payload_rescue_gain, (int, float)):
@@ -1584,7 +1598,6 @@ def _select_tubelet_sync_candidate(
             "min_sync_alignment_matched_count": int(
                 resolved_min_sync_alignment_matched_count
             ),
-            "min_sync_candidate_score": float(resolved_min_sync_candidate_score),
             "sync_confidence_gate_rule": str(resolved_sync_confidence_gate_rule),
             "min_payload_rescue_gain": float(resolved_min_payload_rescue_gain),
             "min_aligned_payload_score": float(resolved_min_aligned_payload_score),
@@ -1868,11 +1881,6 @@ def _build_tubelet_sync_scan_seed(
                 "min_sync_alignment_matched_count",
                 [selected_candidate_sync_defaults["min_sync_alignment_matched_count"]],
             ),
-            "min_sync_candidate_score": _read_optional_grid_numeric_list(
-                grid,
-                "min_sync_candidate_score",
-                [selected_candidate_sync_defaults["min_sync_candidate_score"]],
-            ),
             "sync_confidence_gate_rule": _read_optional_grid_string_list(
                 grid,
                 "sync_confidence_gate_rule",
@@ -2081,13 +2089,6 @@ def _parse_tubelet_sync_variant_name(method_variant: str) -> dict[str, Any]:
             )
         elif token.startswith("mc") and token[2:].isdigit():
             parsed_payload["min_sync_alignment_matched_count"] = int(token[2:])
-        elif token.startswith("cs") and token[2:].isdigit():
-            parsed_payload["min_sync_candidate_score"] = round(
-                int(token[2:]) / 1000.0,
-                6,
-            )
-        elif token == "grcscore":
-            parsed_payload["sync_confidence_gate_rule"] = "candidate_score_gate"
         elif token == "grapsafe":
             parsed_payload["sync_confidence_gate_rule"] = "aligned_payload_safety_gate"
         elif token.startswith("rg") and token[2:].isdigit():
@@ -2167,20 +2168,14 @@ def _resolve_selected_candidate_sync_defaults(
         if isinstance(min_sync_alignment_matched_count, int)
         else 1
     )
-    min_sync_candidate_score = sync_search.get("min_sync_candidate_score", 0.0)
-    default_min_sync_candidate_score = (
-        round(float(min_sync_candidate_score), 6)
-        if isinstance(min_sync_candidate_score, (int, float))
-        else 0.0
-    )
     sync_confidence_gate_rule = sync_search.get(
         "sync_confidence_gate_rule",
-        "candidate_score_gate",
+        "aligned_payload_safety_gate",
     )
     default_sync_confidence_gate_rule = (
         str(sync_confidence_gate_rule)
         if isinstance(sync_confidence_gate_rule, str) and sync_confidence_gate_rule
-        else "candidate_score_gate"
+        else "aligned_payload_safety_gate"
     )
     min_payload_rescue_gain = sync_search.get("min_payload_rescue_gain", 0.01)
     default_min_payload_rescue_gain = (
@@ -2201,7 +2196,6 @@ def _resolve_selected_candidate_sync_defaults(
         "min_sync_positive_margin": default_min_sync_positive_margin,
         "min_sync_alignment_coverage_ratio": default_min_sync_alignment_coverage_ratio,
         "min_sync_alignment_matched_count": default_min_sync_alignment_matched_count,
-        "min_sync_candidate_score": default_min_sync_candidate_score,
         "sync_confidence_gate_rule": default_sync_confidence_gate_rule,
         "min_payload_rescue_gain": default_min_payload_rescue_gain,
         "min_aligned_payload_score": default_min_aligned_payload_score,
@@ -2339,19 +2333,12 @@ def _resolve_sync_confidence_config(
         parsed_field_name="min_sync_alignment_matched_count",
         default_value=1,
     )
-    min_candidate_score = _resolve_numeric_sync_confidence_value(
-        mechanism_trace,
-        parsed_payload,
-        trace_field_name="sync_confidence_min_candidate_score",
-        parsed_field_name="min_sync_candidate_score",
-        default_value=0.0,
-    )
     gate_rule = _resolve_string_sync_confidence_value(
         mechanism_trace,
         parsed_payload,
         trace_field_name="sync_confidence_gate_rule",
         parsed_field_name="sync_confidence_gate_rule",
-        default_value="candidate_score_gate",
+        default_value="aligned_payload_safety_gate",
     )
     min_payload_rescue_gain = _resolve_numeric_sync_confidence_value(
         mechanism_trace,
@@ -2371,7 +2358,6 @@ def _resolve_sync_confidence_config(
         "min_sync_positive_margin": min_margin,
         "min_sync_alignment_coverage_ratio": min_coverage_ratio,
         "min_sync_alignment_matched_count": min_matched_count,
-        "min_sync_candidate_score": min_candidate_score,
         "sync_confidence_gate_rule": gate_rule,
         "min_payload_rescue_gain": min_payload_rescue_gain,
         "min_aligned_payload_score": min_aligned_payload_score,
@@ -2586,7 +2572,6 @@ def _write_text_report(
                 f"- min_sync_positive_margin: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['min_sync_positive_margin']}",
                 f"- min_sync_alignment_coverage_ratio: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['min_sync_alignment_coverage_ratio']}",
                 f"- min_sync_alignment_matched_count: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['min_sync_alignment_matched_count']}",
-                f"- min_sync_candidate_score: {candidate_payload['tubelet_sync_scan_seed']['parameter_scan']['min_sync_candidate_score']}",
             ]
         )
     file_path.parent.mkdir(parents=True, exist_ok=True)
