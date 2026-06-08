@@ -3572,3 +3572,175 @@ local_clip_sync_gain >= 0.1
 max_attacked_negative_fpr = 0.0
 ```
 
+## 27. 2026-06-08 `20260608T124945Z__f4dc654` 固定候选 confirmation 通过与最终 formal audit 收口配置
+
+### 27.1 结果位置
+
+本次检查对象为:
+
+```text
+G:\我的云端硬盘\TSTW\results\families\real_video_vae_latent_probe__formal__davis2017_trainval480p__20260608T124945Z__f4dc654
+```
+
+关键产物包括:
+
+```text
+stage2_calibration/stage2_mechanism_calibration_summary.json
+stage2_calibration/tubelet_sync_real_video_vae_candidate.json
+stage2_calibration/selected_candidate_local_clip_sync_diagnostics.csv
+audit_bundles/real_video_vae_latent_probe_non_formal_audit/packages/real_video_vae_latent_probe_non_formal_audit.zip
+```
+
+### 27.2 本次 confirmation 结论
+
+本次运行已经按预期进入固定候选 confirmation 路径, 而不是重新进入 broad search:
+
+```text
+calibration_completion_status = complete
+selection_completion_status = complete
+selected_sync_candidate_status = eligible
+selected_sync_negative_leakage_status = controlled
+search_terminated_early = false
+generated_method_variant_count = 3
+```
+
+其中:
+
+```text
+formal_anchor_diag generated_method_variant_count = 2
+formal_sync_diag generated_method_variant_count = 1
+```
+
+这说明本次只验证了已确认的 `w009` anchor 和唯一的 aligned payload safety gate sync candidate。
+
+### 27.3 固定候选指标复现
+
+固定候选为:
+
+```text
+tubelet_sync_cal_tl04_sp04x04_w009_em1000_sr08_ls010_mg000_cv125_mc64_grapsafe_rg010_as095_frsync_rescue
+```
+
+候选状态为:
+
+```text
+candidate_selection_status = eligible
+sync_rescue_decision = PASS
+sync_leakage_decision = PASS
+negative_leakage_status = controlled
+```
+
+机制增益复现为:
+
+```text
+temporal_crop_sync_gain = 0.5
+local_clip_sync_gain = 0.4375
+mean_temporal_sync_gain = 0.3625
+```
+
+negative safety 复现为:
+
+```text
+calibration_negative_count = 280
+attacked_calibration_negative_count = 260
+negative_rescue_over_threshold_count = 0
+negative_rescue_over_threshold_rate = 0.0
+upper_confidence_bound_for_negative_rescue_rate = 0.013534
+aligned_payload_negative_safety_status = PASS
+aligned_payload_attacked_negative_fpr = 0.0
+sync_rescue_applied_attacked_negative_rate = 0.0
+```
+
+这说明 `aligned_payload_safety_gate` 在固定候选确认运行中稳定复现了 positive rescue gain 与 calibration negative safety。
+
+### 27.4 运行时间
+
+notebook 总记录时间为:
+
+```text
+total_recorded_seconds = 2085.991984
+约 34.8 分钟
+```
+
+主要耗时为:
+
+```text
+stage2_mechanism_calibration = 2061.135438 秒
+约 34.4 分钟
+```
+
+阶段耗时为:
+
+```text
+formal_anchor_diag = 1057.511788 秒
+formal_sync_diag = 1003.399017 秒
+```
+
+该耗时符合固定候选 confirmation run 的预期, 并明显低于此前搜索路径。
+
+### 27.5 当前限制
+
+本次结果仍属于 calibration / non-formal audit bundle 路径。它可以证明固定候选稳定复现, 但还不是最终 formal run 中的:
+
+```text
+Stage2MechanismDecision = PASS
+```
+
+因此, 下一步不再继续 calibration 搜索, 而是进入最终 formal audit 收口运行。
+
+### 27.6 项目配置切换
+
+本次之后项目默认运行口径切换为:
+
+```text
+run_main_formal = true
+run_stage2_mechanism_calibration = false
+require_stage2_mechanism_pass = true
+```
+
+新增并启用两个 real-video formal runtime method config:
+
+```text
+configs/method/real_video_tubelet_only_anchor.json
+configs/method/real_video_tubelet_sync_candidate_runtime.json
+```
+
+其中 `real_video_tubelet_sync_candidate_runtime.json` 使用已确认候选的参数, 但保留主方法名:
+
+```text
+method_variant = tubelet_sync
+candidate_source_method_variant = tubelet_sync_cal_tl04_sp04x04_w009_em1000_sr08_ls010_mg000_cv125_mc64_grapsafe_rg010_as095_frsync_rescue
+```
+
+这样设计的主要原因是: 最终 formal audit 需要按主方法名聚合 `frame_prc`、`tubelet_only`、`tubelet_sync` 三个方法。若直接使用长候选名作为 `method_variant`, `Stage2MechanismDecision` 的主方法聚合会失去 `tubelet_sync` 这一正式方法键。
+
+`configs/ablation/real_video_vae_latent_ablation.json` 现在通过 `method_config_paths` 将主方法替换为固定收口参数:
+
+```json
+{
+  "tubelet_only": "configs/method/real_video_tubelet_only_anchor.json",
+  "tubelet_sync": "configs/method/real_video_tubelet_sync_candidate_runtime.json"
+}
+```
+
+### 27.7 下一轮运行目标
+
+下一轮 notebook 运行的目标不再是生成 calibration candidate, 而是生成最终 formal audit 产物并要求:
+
+```text
+Stage2ImplementationDecision = PASS
+Stage2MechanismDecision = PASS
+```
+
+若下一轮输出 `Stage2MechanismDecision = PASS`, 则阶段 2 可以登记为机制证明完成, 再进入阶段 3 的正式讨论。
+
+若下一轮失败, 不应回到 broad search。优先检查:
+
+```text
+1. real_video_tubelet_sync_candidate_runtime.json 是否被 main formal runner 正确加载;
+2. records 中的 method_variant 是否仍为 tubelet_sync;
+3. mechanism audit 是否读取到了 frame_prc / tubelet_only / tubelet_sync 三个主方法;
+4. test split 是否只用于最终审计, 没有参与 threshold 或参数选择;
+5. aligned payload safety gate 的 mechanism_trace 字段是否在 main formal records 中完整出现。
+```
+

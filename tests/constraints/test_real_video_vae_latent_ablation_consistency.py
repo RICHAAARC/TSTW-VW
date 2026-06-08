@@ -37,8 +37,8 @@ def test_real_video_vae_latent_ablation_config_reuses_shared_protocol_semantics(
     assert ablation_config["shared_attack_matrix_name"] == "real_video_attack_matrix"
 
 
-def test_real_video_vae_latent_ablation_does_not_keep_failed_completion_candidate() -> None:
-    """验证 formal 失败候选不会继续作为默认 completion 配置。
+def test_real_video_vae_latent_ablation_uses_confirmed_stage2_candidate_for_final_audit() -> None:
+    """验证最终 formal audit 使用已确认的阶段 2 anchor 与 sync candidate。
 
     Args:
         None.
@@ -50,13 +50,31 @@ def test_real_video_vae_latent_ablation_does_not_keep_failed_completion_candidat
     ablation_config = load_json_config(
         repository_root / "configs" / "ablation" / "real_video_vae_latent_ablation.json"
     )
-    stale_candidate_paths = [
-        repository_root / "configs" / "method" / "real_video_tubelet_only_anchor.json",
-        repository_root / "configs" / "method" / "real_video_tubelet_sync_candidate_runtime.json",
-        repository_root / "configs" / "method" / "tubelet_sync_real_video_vae_candidate.json",
-    ]
+    method_config_paths = ablation_config["method_config_paths"]
 
-    assert "method_config_paths" not in ablation_config
-    assert "mechanism_default_candidate_method_config_path" not in ablation_config
+    assert method_config_paths == {
+        "tubelet_only": "configs/method/real_video_tubelet_only_anchor.json",
+        "tubelet_sync": "configs/method/real_video_tubelet_sync_candidate_runtime.json",
+    }
+    assert ablation_config["mechanism_default_candidate_method_config_path"] == (
+        "configs/method/real_video_tubelet_sync_candidate_runtime.json"
+    )
+    assert ablation_config["mechanism_default_anchor_method_config_path"] == (
+        "configs/method/real_video_tubelet_only_anchor.json"
+    )
     assert ablation_config["tubelet_length_sweep_formal"] == []
-    assert all(not stale_path.exists() for stale_path in stale_candidate_paths)
+
+    anchor_config = load_json_config(repository_root / method_config_paths["tubelet_only"])
+    sync_config = load_json_config(repository_root / method_config_paths["tubelet_sync"])
+    assert anchor_config["method_variant"] == "tubelet_only"
+    assert anchor_config["score_calibration"]["embedding_projection_support_weight"] == 0.09
+    assert anchor_config["tubelet_partition"]["spatial_patch_size"] == [4, 4]
+    assert sync_config["method_variant"] == "tubelet_sync"
+    assert sync_config["candidate_source_method_variant"] == (
+        "tubelet_sync_cal_tl04_sp04x04_w009_em1000_sr08_ls010_mg000_cv125_mc64_grapsafe_rg010_as095_frsync_rescue"
+    )
+    assert sync_config["sync_search"]["sync_confidence_gate_rule"] == (
+        "aligned_payload_safety_gate"
+    )
+    assert sync_config["sync_search"]["min_payload_rescue_gain"] == 0.01
+    assert sync_config["sync_search"]["min_aligned_payload_score"] == 0.095

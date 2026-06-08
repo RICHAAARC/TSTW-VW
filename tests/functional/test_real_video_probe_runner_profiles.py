@@ -101,8 +101,8 @@ def test_runner_allows_method_config_path_overrides(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-def test_real_video_formal_ablation_uses_repo_default_tubelet_sync_config() -> None:
-    """Validate the real-video formal ablation does not keep a stale frozen sync override.
+def test_real_video_formal_ablation_uses_confirmed_stage2_candidate_config() -> None:
+    """验证 real-video formal ablation 使用阶段 2 已确认的固定 sync candidate。
 
     Args:
         None.
@@ -126,10 +126,22 @@ def test_real_video_formal_ablation_uses_repo_default_tubelet_sync_config() -> N
         config for config in runtime_method_configs if config["method_variant"] == "tubelet_sync"
     )
 
-    assert resolved_paths["tubelet_sync"] == ROOT / "configs" / "method" / "tubelet_sync.json"
+    assert resolved_paths["tubelet_sync"] == (
+        ROOT / "configs" / "method" / "real_video_tubelet_sync_candidate_runtime.json"
+    )
+    assert tubelet_sync_config["method_variant"] == "tubelet_sync"
+    assert tubelet_sync_config["candidate_source_method_variant"] == (
+        "tubelet_sync_cal_tl04_sp04x04_w009_em1000_sr08_ls010_mg000_cv125_mc64_grapsafe_rg010_as095_frsync_rescue"
+    )
+    assert tubelet_sync_config["tubelet_length"] == 4
+    assert tubelet_sync_config["score_calibration"]["embedding_projection_support_weight"] == 0.09
+    assert tubelet_sync_config["sync_search"]["sync_confidence_gate_rule"] == (
+        "aligned_payload_safety_gate"
+    )
+    assert tubelet_sync_config["sync_search"]["min_payload_rescue_gain"] == 0.01
+    assert tubelet_sync_config["sync_search"]["min_aligned_payload_score"] == 0.095
     assert tubelet_sync_config["target_construction_phase"] == "real_video_vae_latent_probe"
     assert tubelet_sync_config["method_status"] == "formal_real_video_vae_probe_runtime"
-    assert tubelet_sync_config["method_variant"] == "tubelet_sync"
 
 
 @pytest.mark.unit

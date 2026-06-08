@@ -1,0 +1,23 @@
+{
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "target_construction_phase": "real_video_vae_latent_probe",
+  "method_family": "temporal_tubelet_watermark",
+  "method_variant": "tubelet_only",
+  "method_status": "stage2_fixed_anchor_for_final_formal_audit",
+  "enable_frame_prc": false,
+  "enable_tubelet": true,
+  "enable_sync": false,
+  "enable_trajectory": false,
+  "tubelet_length": 4,
+  "embedding_margin": 1.0,
+  "score_calibration": {
+    "embedding_projection_support_weight": 0.09
+  },
+  "tubelet_partition": {
+    "spatial_patch_size": [
+      4,
+      4
+    ]
+  },
+  "fusion_rule": "tubelet_score_only"
+}
