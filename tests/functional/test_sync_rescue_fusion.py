@@ -140,7 +140,7 @@ def test_positive_sync_score_is_gated_with_rescue() -> None:
             lambda_sync=0.1,
             gate_sync=True,
         )
-        == 0.75
+        == 0.67
     )
 
 

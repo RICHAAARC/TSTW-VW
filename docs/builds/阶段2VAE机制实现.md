@@ -3157,8 +3157,8 @@ min_sync_positive_margin = [0.0]
 min_sync_alignment_coverage_ratio = [0.125]
 min_sync_alignment_matched_count = [64]
 sync_confidence_gate_rule = [aligned_payload_safety_gate]
-min_aligned_rescue_gain = [0.01, 0.02]
-min_aligned_score_gate = [0.095, 0.10]
+min_payload_rescue_gain = [0.01, 0.02]
+min_aligned_payload_score = [0.095, 0.10]
 min_sync_candidate_score = removed from default grid
 ```
 
@@ -3195,3 +3195,123 @@ aligned_payload_attacked_negative_over_threshold_count
 
 下一轮可以直接运行 notebook。预期运行时间应显著低于 48 个 candidate 的旧窗口。若缓存命中, 预计约 1-3 小时; 若 Drive I/O 或 latent 缓存未命中, 预计约 3-6 小时。若超过 8 小时仍未看到 `formal_sync_diag/records/event_scores.jsonl` 或 runtime timing 持续增长, 应优先中断并检查是否又进入了非默认旧搜索空间。
 
+
+## 25. 2026-06-08 注意事项修复后的阶段 2 机制口径
+
+### 25.1 字段命名统一
+
+本次已取消默认 grid 中的临时别名:
+
+```text
+min_aligned_rescue_gain
+min_aligned_score_gate
+```
+
+阶段 2 默认配置、runner、selector、trace 与文档统一使用正式字段:
+
+```text
+S_payload_aligned
+S_payload_rescue_gain
+min_payload_rescue_gain
+min_aligned_payload_score
+sync_alignment_coverage_ratio
+min_sync_alignment_coverage_ratio
+sync_alignment_matched_count
+min_sync_alignment_matched_count
+```
+
+`min_sync_candidate_score` 仍不进入默认 grid。`sync_candidate_score_raw`、`sync_candidate_score_penalized`、`sync_candidate_score_hybrid` 继续保留为 alignment search 与 failure diagnosis 字段。
+
+### 25.2 S_final 更新规则收敛
+
+本次将 `sync_rescue_fusion` 收敛为更保守的 payload-only rescue 规则:
+
+```text
+如果 aligned_payload_safety_gate 通过:
+    S_final = S_final_before_rescue + S_payload_rescue_gain
+否则:
+    S_final = S_final_before_rescue
+```
+
+这意味着 `sync_candidate_score` 只负责选择 alignment candidate, 不直接进入 `S_final`。`lambda_sync` 暂时保留为配置兼容字段, 但在该保守 fusion 规则下不再对最终分数产生加性贡献。
+
+records / mechanism_trace 新增或明确保留:
+
+```text
+S_final_before_rescue
+S_payload_aligned
+S_payload_rescue_gain
+sync_rescue_applied
+S_final_after_rescue
+rescue_gain_clipped
+```
+
+当前实现没有额外上界裁剪, 因此 `rescue_gain_clipped = false`。
+
+### 25.3 selector split 协议显式化
+
+selector 现在显式记录:
+
+```text
+selector_split_policy = dev_calibration_only
+test_split_used_for_selection = false
+```
+
+候选选择、negative safety 聚合和 calibration grid row 生成只允许使用 `allowed_splits` 中的记录。当前默认配置为:
+
+```text
+allowed_splits = [dev, calibration]
+forbidden_splits = [test]
+```
+
+这用于防止 test-guided tuning。test split 只能用于最终机制审计和最终报告, 不能用于选择 gate 参数或 sync 搜索参数。
+
+### 25.4 negative safety 样本量解释
+
+在原有保守条件:
+
+```text
+negative_rescue_over_threshold_count = 0
+```
+
+之外, selector 现在补充输出:
+
+```text
+calibration_negative_count
+attacked_calibration_negative_count
+negative_rescue_over_threshold_rate
+upper_confidence_bound_for_negative_rescue_rate
+```
+
+这样后续报告可以区分 `0 / 20` 与 `0 / 500` 两类不同强度的 negative safety 证据。
+
+### 25.5 当前可运行默认配置
+
+当前默认 sync 搜索空间仍保持小规模收尾测试:
+
+```text
+anchor = tubelet_only_cal_tl04_sp04x04_w009_em1000
+lambda_sync = [0.01]
+sync_search_radius = [8]
+min_sync_positive_margin = [0.0]
+min_sync_alignment_coverage_ratio = [0.125]
+min_sync_alignment_matched_count = [64]
+sync_confidence_gate_rule = [aligned_payload_safety_gate]
+min_payload_rescue_gain = [0.01, 0.02]
+min_aligned_payload_score = [0.095, 0.10]
+min_sync_candidate_score = removed from default grid
+```
+
+下一轮运行的主要观察项应为:
+
+```text
+aligned_payload_negative_safety_status
+negative_rescue_over_threshold_count
+negative_rescue_over_threshold_rate
+upper_confidence_bound_for_negative_rescue_rate
+aligned_payload_temporal_crop_tpr
+aligned_payload_local_clip_tpr
+sync_rescue_applied_positive_rate
+sync_rescue_applied_attacked_negative_rate
+candidate_eligible
+```

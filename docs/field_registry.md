@@ -147,6 +147,9 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | S_payload_unaligned | protocol | none | true | false | false | Payload-only score before synchronization alignment, mapped to `S_tubelet` for sync-rescue records. |
 | S_payload_aligned | protocol | none | true | false | false | Payload evidence score after applying the estimated synchronization alignment. |
 | S_payload_rescue_gain | protocol | none | true | false | false | Non-negative score gain from aligned payload evidence over unaligned payload evidence. |
+| S_final_before_rescue | protocol | none | true | false | false | Final-score baseline before gated sync rescue is applied. |
+| S_final_after_rescue | protocol | none | true | false | false | Final score after applying the gated aligned-payload rescue rule. |
+| rescue_gain_clipped | protocol | none | true | false | false | Boolean trace field indicating whether the payload rescue gain was clipped before fusion. |
 | S_sync_peak_best | protocol | none | true | false | false | Best raw synchronization candidate score before positive-margin calibration. |
 | S_sync_peak_second_or_median | protocol | none | true | false | false | Second-best or median synchronization score used as the peak-margin baseline. |
 | S_sync_peak_margin | protocol | none | true | false | false | Raw difference between best synchronization peak and its comparison baseline. |
@@ -166,8 +169,6 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | sync_confidence_min_aligned_payload_score | protocol | none | true | false | false | `aligned_payload_safety_gate` 要求的最小 aligned payload score. |
 | min_payload_rescue_gain | threshold | none | true | false | false | 阶段 2 calibration grid 中用于生成 `sync_confidence_min_payload_rescue_gain` 的搜索参数. |
 | min_aligned_payload_score | threshold | none | true | false | false | 阶段 2 calibration grid 中用于生成 `sync_confidence_min_aligned_payload_score` 的搜索参数. |
-| min_aligned_rescue_gain | threshold | none | true | false | false | 默认 grid 使用的审计安全别名, 运行时映射为 `min_payload_rescue_gain`. |
-| min_aligned_score_gate | threshold | none | true | false | false | 默认 grid 使用的审计安全别名, 运行时映射为 `min_aligned_payload_score`. |
 | aligned_payload_clean_negative_fpr | table | none | true | false | false | selector 聚合的 no-attack clean negative aligned-payload 过阈率. |
 | aligned_payload_attacked_negative_fpr | table | none | true | false | false | selector 聚合的 attacked negative aligned-payload 过阈率上界. |
 | aligned_payload_positive_tpr | table | none | true | false | false | selector 聚合的 no-attack positive aligned-payload 过阈率. |
@@ -175,7 +176,13 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | aligned_payload_local_clip_tpr | table | none | true | false | false | selector 聚合的 local-clip positive aligned-payload 过阈率. |
 | sync_rescue_applied_positive_rate | table | none | true | false | false | selector 聚合的 positive 样本 sync rescue 实际启用比例. |
 | sync_rescue_applied_attacked_negative_rate | table | none | true | false | false | selector 聚合的 attacked negative 样本 sync rescue 实际启用比例上界. |
+| calibration_negative_count | table | none | true | false | false | Count of calibration negative samples used by selector-level negative safety. |
+| attacked_calibration_negative_count | table | none | true | false | false | Count of attacked calibration negative samples used by selector-level negative safety. |
 | negative_rescue_over_threshold_count | table | none | true | false | false | calibration negative 中 sync rescue 后 `S_final` 过阈的样本数. |
+| negative_rescue_over_threshold_rate | table | none | true | false | false | Rate of calibration negative samples crossing threshold after gated sync rescue. |
+| upper_confidence_bound_for_negative_rescue_rate | table | none | true | false | false | Wilson upper confidence bound for the calibration negative rescue-over-threshold rate. |
+| selector_split_policy | protocol | none | true | false | false | Split policy declared by the selector, expected to be `dev_calibration_only` for stage-two candidate selection. |
+| test_split_used_for_selection | protocol | none | true | false | false | Boolean selector audit field indicating whether test records entered candidate selection. |
 | aligned_payload_negative_safety_status | table | none | true | false | false | 方法级 negative safety gate 状态, `PASS` 表示没有 calibration negative 被 rescue 过阈. |
 | aligned_payload_clean_negative_over_threshold_count | table | none | true | false | false | clean negative 中 aligned-payload score 过阈的样本数. |
 | aligned_payload_attacked_negative_over_threshold_count | table | none | true | false | false | attacked negative 中 aligned-payload score 过阈的样本数. |

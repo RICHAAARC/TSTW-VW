@@ -1471,14 +1471,14 @@ def _build_stage_generated_method_configs(
         "sync_confidence_gate_rule",
         [seed_sync_defaults["sync_confidence_gate_rule"]],
     )
-    min_payload_rescue_gains = _read_optional_grid_numeric_alias_list(
+    min_payload_rescue_gains = _read_optional_grid_numeric_list(
         stage_grid,
-        ("min_aligned_rescue_gain", "min_payload_rescue_gain"),
+        "min_payload_rescue_gain",
         [seed_sync_defaults["min_payload_rescue_gain"]],
     )
-    min_aligned_payload_scores = _read_optional_grid_numeric_alias_list(
+    min_aligned_payload_scores = _read_optional_grid_numeric_list(
         stage_grid,
-        ("min_aligned_score_gate", "min_aligned_payload_score"),
+        "min_aligned_payload_score",
         [seed_sync_defaults["min_aligned_payload_score"]],
     )
     for (
@@ -1852,14 +1852,14 @@ def _build_generated_method_configs(
         "sync_confidence_gate_rule",
         ["candidate_score_gate"],
     )
-    min_payload_rescue_gains = _read_optional_grid_numeric_alias_list(
+    min_payload_rescue_gains = _read_optional_grid_numeric_list(
         grid_payload,
-        ("min_aligned_rescue_gain", "min_payload_rescue_gain"),
+        "min_payload_rescue_gain",
         [0.01],
     )
-    min_aligned_payload_scores = _read_optional_grid_numeric_alias_list(
+    min_aligned_payload_scores = _read_optional_grid_numeric_list(
         grid_payload,
-        ("min_aligned_score_gate", "min_aligned_payload_score"),
+        "min_aligned_payload_score",
         [0.1],
     )
 
@@ -2267,17 +2267,6 @@ def _read_optional_grid_numeric_list(
     if not resolved_values:
         raise ValueError(f"grid field {field_name} must contain numeric values")
     return resolved_values
-
-
-def _read_optional_grid_numeric_alias_list(
-    payload: dict[str, Any],
-    field_names: tuple[str, ...],
-    default_values: list[float],
-) -> list[float]:
-    for field_name in field_names:
-        if field_name in payload:
-            return _read_optional_grid_numeric_list(payload, field_name, default_values)
-    return _read_optional_grid_numeric_list(payload, field_names[0], default_values)
 
 
 def _read_optional_grid_integer_list(

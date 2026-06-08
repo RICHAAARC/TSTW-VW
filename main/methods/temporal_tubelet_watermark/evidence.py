@@ -299,6 +299,7 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 trajectory_projections
             )
         if self._fusion_rule == "sync_rescue_fusion":
+            S_final_before_rescue = round(float(evidence_scores["S_tubelet"] or 0.0), 6)
             evidence_scores["S_final"] = sync_rescue_fusion(
                 evidence_scores,
                 payload_rescue_gain=S_payload_rescue_gain,
@@ -306,12 +307,17 @@ class SyntheticProbeEvidenceExtractor(EvidenceExtractor):
                 gate_sync=sync_rescue_applied,
             )
         else:
+            S_final_before_rescue = round(float(evidence_scores["S_tubelet"] or 0.0), 6)
             evidence_scores["S_final"] = self._fusion_callable(evidence_scores)
+        S_final_after_rescue = round(float(evidence_scores["S_final"] or 0.0), 6)
         mechanism_trace.update(
             {
                 "S_payload_unaligned": S_payload_unaligned,
                 "S_payload_aligned": S_payload_aligned,
                 "S_payload_rescue_gain": S_payload_rescue_gain,
+                "S_final_before_rescue": S_final_before_rescue,
+                "S_final_after_rescue": S_final_after_rescue,
+                "rescue_gain_clipped": False,
                 "sync_rescue_applied": sync_rescue_applied,
                 "fusion_rule": self._fusion_rule,
                 "lambda_sync": self._resolve_lambda_sync(),

@@ -62,7 +62,11 @@ CALIBRATION_GRID_COLUMNS = [
     "aligned_payload_local_clip_tpr",
     "sync_rescue_applied_positive_rate",
     "sync_rescue_applied_attacked_negative_rate",
+    "calibration_negative_count",
+    "attacked_calibration_negative_count",
     "negative_rescue_over_threshold_count",
+    "negative_rescue_over_threshold_rate",
+    "upper_confidence_bound_for_negative_rescue_rate",
     "aligned_payload_negative_safety_status",
     "aligned_payload_clean_negative_over_threshold_count",
     "aligned_payload_attacked_negative_over_threshold_count",
@@ -261,6 +265,8 @@ def select_stage2_mechanism_candidate(
         "forbidden_splits": forbidden_splits,
         "observed_splits": observed_splits,
         "observed_forbidden_splits": observed_forbidden_splits,
+        "selector_split_policy": _resolve_selector_split_policy(allowed_splits),
+        "test_split_used_for_selection": "test" in set(allowed_splits),
         "selection_scope": selection_scope,
         "selection_completion_status": selection_completion_status,
         "selection_blocking_reason": selection_blocking_reason,
@@ -352,15 +358,15 @@ def _build_selection_snapshot(
         split_name = str(event_record.get("split"))
         observed_splits.add(split_name)
 
+        if split_name not in allowed_splits:
+            continue
+
         if method_variant not in representative_records:
             representative_records[method_variant] = event_record
         if base_method_variant in candidate_variants_by_base:
             candidate_variants_by_base[base_method_variant].add(method_variant)
         if base_method_variant == "tubelet_sync":
             tubelet_sync_signatures.add(_build_sync_stage_signature(event_record))
-
-        if split_name not in allowed_splits:
-            continue
 
         attack_name = str(event_record.get("attack_name"))
         sample_role = str(event_record.get("sample_role"))
@@ -407,6 +413,12 @@ def _build_selection_snapshot(
     }
 
 
+def _resolve_selector_split_policy(allowed_splits: list[str]) -> str:
+    if set(allowed_splits) == {"dev", "calibration"}:
+        return "dev_calibration_only"
+    return "custom_allowed_splits"
+
+
 def _build_selection_group_state(event_record: dict[str, Any]) -> dict[str, Any]:
     mechanism_trace = event_record.get("mechanism_trace", {})
     if not isinstance(mechanism_trace, dict):
@@ -430,6 +442,8 @@ def _build_selection_group_state(event_record: dict[str, Any]) -> dict[str, Any]
 def _build_method_safety_state() -> dict[str, Any]:
     return {
         "negative_rescue_over_threshold_count": 0,
+        "calibration_negative_count": 0,
+        "attacked_calibration_negative_count": 0,
         "aligned_payload_clean_negative_over_threshold_count": 0,
         "aligned_payload_attacked_negative_over_threshold_count": 0,
     }
@@ -444,6 +458,10 @@ def _update_method_safety_state(
     split_name = str(event_record.get("split"))
     if sample_role not in {"clean_negative", "attacked_negative"}:
         return
+    if split_name == "calibration":
+        method_safety_state["calibration_negative_count"] += 1
+        if sample_role == "attacked_negative":
+            method_safety_state["attacked_calibration_negative_count"] += 1
     if _aligned_payload_decision_value(event_record, threshold_index) > 0.0:
         if sample_role == "clean_negative":
             method_safety_state[
@@ -465,12 +483,49 @@ def _finalize_method_safety_state(method_safety_state: dict[str, Any]) -> dict[s
     negative_rescue_count = int(
         method_safety_state.get("negative_rescue_over_threshold_count", 0)
     )
+    calibration_negative_count = int(
+        method_safety_state.get("calibration_negative_count", 0)
+    )
+    negative_rescue_rate = _ratio_or_none(
+        negative_rescue_count,
+        calibration_negative_count,
+    )
     return {
         **method_safety_state,
+        "negative_rescue_over_threshold_rate": negative_rescue_rate,
+        "upper_confidence_bound_for_negative_rescue_rate": (
+            _wilson_upper_confidence_bound(
+                negative_rescue_count,
+                calibration_negative_count,
+            )
+        ),
         "aligned_payload_negative_safety_status": (
             "PASS" if negative_rescue_count == 0 else "FAIL"
         ),
     }
+
+
+def _ratio_or_none(numerator: int, denominator: int) -> float | None:
+    if denominator < 1:
+        return None
+    return round(float(numerator) / float(denominator), 6)
+
+
+def _wilson_upper_confidence_bound(success_count: int, total_count: int) -> float | None:
+    if total_count < 1:
+        return None
+    z_value = 1.959963984540054
+    sample_ratio = float(success_count) / float(total_count)
+    denominator = 1.0 + (z_value * z_value / float(total_count))
+    center = sample_ratio + (z_value * z_value / (2.0 * float(total_count)))
+    spread = z_value * (
+        (
+            sample_ratio * (1.0 - sample_ratio) / float(total_count)
+            + z_value * z_value / (4.0 * float(total_count) * float(total_count))
+        )
+        ** 0.5
+    )
+    return round(min(1.0, (center + spread) / denominator), 6)
 
 
 def _record_sync_confident(event_record: dict[str, Any]) -> bool:
@@ -1002,6 +1057,18 @@ def _build_tubelet_sync_calibration_grid_rows(
         negative_rescue_over_threshold_count = int(
             method_safety.get("negative_rescue_over_threshold_count", 0)
         )
+        calibration_negative_count = int(
+            method_safety.get("calibration_negative_count", 0)
+        )
+        attacked_calibration_negative_count = int(
+            method_safety.get("attacked_calibration_negative_count", 0)
+        )
+        negative_rescue_over_threshold_rate = _safe_float(
+            method_safety.get("negative_rescue_over_threshold_rate")
+        )
+        upper_confidence_bound_for_negative_rescue_rate = _safe_float(
+            method_safety.get("upper_confidence_bound_for_negative_rescue_rate")
+        )
         aligned_payload_negative_safety_status = str(
             method_safety.get("aligned_payload_negative_safety_status", "PASS")
         )
@@ -1077,8 +1144,18 @@ def _build_tubelet_sync_calibration_grid_rows(
                 "sync_rescue_applied_attacked_negative_rate": (
                     sync_rescue_applied_attacked_negative_rate
                 ),
+                "calibration_negative_count": calibration_negative_count,
+                "attacked_calibration_negative_count": (
+                    attacked_calibration_negative_count
+                ),
                 "negative_rescue_over_threshold_count": (
                     negative_rescue_over_threshold_count
+                ),
+                "negative_rescue_over_threshold_rate": (
+                    negative_rescue_over_threshold_rate
+                ),
+                "upper_confidence_bound_for_negative_rescue_rate": (
+                    upper_confidence_bound_for_negative_rescue_rate
                 ),
                 "aligned_payload_negative_safety_status": (
                     aligned_payload_negative_safety_status
@@ -1801,14 +1878,14 @@ def _build_tubelet_sync_scan_seed(
                 "sync_confidence_gate_rule",
                 [selected_candidate_sync_defaults["sync_confidence_gate_rule"]],
             ),
-            "min_payload_rescue_gain": _read_optional_grid_numeric_alias_list(
+            "min_payload_rescue_gain": _read_optional_grid_numeric_list(
                 grid,
-                ("min_aligned_rescue_gain", "min_payload_rescue_gain"),
+                "min_payload_rescue_gain",
                 [selected_candidate_sync_defaults["min_payload_rescue_gain"]],
             ),
-            "min_aligned_payload_score": _read_optional_grid_numeric_alias_list(
+            "min_aligned_payload_score": _read_optional_grid_numeric_list(
                 grid,
-                ("min_aligned_score_gate", "min_aligned_payload_score"),
+                "min_aligned_payload_score",
                 [selected_candidate_sync_defaults["min_aligned_payload_score"]],
             ),
         },
@@ -2441,6 +2518,8 @@ def _write_text_report(
         "",
         "## Selection Scope",
         f"- selection_scope: {candidate_payload.get('selection_scope')}",
+        f"- selector_split_policy: {candidate_payload.get('selector_split_policy')}",
+        f"- test_split_used_for_selection: {candidate_payload.get('test_split_used_for_selection')}",
         f"- allowed_splits: {', '.join(candidate_payload['allowed_splits'])}",
         f"- forbidden_splits: {', '.join(candidate_payload['forbidden_splits'])}",
         f"- observed_forbidden_splits: {', '.join(candidate_payload['observed_forbidden_splits']) or 'none'}",
@@ -2588,17 +2667,6 @@ def _read_optional_grid_numeric_list(
     if not resolved_values:
         raise ValueError(f"grid field {field_name} must contain numeric values")
     return resolved_values
-
-
-def _read_optional_grid_numeric_alias_list(
-    payload: dict[str, Any],
-    field_names: tuple[str, ...],
-    default_values: list[float],
-) -> list[float]:
-    for field_name in field_names:
-        if field_name in payload:
-            return _read_optional_grid_numeric_list(payload, field_name, default_values)
-    return _read_optional_grid_numeric_list(payload, field_names[0], default_values)
 
 
 def _read_optional_grid_integer_list(

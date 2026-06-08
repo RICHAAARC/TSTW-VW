@@ -401,10 +401,10 @@ def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameteriza
     assert grid_config["grid"]["sync_confidence_gate_rule"] == [
         "aligned_payload_safety_gate"
     ]
-    assert grid_config["grid"]["min_aligned_rescue_gain"] == [0.01, 0.02]
-    assert grid_config["grid"]["min_aligned_score_gate"] == [0.095, 0.1]
-    assert "min_payload_rescue_gain" not in grid_config["grid"]
-    assert "min_aligned_payload_score" not in grid_config["grid"]
+    assert grid_config["grid"]["min_payload_rescue_gain"] == [0.01, 0.02]
+    assert grid_config["grid"]["min_aligned_payload_score"] == [0.095, 0.1]
+    assert "min_aligned_rescue_gain" not in grid_config["grid"]
+    assert "min_aligned_score_gate" not in grid_config["grid"]
     assert "min_sync_candidate_score" not in grid_config["grid"]
 
 

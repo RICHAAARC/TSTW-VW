@@ -48,11 +48,11 @@
     "sync_confidence_gate_rule": [
       "aligned_payload_safety_gate"
     ],
-    "min_aligned_rescue_gain": [
+    "min_payload_rescue_gain": [
       0.01,
       0.02
     ],
-    "min_aligned_score_gate": [
+    "min_aligned_payload_score": [
       0.095,
       0.1
     ]
@@ -120,11 +120,11 @@
         "sync_confidence_gate_rule": [
           "aligned_payload_safety_gate"
         ],
-        "min_aligned_rescue_gain": [
+        "min_payload_rescue_gain": [
           0.01,
           0.02
         ],
-        "min_aligned_score_gate": [
+        "min_aligned_payload_score": [
           0.095,
           0.1
         ]
@@ -143,6 +143,10 @@
     "aligned_payload_local_clip_tpr",
     "sync_rescue_applied_positive_rate",
     "sync_rescue_applied_attacked_negative_rate",
+    "upper_confidence_bound_for_negative_rescue_rate",
+    "negative_rescue_over_threshold_rate",
+    "attacked_calibration_negative_count",
+    "calibration_negative_count",
     "negative_rescue_over_threshold_count",
     "aligned_payload_negative_safety_status",
     "temporal_crop_sync_gain",
