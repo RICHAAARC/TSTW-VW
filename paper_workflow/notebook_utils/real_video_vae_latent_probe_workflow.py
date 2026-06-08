@@ -1179,6 +1179,180 @@ def run_probe_stage2_mechanism_calibration(
     return calibration_summary
 
 
+def validate_probe_stage2_mechanism_calibration_confirmation(
+    calibration_summary: dict[str, Any],
+    *,
+    expected_candidate: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """校验阶段 2 固定候选确认运行是否达到机制收口条件。
+
+    Args:
+        calibration_summary: runner 返回或落盘的阶段 2 calibration summary。
+        expected_candidate: 配置文件中的固定候选期望字段。该参数用于把
+            notebook 的通过判断绑定到仓库配置, 避免 notebook 内联搜索空间。
+
+    Returns:
+        一个只描述确认判断结果的 JSON-safe 字典。
+
+    Raises:
+        RuntimeError: 当候选未选中, negative safety 失控, 或关键 sync gain 不达标时抛出。
+    """
+    if not isinstance(calibration_summary, dict):
+        raise TypeError("calibration_summary must be a dictionary")
+    expected_payload = dict(expected_candidate or {})
+    selected_candidate = calibration_summary.get("selected_tubelet_sync_candidate")
+    if not isinstance(selected_candidate, dict):
+        raise RuntimeError(
+            {
+                "confirmation_decision": "FAIL",
+                "blocking_reason": "selected_tubelet_sync_candidate_missing",
+            }
+        )
+
+    metrics = selected_candidate.get("metrics")
+    if not isinstance(metrics, dict):
+        metrics = {}
+    sync_search = selected_candidate.get("sync_search")
+    if not isinstance(sync_search, dict):
+        sync_search = {}
+
+    blocking_reasons: list[str] = []
+    expected_method_variant = expected_payload.get("method_variant")
+    if expected_method_variant and selected_candidate.get("method_variant") != expected_method_variant:
+        blocking_reasons.append("selected_method_variant_mismatch")
+
+    expected_gate_rule = expected_payload.get("sync_confidence_gate_rule")
+    if expected_gate_rule and sync_search.get("sync_confidence_gate_rule") != expected_gate_rule:
+        blocking_reasons.append("sync_confidence_gate_rule_mismatch")
+
+    if calibration_summary.get("selection_completion_status") != "complete":
+        blocking_reasons.append("selection_not_complete")
+    if calibration_summary.get("selected_sync_candidate_status") != "eligible":
+        blocking_reasons.append("selected_sync_candidate_not_eligible")
+    if calibration_summary.get("selected_sync_negative_leakage_status") != "controlled":
+        blocking_reasons.append("selected_sync_negative_leakage_not_controlled")
+    if selected_candidate.get("candidate_selection_status") != "eligible":
+        blocking_reasons.append("candidate_selection_status_not_eligible")
+    if selected_candidate.get("sync_rescue_decision") != "PASS":
+        blocking_reasons.append("sync_rescue_decision_not_pass")
+    if selected_candidate.get("sync_leakage_decision") != "PASS":
+        blocking_reasons.append("sync_leakage_decision_not_pass")
+
+    max_attacked_negative_fpr = _coerce_optional_float(
+        metrics.get("max_attacked_negative_fpr")
+    )
+    expected_max_attacked_negative_fpr = _coerce_optional_float(
+        expected_payload.get("max_attacked_negative_fpr", 0.0)
+    )
+    if (
+        max_attacked_negative_fpr is None
+        or expected_max_attacked_negative_fpr is None
+        or max_attacked_negative_fpr > expected_max_attacked_negative_fpr
+    ):
+        blocking_reasons.append("max_attacked_negative_fpr_above_confirmation_gate")
+
+    for metric_name, expected_field_name in (
+        ("temporal_crop_sync_gain", "min_temporal_crop_sync_gain"),
+        ("local_clip_sync_gain", "min_local_clip_sync_gain"),
+    ):
+        metric_value = _coerce_optional_float(metrics.get(metric_name))
+        minimum_value = _coerce_optional_float(expected_payload.get(expected_field_name, 0.1))
+        if metric_value is None or minimum_value is None or metric_value < minimum_value:
+            blocking_reasons.append(f"{metric_name}_below_confirmation_gate")
+
+    expected_negative_crossing = expected_payload.get(
+        "negative_rescue_over_threshold_count",
+        0,
+    )
+    selected_stage_summaries = calibration_summary.get("search_stage_summaries")
+    selected_grid_safety_status = None
+    if isinstance(selected_stage_summaries, list):
+        selected_grid_safety_status = _resolve_selected_grid_negative_safety_status(
+            selected_stage_summaries,
+            selected_candidate.get("method_variant"),
+        )
+    if selected_grid_safety_status is not None:
+        if selected_grid_safety_status.get("aligned_payload_negative_safety_status") != "PASS":
+            blocking_reasons.append("aligned_payload_negative_safety_status_not_pass")
+        crossing_count = selected_grid_safety_status.get(
+            "negative_rescue_over_threshold_count"
+        )
+        if crossing_count != int(expected_negative_crossing):
+            blocking_reasons.append("negative_rescue_over_threshold_count_mismatch")
+
+    decision_payload = {
+        "confirmation_decision": "PASS" if not blocking_reasons else "FAIL",
+        "blocking_reasons": sorted(dict.fromkeys(blocking_reasons)),
+        "selected_method_variant": selected_candidate.get("method_variant"),
+        "expected_method_variant": expected_method_variant,
+        "selected_sync_candidate_status": calibration_summary.get(
+            "selected_sync_candidate_status"
+        ),
+        "selected_sync_negative_leakage_status": calibration_summary.get(
+            "selected_sync_negative_leakage_status"
+        ),
+        "max_attacked_negative_fpr": max_attacked_negative_fpr,
+        "temporal_crop_sync_gain": _coerce_optional_float(
+            metrics.get("temporal_crop_sync_gain")
+        ),
+        "local_clip_sync_gain": _coerce_optional_float(
+            metrics.get("local_clip_sync_gain")
+        ),
+        "selected_grid_safety_status": selected_grid_safety_status,
+    }
+    if blocking_reasons:
+        raise RuntimeError(decision_payload)
+    return _json_safe(decision_payload)
+
+
+def _coerce_optional_float(value: Any) -> float | None:
+    """将 JSON 或 CSV 中的数值字段安全转换为 float。"""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _resolve_selected_grid_negative_safety_status(
+    stage_summaries: list[Any],
+    selected_method_variant: Any,
+) -> dict[str, Any] | None:
+    """从 staged summary 的候选表中解析已选候选的 negative safety 状态。"""
+    if not selected_method_variant:
+        return None
+    for stage_summary in stage_summaries:
+        if not isinstance(stage_summary, dict):
+            continue
+        candidates = stage_summary.get("top_tubelet_sync_candidates", [])
+        if not isinstance(candidates, list):
+            continue
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            if candidate.get("method_variant") != selected_method_variant:
+                continue
+            return {
+                "aligned_payload_negative_safety_status": candidate.get(
+                    "aligned_payload_negative_safety_status"
+                ),
+                "negative_rescue_over_threshold_count": int(
+                    candidate.get("negative_rescue_over_threshold_count", 0)
+                ),
+                "calibration_negative_count": candidate.get(
+                    "calibration_negative_count"
+                ),
+                "negative_rescue_over_threshold_rate": candidate.get(
+                    "negative_rescue_over_threshold_rate"
+                ),
+                "upper_confidence_bound_for_negative_rescue_rate": candidate.get(
+                    "upper_confidence_bound_for_negative_rescue_rate"
+                ),
+            }
+    return None
+
+
 def export_probe_stage2_calibration_family_snapshot(
     *,
     family_root: str | Path,

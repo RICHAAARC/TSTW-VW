@@ -3315,3 +3315,260 @@ sync_rescue_applied_positive_rate
 sync_rescue_applied_attacked_negative_rate
 candidate_eligible
 ```
+
+## 26. 2026-06-08 `20260608T081945Z__a42a74b` 阶段 2 机制证明候选结果登记
+
+### 26.1 结果位置
+
+本次检查对象为:
+
+```text
+G:\我的云端硬盘\TSTW\results\families\real_video_vae_latent_probe__formal__davis2017_trainval480p__20260608T081945Z__a42a74b
+```
+
+关键产物包括:
+
+```text
+stage2_calibration/stage2_mechanism_calibration_summary.json
+stage2_calibration/tubelet_sync_real_video_vae_candidate.json
+stage2_calibration/selected_candidate_local_clip_sync_diagnostics.csv
+audit_bundles/real_video_vae_latent_probe_non_formal_audit/packages/real_video_vae_latent_probe_non_formal_audit.zip
+```
+
+zip 包内包含完整的阶段 2 机制校准产物:
+
+```text
+calibration_run/stages/formal_sync_diag/artifacts/stage2_selected_mechanism_candidate.json
+calibration_run/stages/formal_sync_diag/tables/stage2_mechanism_calibration_grid.csv
+selected_stage/records/event_scores.jsonl
+selected_stage/thresholds/thresholds.json
+calibration_run/artifacts/stage2_mechanism_calibration_timing_summary.json
+```
+
+### 26.2 总体结论
+
+本次运行完成了阶段 2 mechanism calibration 与 candidate selection:
+
+```text
+calibration_completion_status = complete
+selection_completion_status = complete
+selected_sync_candidate_status = eligible
+selected_sync_negative_leakage_status = controlled
+search_terminated_early = false
+```
+
+本次结果是当前阶段 2 中第一个同时满足以下条件的有效候选结果:
+
+```text
+1. selector 只使用 dev / calibration split;
+2. test split 未参与参数选择;
+3. aligned_payload_safety_gate 实际进入 event-level mechanism_trace;
+4. tubelet_sync candidate_eligible = true;
+5. attacked negative FPR 保持为 0;
+6. calibration negative rescue over threshold 计数为 0;
+7. temporal crop 与 local clip 下均出现明确 sync rescue gain。
+```
+
+因此, 本次结果可作为阶段 2 机制证明收口的核心候选结果。
+
+### 26.3 选中候选
+
+选中的 `tubelet_sync` 候选为:
+
+```text
+tubelet_sync_cal_tl04_sp04x04_w009_em1000_sr08_ls010_mg000_cv125_mc64_grapsafe_rg010_as095_frsync_rescue
+```
+
+对应机制参数为:
+
+```text
+tubelet_length = 4
+spatial_patch_size = [4, 4]
+embedding_projection_support_weight = 0.09
+embedding_margin = 1.0
+lambda_sync = 0.01
+sync_search_radius = 8
+min_sync_positive_margin = 0.0
+min_sync_alignment_coverage_ratio = 0.125
+min_sync_alignment_matched_count = 64
+sync_confidence_gate_rule = aligned_payload_safety_gate
+min_payload_rescue_gain = 0.01
+min_aligned_payload_score = 0.095
+```
+
+该候选的选择状态为:
+
+```text
+candidate_selection_status = eligible
+sync_rescue_decision = PASS
+sync_leakage_decision = PASS
+negative_leakage_status = controlled
+```
+
+### 26.4 与 tubelet-only anchor 的对比
+
+本次选中的 `tubelet_only` anchor 为:
+
+```text
+tubelet_only_cal_tl04_sp04x04_w009_em1000
+```
+
+anchor 指标为:
+
+```text
+no_attack_clean_negative_fpr = 0.0
+no_attack_clean_positive_tpr = 0.6
+max_attacked_negative_fpr = 0.0
+temporal_crop_attacked_positive_tpr = 0.35
+local_clip_attacked_positive_tpr = 0.4
+```
+
+选中 `tubelet_sync` 候选指标为:
+
+```text
+no_attack_clean_negative_fpr = 0.0
+no_attack_clean_positive_tpr = 0.75
+max_attacked_negative_fpr = 0.0
+temporal_crop_attacked_positive_tpr = 0.85
+frame_dropping_attacked_positive_tpr = 0.75
+local_clip_attacked_positive_tpr = 0.8375
+```
+
+相对 anchor 的关键机制增益为:
+
+```text
+temporal_crop_sync_gain = 0.5
+local_clip_sync_gain = 0.4375
+mean_temporal_sync_gain = 0.3625
+```
+
+该结果说明: 当前 `tubelet_sync` 不是依赖更强的 baseline anchor 直接通过, 而是在保留 headroom 的 `w009` anchor 上通过 aligned payload safety gate 产生了 temporal crop / local clip 的同步救援增益。
+
+### 26.5 negative safety 统计
+
+本次 selector 输出的 negative safety 统计为:
+
+```text
+calibration_negative_count = 280
+attacked_calibration_negative_count = 260
+negative_rescue_over_threshold_count = 0
+negative_rescue_over_threshold_rate = 0.0
+upper_confidence_bound_for_negative_rescue_rate = 0.013534
+aligned_payload_negative_safety_status = PASS
+aligned_payload_attacked_negative_fpr = 0.0
+sync_rescue_applied_attacked_negative_rate = 0.0
+```
+
+这说明在 calibration negative 中没有任何样本因为 sync rescue 越过阈值。当前 safety 证据强度是 `0 / 280`, 其上置信界约为 `0.013534`。后续论文或阶段报告中应同时报告 count、rate 与 upper confidence bound, 避免只写 `0` 而忽略样本量解释。
+
+### 26.6 字段与协议核验
+
+本次 `event_scores.jsonl` 的新字段位于 `mechanism_trace` 中, 而不是 top-level record 字段中。已核验存在的正式字段包括:
+
+```text
+S_payload_unaligned
+S_payload_aligned
+S_payload_rescue_gain
+S_final_before_rescue
+S_final_after_rescue
+rescue_gain_clipped
+sync_rescue_applied
+sync_confidence_gate_rule
+sync_confidence_min_payload_rescue_gain
+sync_confidence_min_aligned_payload_score
+sync_candidate_score_raw
+sync_candidate_score_penalized
+sync_candidate_score_hybrid
+```
+
+旧别名字段未出现:
+
+```text
+min_aligned_rescue_gain = not present
+min_aligned_score_gate = not present
+```
+
+selector split 协议已记录为:
+
+```text
+selector_split_policy = dev_calibration_only
+test_split_used_for_selection = false
+allowed_splits = [dev, calibration]
+forbidden_splits = [test]
+```
+
+这说明本次候选选择没有使用 test split 调参, 符合阶段 2 当前的固定 low-FPR 与机制校准协议。
+
+### 26.7 运行时间与性能记录
+
+notebook 记录的总运行时间为:
+
+```text
+total_recorded_seconds = 3158.052226
+约 52.6 分钟
+```
+
+主要耗时为:
+
+```text
+stage2_mechanism_calibration = 3134.685676 秒
+约 52.2 分钟
+```
+
+阶段内部热点为:
+
+```text
+formal_anchor_diag runner_attack_materialization = 1301.350704 秒
+formal_anchor_diag runner_cross_event_reencode_latent = 428.749964 秒
+formal_sync_diag runner_detect = 380.309251 秒
+formal_sync_diag runner_build_source_sample = 128.799846 秒
+```
+
+GPU runtime profile 本次未运行:
+
+```text
+record_status = skipped
+skip_reason = gpu_runtime_profile_not_run
+```
+
+该信息不影响机制结果判断, 但说明本次结果不能用于分析 GPU 利用率。
+
+### 26.8 当前判断
+
+本次结果可登记为:
+
+```text
+Stage2MechanismCandidate = PASS_CANDIDATE
+Stage2MechanismEvidenceStatus = ready_for_formal_audit_closure
+RecommendedDefaultCandidate = tubelet_sync_cal_tl04_sp04x04_w009_em1000_sr08_ls010_mg000_cv125_mc64_grapsafe_rg010_as095_frsync_rescue
+```
+
+当前还不应直接进入阶段 3。更稳妥的做法是先围绕本次候选完成阶段 2 的收口工作: 将 candidate 固化、补齐可复现审计产物、运行一次不再搜索参数的 confirmation run, 并把阶段 2 文档与 checker 输出统一到同一套通过口径。
+
+### 26.9 下一步行动建议
+
+下一步应按以下优先级推进:
+
+```text
+1. 将本次选中的 tubelet_sync candidate 固化为阶段 2 默认 candidate 配置;
+2. 将 notebook 保持为纯运行入口, 不在 notebook 中显式维护搜索空间;
+3. 增加或确认 Stage2MechanismDecision 输出, 使其能从本次候选记录中给出 PASS / INCONCLUSIVE / FAIL;
+4. 运行一次固定 candidate 的 confirmation run, 不再执行大范围 grid search;
+5. 若 confirmation run 指标复现, 将阶段 2 标记为机制证明完成, 再讨论阶段 3 trajectory statistic probe;
+6. 若 confirmation run 失败, 不应回到 broad search, 而应只围绕当前候选检查数据缓存、threshold materialization、selector split policy 与 aligned payload gate 记录一致性。
+```
+
+建议下一次运行的目标不是继续搜索, 而是验证以下内容能否在固定候选下稳定复现:
+
+```text
+candidate_eligible = true
+selector_split_policy = dev_calibration_only
+test_split_used_for_selection = false
+aligned_payload_negative_safety_status = PASS
+negative_rescue_over_threshold_count = 0
+calibration_negative_count >= 280
+temporal_crop_sync_gain >= 0.1
+local_clip_sync_gain >= 0.1
+max_attacked_negative_fpr = 0.0
+```
+

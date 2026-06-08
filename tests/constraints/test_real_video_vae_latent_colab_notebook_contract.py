@@ -261,7 +261,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "'reset_stage2_mechanism_calibration_run_root': True" in notebook_text
     assert "'run_stage2_local_clip_sync_forensics': True" in notebook_text
     assert "'package_non_formal_audit_bundle': True" in notebook_text
-    assert "'require_stage2_mechanism_pass': False" in notebook_text
+    assert "'require_stage2_mechanism_pass': True" in notebook_text
     assert "selected_tubelet_anchor_forensics.csv" in notebook_text
     assert "selected_tubelet_anchor_forensics_summary.json" in notebook_text
     assert "stage2_controlled_search_stage_summary" in notebook_text
@@ -387,7 +387,7 @@ def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameteriza
         "formal_sync_diag",
     ]
     assert grid_config["calibration_purpose"] == (
-        "stage2_aligned_payload_safety_gate_completion_diagnostic"
+        "stage2_fixed_aligned_payload_candidate_confirmation"
     )
     assert grid_config["grid"]["tubelet_length"] == [4]
     assert grid_config["grid"]["spatial_patch_size"] == [[4, 4]]
@@ -401,8 +401,20 @@ def test_stage2_calibration_grid_owns_search_space_after_notebook_deparameteriza
     assert grid_config["grid"]["sync_confidence_gate_rule"] == [
         "aligned_payload_safety_gate"
     ]
-    assert grid_config["grid"]["min_payload_rescue_gain"] == [0.01, 0.02]
-    assert grid_config["grid"]["min_aligned_payload_score"] == [0.095, 0.1]
+    assert grid_config["grid"]["min_payload_rescue_gain"] == [0.01]
+    assert grid_config["grid"]["min_aligned_payload_score"] == [0.095]
+    assert grid_config["top_candidate_limit"] == 1
+    assert grid_config["confirmation_expected_candidate"] == {
+        "method_variant": "tubelet_sync_cal_tl04_sp04x04_w009_em1000_sr08_ls010_mg000_cv125_mc64_grapsafe_rg010_as095_frsync_rescue",
+        "candidate_selection_status": "eligible",
+        "sync_confidence_gate_rule": "aligned_payload_safety_gate",
+        "min_payload_rescue_gain": 0.01,
+        "min_aligned_payload_score": 0.095,
+        "min_temporal_crop_sync_gain": 0.1,
+        "min_local_clip_sync_gain": 0.1,
+        "max_attacked_negative_fpr": 0.0,
+        "negative_rescue_over_threshold_count": 0,
+    }
     assert "min_aligned_rescue_gain" not in grid_config["grid"]
     assert "min_aligned_score_gate" not in grid_config["grid"]
     assert "min_sync_candidate_score" not in grid_config["grid"]

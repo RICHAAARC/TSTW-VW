@@ -1,8 +1,8 @@
 {
   "construction_phase": "real_video_vae_latent_probe",
-  "calibration_purpose": "stage2_aligned_payload_safety_gate_completion_diagnostic",
+  "calibration_purpose": "stage2_fixed_aligned_payload_candidate_confirmation",
   "campaign_mode": "staged_search",
-  "top_candidate_limit": 4,
+  "top_candidate_limit": 1,
   "anchor_selection_policy": "fixed_unsaturated_anchor",
   "allowed_splits": [
     "dev",
@@ -49,12 +49,10 @@
       "aligned_payload_safety_gate"
     ],
     "min_payload_rescue_gain": [
-      0.01,
-      0.02
+      0.01
     ],
     "min_aligned_payload_score": [
-      0.095,
-      0.1
+      0.095
     ]
   },
   "search_stages": [
@@ -62,7 +60,7 @@
       "stage_name": "formal_anchor_diag",
       "selection_scope": "tubelet_only",
       "include_frame_prc_baseline": true,
-      "top_candidate_limit": 4,
+      "top_candidate_limit": 1,
       "anchor_selection_policy": "fixed_unsaturated_anchor",
       "grid": {
         "tubelet_length": [
@@ -81,7 +79,7 @@
           1.0
         ]
       },
-      "calibration_purpose": "stage2_fixed_anchor_confirmation_diagnostic",
+      "calibration_purpose": "stage2_fixed_anchor_confirmation",
       "fixed_tubelet_only_anchor": {
         "tubelet_length": 4,
         "spatial_patch_size": [
@@ -97,7 +95,7 @@
       "selection_scope": "tubelet_sync",
       "candidate_source": "selected_tubelet_only_candidate",
       "include_frame_prc_baseline": false,
-      "top_candidate_limit": 4,
+      "top_candidate_limit": 1,
       "grid": {
         "fusion_rule": [
           "sync_rescue_fusion"
@@ -121,15 +119,24 @@
           "aligned_payload_safety_gate"
         ],
         "min_payload_rescue_gain": [
-          0.01,
-          0.02
+          0.01
         ],
         "min_aligned_payload_score": [
-          0.095,
-          0.1
+          0.095
         ]
       },
-      "calibration_purpose": "stage2_aligned_payload_safety_gate_completion_diagnostic"
+      "calibration_purpose": "stage2_fixed_aligned_payload_candidate_confirmation",
+      "confirmation_expected_candidate": {
+        "method_variant": "tubelet_sync_cal_tl04_sp04x04_w009_em1000_sr08_ls010_mg000_cv125_mc64_grapsafe_rg010_as095_frsync_rescue",
+        "candidate_selection_status": "eligible",
+        "sync_confidence_gate_rule": "aligned_payload_safety_gate",
+        "min_payload_rescue_gain": 0.01,
+        "min_aligned_payload_score": 0.095,
+        "min_temporal_crop_sync_gain": 0.1,
+        "min_local_clip_sync_gain": 0.1,
+        "max_attacked_negative_fpr": 0.0,
+        "negative_rescue_over_threshold_count": 0
+      }
     }
   ],
   "selection_metrics": [
@@ -174,5 +181,16 @@
     ],
     "embedding_projection_support_weight": 0.09,
     "embedding_margin": 1.0
+  },
+  "confirmation_expected_candidate": {
+    "method_variant": "tubelet_sync_cal_tl04_sp04x04_w009_em1000_sr08_ls010_mg000_cv125_mc64_grapsafe_rg010_as095_frsync_rescue",
+    "candidate_selection_status": "eligible",
+    "sync_confidence_gate_rule": "aligned_payload_safety_gate",
+    "min_payload_rescue_gain": 0.01,
+    "min_aligned_payload_score": 0.095,
+    "min_temporal_crop_sync_gain": 0.1,
+    "min_local_clip_sync_gain": 0.1,
+    "max_attacked_negative_fpr": 0.0,
+    "negative_rescue_over_threshold_count": 0
   }
 }
