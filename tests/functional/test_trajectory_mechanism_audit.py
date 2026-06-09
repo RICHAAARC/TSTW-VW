@@ -21,7 +21,9 @@ def _build_record(
     sample_role: str,
     attack_name: str,
     S_traj: float | None,
+    trajectory_source_kind: str = "latent_interpolation_surrogate",
 ) -> dict[str, object]:
+    source_kind = None if S_traj is None else trajectory_source_kind
     return {
         "run_id": "trajectory_probe_run",
         "split": "test",
@@ -36,7 +38,19 @@ def _build_record(
             "S_final": 0.2 if S_traj is None else 0.3,
         },
         "mechanism_trace": {
-            "trajectory_source_kind": None if S_traj is None else "latent_interpolation_surrogate",
+            "trajectory_source_kind": source_kind,
+            "formal_trajectory_source_status": (
+                None
+                if S_traj is None
+                else "candidate_ready"
+                if source_kind == "stage2_frozen_endpoint_replay"
+                else "not_formal_source"
+            ),
+            "trajectory_source_provenance_digest": (
+                "stage2_manifest_digest"
+                if source_kind == "stage2_frozen_endpoint_replay"
+                else None
+            ),
             "trajectory_statistic_kind": None if S_traj is None else "velocity_projection",
             "trajectory_time_grid": None if S_traj is None else [0.0, 0.5, 1.0],
             "trajectory_control_scores": {
@@ -149,3 +163,59 @@ def test_stage3_mechanism_audit_uses_passed_frozen_baseline_but_blocks_surrogate
     assert decision["Stage2DependencyStatus"] == "PASSED"
     assert decision["Stage3MechanismDecision"] == "INCONCLUSIVE"
     assert "surrogate_source_not_sufficient" in decision["Stage3MechanismBlockingReasons"]
+
+
+def test_stage3_mechanism_audit_accepts_formal_source_candidate_but_requires_validation() -> None:
+    """验证 formal source candidate 可接入, 但仍不能跳过机制验证直接 PASS。"""
+    event_score_records = [
+        _build_record("tubelet_only", "attacked_positive", "temporal_crop", None),
+        _build_record("tubelet_sync", "attacked_positive", "temporal_crop", None),
+        _build_record(
+            "traj_only",
+            "attacked_positive",
+            "temporal_crop",
+            0.4,
+            trajectory_source_kind="stage2_frozen_endpoint_replay",
+        ),
+        _build_record(
+            "tubelet_traj",
+            "attacked_positive",
+            "temporal_crop",
+            0.5,
+            trajectory_source_kind="stage2_frozen_endpoint_replay",
+        ),
+        _build_record(
+            "tubelet_sync_trajectory_fusion",
+            "attacked_positive",
+            "temporal_crop",
+            0.6,
+            trajectory_source_kind="stage2_frozen_endpoint_replay",
+        ),
+    ]
+
+    decision = build_stage3_mechanism_decision(
+        event_score_records,
+        threshold_records=[{"threshold_id": "threshold"}],
+        runtime_method_configs=[
+            {"method_variant": "tubelet_only", "enable_trajectory": False},
+            {"method_variant": "tubelet_sync", "enable_trajectory": False},
+            {"method_variant": "traj_only", "enable_trajectory": True},
+            {"method_variant": "tubelet_traj", "enable_trajectory": True},
+            {"method_variant": "tubelet_sync_trajectory_fusion", "enable_trajectory": True},
+        ],
+        frozen_baseline_manifest={"Stage2DependencyStatus": "PASSED"},
+        trajectory_backend_config={
+            "trajectory_source_kind": "stage2_frozen_endpoint_replay",
+        },
+    )
+
+    assert decision["Stage3ImplementationDecision"] == "PASS"
+    assert decision["Stage2DependencyStatus"] == "PASSED"
+    assert decision["trajectory_source_kind"] == "stage2_frozen_endpoint_replay"
+    assert decision["formal_trajectory_source_status"] == "candidate_ready"
+    assert decision["Stage3MechanismDecision"] == "INCONCLUSIVE"
+    assert "surrogate_source_not_sufficient" not in decision["Stage3MechanismBlockingReasons"]
+    assert (
+        "formal_source_candidate_requires_mechanism_validation"
+        in decision["Stage3MechanismBlockingReasons"]
+    )

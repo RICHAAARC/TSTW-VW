@@ -90,8 +90,10 @@ def test_frozen_baseline_loader_rejects_non_null_s_traj(tmp_path: Path) -> None:
         load_real_video_vae_latent_frozen_baseline(baseline_root)
 
 
-def test_formal_replay_writes_required_artifacts_and_surrogate_blocks_pass(tmp_path: Path) -> None:
-    """验证 replay 会写出完整产物, 且 surrogate source 不会形成机制 PASS。"""
+def test_formal_replay_writes_required_artifacts_and_formal_candidate_requires_validation(
+    tmp_path: Path,
+) -> None:
+    """验证 replay 会写出完整产物, formal source candidate 仍需机制验证。"""
     baseline_root = _build_frozen_baseline_root(tmp_path)
     output_root = tmp_path / "outputs" / "runs" / "trajectory_statistic_probe_replay"
 
@@ -119,5 +121,11 @@ def test_formal_replay_writes_required_artifacts_and_surrogate_blocks_pass(tmp_p
     assert output_paths.stage2_frozen_baseline_manifest_path.exists()
     assert decision["Stage3ImplementationDecision"] == "PASS"
     assert decision["Stage2DependencyStatus"] == "PASSED"
+    assert decision["trajectory_source_kind"] == "stage2_frozen_endpoint_replay"
+    assert decision["formal_trajectory_source_status"] == "candidate_ready"
     assert decision["Stage3MechanismDecision"] == "INCONCLUSIVE"
-    assert "surrogate_source_not_sufficient" in decision["Stage3MechanismBlockingReasons"]
+    assert "surrogate_source_not_sufficient" not in decision["Stage3MechanismBlockingReasons"]
+    assert (
+        "formal_source_candidate_requires_mechanism_validation"
+        in decision["Stage3MechanismBlockingReasons"]
+    )

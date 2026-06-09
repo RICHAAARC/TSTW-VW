@@ -354,6 +354,11 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | motion_consistency_placeholder | placeholder | _placeholder | true | false | true | Placeholder field representing disabled motion-consistency support in the real_video_vae_latent_probe scaffold. |
 | trajectory_backend_name | protocol | none | true | false | false | Stage-three trajectory backend identifier used by the surrogate reconstruction support config and runtime config manifest. |
 | trajectory_source_kind | protocol | none | true | false | false | Stage-three trajectory source identifier recorded in method configs and mechanism traces. |
+| formal_trajectory_source_status | protocol | none | true | false | false | Stage-three status field indicating whether the trajectory source is missing, non-formal, or a ready formal candidate. |
+| trajectory_source_provenance_digest | protocol | none | true | false | false | Digest provenance for a stage-three trajectory source, anchored to the frozen upstream dependency when available. |
+| stage2_frozen_baseline_manifest_digest | governance | none | true | false | false | Digest of the validated stage-two frozen baseline manifest injected into stage-three formal source candidate records. |
+| stage2_frozen_baseline_record_count | governance | none | true | false | false | Number of event-score records validated in the stage-two frozen baseline package used by stage-three replay. |
+| stage2_frozen_baseline_threshold_count | governance | none | true | false | false | Number of threshold records validated in the stage-two frozen baseline package used by stage-three replay. |
 | trajectory_statistic_kind | protocol | none | true | false | false | Stage-three trajectory statistic identifier recorded in method configs and mechanism traces. |
 | trajectory_control_kind | protocol | none | true | false | false | Governed trajectory control identifier recorded in method configs and mechanism traces. |
 | trajectory_time_grid | protocol | none | true | false | false | Ordered interpolation time grid used by stage-three surrogate trajectory reconstruction and recorded in mechanism traces. |

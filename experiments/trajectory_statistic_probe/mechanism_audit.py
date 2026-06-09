@@ -70,6 +70,14 @@ def build_stage3_mechanism_decision(
         if any(record["mechanism_trace"].get("trajectory_time_grid") is None for record in variant_records):
             blocking_reasons.append("trajectory_time_grid_missing")
             break
+        if any(
+            record["mechanism_trace"].get("trajectory_source_kind")
+            == "stage2_frozen_endpoint_replay"
+            and not record["mechanism_trace"].get("trajectory_source_provenance_digest")
+            for record in variant_records
+        ):
+            blocking_reasons.append("trajectory_source_provenance_digest_missing")
+            break
 
     for method_variant in trajectory_disabled_variants:
         variant_records = [
@@ -101,6 +109,10 @@ def build_stage3_mechanism_decision(
         stage2_dependency_status,
         trajectory_source_kind,
         implementation_decision,
+    )
+    formal_trajectory_source_status = _resolve_formal_trajectory_source_status(
+        stage2_dependency_status,
+        trajectory_source_kind,
     )
     mechanism_decision = (
         "INCONCLUSIVE"
@@ -141,6 +153,7 @@ def build_stage3_mechanism_decision(
         "BlockingReasons": blocking_reasons,
         "Stage3MechanismBlockingReasons": mechanism_blocking_reasons,
         "trajectory_source_kind": trajectory_source_kind,
+        "formal_trajectory_source_status": formal_trajectory_source_status,
         "TrajectoryLeakageSummary": {
             "max_clean_negative_fpr": _max_role_decision_rate(
                 event_score_records,
@@ -216,7 +229,27 @@ def _build_mechanism_blocking_reasons(
         blocking_reasons.append("formal_trajectory_source_missing")
     if trajectory_source_kind == "latent_interpolation_surrogate":
         blocking_reasons.append("surrogate_source_not_sufficient")
+    if (
+        stage2_dependency_status == "PASSED"
+        and trajectory_source_kind == "stage2_frozen_endpoint_replay"
+    ):
+        blocking_reasons.append("formal_source_candidate_requires_mechanism_validation")
     return blocking_reasons
+
+
+def _resolve_formal_trajectory_source_status(
+    stage2_dependency_status: str,
+    trajectory_source_kind: str | None,
+) -> str:
+    if trajectory_source_kind == "stage2_frozen_endpoint_replay":
+        return (
+            "candidate_ready"
+            if stage2_dependency_status == "PASSED"
+            else "candidate_blocked_by_stage2_dependency"
+        )
+    if trajectory_source_kind is None:
+        return "missing"
+    return "not_formal_source"
 
 
 def _collect_delta_traj_values(event_score_records: list[dict[str, Any]]) -> list[float]:

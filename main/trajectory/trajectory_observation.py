@@ -111,6 +111,47 @@ def build_latent_interpolation_surrogate(
     )
 
 
+def build_stage2_frozen_endpoint_replay(
+    sample: LatentSample,
+    time_grid: list[float] | tuple[float, ...],
+    stage2_frozen_baseline_manifest_digest: str,
+) -> TrajectoryObservation:
+    """功能：基于阶段 2 冻结 baseline digest 构建可审计 endpoint replay trajectory。
+
+    该函数属于项目特定写法。它不接入真实 Flow Matching 或真实视频生成流程, 而是把阶段 2
+    frozen baseline manifest digest 作为只读前置依赖, 构建一个可复现的 endpoint replay
+    观测。通用工程可复用的部分是“把上游冻结依赖的 digest 写入 source provenance, 再用该
+    provenance 约束后续 records”的设计。
+
+    Args:
+        sample: 当前 replay 样本。
+        time_grid: 受治理的归一化时间网格。
+        stage2_frozen_baseline_manifest_digest: 阶段 2 frozen baseline manifest digest。
+
+    Returns:
+        `TrajectoryObservation` 实例。
+    """
+    observed_artifact = _load_sample_artifact(sample)
+    source_kind = "stage2_frozen_endpoint_replay"
+    endpoint_seed_artifact = _build_digest_seed_artifact(
+        observed_artifact.shape,
+        {
+            "sample_id": sample.sample_id,
+            "sample_role": sample.sample_role,
+            "split": sample.split,
+            "latent_tensor_digest_random": sample.latent_tensor_digest_random,
+            "stage2_frozen_baseline_manifest_digest": stage2_frozen_baseline_manifest_digest,
+        },
+        source_kind=source_kind,
+    )
+    return build_interpolated_observation(
+        endpoint_seed_artifact,
+        observed_artifact,
+        time_grid,
+        source_kind=source_kind,
+    )
+
+
 def build_synthetic_flow_trajectory(
     sample: LatentSample,
     time_grid: list[float] | tuple[float, ...],
@@ -138,6 +179,26 @@ def build_synthetic_flow_trajectory(
         time_grid,
         source_kind="synthetic_flow_trajectory",
     )
+
+
+def _build_digest_seed_artifact(
+    shape: tuple[int, ...],
+    seed_material: dict[str, object],
+    source_kind: str,
+) -> FloatTensorArtifact:
+    if not isinstance(seed_material, dict) or not seed_material:
+        raise TypeError("seed_material must be a non-empty dictionary")
+    derived_seed = int(
+        compute_object_digest(
+            {
+                "seed_material": seed_material,
+                "shape": list(shape),
+                "source_kind": source_kind,
+            }
+        )[:16],
+        16,
+    )
+    return _build_seed_artifact(shape, derived_seed, source_kind)
 
 
 def _load_sample_artifact(sample: LatentSample) -> FloatTensorArtifact:

@@ -18,6 +18,7 @@ from main.trajectory.trajectory_controls import (
 from main.trajectory.trajectory_observation import (
     build_interpolated_observation,
     build_latent_interpolation_surrogate,
+    build_stage2_frozen_endpoint_replay,
     build_synthetic_flow_trajectory,
 )
 from main.trajectory.trajectory_runtime import measure_trajectory_runtime
@@ -32,6 +33,7 @@ __all__ = [
     "apply_trajectory_control",
     "build_interpolated_observation",
     "build_latent_interpolation_surrogate",
+    "build_stage2_frozen_endpoint_replay",
     "build_synthetic_flow_trajectory",
     "build_trajectory_backend_from_config",
     "build_velocity_projection_statistic",

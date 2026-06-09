@@ -315,8 +315,25 @@ class TrajectoryProbeWatermarkMethod:
             )
             control_scores[audit_control_kind] = audit_result.S_traj_velocity
 
+        source_kind = observation.source_kind
+        source_status = (
+            "formal_candidate_runtime"
+            if source_kind == "stage2_frozen_endpoint_replay"
+            else "surrogate_runtime"
+        )
         trajectory_trace = {
             "trajectory_source_kind": observation.source_kind,
+            "formal_trajectory_source_status": (
+                "candidate_ready"
+                if source_kind == "stage2_frozen_endpoint_replay"
+                else "not_formal_source"
+            ),
+            "trajectory_source_provenance_digest": self._trajectory_backend_config.get(
+                "stage2_frozen_baseline_manifest_digest"
+            ),
+            "stage2_frozen_baseline_manifest_digest": self._trajectory_backend_config.get(
+                "stage2_frozen_baseline_manifest_digest"
+            ),
             "trajectory_statistic_kind": str(
                 self._trajectory_backend_config.get(
                     "trajectory_statistic_kind",
@@ -329,7 +346,7 @@ class TrajectoryProbeWatermarkMethod:
             "S_traj_velocity": statistic_result.S_traj_velocity,
             "S_traj_displacement": statistic_result.S_traj_displacement,
             "trajectory_curvature_residual": statistic_result.trajectory_curvature_residual,
-            "trajectory_backend_status": "surrogate_runtime",
+            "trajectory_backend_status": source_status,
             "trajectory_fail_reason": None,
             "trajectory_control_kind": control_kind,
             "trajectory_control_scores": control_scores,

@@ -122,16 +122,22 @@ class TrajectoryStatisticProbeRunner:
         frozen_baseline_package = self._load_frozen_baseline_if_available(
             frozen_baseline_root
         )
+        trajectory_backend_config = self._resolve_trajectory_backend_config(
+            frozen_baseline_package
+        )
         attack_registry = build_attack_registry(self._runtime_configs["attack_config"])
         split_plan = build_split_plan(samples_per_role=samples_per_role)
         event_plan = build_event_plan(split_plan, attack_registry)
-        runtime_method_configs = self._build_runtime_method_configs(method_variants)
+        runtime_method_configs = self._build_runtime_method_configs(
+            method_variants,
+            frozen_baseline_package,
+        )
         protocol_runner = ProtocolRunner(
             latent_backend=build_synthetic_video_latent_backend_from_support_config(
                 protocol_config
             ),
             method_factory=build_trajectory_probe_method_factory(
-                self._runtime_configs["trajectory_backend_config"]
+                trajectory_backend_config
             ),
         )
 
@@ -173,7 +179,7 @@ class TrajectoryStatisticProbeRunner:
                 if frozen_baseline_package is not None
                 else None
             ),
-            trajectory_backend_config=self._runtime_configs["trajectory_backend_config"],
+            trajectory_backend_config=trajectory_backend_config,
         )
         output_paths.trajectory_mechanism_decision_path.parent.mkdir(parents=True, exist_ok=True)
         output_paths.trajectory_mechanism_decision_path.write_text(
@@ -203,7 +209,9 @@ class TrajectoryStatisticProbeRunner:
                     ],
                     "trajectory_backend_config": self._runtime_configs[
                         "trajectory_backend_config"
-                    ],
+                    ]
+                    if frozen_baseline_package is None
+                    else trajectory_backend_config,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -256,9 +264,44 @@ class TrajectoryStatisticProbeRunner:
             return None
         return load_real_video_vae_latent_frozen_baseline(frozen_baseline_root)
 
+    def _resolve_trajectory_backend_config(
+        self,
+        frozen_baseline_package: FrozenBaselinePackage | None,
+    ) -> dict[str, Any]:
+        """功能：根据冻结 baseline 依赖决定 trajectory source 配置。
+
+        通用工程写法是先复制静态配置, 再把只读依赖的 digest 作为 provenance 注入运行时配置。
+        项目特定设计在于: 只有当阶段 2 frozen baseline 通过 loader 后, 才允许把 source 从
+        `latent_interpolation_surrogate` 推进为 `stage2_frozen_endpoint_replay`。
+        """
+        trajectory_backend_config = dict(
+            self._runtime_configs["trajectory_backend_config"]
+        )
+        if frozen_baseline_package is None:
+            return trajectory_backend_config
+        trajectory_backend_config["trajectory_source_kind"] = (
+            "stage2_frozen_endpoint_replay"
+        )
+        trajectory_backend_config["formal_trajectory_source_status"] = "candidate_ready"
+        trajectory_backend_config["stage2_frozen_baseline_manifest_digest"] = (
+            compute_object_digest(frozen_baseline_package.frozen_baseline_manifest)
+        )
+        trajectory_backend_config["stage2_frozen_baseline_record_count"] = (
+            frozen_baseline_package.frozen_baseline_manifest.get(
+                "baseline_record_count"
+            )
+        )
+        trajectory_backend_config["stage2_frozen_baseline_threshold_count"] = (
+            frozen_baseline_package.frozen_baseline_manifest.get(
+                "baseline_threshold_count"
+            )
+        )
+        return trajectory_backend_config
+
     def _build_runtime_method_configs(
         self,
         method_variants: list[str] | None,
+        frozen_baseline_package: FrozenBaselinePackage | None = None,
     ) -> list[dict[str, Any]]:
         ablation_config = self._runtime_configs["ablation_config"]
         method_configs = self._runtime_configs["method_configs"]
@@ -276,7 +319,17 @@ class TrajectoryStatisticProbeRunner:
                     f"unsupported method_variants: {', '.join(sorted(missing_variants))}"
                 )
             selected_variants = list(method_variants)
-        return [dict(method_configs[method_variant]) for method_variant in selected_variants]
+        runtime_method_configs = [
+            dict(method_configs[method_variant])
+            for method_variant in selected_variants
+        ]
+        if frozen_baseline_package is not None:
+            for method_config in runtime_method_configs:
+                if bool(method_config.get("enable_trajectory", False)):
+                    method_config["trajectory_source_kind"] = (
+                        "stage2_frozen_endpoint_replay"
+                    )
+        return runtime_method_configs
 
     def _build_run_manifest(
         self,

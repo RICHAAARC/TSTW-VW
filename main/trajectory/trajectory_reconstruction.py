@@ -12,6 +12,7 @@ from main.core.schema import LatentSample
 from main.trajectory.interfaces import TrajectoryObservation
 from main.trajectory.trajectory_observation import (
     build_latent_interpolation_surrogate,
+    build_stage2_frozen_endpoint_replay,
     build_synthetic_flow_trajectory,
 )
 
@@ -49,6 +50,14 @@ def reconstruct_trajectory_observation(
     )
     if trajectory_source_kind == "latent_interpolation_surrogate":
         return build_latent_interpolation_surrogate(sample, time_grid)
+    if trajectory_source_kind == "stage2_frozen_endpoint_replay":
+        baseline_digest = backend_config.get("stage2_frozen_baseline_manifest_digest")
+        if not isinstance(baseline_digest, str) or not baseline_digest:
+            raise ValueError(
+                "stage2_frozen_endpoint_replay requires "
+                "stage2_frozen_baseline_manifest_digest"
+            )
+        return build_stage2_frozen_endpoint_replay(sample, time_grid, baseline_digest)
     if trajectory_source_kind == "synthetic_flow_trajectory":
         return build_synthetic_flow_trajectory(sample, time_grid)
     raise ValueError(f"unsupported trajectory_source_kind: {trajectory_source_kind}")
