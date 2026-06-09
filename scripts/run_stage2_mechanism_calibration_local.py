@@ -38,7 +38,7 @@ DEFAULT_FAMILY_ID_TEMPLATE = (
     "real_video_vae_latent_probe__formal__davis2017_trainval480p__3060"
 )
 DEFAULT_PROCESSED_DATASET_KEY = (
-    "real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001"
+    "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
 )
 DEFAULT_MODEL_ID = "stabilityai/sd-vae-ft-mse"
 

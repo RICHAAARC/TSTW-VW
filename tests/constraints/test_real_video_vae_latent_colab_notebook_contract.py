@@ -147,6 +147,14 @@ def test_processed_dataset_notebook_exists_and_uses_governed_entrypoints() -> No
     assert "scripts.prepare_datasets.build_processed_real_video_dataset" in workflow_text
     assert "raw_dataset_download_manifest.json" in notebook_text
     assert "PROCESSED_DATASET_KEY" in notebook_text
+    assert (
+        "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
+        in notebook_text
+    )
+    assert (
+        "real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001"
+        not in notebook_text
+    )
     assert "processed_dataset_checks.json" in notebook_text
     assert "/content/drive/MyDrive" in notebook_text
     assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
@@ -207,6 +215,14 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     )
     assert "FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / 'families' / FAMILY_ID" not in notebook_text
     assert "PROCESSED_DATASET_MANIFEST" in notebook_text
+    assert (
+        "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
+        in notebook_text
+    )
+    assert (
+        "real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001"
+        not in notebook_text
+    )
     assert "dataset_manifest_path=PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "dataset_manifest=PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "attack_matrix=ATTACK_MATRIX_PATH" in notebook_text

@@ -3976,3 +3976,19 @@ real_video_vae_latent_probe_formal_davis2017_trainval480p_<UTC_TIME>_<SHORT_COMM
 ```text
 /content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/*/packages/real_video_vae_latent_probe_formal.zip
 ```
+
+### 2026-06-09 processed dataset key 单下划线命名修订
+
+本次修订将 `build_processed_real_video_dataset.ipynb` 输出的 `PROCESSED_DATASET_KEY` 从历史双下划线分隔形式改为单下划线分隔形式：
+
+```text
+real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001
+```
+
+同步影响与处理：
+
+1. `paper_workflow/build_processed_real_video_dataset.ipynb` 使用新的 processed dataset key 写入 Google Drive：
+   `/content/drive/MyDrive/TSTW/datasets/processed/<PROCESSED_DATASET_KEY>/`。
+2. `paper_workflow/run_real_video_vae_latent_probe.ipynb` 的默认 `processed_dataset_key` 已同步改为同一单下划线 key，避免阶段 2 运行 notebook 继续查找旧双下划线目录。
+3. `scripts/run_stage2_mechanism_calibration_local.py` 的本地 calibration 默认 processed dataset key 已同步更新，避免本地排查与 Colab notebook 默认参数不一致。
+4. 历史已构建的双下划线 processed dataset 目录不会被自动迁移；若要复用历史数据，需要手动移动或复制到新的 key 目录，或通过 `TSTW_PROCESSED_DATASET_KEY` 显式覆盖。
