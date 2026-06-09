@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import binascii
 import csv
+import math
 from pathlib import Path
 import struct
 from typing import Any
@@ -51,8 +52,16 @@ QUALITY_TABLE_COLUMNS = [
     "sample_role",
     "video_count",
     "vae_reconstruction_psnr_mean",
+    "vae_reconstruction_psnr_finite_mean",
+    "vae_reconstruction_psnr_finite_count",
+    "vae_reconstruction_psnr_inf_count",
+    "vae_reconstruction_psnr_total_count",
     "vae_reconstruction_ssim_mean",
     "watermarked_video_psnr_mean",
+    "watermarked_video_psnr_finite_mean",
+    "watermarked_video_psnr_finite_count",
+    "watermarked_video_psnr_inf_count",
+    "watermarked_video_psnr_total_count",
     "watermarked_video_ssim_mean",
     "watermarked_video_lpips_mean",
     "quality_failure_count",
@@ -274,7 +283,11 @@ class RealVideoVaeLatentArtifactBuilder:
             {row["method_variant"] for row in attack_breakdown_rows} | {row["method_variant"] for row in quality_rows}
         )
         quality_map = {
-            row["method_variant"]: float(row["watermarked_video_psnr_mean"] or 0.0)
+            row["method_variant"]: float(
+                row.get("watermarked_video_psnr_finite_mean")
+                or row["watermarked_video_psnr_mean"]
+                or 0.0
+            )
             for row in quality_rows
             if row["sample_role"] == "attacked_positive"
         }
@@ -399,47 +412,85 @@ def build_quality_table_rows(
             and record["threshold_id"] == threshold_id
         ]
         rows.append(
-            {
-                "run_id": grouped_records[0]["run_id"],
-                "construction_phase": grouped_records[0]["mechanism_trace"]["construction_phase"],
-                "method_variant": method_variant,
-                "attack_name": attack_name,
-                "sample_role": sample_role,
-                "video_count": len(grouped_records),
-                "vae_reconstruction_psnr_mean": _mean_payload_value(
-                    grouped_records,
-                    "quality_metrics",
-                    "vae_reconstruction_psnr",
-                ),
-                "vae_reconstruction_ssim_mean": _mean_payload_value(
-                    grouped_records,
-                    "quality_metrics",
-                    "vae_reconstruction_ssim",
-                ),
-                "watermarked_video_psnr_mean": _mean_payload_value(
-                    grouped_records,
-                    "quality_metrics",
-                    "watermarked_video_psnr",
-                ),
-                "watermarked_video_ssim_mean": _mean_payload_value(
-                    grouped_records,
-                    "quality_metrics",
-                    "watermarked_video_ssim",
-                ),
-                "watermarked_video_lpips_mean": _mean_payload_value(
-                    grouped_records,
-                    "quality_metrics",
-                    "watermarked_video_lpips",
-                ),
-                "quality_failure_count": sum(
-                    1
-                    for record in grouped_records
-                    if record.get("quality_metrics", {}).get("quality_failure_reason") is not None
-                ),
-                "threshold_id": threshold_id,
-            }
+            _build_quality_table_row(
+                grouped_records=grouped_records,
+                method_variant=method_variant,
+                attack_name=attack_name,
+                sample_role=sample_role,
+                threshold_id=threshold_id,
+            )
         )
     return rows
+
+
+def _build_quality_table_row(
+    *,
+    grouped_records: list[dict[str, Any]],
+    method_variant: str,
+    attack_name: str,
+    sample_role: str,
+    threshold_id: str,
+) -> dict[str, Any]:
+    """构建质量表单行, 并显式分离 PSNR 的 finite 与 infinity 统计。"""
+    vae_psnr_stats = _build_psnr_distribution_stats(
+        grouped_records,
+        "quality_metrics",
+        "vae_reconstruction_psnr",
+    )
+    watermarked_psnr_stats = _build_psnr_distribution_stats(
+        grouped_records,
+        "quality_metrics",
+        "watermarked_video_psnr",
+    )
+    return {
+        "run_id": grouped_records[0]["run_id"],
+        "construction_phase": grouped_records[0]["mechanism_trace"]["construction_phase"],
+        "method_variant": method_variant,
+        "attack_name": attack_name,
+        "sample_role": sample_role,
+        "video_count": len(grouped_records),
+        "vae_reconstruction_psnr_mean": _mean_payload_value(
+            grouped_records,
+            "quality_metrics",
+            "vae_reconstruction_psnr",
+            allow_positive_infinity=True,
+        ),
+        "vae_reconstruction_psnr_finite_mean": vae_psnr_stats["finite_mean"],
+        "vae_reconstruction_psnr_finite_count": vae_psnr_stats["finite_count"],
+        "vae_reconstruction_psnr_inf_count": vae_psnr_stats["inf_count"],
+        "vae_reconstruction_psnr_total_count": vae_psnr_stats["total_count"],
+        "vae_reconstruction_ssim_mean": _mean_payload_value(
+            grouped_records,
+            "quality_metrics",
+            "vae_reconstruction_ssim",
+        ),
+        "watermarked_video_psnr_mean": _mean_payload_value(
+            grouped_records,
+            "quality_metrics",
+            "watermarked_video_psnr",
+            allow_positive_infinity=True,
+        ),
+        "watermarked_video_psnr_finite_mean": watermarked_psnr_stats["finite_mean"],
+        "watermarked_video_psnr_finite_count": watermarked_psnr_stats["finite_count"],
+        "watermarked_video_psnr_inf_count": watermarked_psnr_stats["inf_count"],
+        "watermarked_video_psnr_total_count": watermarked_psnr_stats["total_count"],
+        "watermarked_video_ssim_mean": _mean_payload_value(
+            grouped_records,
+            "quality_metrics",
+            "watermarked_video_ssim",
+        ),
+        "watermarked_video_lpips_mean": _mean_payload_value(
+            grouped_records,
+            "quality_metrics",
+            "watermarked_video_lpips",
+        ),
+        "quality_failure_count": sum(
+            1
+            for record in grouped_records
+            if record.get("quality_metrics", {}).get("quality_failure_reason") is not None
+        ),
+        "threshold_id": threshold_id,
+    }
 
 
 def build_temporal_consistency_rows(
@@ -952,15 +1003,59 @@ def _mean_payload_value(
     records: list[dict[str, Any]],
     payload_name: str,
     field_name: str,
+    *,
+    allow_positive_infinity: bool = False,
 ) -> float | None:
-    values = [
-        float(record[payload_name][field_name])
-        for record in records
-        if isinstance(record.get(payload_name, {}).get(field_name), (int, float))
-    ]
+    values: list[float] = []
+    positive_infinity_present = False
+    for record in records:
+        raw_value = record.get(payload_name, {}).get(field_name)
+        if not isinstance(raw_value, (int, float)):
+            continue
+        numeric_value = float(raw_value)
+        if math.isfinite(numeric_value):
+            values.append(numeric_value)
+        elif allow_positive_infinity and math.isinf(numeric_value) and numeric_value > 0.0:
+            positive_infinity_present = True
     if not values:
+        if positive_infinity_present:
+            return math.inf
         return None
+    if positive_infinity_present:
+        return math.inf
     return round(sum(values) / len(values), 6)
+
+
+def _build_psnr_distribution_stats(
+    records: list[dict[str, Any]],
+    payload_name: str,
+    field_name: str,
+) -> dict[str, int | float | None]:
+    """统计 PSNR 的有限值与正无穷值, 便于报告区分完美重建和普通质量均值。"""
+    finite_values: list[float] = []
+    inf_count = 0
+    total_count = 0
+    for record in records:
+        raw_value = record.get(payload_name, {}).get(field_name)
+        if not isinstance(raw_value, (int, float)):
+            continue
+        total_count += 1
+        numeric_value = float(raw_value)
+        if math.isfinite(numeric_value):
+            finite_values.append(numeric_value)
+        elif math.isinf(numeric_value) and numeric_value > 0.0:
+            inf_count += 1
+    finite_mean = (
+        round(sum(finite_values) / len(finite_values), 6)
+        if finite_values
+        else None
+    )
+    return {
+        "finite_mean": finite_mean,
+        "finite_count": len(finite_values),
+        "inf_count": inf_count,
+        "total_count": total_count,
+    }
 
 
 def _bool_to_report_value(value: Any) -> str:

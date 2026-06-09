@@ -117,6 +117,10 @@ def test_stage2_mechanism_audit_rows_recompute_missing_threshold_decisions() -> 
     assert no_attack_positive_row["decision_rate"] == 1.0
     assert no_attack_positive_row["clean_positive_TPR"] == 1.0
     assert math.isinf(float(no_attack_positive_row["quality_psnr_mean"]))
+    assert no_attack_positive_row["quality_psnr_finite_mean"] is None
+    assert no_attack_positive_row["quality_psnr_finite_count"] == 0
+    assert no_attack_positive_row["quality_psnr_inf_count"] == 2
+    assert no_attack_positive_row["quality_psnr_total_count"] == 2
     assert no_attack_positive_row["quality_ssim_mean"] == 1.0
     assert no_attack_negative_row["decision_rate"] == 0.0
     assert no_attack_negative_row["clean_negative_FPR"] == 0.0
@@ -148,6 +152,8 @@ def test_stage2_mechanism_audit_writes_expected_artifacts(tmp_path: Path) -> Non
     assert result["SyncCandidateSelectionStatus"] == "rescue_with_leakage"
     assert result["SyncAbsoluteRescueStatus"] == "multi_attack_absolute_success"
     assert result["SyncNegativeLeakageStatus"] == "leakage_exceeded"
+    assert "mean_watermarked_video_psnr_finite" in result["mechanism_metrics"]
+    assert "watermarked_video_psnr_inf_count" in result["mechanism_metrics"]
 
     with output_paths.stage2_sync_gain_table_path.open("r", encoding="utf-8", newline="") as handle:
         sync_rows = list(csv.DictReader(handle))

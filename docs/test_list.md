@@ -7,16 +7,16 @@
 - 测试根目录：`tests/`
 - 测试构建约束：`docs/test_case_constraints.md`
 - 当前 pytest 默认参数来自 `pyproject.toml`：`(constraint or unit or quick) and not integration and not smoke and not slow and not formal`
-- 当前全量测试节点：401 个
-- 当前默认会执行的测试节点：334 个
+- 当前全量测试节点：415 个
+- 当前默认会执行的测试节点：348 个
 - 当前默认排除的测试节点：67 个
 
 ## 2. 分层统计
 
 | Layer | Files | Nodes | Default role |
 | --- | --- | --- | --- |
-| constraints | 33 | 146 | default governance checks |
-| functional | 39 | 216 | default quick behavior checks |
+| constraints | 33 | 153 | default governance checks |
+| functional | 39 | 223 | default quick behavior checks |
 | integration | 22 | 39 | excluded runner/smoke/formal checks |
 
 ## 3. 推荐执行命令
@@ -37,8 +37,8 @@ python tools/harness/run_all_audits.py
 | `tests/constraints/test_core_boundary_layering.py` | 3 | constraints | `constraint`, `unit` | 3 | no | no | no | 验证 main 运行时代码与外层 governance 层之间的边界。 |
 | `tests/constraints/test_family_id_materialization_contract.py` | 2 | constraints | `constraint`, `unit` | 2 | no | no | yes | 验证 family_id 模板占位符会被物化为真实 UTC 时间与 short commit。 |
 | `tests/constraints/test_family_package_metadata_contract.py` | 1 | constraints | `constraint`, `unit` | 1 | yes | no | yes | 验证 family package metadata 与实际 canonical archive 一致。 |
-| `tests/constraints/test_governance_docs.py` | 17 | constraints | `constraint`, `unit` | 17 | no | no | yes | Validate governed documentation constraints. |
-| `tests/constraints/test_mechanism_decision_contract.py` | 3 | constraints | `constraint`, `unit` | 3 | no | no | yes | 验证 Stage2MechanismDecision 的门禁语义与字段完整性。 |
+| `tests/constraints/test_governance_docs.py` | 18 | constraints | `constraint`, `unit` | 18 | no | no | yes | Validate governed documentation constraints. |
+| `tests/constraints/test_mechanism_decision_contract.py` | 6 | constraints | `constraint`, `unit` | 6 | no | no | yes | 验证 Stage2MechanismDecision 的门禁语义与字段完整性。 |
 | `tests/constraints/test_naming_conventions.py` | 7 | constraints | `constraint`, `unit` | 7 | yes | no | no | 验证命名治理规则与命名审计行为。File purpose: Validate naming governance helper functions and the naming audit behavior. |
 | `tests/constraints/test_notebook_naming_contract.py` | 5 | constraints | `constraint`, `unit` | 5 | yes | no | yes | 验证 notebook 命名与 helper 归属审计行为。 |
 | `tests/constraints/test_packager_notebook_contract.py` | 1 | constraints | `constraint`, `unit` | 1 | no | no | yes | 验证 real video tar.zst packager notebook handoff contract。 |
@@ -52,13 +52,13 @@ python tools/harness/run_all_audits.py
 | `tests/constraints/test_real_video_lpips_metric_formal_required.py` | 7 | constraints | `constraint`, `formal` | 0 | no | no | yes | 验证 LPIPS 在 formal 模式下的必需性与行为。 |
 | `tests/constraints/test_real_video_probe_no_trajectory_regression.py` | 2 | constraints | `constraint`, `unit` | 2 | no | no | yes | 验证 real_video_vae_latent_probe 默认路径未被 trajectory scaffold 污染。 |
 | `tests/constraints/test_real_video_quality_metric_flags.py` | 5 | constraints | `constraint`, `unit` | 5 | yes | no | yes | 验证真实视频质量指标的 governed flags 与 failure reason 行为。 |
-| `tests/constraints/test_real_video_vae_latent_ablation_consistency.py` | 1 | constraints | `constraint`, `unit` | 1 | no | no | yes | 验证阶段 2 scaffold 消融配置共享同一协议语义。File purpose: Validate that the stage-two scaffold ablation config shares one protocol contract. |
+| `tests/constraints/test_real_video_vae_latent_ablation_consistency.py` | 2 | constraints | `constraint`, `unit` | 2 | no | no | yes | 验证阶段 2 scaffold 消融配置共享同一协议语义。File purpose: Validate that the stage-two scaffold ablation config shares one protocol contract. |
 | `tests/constraints/test_real_video_vae_latent_backend_no_synthetic_dependency_formal.py` | 2 | constraints | `constraint`, `unit` | 2 | no | no | yes | 验证阶段 2 formal backend 不依赖 synthetic backend。 |
-| `tests/constraints/test_real_video_vae_latent_colab_notebook_contract.py` | 3 | constraints | `constraint`, `unit` | 3 | yes | no | yes | 验证真实视频 workflow notebook 入口遵循受治理合同。 |
+| `tests/constraints/test_real_video_vae_latent_colab_notebook_contract.py` | 4 | constraints | `constraint`, `unit` | 4 | yes | no | yes | 验证真实视频 workflow notebook 入口遵循受治理合同。 |
 | `tests/constraints/test_real_video_vae_latent_no_flow_matching_dependency.py` | 1 | constraints | `constraint`, `unit` | 1 | no | no | yes | 验证阶段 2 scaffold 不依赖 Flow Matching、DiT hook 或 trajectory 实现。File purpose: Validate that the stage-two scaffold does not depend on Flow Matching, DiT hooks, or trajectory implementations. |
 | `tests/constraints/test_records_schema.py` | 1 | constraints | `constraint`, `unit` | 1 | no | no | no | 验证 active formal stage 的 records schema 约束。 |
 | `tests/constraints/test_repository_intake.py` | 2 | constraints | `constraint`, `unit` | 2 | yes | no | yes | 验证仓库 intake 检查与当前 formal stage 的目录边界。 |
-| `tests/constraints/test_run_all_audits.py` | 4 | constraints | `constraint`, `unit` | 4 | yes | no | no | 验证全部 harness 审计可执行并输出治理摘要。 |
+| `tests/constraints/test_run_all_audits.py` | 5 | constraints | `constraint`, `unit` | 5 | yes | no | no | 验证全部 harness 审计可执行并输出治理摘要。 |
 | `tests/constraints/test_runtime_check.py` | 2 | constraints | `constraint`, `unit` | 2 | yes | yes | yes | 验证 Colab runtime 预检的版本、导入与 formal 阻断行为。 |
 | `tests/constraints/test_runtime_profile_boundaries.py` | 5 | constraints | `constraint`, `unit` | 5 | no | no | yes | 验证 runtime_profile 治理边界、配置目录与 release 可移除性约束。 |
 | `tests/constraints/test_runtime_profile_file_organization.py` | 5 | constraints | `constraint`, `unit` | 5 | no | no | yes | 验证 runtime profiling 脚本与 notebook helper 的文件组织合同。 |
@@ -71,8 +71,8 @@ python tools/harness/run_all_audits.py
 | `tests/functional/test_diffusers_autoencoder_kl_framewise_backend.py` | 4 | functional | `quick`, `unit` | 4 | yes | no | yes | 验证 framewise AutoencoderKL backend 的基础编解码行为。 |
 | `tests/functional/test_gpu_runtime_profiler.py` | 10 | functional | `quick` | 10 | yes | yes | yes | 验证 GPU runtime profiler 在无 GPU 与 stop-file 场景下的行为。 |
 | `tests/functional/test_mechanism_audit.py` | 2 | functional | `quick` | 2 | yes | no | yes | 验证阶段 2 mechanism audit 能重建表格与决策文件。 |
-| `tests/functional/test_mechanism_calibration_runner.py` | 5 | functional | `quick`, `unit` | 5 | yes | no | yes | 验证 real_video_vae_latent_probe mechanism calibration runner 的 orchestration 行为。 |
-| `tests/functional/test_mechanism_candidate_selection.py` | 12 | functional | `quick` | 12 | yes | no | yes | 验证 real_video_vae_latent_probe mechanism calibration candidate selector 的 quick 行为。 |
+| `tests/functional/test_mechanism_calibration_runner.py` | 7 | functional | `quick`, `unit` | 7 | yes | no | yes | 验证 real_video_vae_latent_probe mechanism calibration runner 的 orchestration 行为。 |
+| `tests/functional/test_mechanism_candidate_selection.py` | 16 | functional | `quick` | 16 | yes | no | yes | 验证 real_video_vae_latent_probe mechanism calibration candidate selector 的 quick 行为。 |
 | `tests/functional/test_packager.py` | 9 | functional | `quick` | 9 | yes | yes | yes | 验证 real-video zip / tar.zst 打包器的轻量功能契约。 |
 | `tests/functional/test_projection_margin_embedding.py` | 3 | functional | `quick` | 3 | yes | no | no | 验证 stage-one projection-margin embedding 的最小语义。 |
 | `tests/functional/test_protocol_runner_dependency_injection.py` | 6 | functional | `quick` | 6 | no | no | no | 验证 ProtocolRunner 的依赖注入与方法家族解耦行为。File purpose: Validate ProtocolRunner dependency injection and method-family decoupling. |
@@ -94,7 +94,7 @@ python tools/harness/run_all_audits.py
 | `tests/functional/test_runtime_profile_packaging.py` | 1 | functional | `quick`, `unit` | 1 | yes | no | yes | 验证结果打包器会纳入 runtime_profile 目录。 |
 | `tests/functional/test_runtime_profile_recommendation.py` | 5 | functional | `quick`, `unit` | 5 | yes | no | yes | 验证受治理 runtime profile recommendation 的具体 profile 与 batch 建议。 |
 | `tests/functional/test_sync_alignment.py` | 7 | functional | `quick`, `unit` | 7 | yes | no | no | 验证 stage-one offset search synchronization 的最小语义。 |
-| `tests/functional/test_sync_rescue_fusion.py` | 11 | functional | `quick`, `unit` | 11 | yes | no | no | Validate sync-rescue fusion semantics for the synthetic tubelet probe. |
+| `tests/functional/test_sync_rescue_fusion.py` | 12 | functional | `quick`, `unit` | 12 | yes | no | no | Validate sync-rescue fusion semantics for the synthetic tubelet probe. |
 | `tests/functional/test_synthetic_video_latent_reproducibility.py` | 2 | functional | `quick` | 2 | yes | no | no | 验证 synthetic video latent tensor artifact backend 的可复现性。 |
 | `tests/functional/test_synthetic_video_latent_runtime.py` | 3 | functional | `quick` | 3 | no | no | no | 验证 synthetic video latent tensor artifact runtime 的最小运行语义。 |
 | `tests/functional/test_temporal_attack_runtime.py` | 3 | functional | `quick` | 3 | yes | no | no | 验证 temporal attack placeholder runtime 的最小运行语义。 |

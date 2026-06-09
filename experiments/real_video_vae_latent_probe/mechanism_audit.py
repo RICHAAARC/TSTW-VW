@@ -45,6 +45,10 @@ STAGE2_MECHANISM_AUDIT_COLUMNS = [
     "sync_alignment_error_mean",
     "sync_peak_rank_median",
     "quality_psnr_mean",
+    "quality_psnr_finite_mean",
+    "quality_psnr_finite_count",
+    "quality_psnr_inf_count",
+    "quality_psnr_total_count",
     "quality_ssim_mean",
     "temporal_consistency_score_mean",
     "flicker_score_mean",
@@ -196,6 +200,11 @@ def build_stage2_mechanism_audit_rows(
         ]
         if not grouped_records:
             continue
+        psnr_stats = _build_payload_numeric_distribution_stats(
+            grouped_records,
+            "quality_metrics",
+            "watermarked_video_psnr",
+        )
         rows.append(
             {
                 "run_id": grouped_records[0].get("run_id"),
@@ -256,6 +265,10 @@ def build_stage2_mechanism_audit_rows(
                     "watermarked_video_psnr",
                     allow_positive_infinity=True,
                 ),
+                "quality_psnr_finite_mean": psnr_stats["finite_mean"],
+                "quality_psnr_finite_count": psnr_stats["finite_count"],
+                "quality_psnr_inf_count": psnr_stats["positive_infinity_count"],
+                "quality_psnr_total_count": psnr_stats["total_count"],
                 "quality_ssim_mean": _mean_payload_value(grouped_records, "quality_metrics", "watermarked_video_ssim"),
                 "temporal_consistency_score_mean": _mean_payload_value(grouped_records, "temporal_metrics", "temporal_consistency_score"),
                 "flicker_score_mean": _mean_payload_value(grouped_records, "temporal_metrics", "flicker_score"),
@@ -553,6 +566,11 @@ def build_stage2_mechanism_decision(
         "watermarked_video_psnr",
         allow_positive_infinity=True,
     )
+    psnr_stats = _build_payload_numeric_distribution_stats(
+        positive_quality_records,
+        "quality_metrics",
+        "watermarked_video_psnr",
+    )
     mean_ssim = _mean_payload_value(positive_quality_records, "quality_metrics", "watermarked_video_ssim")
     if require_quality_not_collapsed and (
         mean_psnr is None
@@ -626,6 +644,14 @@ def build_stage2_mechanism_decision(
                 "positive_gain_attack_count"
             ],
             "mean_watermarked_video_psnr": _round_or_none(mean_psnr),
+            "mean_watermarked_video_psnr_finite": _round_or_none(
+                psnr_stats["finite_mean"]
+            ),
+            "watermarked_video_psnr_finite_count": psnr_stats["finite_count"],
+            "watermarked_video_psnr_inf_count": psnr_stats[
+                "positive_infinity_count"
+            ],
+            "watermarked_video_psnr_total_count": psnr_stats["total_count"],
             "mean_watermarked_video_ssim": _round_or_none(mean_ssim),
         },
         "SyncRescueDecision": sync_semantics["sync_rescue_decision"],
@@ -753,6 +779,35 @@ def _values_for_payload(records: list[dict[str, Any]], payload_key: str, value_k
             continue
         values.append(numeric_value)
     return values
+
+
+def _build_payload_numeric_distribution_stats(
+    records: list[dict[str, Any]],
+    payload_key: str,
+    value_key: str,
+) -> dict[str, int | float | None]:
+    """统计 payload 数值的有限值和正无穷值, 用于把 PSNR 的完美重建和普通均值分开记录。"""
+    finite_values: list[float] = []
+    positive_infinity_count = 0
+    total_count = 0
+    for value in _values_for_payload(records, payload_key, value_key):
+        total_count += 1
+        numeric_value = float(value)
+        if math.isfinite(numeric_value):
+            finite_values.append(numeric_value)
+        elif math.isinf(numeric_value) and numeric_value > 0:
+            positive_infinity_count += 1
+    finite_mean = (
+        round(statistics.fmean(finite_values), 6)
+        if finite_values
+        else None
+    )
+    return {
+        "finite_mean": finite_mean,
+        "finite_count": len(finite_values),
+        "positive_infinity_count": positive_infinity_count,
+        "total_count": total_count,
+    }
 
 
 def _values_for_score(records: list[dict[str, Any]], score_name: str) -> list[float]:

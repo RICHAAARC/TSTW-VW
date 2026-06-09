@@ -1000,6 +1000,8 @@ def write_gpu_runtime_audit_record(
 
     if summary_payload is None:
         record_status = "skipped"
+        profiling_status = "not_sampled"
+        profiling_failure_reason = None
         if profiling_expected:
             if session_payload.get("process_started") is False:
                 skip_reason = "gpu_runtime_profile_start_failed"
@@ -1012,10 +1014,14 @@ def write_gpu_runtime_audit_record(
     else:
         record_status = "available"
         skip_reason = None
+        profiling_status = str(summary_payload.get("profiling_status") or "unknown")
+        profiling_failure_reason = summary_payload.get("profiling_failure_reason")
 
     audit_payload = {
         "generated_at_utc": iso_timestamp_utc(),
         "record_status": record_status,
+        "profiling_status": profiling_status,
+        "profiling_failure_reason": profiling_failure_reason,
         "profiling_mode": str(profiling_mode).strip() or "unspecified",
         "profiling_expected": bool(profiling_expected),
         "trace_path": str(trace_path),

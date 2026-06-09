@@ -65,6 +65,10 @@ def test_gpu_runtime_profiler_writes_unavailable_trace_without_nvidia_smi(
     assert len(rows) == 1
     assert rows[0]["gpu_name"] == "unavailable"
     assert summary["trace_available"] is True
+    assert summary["usable_sample_count"] == 0
+    assert summary["unavailable_sample_count"] == 1
+    assert summary["profiling_status"] == "unavailable"
+    assert summary["profiling_failure_reason"] == "gpu_runtime_samples_unavailable"
     assert summary["gpu_name"] == "unavailable"
     assert output_json.exists()
     assert output_md.exists()
@@ -238,6 +242,7 @@ def test_runtime_profile_workflow_writes_skipped_gpu_audit_record_without_trace(
 
     assert audit_path.exists()
     assert payload["record_status"] == "skipped"
+    assert payload["profiling_status"] == "not_sampled"
     assert payload["skip_reason"] == "gpu_runtime_profile_not_requested"
     assert payload["trace_exists"] is False
     assert payload["summary_exists"] is False
@@ -280,11 +285,14 @@ def test_runtime_profile_workflow_writes_available_gpu_audit_record_from_trace(
     assert audit_path.exists()
     assert summary_path.exists()
     assert payload["record_status"] == "available"
+    assert payload["profiling_status"] == "unavailable"
+    assert payload["profiling_failure_reason"] == "gpu_runtime_samples_unavailable"
     assert payload["skip_reason"] is None
     assert payload["trace_exists"] is True
     assert payload["summary_exists"] is True
     assert isinstance(payload["gpu_runtime_summary"], dict)
     assert payload["gpu_runtime_summary"]["trace_available"] is True
+    assert payload["gpu_runtime_summary"]["usable_sample_count"] == 0
 
 
 def test_runtime_profile_workflow_loads_governed_profile_config() -> None:

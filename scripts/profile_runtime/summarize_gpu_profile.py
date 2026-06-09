@@ -92,6 +92,22 @@ def summarize_gpu_runtime_profile(
     elapsed_values = [row["elapsed_seconds"] for row in numeric_rows if "elapsed_seconds" in row]
 
     trace_available = bool(rows)
+    usable_sample_count = len(gpu_util_values)
+    unavailable_sample_count = sum(
+        1
+        for row in rows
+        if "unavailable" in str(row.get("gpu_name", "")).lower()
+        or "sample_failure" in str(row.get("gpu_name", "")).lower()
+    )
+    if usable_sample_count > 0:
+        profiling_status = "sampled"
+        profiling_failure_reason = None
+    elif trace_available:
+        profiling_status = "unavailable"
+        profiling_failure_reason = "gpu_runtime_samples_unavailable"
+    else:
+        profiling_status = "not_sampled"
+        profiling_failure_reason = "gpu_runtime_trace_empty"
     total_memory_mb = max(memory_total_values) if memory_total_values else 0.0
     peak_memory_used_mb = max(memory_used_values) if memory_used_values else 0.0
     peak_memory_ratio = (peak_memory_used_mb / total_memory_mb) if total_memory_mb > 0 else 0.0
@@ -144,6 +160,10 @@ def summarize_gpu_runtime_profile(
     summary = {
         "trace_available": trace_available,
         "sample_count": len(rows),
+        "usable_sample_count": usable_sample_count,
+        "unavailable_sample_count": unavailable_sample_count,
+        "profiling_status": profiling_status,
+        "profiling_failure_reason": profiling_failure_reason,
         "gpu_name": gpu_name,
         "total_memory_mb": round(total_memory_mb, 6),
         "peak_memory_used_mb": round(peak_memory_used_mb, 6),
@@ -164,6 +184,9 @@ def summarize_gpu_runtime_profile(
         f"- run_root: {Path(run_root)}",
         f"- trace_available: {summary['trace_available']}",
         f"- sample_count: {summary['sample_count']}",
+        f"- usable_sample_count: {summary['usable_sample_count']}",
+        f"- profiling_status: {summary['profiling_status']}",
+        f"- profiling_failure_reason: {summary['profiling_failure_reason']}",
         f"- gpu_name: {summary['gpu_name']}",
         f"- peak_memory_ratio: {summary['peak_memory_ratio']}",
         f"- mean_gpu_util_percent: {summary['mean_gpu_util_percent']}",

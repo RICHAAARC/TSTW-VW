@@ -3916,3 +3916,35 @@ clip_similarity_not_enabled
 
 因此, 本结果可作为阶段 2 机制证明完成结果。后续工作应进入 `trajectory_statistic_probe` 的阶段准备, 而不是继续在阶段 2 参数搜索空间中调参。
 
+## 2026-06-09 阶段 2 工程清理记录
+
+本次清理目标是让项目以完整、可审计、可复现的状态进入 `trajectory_statistic_probe`。
+
+### 已完成修复
+
+1. GPU runtime profiler 不再只用 `record_status = available` 表示存在 trace, 而是额外记录 `profiling_status`、`profiling_failure_reason`、`usable_sample_count` 与 `unavailable_sample_count`。这样可以区分“已成功采样”和“trace 存在但 GPU 采样不可用”。
+2. PSNR 汇总增加 finite / positive-infinity 分离统计, 保留历史 `*_psnr_mean` 兼容字段, 同时新增 `*_psnr_finite_mean`、`*_psnr_finite_count`、`*_psnr_inf_count` 与 `*_psnr_total_count`。这样可以区分“完美重建导致 Infinity”和“普通有限 PSNR 均值”。
+3. `stage2_mechanism_decision` 的 mechanism metrics 增加 `mean_watermarked_video_psnr_finite` 和 PSNR 计数字段, 避免阶段 2 收口报告只能看到 `Infinity`。
+4. `docs/field_registry.md` 已登记本次新增的 GPU profiling 与 PSNR 分离统计字段。
+5. `docs/test_list.md` 已通过 `python tools/harness/update_test_list.py` 重新生成, 与当前测试集合对齐。
+6. 检查未发现 root-level `tests/test_*.py` 历史遗留测试文件, 当前测试分层仍符合 `docs/test_case_constraints.md`。
+
+### 验证结果
+
+```text
+python -m pytest -q
+348 passed, 67 deselected, 3 warnings
+
+python -m pytest --collect-only -q -m "not __never__"
+415 tests collected
+
+python tools/harness/run_all_audits.py
+overall_decision = pass
+pass_count = 17
+fail_count = 0
+```
+
+### 结论
+
+阶段 2 当前不需要继续修复 GPU profiler 未采样和 PSNR Infinity 两项作为机制证明阻塞项; 它们已经被工程化为可解释、可审计的诊断字段。阶段 2 的机制证明结果仍保持 PASS, 项目可以进入 `trajectory_statistic_probe` 的阶段 3 构建准备。
+

@@ -410,3 +410,20 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 - All `*_placeholder` fields require replacement before any supported claim can rely on them.
 - All `*_random` fields must carry seed or digest traceability.
 - Current stage freezes schema, layout, and placeholder / random runtime scaffolding only; it does not register any real algorithm field as claim-supporting.
+| vae_reconstruction_psnr_finite_mean | table | none | true | false | false | VAE reconstruction PSNR finite-only mean used to separate ordinary finite quality from positive-infinity perfect reconstruction cases. |
+| vae_reconstruction_psnr_finite_count | table | none | true | false | false | Count of finite VAE reconstruction PSNR values contributing to `vae_reconstruction_psnr_finite_mean`. |
+| vae_reconstruction_psnr_inf_count | table | none | true | false | false | Count of positive-infinity VAE reconstruction PSNR values in quality tables. |
+| vae_reconstruction_psnr_total_count | table | none | true | false | false | Count of numeric VAE reconstruction PSNR values, including finite and positive-infinity values. |
+| watermarked_video_psnr_finite_mean | table | none | true | false | false | Watermarked-video PSNR finite-only mean used by quality tables and tradeoff figures when regular finite values are available. |
+| watermarked_video_psnr_finite_count | table | none | true | false | false | Count of finite watermarked-video PSNR values contributing to `watermarked_video_psnr_finite_mean`. |
+| watermarked_video_psnr_inf_count | table | none | true | false | false | Count of positive-infinity watermarked-video PSNR values in quality tables. |
+| watermarked_video_psnr_total_count | table | none | true | false | false | Count of numeric watermarked-video PSNR values, including finite and positive-infinity values. |
+| quality_psnr_finite_mean | table | none | true | false | false | Stage-two mechanism audit finite-only PSNR mean for the grouped `watermarked_video_psnr` field. |
+| quality_psnr_finite_count | table | none | true | false | false | Stage-two mechanism audit count of finite grouped PSNR values. |
+| quality_psnr_inf_count | table | none | true | false | false | Stage-two mechanism audit count of positive-infinity grouped PSNR values. |
+| quality_psnr_total_count | table | none | true | false | false | Stage-two mechanism audit count of numeric grouped PSNR values. |
+| mean_watermarked_video_psnr_finite | table | none | true | false | false | Stage-two mechanism decision finite-only mean of positive watermarked-video PSNR values. |
+| profiling_status | runtime_profile | none | true | false | false | GPU runtime profiling status; expected values include `sampled`, `unavailable`, and `not_sampled`. |
+| profiling_failure_reason | runtime_profile | none | true | false | false | Reason explaining why GPU profiling did not produce usable samples. |
+| usable_sample_count | runtime_profile | none | true | false | false | Count of GPU runtime trace samples with usable GPU utilization values. |
+| unavailable_sample_count | runtime_profile | none | true | false | false | Count of GPU runtime trace samples that explicitly report unavailable or failed GPU sampling. |
