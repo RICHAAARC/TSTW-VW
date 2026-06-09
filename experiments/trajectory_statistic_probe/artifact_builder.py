@@ -7,6 +7,7 @@ Module type: General module
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 from statistics import mean
 from typing import Any
@@ -99,6 +100,7 @@ class TrajectoryStatisticArtifactBuilder:
         event_score_records: list[dict[str, Any]],
         threshold_records: list[dict[str, Any]],
         output_root: str | Path,
+        mechanism_decision: dict[str, Any] | None = None,
     ) -> dict[str, Path]:
         """功能：从 governed records 构建阶段 3 产物。
 
@@ -151,6 +153,7 @@ class TrajectoryStatisticArtifactBuilder:
                 gain_rows,
                 correlation_rows,
                 runtime_rows,
+                mechanism_decision,
             ),
             encoding="utf-8",
         )
@@ -175,10 +178,19 @@ class TrajectoryStatisticArtifactBuilder:
             A dictionary containing artifact paths.
         """
         record_writer = RecordWriter(output_root)
+        output_paths = build_trajectory_statistic_probe_output_paths(output_root)
+        mechanism_decision = None
+        if output_paths.trajectory_mechanism_decision_path.exists():
+            mechanism_decision = json.loads(
+                output_paths.trajectory_mechanism_decision_path.read_text(
+                    encoding="utf-8"
+                )
+            )
         return self.build_artifacts(
             record_writer.read_event_score_records(),
             record_writer.read_threshold_records(),
             output_root,
+            mechanism_decision,
         )
 
     def _write_csv(
@@ -396,6 +408,7 @@ def build_trajectory_probe_report_text(
     gain_rows: list[dict[str, Any]],
     correlation_rows: list[dict[str, Any]],
     runtime_rows: list[dict[str, Any]],
+    mechanism_decision: dict[str, Any] | None = None,
 ) -> str:
     method_variants = ", ".join(
         sorted({record["method_variant"] for record in event_score_records})
@@ -409,6 +422,22 @@ def build_trajectory_probe_report_text(
         default=0.0,
     )
     mean_runtime_ms = mean([float(row["trajectory_runtime_ms"]) for row in runtime_rows]) if runtime_rows else 0.0
+    mechanism_status = _resolve_stage3_mechanism_status(mechanism_decision)
+    implementation_status = _resolve_decision_text(
+        mechanism_decision,
+        "Stage3ImplementationDecision",
+        "NOT_AVAILABLE",
+    )
+    dependency_status = _resolve_decision_text(
+        mechanism_decision,
+        "Stage2DependencyStatus",
+        "NOT_AVAILABLE",
+    )
+    next_allowed_stage = _resolve_decision_text(
+        mechanism_decision,
+        "NextAllowedStageByTrajectory",
+        "NOT_AVAILABLE",
+    )
     return "\n".join(
         [
             "# Trajectory Probe Report",
@@ -420,12 +449,49 @@ def build_trajectory_probe_report_text(
             f"max_delta_positive_margin_traj: {round(max_delta_positive_margin, 6)}",
             f"correlation_row_count: {len(correlation_rows)}",
             f"mean_runtime_ms: {round(mean_runtime_ms, 6)}",
-            "stage3_mechanism_status: deferred_by_stage2",
+            f"stage2_dependency_status: {dependency_status}",
+            f"stage3_implementation_status: {implementation_status}",
+            f"stage3_mechanism_status: {mechanism_status}",
+            f"next_allowed_stage_by_trajectory: {next_allowed_stage}",
             "",
-            "This scaffold reports trajectory-side records, tables, and runtime traces without promoting the project stage.",
+            (
+                "This report is rebuilt from governed records, thresholds, and the "
+                "trajectory mechanism decision artifact; the repository project stage "
+                "is still controlled by the separate project contract."
+            ),
             "",
         ]
     )
+
+
+def _resolve_stage3_mechanism_status(
+    mechanism_decision: dict[str, Any] | None,
+) -> str:
+    """功能：从机制决策产物解析报告中的阶段 3 机制状态。
+
+    该函数属于通用报告防漂移写法。报告不再硬编码旧状态, 而是优先复用
+    `trajectory_mechanism_decision.json` 中的正式门禁结论；当重建旧产物且决策文件缺失时,
+    明确写出 `NOT_AVAILABLE`, 避免误导为已经通过或被阶段 2 阻断。
+    """
+    return _resolve_decision_text(
+        mechanism_decision,
+        "Stage3MechanismDecision",
+        "NOT_AVAILABLE",
+    )
+
+
+def _resolve_decision_text(
+    mechanism_decision: dict[str, Any] | None,
+    field_name: str,
+    default_value: str,
+) -> str:
+    if not mechanism_decision:
+        return default_value
+    value = mechanism_decision.get(field_name)
+    if value is None:
+        return default_value
+    normalized_value = str(value).strip()
+    return normalized_value if normalized_value else default_value
 
 
 def _decision_rate(records: list[dict[str, Any]]) -> float:

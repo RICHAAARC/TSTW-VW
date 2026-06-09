@@ -1175,3 +1175,30 @@ Codex 禁止执行以下行为：
 10. notebook 或 CLI 最小运行入口。
 
 该起点完成后，项目才具备稳定进入真实视频 latent、trajectory statistic 与完整论文协议的基础。
+
+## 2026-06-10 阶段 3 构建推进状态补充
+
+当前阶段 3 `trajectory_statistic_probe` 的 formal GPU validation 结果已经产生正式 PASS 证据。有效结果包为：
+
+```text
+trajectory_statistic_probe_formal_gpu_validation_20260609T154216Z_b94ad62.zip
+```
+
+正式结论来自包内：
+
+```text
+artifacts/trajectory_mechanism_decision.json
+```
+
+关键状态为：
+
+```text
+Stage2DependencyStatus = PASSED
+Stage3ImplementationDecision = PASS
+Stage3MechanismDecision = PASS
+NextAllowedStageByTrajectory = trajectory_aware_sampling_probe
+```
+
+构建流程上需要注意：报告文件 `reports/trajectory_probe_report.md` 只是人工阅读入口，不能替代正式 gate 文件。报告生成逻辑已调整为读取机制决策 payload，避免旧硬编码状态 `deferred_by_stage2` 与正式结果不一致。
+
+后续阶段推进应继续遵守项目契约：在 `.codex/project_contract.md` 未更新前，仓库级 `project_stage` 仍保持当前受治理状态；阶段 3 结果只说明 trajectory 机制验证已允许进入 `trajectory_aware_sampling_probe` 的下一步设计与验证准备。

@@ -165,11 +165,6 @@ class TrajectoryStatisticProbeRunner:
         record_writer = RecordWriter(output_root_path)
         record_writer.write_event_score_records(event_score_records)
         record_writer.write_threshold_records(threshold_records)
-        self._artifact_builder.build_artifacts(
-            event_score_records,
-            threshold_records,
-            output_root_path,
-        )
         mechanism_decision = build_stage3_mechanism_decision(
             event_score_records,
             threshold_records,
@@ -185,6 +180,12 @@ class TrajectoryStatisticProbeRunner:
         output_paths.trajectory_mechanism_decision_path.write_text(
             json.dumps(mechanism_decision, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
+        )
+        self._artifact_builder.build_artifacts(
+            event_score_records,
+            threshold_records,
+            output_root_path,
+            mechanism_decision,
         )
         run_manifest = self._build_run_manifest(
             run_id,
