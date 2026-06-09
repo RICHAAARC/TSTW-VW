@@ -3764,6 +3764,16 @@ def _write_stage2_frozen_baseline_handoff(
             if mechanism_summary is None
             else mechanism_summary.get("stage2_mechanism_protocol")
         ),
+        "sync_confidence_gate_rule": (
+            None
+            if mechanism_summary is None
+            else mechanism_summary.get("sync_confidence_gate_rule")
+        ),
+        "negative_rescue_over_threshold_count": (
+            None
+            if mechanism_summary is None
+            else mechanism_summary.get("negative_rescue_over_threshold_count")
+        ),
         "NextAllowedStageByMechanism": (
             None
             if mechanism_summary is None

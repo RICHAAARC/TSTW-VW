@@ -672,9 +672,11 @@ class RealVideoVaeLatentRunner:
     def _set_runtime_event_tag(self, event_tag: str) -> None:
         with self._runtime_event_tag_lock:
             self._current_runtime_event_tag = event_tag
+            if self._runner_timing_recorder is None:
+                return
             try:
                 write_current_runtime_event_tag(
-                    self._runner_timing_recorder.run_root if self._runner_timing_recorder is not None else self._repository_root,
+                    self._runner_timing_recorder.run_root,
                     event_tag,
                 )
             except Exception:

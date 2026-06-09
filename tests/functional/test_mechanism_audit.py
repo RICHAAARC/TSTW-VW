@@ -152,6 +152,8 @@ def test_stage2_mechanism_audit_writes_expected_artifacts(tmp_path: Path) -> Non
     assert result["SyncCandidateSelectionStatus"] == "rescue_with_leakage"
     assert result["SyncAbsoluteRescueStatus"] == "multi_attack_absolute_success"
     assert result["SyncNegativeLeakageStatus"] == "leakage_exceeded"
+    assert result["sync_confidence_gate_rule"] == "aligned_payload_safety_gate"
+    assert result["negative_rescue_over_threshold_count"] == 0
     assert "mean_watermarked_video_psnr_finite" in result["mechanism_metrics"]
     assert "watermarked_video_psnr_inf_count" in result["mechanism_metrics"]
 

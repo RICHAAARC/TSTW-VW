@@ -222,6 +222,8 @@ def test_mechanism_decision_passes_without_sync_score_gap_requirement() -> None:
 
     assert result["Stage2MechanismDecision"] == "PASS"
     assert "sync_positive_negative_score_gap_low" not in result["Stage2MechanismBlockingReasons"]
+    assert result["sync_confidence_gate_rule"] == "aligned_payload_safety_gate"
+    assert result["negative_rescue_over_threshold_count"] == 0
 
 
 def test_mechanism_candidate_selector_has_no_local_clip_only_sync_confident_counter() -> None:

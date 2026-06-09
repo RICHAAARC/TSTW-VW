@@ -218,6 +218,8 @@ def _build_stage2_family_summary(
         "Stage2MechanismDecision",
         "Stage2MechanismBlockingReasons",
         "Stage2MechanismWarnings",
+        "sync_confidence_gate_rule",
+        "negative_rescue_over_threshold_count",
         "NextAllowedStageByImplementation",
         "NextAllowedStageByMechanism",
         "RecommendedNextAction",

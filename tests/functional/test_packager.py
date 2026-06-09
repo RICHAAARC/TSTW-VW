@@ -97,6 +97,8 @@ def _make_run_root(tmp_path: Path) -> Path:
                 "Stage2ImplementationDecision": "PASS",
                 "Stage2MechanismDecision": "INCONCLUSIVE",
                 "Stage2MechanismBlockingReasons": ["sample_count_insufficient"],
+                "sync_confidence_gate_rule": "aligned_payload_safety_gate",
+                "negative_rescue_over_threshold_count": 0,
                 "NextAllowedStageByImplementation": "trajectory_statistic_probe",
                 "NextAllowedStageByMechanism": "remain_in_real_video_vae_latent_probe",
                 "RecommendedNextAction": "stage2_mechanism_calibration_run",
@@ -327,6 +329,8 @@ def test_notebook_family_packaging_writes_stage2_frozen_baseline_handoff(
             "Stage2ImplementationDecision": "PASS",
             "Stage2MechanismDecision": "PASS",
             "stage2_mechanism_protocol": "aligned_payload_safety",
+            "sync_confidence_gate_rule": "aligned_payload_safety_gate",
+            "negative_rescue_over_threshold_count": 0,
             "NextAllowedStageByMechanism": "trajectory_statistic_probe",
         },
     )
@@ -343,6 +347,8 @@ def test_notebook_family_packaging_writes_stage2_frozen_baseline_handoff(
     ):
         assert required_relpath in handoff_payload["required_relpaths"]
     assert handoff_payload["Stage2MechanismDecision"] == "PASS"
+    assert handoff_payload["sync_confidence_gate_rule"] == "aligned_payload_safety_gate"
+    assert handoff_payload["negative_rescue_over_threshold_count"] == 0
 
 
 def test_real_video_tar_zst_packager_raises_without_tar_zstd(tmp_path: Path) -> None:

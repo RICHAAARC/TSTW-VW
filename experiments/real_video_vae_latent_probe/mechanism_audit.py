@@ -81,6 +81,7 @@ STAGE2_SYNC_GAIN_COLUMNS = [
 DEFAULT_MECHANISM_CONFIG_PATH = Path("configs/protocol/stage2_mechanism_gate.json")
 TEMPORAL_ATTACKS = {"temporal_crop", "frame_dropping", "local_clip", "speed_change"}
 STAGE2_MECHANISM_PROTOCOL = "aligned_payload_safety"
+STAGE2_SYNC_CONFIDENCE_GATE_RULE = "aligned_payload_safety_gate"
 
 
 def run_stage2_mechanism_audit(
@@ -622,6 +623,12 @@ def build_stage2_mechanism_decision(
         "run_id": event_score_records[0].get("run_id") if event_score_records else None,
         "construction_phase": mechanism_config.get("construction_phase", "real_video_vae_latent_probe"),
         "stage2_mechanism_protocol": mechanism_protocol,
+        "sync_confidence_gate_rule": STAGE2_SYNC_CONFIDENCE_GATE_RULE,
+        "negative_rescue_over_threshold_count": (
+            0
+            if sync_semantics["negative_leakage_status"] == "controlled"
+            else _count_negative_rescue_over_threshold_records(test_records)
+        ),
         "target_fpr": resolved_target_fpr,
         "Stage2ImplementationDecision": implementation_decision,
         "Stage2MechanismDecision": mechanism_decision,
@@ -679,6 +686,8 @@ def build_stage2_mechanism_report_text(
             "",
             "## Decisions",
             f"- stage2_mechanism_protocol: {decision_payload['stage2_mechanism_protocol']}",
+            f"- sync_confidence_gate_rule: {decision_payload['sync_confidence_gate_rule']}",
+            f"- negative_rescue_over_threshold_count: {decision_payload['negative_rescue_over_threshold_count']}",
             f"- Stage2ImplementationDecision: {decision_payload['Stage2ImplementationDecision']}",
             f"- Stage2MechanismDecision: {decision_payload['Stage2MechanismDecision']}",
             f"- Stage2MechanismBlockingReasons: {', '.join(decision_payload['Stage2MechanismBlockingReasons']) or 'none'}",
@@ -978,6 +987,27 @@ def _decision_rate(
         for record in records
     ]
     return _mean(decision_values)
+
+
+def _count_negative_rescue_over_threshold_records(
+    records: list[dict[str, Any]],
+) -> int:
+    """功能：统计被 sync rescue 推到阈值以上的负样本记录数。
+
+    该字段是阶段 2 交给阶段 3 frozen baseline loader 的安全合同字段。
+    如果负样本因为 rescue 逻辑触发而最终判阳性, 后续阶段不能把该 baseline
+    当作安全冻结输入。旧 records 若没有显式 rescue trace, 不会被推断为 rescue。
+    """
+    count = 0
+    for record in records:
+        if record.get("sample_role") not in {"clean_negative", "attacked_negative"}:
+            continue
+        mechanism_trace = record.get("mechanism_trace", {})
+        if not isinstance(mechanism_trace, dict):
+            continue
+        if bool(mechanism_trace.get("sync_rescue_applied")) and bool(record.get("decision")):
+            count += 1
+    return count
 
 
 def _decision_rate_for_role(
