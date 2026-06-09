@@ -57,7 +57,7 @@ python tools/harness/run_all_audits.py
 | `tests/constraints/test_real_video_vae_latent_colab_notebook_contract.py` | 4 | constraints | `constraint`, `unit` | 4 | yes | no | yes | 验证真实视频 workflow notebook 入口遵循受治理合同。 |
 | `tests/constraints/test_real_video_vae_latent_no_flow_matching_dependency.py` | 1 | constraints | `constraint`, `unit` | 1 | no | no | yes | 验证阶段 2 scaffold 不依赖 Flow Matching、DiT hook 或 trajectory 实现。File purpose: Validate that the stage-two scaffold does not depend on Flow Matching, DiT hooks, or trajectory implementations. |
 | `tests/constraints/test_records_schema.py` | 1 | constraints | `constraint`, `unit` | 1 | no | no | no | 验证 active formal stage 的 records schema 约束。 |
-| `tests/constraints/test_repository_intake.py` | 2 | constraints | `constraint`, `unit` | 2 | yes | no | yes | 验证仓库 intake 检查与当前 formal stage 的目录边界。 |
+| `tests/constraints/test_repository_intake.py` | 2 | constraints | `constraint`, `unit` | 2 | yes | no | no | 验证仓库 intake 检查与当前 formal stage 的目录边界。 |
 | `tests/constraints/test_run_all_audits.py` | 5 | constraints | `constraint`, `unit` | 5 | yes | no | no | 验证全部 harness 审计可执行并输出治理摘要。 |
 | `tests/constraints/test_runtime_check.py` | 2 | constraints | `constraint`, `unit` | 2 | yes | yes | yes | 验证 Colab runtime 预检的版本、导入与 formal 阻断行为。 |
 | `tests/constraints/test_runtime_profile_boundaries.py` | 5 | constraints | `constraint`, `unit` | 5 | no | no | yes | 验证 runtime_profile 治理边界、配置目录与 release 可移除性约束。 |

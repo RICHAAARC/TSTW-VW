@@ -72,9 +72,18 @@ STAGE_ONE_REQUIRED_PATHS = {
     "temporal_attack_module": "main/attacks/temporal.py",
     "synthetic_tubelet_sync_contract_module": "experiments/synthetic_tubelet_sync_probe/synthetic_tubelet_sync_contract.py",
 }
+TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS = {
+    "trajectory_aware_sampling_protocol_config": "configs/protocol/trajectory_aware_sampling_probe.json",
+    "trajectory_aware_sampling_ablation_config": "configs/ablation/trajectory_aware_sampling_ablation.json",
+    "trajectory_aware_sampling_package_root": "experiments/trajectory_aware_sampling_probe",
+    "trajectory_aware_sampling_readiness_audit": "experiments/trajectory_aware_sampling_probe/readiness_audit.py",
+    "trajectory_aware_sampling_output_layout": "experiments/trajectory_aware_sampling_probe/output_layout.py",
+    "trajectory_aware_sampling_contract_test": "tests/constraints/test_trajectory_aware_sampling_contract.py",
+    "trajectory_aware_sampling_readiness_test": "tests/functional/test_trajectory_aware_sampling_readiness.py",
+}
 
 
-NEXT_STAGE_TARGET = "real_video_vae_latent_probe"
+NEXT_STAGE_TARGET = "trajectory_aware_sampling_probe"
 
 
 def _read_project_contract(root_path: Path) -> dict[str, Any]:
@@ -143,6 +152,20 @@ def _inspect_next_stage_readiness(root_path: Path, project_stage: str | None) ->
             "all_required_paths_present": present_count == len(REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS),
             "present_required_path_count": present_count,
             "required_path_count": len(REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS),
+            "required_paths": required_paths,
+        }
+    if project_stage == "trajectory_statistic_probe":
+        present_count, required_paths = _build_required_paths(
+            root_path,
+            TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS,
+        )
+        return {
+            "target_construction_phase": target_construction_phase,
+            "all_required_paths_present": (
+                present_count == len(TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS)
+            ),
+            "present_required_path_count": present_count,
+            "required_path_count": len(TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS),
             "required_paths": required_paths,
         }
 

@@ -56,4 +56,5 @@ def test_project_contract_stage_matches_active_formal_phase() -> None:
         None.
     """
     data = load_json_config(ROOT / "configs" / "project" / "project_contract.json")
-    assert data["project_stage"] == "synthetic_tubelet_sync_probe"
+    assert data["project_stage"] == "trajectory_statistic_probe"
+    assert data["target_construction_phase"] == "trajectory_aware_sampling_probe"

@@ -78,7 +78,7 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | payload_bits_digest_random | random | _digest_random | true | false | false | Digest-tracked random payload field; digest semantics are self-contained. |
 | protocol_name | protocol | none | true | false | false | Frozen protocol identifier for the fixed low-FPR calibrated detector skeleton. |
 | construction_phase | protocol | none | true | false | false | Semantic construction phase identifier aligned with the active governed stage. |
-| target_construction_phase | protocol | none | true | false | false | Reserved next-stage construction phase identifier used by support configs and project contract while the active project stage remains `synthetic_tubelet_sync_probe`. |
+| target_construction_phase | protocol | none | true | false | false | Reserved next-stage construction phase identifier used by support configs and project contract; after trajectory formal validation it points from `trajectory_statistic_probe` to `trajectory_aware_sampling_probe`. |
 | latent_distribution | protocol | none | true | false | false | Governed latent distribution identifier reserved for the synthetic tubelet sync probe entry config. |
 | latent_shape | protocol | none | true | false | false | Reserved latent-shape container for the synthetic video latent support config. |
 | latent_generation_seed | protocol | none | true | false | false | Reserved deterministic seed field for the synthetic video latent support config. |
@@ -349,7 +349,7 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | require_quality_not_collapsed | governance | none | true | false | false | Boolean mechanism-gate flag requiring stage-two quality metrics to stay above configured floors. |
 | min_watermarked_video_psnr | governance | none | true | false | false | Minimum watermarked-video PSNR floor used by the stage-two mechanism gate. |
 | min_watermarked_video_ssim | governance | none | true | false | false | Minimum watermarked-video SSIM floor used by the stage-two mechanism gate. |
-| video_vae_backend_placeholder | placeholder | _placeholder | true | false | true | Placeholder VAE backend field reserved while the repository remains under synthetic_tubelet_sync_probe governance. |
+| video_vae_backend_placeholder | placeholder | _placeholder | true | false | true | Placeholder VAE backend field reserved until a later governed transition explicitly enables real generation or real watermark integration. |
 | clip_similarity_placeholder | placeholder | _placeholder | true | false | true | Placeholder field representing disabled CLIP-similarity support in the real_video_vae_latent_probe scaffold. |
 | motion_consistency_placeholder | placeholder | _placeholder | true | false | true | Placeholder field representing disabled motion-consistency support in the real_video_vae_latent_probe scaffold. |
 | trajectory_backend_name | protocol | none | true | false | false | Stage-three trajectory backend identifier used by the surrogate reconstruction support config and runtime config manifest. |

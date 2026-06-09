@@ -1,7 +1,7 @@
 {
-  "project_stage": "synthetic_tubelet_sync_probe",
-  "construction_phase": "synthetic_tubelet_sync_probe",
-  "target_construction_phase": "real_video_vae_latent_probe",
+  "project_stage": "trajectory_statistic_probe",
+  "construction_phase": "trajectory_statistic_probe",
+  "target_construction_phase": "trajectory_aware_sampling_probe",
   "legacy_stage_id": null,
   "method_objects": [
     "temporal_synchronized_tubelet_code",
@@ -39,7 +39,10 @@
   "supported_method_variants": [
     "frame_prc",
     "tubelet_only",
-    "tubelet_sync"
+    "tubelet_sync",
+    "traj_only",
+    "tubelet_traj",
+    "tubelet_sync_trajectory_fusion"
   ],
   "core_boundary_policy": {
     "governance_layer_paths": [

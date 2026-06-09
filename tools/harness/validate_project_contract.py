@@ -66,6 +66,13 @@ REQUIRED_PROTOCOL_RUNTIME_OBJECTS = {
     "manifest_builder",
 }
 REQUIRED_SUPPORTED_METHOD_VARIANTS = set(SYNTHETIC_TUBELET_SYNC_METHOD_VARIANTS)
+ACTIVE_PROJECT_STAGE = "trajectory_statistic_probe"
+ACTIVE_TARGET_CONSTRUCTION_PHASE = "trajectory_aware_sampling_probe"
+REQUIRED_TRAJECTORY_METHOD_VARIANTS = {
+    "traj_only",
+    "tubelet_traj",
+    "tubelet_sync_trajectory_fusion",
+}
 REQUIRED_GOVERNANCE_LAYER_PATHS = {
     "tools/harness",
     ".codex",
@@ -331,19 +338,27 @@ def validate_project_contract_data(data: dict[str, Any]) -> list[dict[str, str]]
     """
     violations: list[dict[str, str]] = []
 
-    if data.get("project_stage") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
+    if data.get("project_stage") != ACTIVE_PROJECT_STAGE:
         violations.append(
             {
                 "field": "project_stage",
-                "reason": "project_stage_must_equal_synthetic_tubelet_sync_probe",
+                "reason": "project_stage_must_equal_trajectory_statistic_probe",
             }
         )
 
-    if data.get("construction_phase") != SYNTHETIC_TUBELET_SYNC_TARGET_PHASE:
+    if data.get("construction_phase") != ACTIVE_PROJECT_STAGE:
         violations.append(
             {
                 "field": "construction_phase",
-                "reason": "construction_phase_must_equal_synthetic_tubelet_sync_probe",
+                "reason": "construction_phase_must_equal_trajectory_statistic_probe",
+            }
+        )
+
+    if data.get("target_construction_phase") != ACTIVE_TARGET_CONSTRUCTION_PHASE:
+        violations.append(
+            {
+                "field": "target_construction_phase",
+                "reason": "target_construction_phase_must_equal_trajectory_aware_sampling_probe",
             }
         )
 
@@ -389,7 +404,10 @@ def validate_project_contract_data(data: dict[str, Any]) -> list[dict[str, str]]
             }
         )
 
-    if not REQUIRED_SUPPORTED_METHOD_VARIANTS.issubset(
+    required_supported_variants = (
+        REQUIRED_SUPPORTED_METHOD_VARIANTS | REQUIRED_TRAJECTORY_METHOD_VARIANTS
+    )
+    if not required_supported_variants.issubset(
         set(data.get("supported_method_variants", []))
     ):
         violations.append(

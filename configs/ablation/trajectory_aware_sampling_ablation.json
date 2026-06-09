@@ -1,5 +1,5 @@
 {
-  "project_stage": "synthetic_tubelet_sync_probe",
+  "project_stage": "trajectory_statistic_probe",
   "construction_phase": "trajectory_aware_sampling_probe",
   "ablation_name": "trajectory_aware_sampling_ablation",
   "shared_protocol_name": "fixed_low_fpr_calibrated_detection",

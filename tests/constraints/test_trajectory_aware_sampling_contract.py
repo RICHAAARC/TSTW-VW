@@ -23,7 +23,7 @@ def test_trajectory_aware_sampling_protocol_config_is_decision_only() -> None:
     """验证下一阶段配置只允许 decision-only scaffold。"""
     config = json.loads(PROTOCOL_CONFIG_PATH.read_text(encoding="utf-8"))
 
-    assert config["project_stage"] == "synthetic_tubelet_sync_probe"
+    assert config["project_stage"] == "trajectory_statistic_probe"
     assert config["construction_phase"] == "trajectory_aware_sampling_probe"
     assert config["upstream_required_construction_phase"] == "trajectory_statistic_probe"
     assert config["required_upstream_mechanism_decision"] == "PASS"
@@ -41,7 +41,7 @@ def test_trajectory_aware_sampling_ablation_config_uses_record_selection_only() 
     """验证下一阶段 ablation 仅描述记录选择计划, 不打开真实后端。"""
     config = json.loads(ABLATION_CONFIG_PATH.read_text(encoding="utf-8"))
 
-    assert config["project_stage"] == "synthetic_tubelet_sync_probe"
+    assert config["project_stage"] == "trajectory_statistic_probe"
     assert config["construction_phase"] == "trajectory_aware_sampling_probe"
     assert config["selection_output_kind"] == "record_digest_selection_plan"
     assert config["allow_real_generation"] is False

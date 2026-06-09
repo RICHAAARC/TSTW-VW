@@ -1,7 +1,7 @@
 {
-  "project_stage": "synthetic_tubelet_sync_probe",
+  "project_stage": "trajectory_statistic_probe",
   "construction_phase": "trajectory_statistic_probe",
-  "target_construction_phase": "trajectory_statistic_probe",
+  "target_construction_phase": "trajectory_aware_sampling_probe",
   "protocol_name": "fixed_low_fpr_calibrated_detection",
   "splits": [
     "dev",

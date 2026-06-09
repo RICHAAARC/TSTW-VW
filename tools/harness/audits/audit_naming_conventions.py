@@ -36,7 +36,7 @@ from tools.harness.lib.naming_rules import (
 
 
 PROJECT_STAGE_PATTERN = re.compile(
-    r"(?im)['\"]?project_stage['\"]?\s*:\s*['\"]?(stage[0-9]+(?:[_-]?[0-9]+)?|stage_[0-9]+|stage-[0-9]+|protocol_skeleton|synthetic_tubelet_sync_probe|real_video_vae_latent_probe)['\"]?"
+    r"(?im)['\"]?project_stage['\"]?\s*:\s*['\"]?(stage[0-9]+(?:[_-]?[0-9]+)?|stage_[0-9]+|stage-[0-9]+|protocol_skeleton|synthetic_tubelet_sync_probe|real_video_vae_latent_probe|trajectory_statistic_probe|trajectory_aware_sampling_probe|full_paper_protocol|minimal_release_extraction)['\"]?"
 )
 WEAK_PROJECT_STAGE_PATTERN = re.compile(
     r"(?im)['\"]?project_stage['\"]?\s*:\s*['\"]?(stage[0-9]+|stage_[0-9]+|stage-[0-9]+)['\"]?"
@@ -306,7 +306,15 @@ def run_audit(root: str | Path) -> dict[str, Any]:
             normalized_path = str(config_file).replace('\\', '/')
             if stage_value == 'protocol_skeleton' and '/configs/project/' not in normalized_path:
                 continue
-            if stage_value not in {'protocol_skeleton', 'synthetic_tubelet_sync_probe', 'real_video_vae_latent_probe'}:
+            if stage_value not in {
+                'protocol_skeleton',
+                'synthetic_tubelet_sync_probe',
+                'real_video_vae_latent_probe',
+                'trajectory_statistic_probe',
+                'trajectory_aware_sampling_probe',
+                'full_paper_protocol',
+                'minimal_release_extraction',
+            }:
                 continue
             if stage_value == 'protocol_skeleton':
                 violations.append(
