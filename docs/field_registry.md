@@ -381,6 +381,7 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | runtime_breakdown_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-three trajectory runtime-breakdown table. |
 | trajectory_probe_report_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-three trajectory probe report. |
 | trajectory_mechanism_decision_path | artifact_layout | none | false | false | false | Relative layout path for the persisted stage-three trajectory mechanism-decision artifact. |
+| stage2_frozen_baseline_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the frozen stage-two baseline manifest consumed by the trajectory statistic probe. |
 | left_score_name | protocol | none | false | false | false | Left score identifier used by rebuilt stage-three score-correlation rows. |
 | right_score_name | protocol | none | false | false | false | Right score identifier used by rebuilt stage-three score-correlation rows. |
 | correlation_value | protocol | none | false | false | false | Correlation summary value emitted by rebuilt stage-three score-correlation rows. |
@@ -390,6 +391,17 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | Stage3ImplementationDecision | governance | none | false | false | false | Implementation-completion decision emitted by the stage-three trajectory mechanism audit. |
 | Stage3MechanismDecision | governance | none | false | false | false | Mechanism-evidence decision emitted by the stage-three trajectory mechanism audit. |
 | Stage2DependencyStatus | governance | none | false | false | false | Stage-three mechanism-audit field recording whether the prerequisite stage-two gate has passed. |
+| Stage2FrozenBaselineManifest | governance | none | false | false | false | Frozen stage-two baseline manifest status emitted after the trajectory dependency loader validates the package. |
+| Stage3MechanismBlockingReasons | governance | none | false | false | false | Mechanism-specific blocking reasons that keep stage-three trajectory evidence from becoming a formal PASS. |
+| baseline_construction_phase | governance | none | false | false | false | Construction phase recorded in the frozen baseline run manifest. |
+| baseline_root | governance | none | false | false | false | Runtime path to the frozen baseline output root used by the replay runner. |
+| baseline_run_id | governance | none | false | false | false | Run identifier copied from the frozen baseline run manifest. |
+| baseline_records_digest | governance | none | false | false | false | Digest of frozen baseline event score records used to prove read-only dependency identity. |
+| baseline_thresholds_digest | governance | none | false | false | false | Digest of frozen baseline threshold records used to prove read-only dependency identity. |
+| baseline_run_manifest_digest | governance | none | false | false | false | Digest of the frozen baseline run manifest used to prove read-only dependency identity. |
+| baseline_mechanism_decision_digest | governance | none | false | false | false | Digest of the frozen baseline mechanism decision artifact used to prove gate identity. |
+| baseline_record_count | governance | none | false | false | false | Count of frozen baseline event records accepted by the dependency loader. |
+| baseline_threshold_count | governance | none | false | false | false | Count of frozen baseline threshold records accepted by the dependency loader. |
 | TrajectoryLeakageSummary | governance | none | false | false | false | Stage-three mechanism-audit summary container for negative leakage rates. |
 | TrajectoryGainSummary | governance | none | false | false | false | Stage-three mechanism-audit summary container for trajectory incremental gain. |
 | TrajectoryCorrelationSummary | governance | none | false | false | false | Stage-three mechanism-audit summary container for control-score magnitude and enabled-variant coverage. |

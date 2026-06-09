@@ -39,6 +39,10 @@ def reconstruct_trajectory_observation(
     trajectory_source_kind = str(
         backend_config.get("trajectory_source_kind", "latent_interpolation_surrogate")
     )
+    if bool(backend_config.get("fail_on_positive_only_artifact_access", False)):
+        mechanism_trace = sample.mechanism_trace or {}
+        if bool(mechanism_trace.get("positive_only_artifact_access")):
+            raise ValueError("positive_only_artifact_access_forbidden")
     time_grid = backend_config.get(
         "trajectory_time_grid",
         backend_config.get("time_grid", [0.0, 0.25, 0.5, 0.75, 1.0]),

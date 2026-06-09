@@ -47,7 +47,7 @@ def _build_record(
     }
 
 
-def test_stage3_mechanism_audit_defers_when_stage2_is_not_passed() -> None:
+def test_stage3_mechanism_audit_records_not_passed_dependency() -> None:
     """Validate that stage-three mechanism audit remains deferred by stage two.
 
     Args:
@@ -83,8 +83,10 @@ def test_stage3_mechanism_audit_defers_when_stage2_is_not_passed() -> None:
     )
 
     assert decision["Stage3ImplementationDecision"] == "PASS"
-    assert decision["Stage3MechanismDecision"] == "DEFERRED_BY_STAGE2"
+    assert decision["Stage3MechanismDecision"] == "INCONCLUSIVE"
     assert decision["Stage2DependencyStatus"] == "NOT_PASSED"
+    assert "stage2_dependency_not_passed" in decision["Stage3MechanismBlockingReasons"]
+    assert "surrogate_source_not_sufficient" in decision["Stage3MechanismBlockingReasons"]
     assert decision["NextAllowedStageByTrajectory"] == "finish_stage2_first"
 
 
@@ -110,3 +112,40 @@ def test_stage3_mechanism_audit_fails_when_enabled_variant_lacks_s_traj() -> Non
     assert decision["Stage3ImplementationDecision"] == "FAIL"
     assert "s_traj_missing_for_trajectory_enabled_variant" in decision["BlockingReasons"]
     assert decision["Stage3MechanismDecision"] == "INCONCLUSIVE"
+
+
+def test_stage3_mechanism_audit_uses_passed_frozen_baseline_but_blocks_surrogate_pass() -> None:
+    """验证冻结 baseline 通过时实现可 PASS, 但 surrogate trajectory 不允许机制 PASS。"""
+    event_score_records = [
+        _build_record("tubelet_only", "attacked_positive", "temporal_crop", None),
+        _build_record("tubelet_sync", "attacked_positive", "temporal_crop", None),
+        _build_record("traj_only", "attacked_positive", "temporal_crop", 0.4),
+        _build_record("tubelet_traj", "attacked_positive", "temporal_crop", 0.5),
+        _build_record(
+            "tubelet_sync_trajectory_fusion",
+            "attacked_positive",
+            "temporal_crop",
+            0.6,
+        ),
+    ]
+
+    decision = build_stage3_mechanism_decision(
+        event_score_records,
+        threshold_records=[{"threshold_id": "threshold"}],
+        runtime_method_configs=[
+            {"method_variant": "tubelet_only", "enable_trajectory": False},
+            {"method_variant": "tubelet_sync", "enable_trajectory": False},
+            {"method_variant": "traj_only", "enable_trajectory": True},
+            {"method_variant": "tubelet_traj", "enable_trajectory": True},
+            {"method_variant": "tubelet_sync_trajectory_fusion", "enable_trajectory": True},
+        ],
+        frozen_baseline_manifest={"Stage2DependencyStatus": "PASSED"},
+        trajectory_backend_config={
+            "trajectory_source_kind": "latent_interpolation_surrogate",
+        },
+    )
+
+    assert decision["Stage3ImplementationDecision"] == "PASS"
+    assert decision["Stage2DependencyStatus"] == "PASSED"
+    assert decision["Stage3MechanismDecision"] == "INCONCLUSIVE"
+    assert "surrogate_source_not_sufficient" in decision["Stage3MechanismBlockingReasons"]

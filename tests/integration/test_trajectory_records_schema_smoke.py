@@ -82,4 +82,5 @@ def test_trajectory_probe_records_schema_smoke(tmp_path: Path) -> None:
 
     assert run_manifest["construction_phase"] == "trajectory_statistic_probe"
     assert mechanism_decision["Stage3ImplementationDecision"] == "PASS"
-    assert mechanism_decision["Stage3MechanismDecision"] == "DEFERRED_BY_STAGE2"
+    assert mechanism_decision["Stage3MechanismDecision"] == "INCONCLUSIVE"
+    assert mechanism_decision["Stage2DependencyStatus"] == "NOT_PASSED"

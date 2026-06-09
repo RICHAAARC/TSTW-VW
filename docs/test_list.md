@@ -7,17 +7,17 @@
 - 测试根目录：`tests/`
 - 测试构建约束：`docs/test_case_constraints.md`
 - 当前 pytest 默认参数来自 `pyproject.toml`：`(constraint or unit or quick) and not integration and not smoke and not slow and not formal`
-- 当前全量测试节点：415 个
-- 当前默认会执行的测试节点：348 个
-- 当前默认排除的测试节点：67 个
+- 当前全量测试节点：420 个
+- 当前默认会执行的测试节点：350 个
+- 当前默认排除的测试节点：70 个
 
 ## 2. 分层统计
 
 | Layer | Files | Nodes | Default role |
 | --- | --- | --- | --- |
 | constraints | 33 | 153 | default governance checks |
-| functional | 39 | 223 | default quick behavior checks |
-| integration | 22 | 39 | excluded runner/smoke/formal checks |
+| functional | 40 | 225 | default quick behavior checks |
+| integration | 23 | 42 | excluded runner/smoke/formal checks |
 
 ## 3. 推荐执行命令
 
@@ -98,7 +98,8 @@ python tools/harness/run_all_audits.py
 | `tests/functional/test_synthetic_video_latent_reproducibility.py` | 2 | functional | `quick` | 2 | yes | no | no | 验证 synthetic video latent tensor artifact backend 的可复现性。 |
 | `tests/functional/test_synthetic_video_latent_runtime.py` | 3 | functional | `quick` | 3 | no | no | no | 验证 synthetic video latent tensor artifact runtime 的最小运行语义。 |
 | `tests/functional/test_temporal_attack_runtime.py` | 3 | functional | `quick` | 3 | yes | no | no | 验证 temporal attack placeholder runtime 的最小运行语义。 |
-| `tests/functional/test_trajectory_mechanism_audit.py` | 2 | functional | `quick` | 2 | no | no | no | 验证阶段 3 trajectory mechanism audit 的基本决策语义。 |
+| `tests/functional/test_trajectory_mechanism_audit.py` | 3 | functional | `quick` | 3 | no | no | no | 验证阶段 3 trajectory mechanism audit 的基本决策语义。 |
+| `tests/functional/test_trajectory_source_access_guard.py` | 1 | functional | `quick`, `unit` | 1 | no | no | no | 验证 trajectory source 不允许读取 positive-only artifact。 |
 | `tests/functional/test_trajectory_statistic.py` | 2 | functional | `quick` | 2 | no | no | no | 验证阶段 3 trajectory 统计核心的快速功能语义。 |
 | `tests/functional/test_tubelet_partition.py` | 5 | functional | `quick` | 5 | no | no | no | 验证 stage-one tubelet partition 的边界与 digest 语义。 |
 | `tests/functional/test_video_artifact_digest.py` | 1 | functional | `quick` | 1 | yes | no | yes | 验证阶段 2 视频 artifact digest 行为。 |
@@ -127,4 +128,5 @@ python tools/harness/run_all_audits.py
 | `tests/integration/test_synthetic_tubelet_records_schema_smoke.py` | 2 | integration | `integration`, `smoke` | 0 | yes | no | no | 验证 stage-one event record 中的 mechanism_trace 与正式机制字段语义。 |
 | `tests/integration/test_synthetic_tubelet_table_rebuild_smoke.py` | 5 | integration | `integration`, `slow`, `smoke` | 0 | yes | no | no | 验证 stage-one 表格、曲线与报告可由 records 重建。 |
 | `tests/integration/test_table_rebuild_smoke.py` | 1 | integration | `integration`, `smoke` | 0 | yes | no | no | 验证阶段 0 tables 可由 records 重建。 |
+| `tests/integration/test_trajectory_formal_replay_smoke.py` | 3 | integration | `integration`, `smoke` | 0 | yes | no | yes | 验证 trajectory statistic probe 的冻结 baseline 与 replay 闭环。 |
 | `tests/integration/test_trajectory_records_schema_smoke.py` | 1 | integration | `integration`, `smoke` | 0 | yes | no | no | 验证阶段 3 trajectory statistic probe 的 smoke records schema。 |

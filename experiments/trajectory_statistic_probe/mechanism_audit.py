@@ -14,6 +14,8 @@ def build_stage3_mechanism_decision(
     event_score_records: list[dict[str, Any]],
     threshold_records: list[dict[str, Any]],
     runtime_method_configs: list[dict[str, Any]],
+    frozen_baseline_manifest: dict[str, Any] | None = None,
+    trajectory_backend_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """功能：构建阶段 3 implementation / mechanism 审计结论。
 
@@ -23,6 +25,8 @@ def build_stage3_mechanism_decision(
         event_score_records: Event score records emitted by the runner.
         threshold_records: Threshold records emitted by the runner.
         runtime_method_configs: Runtime method configs used by the runner.
+        frozen_baseline_manifest: Optional validated frozen baseline manifest.
+        trajectory_backend_config: Optional trajectory backend config.
 
     Returns:
         A mechanism-decision dictionary.
@@ -79,15 +83,35 @@ def build_stage3_mechanism_decision(
             blocking_reasons.append("s_traj_non_null_for_trajectory_disabled_variant")
             break
 
+    stage2_dependency_status = _resolve_stage2_dependency_status(
+        frozen_baseline_manifest
+    )
+    trajectory_source_kind = _resolve_trajectory_source_kind(
+        event_score_records,
+        trajectory_backend_config,
+    )
+    if (
+        stage2_dependency_status != "PASSED"
+        and frozen_baseline_manifest is not None
+    ):
+        blocking_reasons.append("stage2_frozen_baseline_manifest_not_passed")
+
     implementation_decision = "PASS" if not blocking_reasons else "FAIL"
-    stage2_dependency_status = "NOT_PASSED"
+    mechanism_blocking_reasons = _build_mechanism_blocking_reasons(
+        stage2_dependency_status,
+        trajectory_source_kind,
+        implementation_decision,
+    )
     mechanism_decision = (
-        "DEFERRED_BY_STAGE2"
+        "INCONCLUSIVE"
         if implementation_decision == "PASS"
         else "INCONCLUSIVE"
     )
     next_allowed_stage = (
-        "finish_stage2_first"
+        "trajectory_mechanism_formal_validation"
+        if implementation_decision == "PASS"
+        and stage2_dependency_status == "PASSED"
+        else "finish_stage2_first"
         if implementation_decision == "PASS"
         else "hold_stage3"
     )
@@ -115,6 +139,8 @@ def build_stage3_mechanism_decision(
         "Stage3MechanismDecision": mechanism_decision,
         "Stage2DependencyStatus": stage2_dependency_status,
         "BlockingReasons": blocking_reasons,
+        "Stage3MechanismBlockingReasons": mechanism_blocking_reasons,
+        "trajectory_source_kind": trajectory_source_kind,
         "TrajectoryLeakageSummary": {
             "max_clean_negative_fpr": _max_role_decision_rate(
                 event_score_records,
@@ -149,6 +175,48 @@ def build_stage3_mechanism_decision(
         },
         "NextAllowedStageByTrajectory": next_allowed_stage,
     }
+
+
+def _resolve_stage2_dependency_status(
+    frozen_baseline_manifest: dict[str, Any] | None,
+) -> str:
+    if frozen_baseline_manifest is None:
+        return "NOT_PASSED"
+    if frozen_baseline_manifest.get("Stage2DependencyStatus") == "PASSED":
+        return "PASSED"
+    return "NOT_PASSED"
+
+
+def _resolve_trajectory_source_kind(
+    event_score_records: list[dict[str, Any]],
+    trajectory_backend_config: dict[str, Any] | None,
+) -> str | None:
+    if trajectory_backend_config is not None:
+        source_kind = trajectory_backend_config.get("trajectory_source_kind")
+        if isinstance(source_kind, str) and source_kind:
+            return source_kind
+    for record in event_score_records:
+        source_kind = record.get("mechanism_trace", {}).get("trajectory_source_kind")
+        if isinstance(source_kind, str) and source_kind:
+            return source_kind
+    return None
+
+
+def _build_mechanism_blocking_reasons(
+    stage2_dependency_status: str,
+    trajectory_source_kind: str | None,
+    implementation_decision: str,
+) -> list[str]:
+    blocking_reasons: list[str] = []
+    if implementation_decision != "PASS":
+        blocking_reasons.append("implementation_not_passed")
+    if stage2_dependency_status != "PASSED":
+        blocking_reasons.append("stage2_dependency_not_passed")
+    if trajectory_source_kind is None:
+        blocking_reasons.append("formal_trajectory_source_missing")
+    if trajectory_source_kind == "latent_interpolation_surrogate":
+        blocking_reasons.append("surrogate_source_not_sufficient")
+    return blocking_reasons
 
 
 def _collect_delta_traj_values(event_score_records: list[dict[str, Any]]) -> list[float]:

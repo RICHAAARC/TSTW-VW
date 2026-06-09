@@ -27,6 +27,10 @@ from experiments.trajectory_statistic_probe.method_factory import (
 from experiments.trajectory_statistic_probe.output_layout import (
     build_trajectory_statistic_probe_output_paths,
 )
+from experiments.trajectory_statistic_probe.real_video_vae_latent_frozen_baseline_loader import (
+    FrozenBaselinePackage,
+    load_real_video_vae_latent_frozen_baseline,
+)
 from experiments.trajectory_statistic_probe.runtime_configs import (
     load_trajectory_statistic_probe_runtime_configs,
 )
@@ -95,6 +99,7 @@ class TrajectoryStatisticProbeRunner:
         samples_per_role: int = 2,
         runtime_profile_override: str | None = None,
         method_variants: list[str] | None = None,
+        frozen_baseline_root: str | Path | None = None,
     ) -> TrajectoryStatisticProbeRunResult:
         """功能：运行阶段 3 受治理协议并写出 records、tables 与 manifests。
 
@@ -105,6 +110,7 @@ class TrajectoryStatisticProbeRunner:
             samples_per_role: Sample count per split-role pair.
             runtime_profile_override: Optional runtime profile override.
             method_variants: Optional method-variant allowlist.
+            frozen_baseline_root: Optional frozen baseline output root.
 
         Returns:
             A `TrajectoryStatisticProbeRunResult` instance.
@@ -113,6 +119,9 @@ class TrajectoryStatisticProbeRunner:
             raise ValueError("samples_per_role must be a positive integer")
 
         protocol_config = self._resolve_protocol_config(runtime_profile_override)
+        frozen_baseline_package = self._load_frozen_baseline_if_available(
+            frozen_baseline_root
+        )
         attack_registry = build_attack_registry(self._runtime_configs["attack_config"])
         split_plan = build_split_plan(samples_per_role=samples_per_role)
         event_plan = build_event_plan(split_plan, attack_registry)
@@ -159,6 +168,12 @@ class TrajectoryStatisticProbeRunner:
             event_score_records,
             threshold_records,
             runtime_method_configs,
+            frozen_baseline_manifest=(
+                frozen_baseline_package.frozen_baseline_manifest
+                if frozen_baseline_package is not None
+                else None
+            ),
+            trajectory_backend_config=self._runtime_configs["trajectory_backend_config"],
         )
         output_paths.trajectory_mechanism_decision_path.parent.mkdir(parents=True, exist_ok=True)
         output_paths.trajectory_mechanism_decision_path.write_text(
@@ -196,6 +211,20 @@ class TrajectoryStatisticProbeRunner:
             + "\n",
             encoding="utf-8",
         )
+        if frozen_baseline_package is not None:
+            output_paths.stage2_frozen_baseline_manifest_path.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+            output_paths.stage2_frozen_baseline_manifest_path.write_text(
+                json.dumps(
+                    frozen_baseline_package.frozen_baseline_manifest,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
         return TrajectoryStatisticProbeRunResult(
             run_id=run_id,
             output_root=output_root_path,
@@ -213,6 +242,19 @@ class TrajectoryStatisticProbeRunner:
         if runtime_profile_override is not None:
             protocol_config["runtime_profile"] = runtime_profile_override
         return protocol_config
+
+    def _load_frozen_baseline_if_available(
+        self,
+        frozen_baseline_root: str | Path | None,
+    ) -> FrozenBaselinePackage | None:
+        """功能：按需读取阶段 3 的冻结 baseline 前置依赖。
+
+        这是项目特定的治理入口。通用工程写法是让 runner 接受可选的只读依赖,
+        并把依赖校验放在主循环之前, 避免已失败的前置输入污染后续 records。
+        """
+        if frozen_baseline_root is None:
+            return None
+        return load_real_video_vae_latent_frozen_baseline(frozen_baseline_root)
 
     def _build_runtime_method_configs(
         self,
@@ -286,4 +328,7 @@ class TrajectoryStatisticProbeRunner:
             "figures_digest": None,
             "placeholder_fields": placeholder_fields,
             "random_fields": random_fields,
+            "stage2_frozen_baseline_manifest_path": (
+                str(output_paths.stage2_frozen_baseline_manifest_path)
+            ),
         }

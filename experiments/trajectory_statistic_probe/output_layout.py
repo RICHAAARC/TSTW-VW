@@ -31,6 +31,7 @@ class TrajectoryStatisticProbeOutputPaths(BaseRunOutputPaths):
         runtime_breakdown_path: Runtime-breakdown table path.
         trajectory_probe_report_path: Report path.
         trajectory_mechanism_decision_path: Mechanism-decision artifact path.
+        stage2_frozen_baseline_manifest_path: Frozen baseline manifest path.
 
     Returns:
         None.
@@ -43,6 +44,7 @@ class TrajectoryStatisticProbeOutputPaths(BaseRunOutputPaths):
     runtime_breakdown_path: Path
     trajectory_probe_report_path: Path
     trajectory_mechanism_decision_path: Path
+    stage2_frozen_baseline_manifest_path: Path
 
     def table_paths(self) -> list[Path]:
         return [
@@ -100,5 +102,8 @@ def build_trajectory_statistic_probe_output_paths(
         ),
         trajectory_mechanism_decision_path=(
             output_root_path / "artifacts" / "trajectory_mechanism_decision.json"
+        ),
+        stage2_frozen_baseline_manifest_path=(
+            output_root_path / "artifacts" / "stage2_frozen_baseline_manifest.json"
         ),
     )
