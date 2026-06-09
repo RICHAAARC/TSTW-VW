@@ -23,6 +23,7 @@ def _write_text(path: Path, text: str = "\n") -> None:
 def _create_governed_notebook_layout(root: Path) -> None:
     _write_text(root / "paper_workflow" / "build_processed_real_video_dataset.ipynb", "{}\n")
     _write_text(root / "paper_workflow" / "run_real_video_vae_latent_probe.ipynb", "{}\n")
+    _write_text(root / "paper_workflow" / "run_trajectory_statistic_probe.ipynb", "{}\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "runtime_check.py", "pass\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "tar_zst_packager.py", "pass\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "__init__.py", "\"\"\"pkg\"\"\"\n")

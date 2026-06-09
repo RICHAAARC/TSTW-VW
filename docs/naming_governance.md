@@ -23,6 +23,7 @@
 - `legacy_stage_id`
 - `paper_workflow/build_processed_real_video_dataset.ipynb`
 - `paper_workflow/run_real_video_vae_latent_probe.ipynb`
+- `paper_workflow/run_trajectory_statistic_probe.ipynb`
 - 外部技术版本表达，例如 Python / CUDA / 依赖版本号。
 
 ## Historical Docs Exemption

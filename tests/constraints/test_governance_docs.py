@@ -61,6 +61,7 @@ def test_file_organization_contract_mentions_release_boundaries() -> None:
     assert "paper_workflow/notebook_utils/" in text
     assert "build_processed_real_video_dataset.ipynb" in text
     assert "run_real_video_vae_latent_probe.ipynb" in text
+    assert "run_trajectory_statistic_probe.ipynb" in text
 
 
 def test_harness_engineering_mentions_file_organization_gate() -> None:
@@ -115,6 +116,7 @@ def test_notebook_governance_mentions_notebook_naming_contract() -> None:
     text = _read("docs/notebook_construction_governance.md")
     assert "build_processed_real_video_dataset.ipynb" in text
     assert "run_real_video_vae_latent_probe.ipynb" in text
+    assert "run_trajectory_statistic_probe.ipynb" in text
     assert "paper_workflow/notebook_utils/" in text
     assert "_Colab" in text
 
@@ -124,6 +126,7 @@ def test_project_contract_mentions_notebook_naming_governance() -> None:
     assert "paper_workflow/notebook_utils/" in text
     assert "build_processed_real_video_dataset.ipynb" in text
     assert "run_real_video_vae_latent_probe.ipynb" in text
+    assert "run_trajectory_statistic_probe.ipynb" in text
     assert "_Colab" in text
 
 
@@ -132,6 +135,7 @@ def test_naming_governance_mentions_notebook_exception() -> None:
     assert "paper_workflow/" in text
     assert "build_processed_real_video_dataset.ipynb" in text
     assert "run_real_video_vae_latent_probe.ipynb" in text
+    assert "run_trajectory_statistic_probe.ipynb" in text
     assert "paper_workflow/notebook_utils/" in text
 
 
@@ -140,6 +144,7 @@ def test_notebook_entrypoint_skill_mentions_notebook_utils() -> None:
     assert "`paper_workflow/notebook_utils/`" in text
     assert "build_processed_real_video_dataset.ipynb" in text
     assert "run_real_video_vae_latent_probe.ipynb" in text
+    assert "run_trajectory_statistic_probe.ipynb" in text
 
 
 def test_notebook_entrypoint_skill_mentions_outer_shard_and_in_shard_worker_semantics() -> None:
