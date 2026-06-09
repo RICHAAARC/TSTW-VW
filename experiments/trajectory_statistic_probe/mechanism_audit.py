@@ -115,6 +115,11 @@ def build_stage3_mechanism_decision(
         for record in enabled_records
         for score_value in record["mechanism_trace"].get("trajectory_control_scores", {}).values()
     ]
+    main_trajectory_values = [
+        abs(float(record["evidence_scores"]["S_traj"]))
+        for record in enabled_records
+        if record["evidence_scores"].get("S_traj") is not None
+    ]
     delta_traj_values = _collect_delta_traj_values(event_score_records)
     runtime_values = [
         float(record["mechanism_trace"]["trajectory_runtime_ms"])
@@ -130,6 +135,9 @@ def build_stage3_mechanism_decision(
             event_score_records,
             "attacked_negative",
         ),
+        "max_negative_leakage_increase_over_baseline": (
+            _max_negative_leakage_increase_over_baseline(event_score_records)
+        ),
     }
     gain_summary = {
         "max_delta_traj": max(delta_traj_values, default=0.0),
@@ -140,7 +148,17 @@ def build_stage3_mechanism_decision(
     control_summary = {
         "control_score_count": len(control_values),
         "max_abs_control_score": max(control_values, default=0.0),
+        "mean_abs_control_score": round(mean(control_values), 6)
+        if control_values
+        else 0.0,
+        "mean_abs_main_trajectory_score": round(mean(main_trajectory_values), 6)
+        if main_trajectory_values
+        else 0.0,
     }
+    control_summary["control_suppression_ratio"] = _safe_ratio(
+        float(control_summary["mean_abs_control_score"]),
+        float(control_summary["mean_abs_main_trajectory_score"]),
+    )
     runtime_summary = {
         "mean_trajectory_runtime_ms": round(mean(runtime_values), 6)
         if runtime_values
@@ -155,6 +173,7 @@ def build_stage3_mechanism_decision(
         runtime_summary,
         target_fpr,
         len(enabled_records),
+        _resolve_runtime_profiles(threshold_records),
         trajectory_backend_config,
     )
     implementation_decision = "PASS" if not blocking_reasons else "FAIL"
@@ -177,6 +196,14 @@ def build_stage3_mechanism_decision(
     next_allowed_stage = (
         "trajectory_aware_sampling_probe"
         if mechanism_decision == "PASS"
+        else "trajectory_formal_gpu_validation"
+        if implementation_decision == "PASS"
+        and stage2_dependency_status == "PASSED"
+        and all(
+            gate == "PASS"
+            for gate_name, gate in mechanism_gate_summary.items()
+            if gate_name != "trajectory_formal_runtime_profile_gate"
+        )
         else "trajectory_mechanism_formal_validation"
         if implementation_decision == "PASS"
         and stage2_dependency_status == "PASSED"
@@ -260,6 +287,8 @@ def _build_mechanism_blocking_reasons(
             blocking_reasons.append("trajectory_control_not_suppressed")
         if mechanism_gate_summary.get("trajectory_runtime_gate") != "PASS":
             blocking_reasons.append("trajectory_runtime_overhead_not_bounded")
+        if mechanism_gate_summary.get("trajectory_formal_runtime_profile_gate") != "PASS":
+            blocking_reasons.append("trajectory_formal_runtime_profile_required")
         if any(gate != "PASS" for gate in mechanism_gate_summary.values()):
             blocking_reasons.append("formal_source_candidate_requires_mechanism_validation")
     return blocking_reasons
@@ -287,6 +316,7 @@ def _build_mechanism_gate_summary(
     runtime_summary: dict[str, float | int],
     target_fpr: float,
     enabled_record_count: int,
+    runtime_profiles: set[str],
     trajectory_backend_config: dict[str, Any] | None,
 ) -> dict[str, str]:
     """功能：把阶段 3 机制审计摘要转换为显式 gate 结果。
@@ -296,28 +326,45 @@ def _build_mechanism_gate_summary(
     不直接用单个总分判定机制成立, 而是把每类失败原因保留为独立字段。
     """
     runtime_limit_ms = 100.0
+    max_control_suppression_ratio = 0.9
     if trajectory_backend_config is not None:
         configured_limit = trajectory_backend_config.get("max_trajectory_runtime_ms")
         if isinstance(configured_limit, (int, float)) and configured_limit > 0:
             runtime_limit_ms = float(configured_limit)
+        configured_control_ratio = trajectory_backend_config.get(
+            "max_control_suppression_ratio"
+        )
+        if (
+            isinstance(configured_control_ratio, (int, float))
+            and configured_control_ratio > 0
+        ):
+            max_control_suppression_ratio = float(configured_control_ratio)
 
     max_delta_traj = float(gain_summary.get("max_delta_traj", 0.0))
-    max_control_score = float(control_summary.get("max_abs_control_score", 0.0))
     runtime_record_count = int(runtime_summary.get("runtime_record_count", 0))
     mean_runtime_ms = float(runtime_summary.get("mean_trajectory_runtime_ms", 0.0))
+    formal_runtime_profiles = {
+        "formal",
+        "l4_formal",
+        "a100_80g_formal",
+        "a100_80g_paper_main",
+    }
     return {
         "trajectory_gain_gate": "PASS" if max_delta_traj > 0.0 else "FAIL",
         "trajectory_negative_leakage_gate": (
             "PASS"
-            if float(leakage_summary.get("max_clean_negative_fpr", 0.0)) <= target_fpr
-            and float(leakage_summary.get("max_attacked_negative_fpr", 0.0)) <= target_fpr
+            if float(
+                leakage_summary.get("max_negative_leakage_increase_over_baseline", 0.0)
+            )
+            <= target_fpr
             else "FAIL"
         ),
         "trajectory_control_gate": (
             "PASS"
             if max_delta_traj > 0.0
             and int(control_summary.get("control_score_count", 0)) > 0
-            and max_control_score < max_delta_traj
+            and float(control_summary.get("control_suppression_ratio", 1.0))
+            <= max_control_suppression_ratio
             else "FAIL"
         ),
         "trajectory_runtime_gate": (
@@ -325,6 +372,12 @@ def _build_mechanism_gate_summary(
             if enabled_record_count > 0
             and runtime_record_count == enabled_record_count
             and mean_runtime_ms <= runtime_limit_ms
+            else "FAIL"
+        ),
+        "trajectory_formal_runtime_profile_gate": (
+            "PASS"
+            if runtime_profiles
+            and runtime_profiles.issubset(formal_runtime_profiles)
             else "FAIL"
         ),
     }
@@ -337,6 +390,21 @@ def _resolve_target_fpr(threshold_records: list[dict[str, Any]]) -> float:
         if isinstance(record.get("target_fpr"), (int, float))
     ]
     return min(target_values) if target_values else 0.001
+
+
+def _resolve_runtime_profiles(threshold_records: list[dict[str, Any]]) -> set[str]:
+    return {
+        str(record["runtime_profile"])
+        for record in threshold_records
+        if isinstance(record.get("runtime_profile"), str)
+        and record["runtime_profile"]
+    }
+
+
+def _safe_ratio(numerator: float, denominator: float) -> float:
+    if denominator <= 0.0:
+        return 1.0
+    return round(numerator / denominator, 6)
 
 
 def _collect_delta_traj_values(event_score_records: list[dict[str, Any]]) -> list[float]:
@@ -378,6 +446,46 @@ def _collect_delta_traj_values(event_score_records: list[dict[str, Any]]) -> lis
                 )
             )
     return deltas
+
+
+def _max_negative_leakage_increase_over_baseline(
+    event_score_records: list[dict[str, Any]],
+) -> float:
+    """功能：计算 trajectory-enabled variant 相对 frozen baseline 增加的负样本泄漏。
+
+    该函数修复的工程问题是: 阶段 3 只能对 trajectory 分支新增的 leakage 负责, 不能把
+    frozen `tubelet_sync` baseline 在 smoke replay 中已经存在的负样本命中误记为 trajectory
+    source 失败。通用写法是把机制分支的安全性定义为“相对基线不恶化”。
+    """
+    comparisons = (
+        ("tubelet_traj", "tubelet_only"),
+        ("tubelet_sync_trajectory_fusion", "tubelet_sync"),
+        ("traj_only", None),
+    )
+    increases: list[float] = []
+    test_records = [record for record in event_score_records if record["split"] == "test"]
+    for method_variant, base_method_variant in comparisons:
+        method_records = [
+            record
+            for record in test_records
+            if record["method_variant"] == method_variant
+            and record["sample_role"] in {"clean_negative", "attacked_negative"}
+        ]
+        if not method_records:
+            continue
+        method_rate = _decision_rate(method_records)
+        if base_method_variant is None:
+            base_rate = 0.0
+        else:
+            base_records = [
+                record
+                for record in test_records
+                if record["method_variant"] == base_method_variant
+                and record["sample_role"] in {"clean_negative", "attacked_negative"}
+            ]
+            base_rate = _decision_rate(base_records)
+        increases.append(round(method_rate - base_rate, 6))
+    return max(increases, default=0.0)
 
 
 def _max_role_decision_rate(

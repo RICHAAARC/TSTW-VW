@@ -404,6 +404,10 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | trajectory_negative_leakage_gate | governance | none | false | false | false | Stage-three gate field indicating whether clean and attacked negative FPR remain under the governed target. |
 | trajectory_control_gate | governance | none | false | false | false | Stage-three gate field indicating whether trajectory controls fail to reproduce the main trajectory gain. |
 | trajectory_runtime_gate | governance | none | false | false | false | Stage-three gate field indicating whether trajectory runtime records are complete and within the configured bound. |
+| trajectory_formal_runtime_profile_gate | governance | none | false | false | false | Stage-three gate field requiring formal runtime profiles before the mechanism decision can become PASS. |
+| max_negative_leakage_increase_over_baseline | protocol | none | false | false | false | Stage-three negative-leakage metric measuring whether trajectory-enabled variants increase negative decisions over the frozen baseline. |
+| mean_abs_main_trajectory_score | protocol | none | false | false | false | Mean absolute main trajectory score used as the denominator for control suppression audit. |
+| control_suppression_ratio | protocol | none | false | false | false | Ratio between mean absolute control score and mean absolute main trajectory score for stage-three control audit. |
 | baseline_construction_phase | governance | none | false | false | false | Construction phase recorded in the frozen baseline run manifest. |
 | baseline_root | governance | none | false | false | false | Runtime path to the frozen baseline output root used by the replay runner. |
 | baseline_run_id | governance | none | false | false | false | Run identifier copied from the frozen baseline run manifest. |

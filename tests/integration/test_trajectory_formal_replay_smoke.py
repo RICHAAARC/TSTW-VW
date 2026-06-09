@@ -130,7 +130,14 @@ def test_formal_replay_writes_required_artifacts_and_formal_candidate_requires_v
         "trajectory_negative_leakage_gate",
         "trajectory_control_gate",
         "trajectory_runtime_gate",
+        "trajectory_formal_runtime_profile_gate",
     }
+    assert (
+        decision["TrajectoryMechanismGateSummary"][
+            "trajectory_formal_runtime_profile_gate"
+        ]
+        == "FAIL"
+    )
     assert (
         "formal_source_candidate_requires_mechanism_validation"
         in decision["Stage3MechanismBlockingReasons"]

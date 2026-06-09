@@ -370,6 +370,12 @@ class TrajectoryProbeWatermarkMethod:
             return round(trajectory_score, 6)
 
         trajectory_weight = float(self._method_config.get("trajectory_weight", 0.25))
+        fusion_rule = str(self._method_config.get("fusion_rule", "trajectory_weighted_linear"))
+        if fusion_rule == "trajectory_residual_boost":
+            return round(
+                baseline_score + (trajectory_weight * max(0.0, trajectory_score)),
+                6,
+            )
         return round(
             ((1.0 - trajectory_weight) * baseline_score)
             + (trajectory_weight * trajectory_score),

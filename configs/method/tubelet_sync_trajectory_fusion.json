@@ -26,7 +26,7 @@
     "min_sync_alignment_matched_count": 1
   },
   "lambda_sync": 0.1,
-  "fusion_rule": "trajectory_weighted_linear",
+  "fusion_rule": "trajectory_residual_boost",
   "trajectory_source_kind": "latent_interpolation_surrogate",
   "trajectory_statistic_kind": "velocity_projection",
   "trajectory_control_kind": "none",
