@@ -399,6 +399,11 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | Stage2DependencyStatus | governance | none | false | false | false | Stage-three mechanism-audit field recording whether the prerequisite stage-two gate has passed. |
 | Stage2FrozenBaselineManifest | governance | none | false | false | false | Frozen stage-two baseline manifest status emitted after the trajectory dependency loader validates the package. |
 | Stage3MechanismBlockingReasons | governance | none | false | false | false | Mechanism-specific blocking reasons that keep stage-three trajectory evidence from becoming a formal PASS. |
+| TrajectoryMechanismGateSummary | governance | none | false | false | false | Stage-three mechanism gate summary containing gain, negative-leakage, control, and runtime gate decisions. |
+| trajectory_gain_gate | governance | none | false | false | false | Stage-three gate field indicating whether trajectory-enabled variants provide positive incremental gain. |
+| trajectory_negative_leakage_gate | governance | none | false | false | false | Stage-three gate field indicating whether clean and attacked negative FPR remain under the governed target. |
+| trajectory_control_gate | governance | none | false | false | false | Stage-three gate field indicating whether trajectory controls fail to reproduce the main trajectory gain. |
+| trajectory_runtime_gate | governance | none | false | false | false | Stage-three gate field indicating whether trajectory runtime records are complete and within the configured bound. |
 | baseline_construction_phase | governance | none | false | false | false | Construction phase recorded in the frozen baseline run manifest. |
 | baseline_root | governance | none | false | false | false | Runtime path to the frozen baseline output root used by the replay runner. |
 | baseline_run_id | governance | none | false | false | false | Run identifier copied from the frozen baseline run manifest. |

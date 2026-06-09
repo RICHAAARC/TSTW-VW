@@ -125,6 +125,12 @@ def test_formal_replay_writes_required_artifacts_and_formal_candidate_requires_v
     assert decision["formal_trajectory_source_status"] == "candidate_ready"
     assert decision["Stage3MechanismDecision"] == "INCONCLUSIVE"
     assert "surrogate_source_not_sufficient" not in decision["Stage3MechanismBlockingReasons"]
+    assert set(decision["TrajectoryMechanismGateSummary"]) == {
+        "trajectory_gain_gate",
+        "trajectory_negative_leakage_gate",
+        "trajectory_control_gate",
+        "trajectory_runtime_gate",
+    }
     assert (
         "formal_source_candidate_requires_mechanism_validation"
         in decision["Stage3MechanismBlockingReasons"]

@@ -192,6 +192,11 @@ def test_stage3_mechanism_audit_accepts_formal_source_candidate_but_requires_val
             trajectory_source_kind="stage2_frozen_endpoint_replay",
         ),
     ]
+    for record in event_score_records:
+        if record["mechanism_trace"]["trajectory_source_kind"] == "stage2_frozen_endpoint_replay":
+            record["mechanism_trace"]["trajectory_control_scores"] = {
+                "traj_time_reversed": 2.0,
+            }
 
     decision = build_stage3_mechanism_decision(
         event_score_records,
@@ -215,6 +220,7 @@ def test_stage3_mechanism_audit_accepts_formal_source_candidate_but_requires_val
     assert decision["formal_trajectory_source_status"] == "candidate_ready"
     assert decision["Stage3MechanismDecision"] == "INCONCLUSIVE"
     assert "surrogate_source_not_sufficient" not in decision["Stage3MechanismBlockingReasons"]
+    assert decision["TrajectoryMechanismGateSummary"]["trajectory_control_gate"] == "FAIL"
     assert (
         "formal_source_candidate_requires_mechanism_validation"
         in decision["Stage3MechanismBlockingReasons"]

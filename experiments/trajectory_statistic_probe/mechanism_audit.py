@@ -104,30 +104,6 @@ def build_stage3_mechanism_decision(
     ):
         blocking_reasons.append("stage2_frozen_baseline_manifest_not_passed")
 
-    implementation_decision = "PASS" if not blocking_reasons else "FAIL"
-    mechanism_blocking_reasons = _build_mechanism_blocking_reasons(
-        stage2_dependency_status,
-        trajectory_source_kind,
-        implementation_decision,
-    )
-    formal_trajectory_source_status = _resolve_formal_trajectory_source_status(
-        stage2_dependency_status,
-        trajectory_source_kind,
-    )
-    mechanism_decision = (
-        "INCONCLUSIVE"
-        if implementation_decision == "PASS"
-        else "INCONCLUSIVE"
-    )
-    next_allowed_stage = (
-        "trajectory_mechanism_formal_validation"
-        if implementation_decision == "PASS"
-        and stage2_dependency_status == "PASSED"
-        else "finish_stage2_first"
-        if implementation_decision == "PASS"
-        else "hold_stage3"
-    )
-
     enabled_records = [
         record
         for record in event_score_records
@@ -145,6 +121,69 @@ def build_stage3_mechanism_decision(
         for record in enabled_records
         if record["mechanism_trace"].get("trajectory_runtime_ms") is not None
     ]
+    leakage_summary = {
+        "max_clean_negative_fpr": _max_role_decision_rate(
+            event_score_records,
+            "clean_negative",
+        ),
+        "max_attacked_negative_fpr": _max_role_decision_rate(
+            event_score_records,
+            "attacked_negative",
+        ),
+    }
+    gain_summary = {
+        "max_delta_traj": max(delta_traj_values, default=0.0),
+        "mean_delta_traj": round(mean(delta_traj_values), 6)
+        if delta_traj_values
+        else 0.0,
+    }
+    control_summary = {
+        "control_score_count": len(control_values),
+        "max_abs_control_score": max(control_values, default=0.0),
+    }
+    runtime_summary = {
+        "mean_trajectory_runtime_ms": round(mean(runtime_values), 6)
+        if runtime_values
+        else 0.0,
+        "runtime_record_count": len(runtime_values),
+    }
+    target_fpr = _resolve_target_fpr(threshold_records)
+    mechanism_gate_summary = _build_mechanism_gate_summary(
+        leakage_summary,
+        gain_summary,
+        control_summary,
+        runtime_summary,
+        target_fpr,
+        len(enabled_records),
+        trajectory_backend_config,
+    )
+    implementation_decision = "PASS" if not blocking_reasons else "FAIL"
+    mechanism_blocking_reasons = _build_mechanism_blocking_reasons(
+        stage2_dependency_status,
+        trajectory_source_kind,
+        implementation_decision,
+        mechanism_gate_summary,
+    )
+    formal_trajectory_source_status = _resolve_formal_trajectory_source_status(
+        stage2_dependency_status,
+        trajectory_source_kind,
+    )
+    mechanism_decision = (
+        "PASS"
+        if implementation_decision == "PASS"
+        and not mechanism_blocking_reasons
+        else "INCONCLUSIVE"
+    )
+    next_allowed_stage = (
+        "trajectory_aware_sampling_probe"
+        if mechanism_decision == "PASS"
+        else "trajectory_mechanism_formal_validation"
+        if implementation_decision == "PASS"
+        and stage2_dependency_status == "PASSED"
+        else "finish_stage2_first"
+        if implementation_decision == "PASS"
+        else "hold_stage3"
+    )
 
     return {
         "Stage3ImplementationDecision": implementation_decision,
@@ -154,38 +193,17 @@ def build_stage3_mechanism_decision(
         "Stage3MechanismBlockingReasons": mechanism_blocking_reasons,
         "trajectory_source_kind": trajectory_source_kind,
         "formal_trajectory_source_status": formal_trajectory_source_status,
-        "TrajectoryLeakageSummary": {
-            "max_clean_negative_fpr": _max_role_decision_rate(
-                event_score_records,
-                "clean_negative",
-            ),
-            "max_attacked_negative_fpr": _max_role_decision_rate(
-                event_score_records,
-                "attacked_negative",
-            ),
-        },
-        "TrajectoryGainSummary": {
-            "max_delta_traj": max(delta_traj_values, default=0.0),
-            "mean_delta_traj": round(mean(delta_traj_values), 6)
-            if delta_traj_values
-            else 0.0,
-        },
+        "TrajectoryMechanismGateSummary": mechanism_gate_summary,
+        "TrajectoryLeakageSummary": leakage_summary,
+        "TrajectoryGainSummary": gain_summary,
         "TrajectoryCorrelationSummary": {
             "mean_abs_control_score": round(mean(control_values), 6)
             if control_values
             else 0.0,
             "trajectory_enabled_variant_count": len(trajectory_enabled_variants),
         },
-        "TrajectoryControlSummary": {
-            "control_score_count": len(control_values),
-            "max_abs_control_score": max(control_values, default=0.0),
-        },
-        "TrajectoryRuntimeOverheadSummary": {
-            "mean_trajectory_runtime_ms": round(mean(runtime_values), 6)
-            if runtime_values
-            else 0.0,
-            "runtime_record_count": len(runtime_values),
-        },
+        "TrajectoryControlSummary": control_summary,
+        "TrajectoryRuntimeOverheadSummary": runtime_summary,
         "NextAllowedStageByTrajectory": next_allowed_stage,
     }
 
@@ -219,6 +237,7 @@ def _build_mechanism_blocking_reasons(
     stage2_dependency_status: str,
     trajectory_source_kind: str | None,
     implementation_decision: str,
+    mechanism_gate_summary: dict[str, Any],
 ) -> list[str]:
     blocking_reasons: list[str] = []
     if implementation_decision != "PASS":
@@ -233,7 +252,16 @@ def _build_mechanism_blocking_reasons(
         stage2_dependency_status == "PASSED"
         and trajectory_source_kind == "stage2_frozen_endpoint_replay"
     ):
-        blocking_reasons.append("formal_source_candidate_requires_mechanism_validation")
+        if mechanism_gate_summary.get("trajectory_gain_gate") != "PASS":
+            blocking_reasons.append("trajectory_gain_not_positive")
+        if mechanism_gate_summary.get("trajectory_negative_leakage_gate") != "PASS":
+            blocking_reasons.append("trajectory_negative_leakage_above_target")
+        if mechanism_gate_summary.get("trajectory_control_gate") != "PASS":
+            blocking_reasons.append("trajectory_control_not_suppressed")
+        if mechanism_gate_summary.get("trajectory_runtime_gate") != "PASS":
+            blocking_reasons.append("trajectory_runtime_overhead_not_bounded")
+        if any(gate != "PASS" for gate in mechanism_gate_summary.values()):
+            blocking_reasons.append("formal_source_candidate_requires_mechanism_validation")
     return blocking_reasons
 
 
@@ -250,6 +278,65 @@ def _resolve_formal_trajectory_source_status(
     if trajectory_source_kind is None:
         return "missing"
     return "not_formal_source"
+
+
+def _build_mechanism_gate_summary(
+    leakage_summary: dict[str, float],
+    gain_summary: dict[str, float],
+    control_summary: dict[str, float | int],
+    runtime_summary: dict[str, float | int],
+    target_fpr: float,
+    enabled_record_count: int,
+    trajectory_backend_config: dict[str, Any] | None,
+) -> dict[str, str]:
+    """功能：把阶段 3 机制审计摘要转换为显式 gate 结果。
+
+    该函数属于项目特定写法, 用于把 trajectory evidence 是否可支撑机制结论拆分为可审计
+    的 gain、negative leakage、control 和 runtime 四类 gate。通用工程可复用的部分是:
+    不直接用单个总分判定机制成立, 而是把每类失败原因保留为独立字段。
+    """
+    runtime_limit_ms = 100.0
+    if trajectory_backend_config is not None:
+        configured_limit = trajectory_backend_config.get("max_trajectory_runtime_ms")
+        if isinstance(configured_limit, (int, float)) and configured_limit > 0:
+            runtime_limit_ms = float(configured_limit)
+
+    max_delta_traj = float(gain_summary.get("max_delta_traj", 0.0))
+    max_control_score = float(control_summary.get("max_abs_control_score", 0.0))
+    runtime_record_count = int(runtime_summary.get("runtime_record_count", 0))
+    mean_runtime_ms = float(runtime_summary.get("mean_trajectory_runtime_ms", 0.0))
+    return {
+        "trajectory_gain_gate": "PASS" if max_delta_traj > 0.0 else "FAIL",
+        "trajectory_negative_leakage_gate": (
+            "PASS"
+            if float(leakage_summary.get("max_clean_negative_fpr", 0.0)) <= target_fpr
+            and float(leakage_summary.get("max_attacked_negative_fpr", 0.0)) <= target_fpr
+            else "FAIL"
+        ),
+        "trajectory_control_gate": (
+            "PASS"
+            if max_delta_traj > 0.0
+            and int(control_summary.get("control_score_count", 0)) > 0
+            and max_control_score < max_delta_traj
+            else "FAIL"
+        ),
+        "trajectory_runtime_gate": (
+            "PASS"
+            if enabled_record_count > 0
+            and runtime_record_count == enabled_record_count
+            and mean_runtime_ms <= runtime_limit_ms
+            else "FAIL"
+        ),
+    }
+
+
+def _resolve_target_fpr(threshold_records: list[dict[str, Any]]) -> float:
+    target_values = [
+        float(record["target_fpr"])
+        for record in threshold_records
+        if isinstance(record.get("target_fpr"), (int, float))
+    ]
+    return min(target_values) if target_values else 0.001
 
 
 def _collect_delta_traj_values(event_score_records: list[dict[str, Any]]) -> list[float]:
