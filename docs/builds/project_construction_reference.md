@@ -1202,3 +1202,24 @@ NextAllowedStageByTrajectory = trajectory_aware_sampling_probe
 构建流程上需要注意：报告文件 `reports/trajectory_probe_report.md` 只是人工阅读入口，不能替代正式 gate 文件。报告生成逻辑已调整为读取机制决策 payload，避免旧硬编码状态 `deferred_by_stage2` 与正式结果不一致。
 
 后续阶段推进应继续遵守项目契约：在 `.codex/project_contract.md` 未更新前，仓库级 `project_stage` 仍保持当前受治理状态；阶段 3 结果只说明 trajectory 机制验证已允许进入 `trajectory_aware_sampling_probe` 的下一步设计与验证准备。
+
+## 2026-06-10 trajectory-aware sampling probe 构建边界
+
+下一阶段构建从 `trajectory_statistic_probe` 的正式 PASS 决策进入 `trajectory_aware_sampling_probe` 的最小 readiness gate。当前新增内容只包含：
+
+```text
+configs/protocol/trajectory_aware_sampling_probe.json
+configs/ablation/trajectory_aware_sampling_ablation.json
+experiments/trajectory_aware_sampling_probe/readiness_audit.py
+experiments/trajectory_aware_sampling_probe/output_layout.py
+```
+
+该阶段当前只做 decision-only scaffold：
+
+1. 读取上游 `trajectory_mechanism_decision.json`。
+2. 验证阶段 3 implementation 与 mechanism 均已 PASS。
+3. 验证 `NextAllowedStageByTrajectory` 指向 `trajectory_aware_sampling_probe`。
+4. 验证采样策略属于 allowlist。
+5. 显式阻断真实 DiT、Flow Matching、真实视频生成和真实 watermark 集成能力。
+
+因此，该推进不会改变 `.codex/project_contract.md` 中的仓库级 `project_stage`，也不会新增 Colab notebook 或正式输出目录。

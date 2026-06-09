@@ -464,3 +464,17 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | profiling_failure_reason | runtime_profile | none | true | false | false | Reason explaining why GPU profiling did not produce usable samples. |
 | usable_sample_count | runtime_profile | none | true | false | false | Count of GPU runtime trace samples with usable GPU utilization values. |
 | unavailable_sample_count | runtime_profile | none | true | false | false | Count of GPU runtime trace samples that explicitly report unavailable or failed GPU sampling. |
+| SamplingReadinessDecision | governance | none | false | false | false | Readiness decision emitted before any trajectory-aware sampling construction is allowed to proceed beyond decision-only scaffold. |
+| TrajectoryAwareSamplingBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent trajectory-aware sampling readiness from becoming PASS. |
+| UpstreamTrajectoryMechanismDecision | governance | none | false | false | false | Copied Stage3MechanismDecision value used by the sampling readiness gate. |
+| UpstreamTrajectoryImplementationDecision | governance | none | false | false | false | Copied Stage3ImplementationDecision value used by the sampling readiness gate. |
+| UpstreamStage2DependencyStatus | governance | none | false | false | false | Copied Stage2DependencyStatus value used by the sampling readiness gate. |
+| upstream_trajectory_decision_digest | governance | none | false | false | false | Digest of the upstream trajectory mechanism decision consumed by the sampling readiness gate. |
+| selected_sampling_policy_kind | governance | none | false | false | false | Sampling policy kind selected by the decision-only trajectory-aware sampling scaffold. |
+| allowed_sampling_policy_kinds | governance | none | false | false | false | Allowlist of sampling policy kinds accepted by the trajectory-aware sampling readiness gate. |
+| forbidden_runtime_capabilities | governance | none | false | false | false | Runtime capabilities that remain blocked in the decision-only sampling scaffold. |
+| enabled_runtime_capabilities | governance | none | false | false | false | Runtime capabilities declared enabled by the sampling scaffold configuration. |
+| NextAllowedStageBySampling | governance | none | false | false | false | Next-stage recommendation emitted by the trajectory-aware sampling readiness gate. |
+| sampling_readiness_decision_path | artifact_layout | none | false | false | false | Relative layout path for the trajectory-aware sampling readiness decision artifact. |
+| sampling_policy_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the trajectory-aware sampling policy manifest artifact. |
+| sampling_probe_report_path | artifact_layout | none | false | false | false | Relative layout path for the trajectory-aware sampling report artifact. |

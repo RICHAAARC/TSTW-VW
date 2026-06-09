@@ -1,0 +1,21 @@
+{
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "construction_phase": "trajectory_aware_sampling_probe",
+  "ablation_name": "trajectory_aware_sampling_ablation",
+  "shared_protocol_name": "fixed_low_fpr_calibrated_detection",
+  "upstream_decision_artifact": "artifacts/trajectory_mechanism_decision.json",
+  "candidate_sampling_policy_kinds": [
+    "trajectory_ranked_replay",
+    "control_balanced_replay"
+  ],
+  "selection_inputs": [
+    "S_traj",
+    "S_final",
+    "trajectory_control_scores",
+    "trajectory_runtime_ms"
+  ],
+  "selection_output_kind": "record_digest_selection_plan",
+  "allow_real_generation": false,
+  "allow_flow_matching_backend": false,
+  "allow_real_watermark_algorithm": false
+}

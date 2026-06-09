@@ -1,0 +1,40 @@
+{
+  "project_stage": "synthetic_tubelet_sync_probe",
+  "construction_phase": "trajectory_aware_sampling_probe",
+  "target_construction_phase": "trajectory_aware_sampling_probe",
+  "upstream_required_construction_phase": "trajectory_statistic_probe",
+  "required_upstream_stage2_dependency_status": "PASSED",
+  "required_upstream_implementation_decision": "PASS",
+  "required_upstream_mechanism_decision": "PASS",
+  "required_next_allowed_stage": "trajectory_aware_sampling_probe",
+  "runtime_mode": "decision_only_scaffold",
+  "selected_sampling_policy_kind": "trajectory_ranked_replay",
+  "allowed_sampling_policy_kinds": [
+    "trajectory_ranked_replay",
+    "control_balanced_replay"
+  ],
+  "enabled_runtime_capabilities": [
+    "stage3_decision_readback",
+    "record_digest_selection_plan"
+  ],
+  "forbidden_runtime_capabilities": [
+    "real_dit_generation",
+    "flow_matching_generation",
+    "real_video_generation",
+    "real_watermark_embedding",
+    "real_watermark_detection"
+  ],
+  "required_input_artifacts": [
+    "artifacts/trajectory_mechanism_decision.json",
+    "records/event_scores.jsonl",
+    "thresholds/thresholds.json"
+  ],
+  "outputs": {
+    "sampling_readiness_decision_path": "artifacts/sampling_readiness_decision.json",
+    "sampling_policy_manifest_path": "artifacts/sampling_policy_manifest.json",
+    "sampling_probe_report_path": "reports/trajectory_aware_sampling_probe_report.md"
+  },
+  "real_generation_allowed": false,
+  "real_watermark_integration_allowed": false,
+  "notebook_entrypoint_allowed": false
+}
