@@ -3781,3 +3781,138 @@ SyncCandidateSelectionStatus = eligible
 
 该结果说明: 20260608T153114Z 运行本身没有进入 runtime 错误路径; 原始 FAIL 来自旧机制判定口径残留。当前重构后, 同一批 governed records 可以在 aligned payload safety 协议下得到合理的 Stage2MechanismDecision = PASS。
 
+## 2026-06-09 阶段 2 final formal audit 通过结果登记
+
+本次登记的结果来源为:
+
+```text
+runtime_runs: G:\我的云端硬盘\TSTW\results\TSTW_runtime_runs_20260609_000157.zip
+family: G:\我的云端硬盘\TSTW\results\families\real_video_vae_latent_probe__formal__davis2017_trainval480p__20260608T224000Z__d2a4e9d
+```
+
+### 运行路径判断
+
+`runtime_config.json` 显示本次运行进入正确的阶段 2 final formal audit 收口路径:
+
+```text
+workflow_key = real_video_vae_latent_probe_stage2_final_formal_audit
+run_mode = formal
+notebook_run_preset = formal_full
+execution_runtime_profile = l4_formal
+require_formal_pass_criteria = true
+method_variants = frame_prc, tubelet_only, tubelet_sync
+git_commit = d2a4e9d
+```
+
+该结果不是 calibration-only, 也不是旧的大搜索路径。
+
+### 机制证明判定
+
+`stage2_mechanism_decision.json` 显示:
+
+```text
+stage2_mechanism_protocol = aligned_payload_safety
+Stage2ImplementationDecision = PASS
+Stage2MechanismDecision = PASS
+Stage2MechanismBlockingReasons = []
+NextAllowedStageByMechanism = trajectory_statistic_probe
+RecommendedNextAction = trajectory_statistic_probe
+SyncRescueDecision = PASS
+SyncLeakageDecision = PASS
+SyncCandidateSelectionStatus = eligible
+```
+
+这说明阶段 2 implementation gate 和 mechanism gate 均已通过。当前机制证明不再依赖旧的 `S_sync` 正负 gap, 而是由 aligned payload rescue、negative safety、sync gain、样本量和质量门禁共同支持。
+
+### 关键机制指标
+
+```text
+tubelet_only_gain_over_frame_prc = 0.28
+tubelet_sync_gain_over_tubelet_only_temporal = 0.254167
+tubelet_sync_required_attack_gain_count = 2
+mean_watermarked_video_ssim = 0.688867
+```
+
+关键攻击项表现:
+
+```text
+temporal_crop:
+  tubelet_only TPR = 0.5
+  tubelet_sync TPR = 0.85
+  sync_gain = 0.35
+  negative_fpr_delta = 0.0
+
+local_clip:
+  tubelet_only TPR = 0.575
+  tubelet_sync TPR = 0.9375
+  sync_gain = 0.3625
+  negative_fpr_delta = 0.0
+```
+
+负样本安全性:
+
+```text
+tubelet_sync attacked_negative decision rate = 0.0
+tubelet_sync clean_negative no_attack decision rate = 0.0
+SyncNegativeLeakageStatus = controlled
+```
+
+### 运行完整性与产物检查
+
+`run_failure_summary.json` 显示:
+
+```text
+record_failure_count = 0
+checker_status = true
+dominant_failure_category = no_failure_detected
+```
+
+`family_checks.json` 显示:
+
+```text
+status = true
+archive_exists = true
+runtime_profile_included = true
+formal_checks.status = true
+```
+
+family package 已生成:
+
+```text
+packages/real_video_vae_latent_probe_formal.zip
+packages/real_video_vae_latent_probe_formal.tar.zst
+packages/real_video_vae_latent_probe_formal_summary.json
+packages/real_video_vae_latent_probe_formal_checks.json
+```
+
+运行耗时:
+
+```text
+total_recorded_seconds = 10715.928296
+约 2.98 小时
+```
+
+主要耗时来自 real video attack materialization、quality metrics、VAE reencode 和 runner 主流程, 属于当前 formal full run 的合理范围。
+
+### 非阻塞警告
+
+本次仅有一个非阻塞警告:
+
+```text
+clip_similarity_not_enabled
+```
+
+当前 formal quality gate 已启用 PSNR、SSIM、LPIPS 和 motion consistency。`clip_similarity_not_enabled` 不影响阶段 2 机制证明通过。
+
+### 当前阶段状态评判
+
+基于本次结果, 阶段 2 的核心构建目标可以判定为已经完成:
+
+1. records / thresholds / tables / reports / manifest / package 均已产出并通过 formal checks。
+2. implementation gate 已通过, 即真实视频 VAE latent probe 的工程链路满足受治理 formal 运行要求。
+3. mechanism gate 已通过, 即 `tubelet_sync` 在 temporal-crop 与 local-clip 等时序攻击下相对 `tubelet_only` 产生显著 rescue gain。
+4. attacked-negative 与 clean-negative 未出现过阈值泄漏, negative safety 受控。
+5. final formal audit 允许下一语义阶段进入 `trajectory_statistic_probe`。
+
+因此, 本结果可作为阶段 2 机制证明完成结果。后续工作应进入 `trajectory_statistic_probe` 的阶段准备, 而不是继续在阶段 2 参数搜索空间中调参。
+
