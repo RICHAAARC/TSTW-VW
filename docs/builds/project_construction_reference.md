@@ -1,5 +1,46 @@
 # 项目构建
 
+
+## 最新工程口径补充：阶段 2 gate 修复后的构建约束
+
+当前项目已经完成阶段 2 gate 机制修复。后续所有构建、重构、notebook、runner、checker 与文档说明必须采用以下口径。
+
+### 1. 阶段 2 机制协议
+
+阶段 2 默认且唯一正式机制协议为:
+
+```text
+stage2_mechanism_protocol = aligned_payload_safety
+sync_confidence_gate_rule = aligned_payload_safety_gate
+```
+
+`sync_candidate_score` 不再作为默认 rescue gate, 不再作为默认搜索维度, 也不再作为阶段 2 机制证明通过依据。它只允许作为 offset / scale alignment search 的内部排序分数和诊断 trace 字段。
+
+### 2. 阶段 2 进入阶段 3 的冻结条件
+
+阶段 3 只能依赖 frozen 阶段 2 baseline。允许进入 `trajectory_statistic_probe` 的条件为:
+
+```text
+Stage2ImplementationDecision == PASS
+Stage2MechanismDecision == PASS
+Stage2MechanismBlockingReasons == []
+stage2_mechanism_protocol == aligned_payload_safety
+NextAllowedStageByMechanism == trajectory_statistic_probe
+```
+
+阶段 3 不得重新选择阶段 2 sync gate, 不得恢复旧 `sync_candidate_score` gate, 不得用 trajectory evidence 反向修改阶段 2 records、thresholds、fusion rule 或 mechanism decision。
+
+### 3. 阶段 3 frozen baseline 原则
+
+阶段 3 的 `delta_traj` 必须相对 frozen baseline 计算:
+
+```text
+delta_traj = TPR(tubelet_sync_trajectory_fusion) - TPR(frozen tubelet_sync)
+```
+
+其中 frozen `tubelet_sync` 必须来自通过阶段 2 final formal audit 的 family package 或等价受治理 records, 不能在阶段 3 中重新调参得到。
+
+
 ## 一、文件定位与冻结性质
 
 本文件是“面向 DiT / Flow Matching 视频生成模型的时空同步轨迹水印项目”的项目构建冻结约束。Codex 在构建、重构、补齐、修复或扩展本项目时，必须以本文件作为高层构建路线与工程边界依据。
@@ -185,7 +226,7 @@ project_root/
 │   ├── backends/
 │   │   ├── synthetic_video_latent.py
 │   │   ├── real_video_vae_latent.py
-│   │   └── flow_matching_backend.py
+│   │   └── trajectory_reconstruction.py
 │   ├── methods/
 │   │   └── temporal_tubelet_watermark/
 │   │       ├── codebook.py
@@ -218,12 +259,9 @@ project_root/
 │       └── build_minimal_demo.py
 │
 ├── paper_workflow/
-│   ├── PW00_prepare.ipynb
-│   ├── PW01_generate_or_load_latents.ipynb
-│   ├── PW02_calibrate_thresholds.ipynb
-│   ├── PW03_attack_and_detect.ipynb
-│   ├── PW04_evaluate_tables.ipynb
-│   └── PW05_export_release.ipynb
+│   ├── build_processed_real_video_dataset.ipynb
+│   ├── run_real_video_vae_latent_probe.ipynb
+│   └── run_trajectory_statistic_probe.ipynb
 │
 ├── tests/
 │   ├── test_protocol_no_threshold_leakage.py
@@ -451,12 +489,25 @@ vae_latent_probe_report.md
 
 阶段 2 通过标准：
 
-1. `tubelet_sync` 在真实 VAE latent 中仍优于 `frame_prc` 与 `tubelet_only`。
-2. temporal synchronization 对 temporal crop、frame dropping 或 local clip detection 有可解释增益。
-3. attacked negative FPR 仍可由 calibration negative 控制。
-4. 视频质量下降可量化、可报告、可调参。
-5. 没有大规模不可接受的 flicker 或 motion artifact。
-6. 所有表格均可由 records 重建。
+1. `Stage2ImplementationDecision == PASS`。
+2. `Stage2MechanismDecision == PASS`。
+3. `Stage2MechanismBlockingReasons == []`。
+4. `stage2_mechanism_protocol == aligned_payload_safety`。
+5. `sync_confidence_gate_rule == aligned_payload_safety_gate`。
+6. `tubelet_sync` 在真实 VAE latent 中仍优于 `frame_prc` 与 `tubelet_only`。
+7. temporal synchronization 对 temporal crop、frame dropping 或 local clip detection 至少一种时间攻击有可解释增益。
+8. `negative_rescue_over_threshold_count == 0`, 且 attacked negative FPR 仍可由 calibration negative 控制。
+9. 视频质量与时序一致性指标可量化、可报告, PSNR 需要区分 finite 与 positive-infinity 统计。
+10. 所有 records、thresholds、tables、reports、manifest 与 package 均可重建和审计。
+
+阶段 2 的 gate 机制必须遵守:
+
+```text
+sync_candidate_score 只负责 alignment search 排序;
+S_payload_aligned 和 S_payload_rescue_gain 负责判断 rescue 是否具有真实 payload 证据价值;
+calibration negative safety 负责阻止 negative 被 rescue 后过阈;
+selector 负责把 positive gain、negative safety、样本量、质量门禁和 implementation pass 聚合为 candidate_eligible。
+```
 
 若阶段 2 不通过，不得直接进入阶段 4。必须优先分析 VAE 编码噪声、latent normalization、carrier tubelet 选择、压缩破坏模式与同步失败模式。
 
@@ -476,11 +527,15 @@ Flow Matching trajectory statistic 是否在 fixed low-FPR protocol 下为最终
 
 ### （二）必须实现的模块
 
-1. `flow_matching_backend.py`：统一管理 trajectory latent、inversion latent 或近似 reconstruction latent。
-2. `trajectory_statistic.py`：实现 velocity projection、displacement projection 与可选 curvature residual。
-3. `score_correlation.py`：分析 trajectory score 与 tubelet score 的相关性。
-4. `runtime_breakdown.py`：记录 trajectory reconstruction 与 detection overhead。
-5. `trajectory_ablation_runner.py`：统一运行 trajectory 相关消融。
+1. `main/trajectory/interfaces.py`：定义 trajectory observation、statistic result 与 runtime summary。
+2. `main/trajectory/trajectory_reconstruction.py`：根据 `trajectory_source_kind` 构造 detector 侧 trajectory observation。
+3. `main/trajectory/trajectory_statistic.py`：实现 velocity projection、displacement projection 与后续可选 curvature residual。
+4. `main/trajectory/trajectory_controls.py`：实现 shuffled key、time reversed、random projection 等 negative control。
+5. `experiments/trajectory_statistic_probe/runner.py`：运行当前 scaffold smoke 与受治理协议闭环。
+6. `experiments/trajectory_statistic_probe/stage2_frozen_baseline_loader.py`：加载并校验阶段 2 frozen family package。
+7. `experiments/trajectory_statistic_probe/formal_replay_runner.py`：使用阶段 2 frozen reencoded latent 执行正式 replay。
+8. `experiments/trajectory_statistic_probe/artifact_builder.py`：从 records 重建 trajectory gain、correlation、control 与 runtime tables。
+9. `experiments/trajectory_statistic_probe/mechanism_audit.py`：生成 `Stage3ImplementationDecision` 与 `Stage3MechanismDecision`。
 
 ### （三）必须支持的 ablation variant
 
@@ -787,12 +842,18 @@ Codex 必须实现：
 
 推荐 notebook 阶段职责如下：
 
-1. `PW00_prepare.ipynb`：加载配置、构建 split、初始化 run manifest。
-2. `PW01_generate_or_load_latents.ipynb`：生成或加载 latent / video。
-3. `PW02_calibrate_thresholds.ipynb`：仅使用 calibration negative 标定 threshold。
-4. `PW03_attack_and_detect.ipynb`：执行 attack matrix 与 detect。
-5. `PW04_evaluate_tables.ipynb`：从 records 生成 metrics、tables、figures。
-6. `PW05_export_release.ipynb`：抽取 minimal release 并运行 release checks。
+1. `build_processed_real_video_dataset.ipynb`：只负责 raw video 到 processed dataset 的构建, 不直接写 formal records。
+2. `run_real_video_vae_latent_probe.ipynb`：只作为阶段 2 runner / checker / package 的流程入口, 正式输出必须委托 repository modules。
+3. `run_trajectory_statistic_probe.ipynb`：作为阶段 3 frozen baseline 校验、formal replay、artifact rebuild、mechanism audit 与 package 的流程入口。
+
+Notebook 规划必须遵守:
+
+```text
+notebook 使用 snake_case 语义命名;
+notebook 不使用编号式正式命名;
+notebook 不直接手写 records、thresholds、tables、reports;
+每次参数、搜索空间或 gate 变更必须进入 config、runtime_config 或 manifest, 不得只存在于 cell 变量中。
+```
 
 ---
 
@@ -1033,19 +1094,25 @@ Codex 禁止执行以下行为：
 
 允许条件：
 
-1. real video VAE latent 中 `tubelet_sync` 未崩溃。
-2. 视频质量与时序一致性指标已记录。
-3. failure case 已导出。
-4. 真实攻击矩阵已形成稳定 records。
+1. `Stage2ImplementationDecision == PASS`。
+2. `Stage2MechanismDecision == PASS`。
+3. `Stage2MechanismBlockingReasons == []`。
+4. `stage2_mechanism_protocol == aligned_payload_safety`。
+5. `NextAllowedStageByMechanism == trajectory_statistic_probe`。
+6. 阶段 2 frozen family package 或等价受治理 records 可被校验和重建。
+7. 阶段 2 baseline records 中 `S_traj == null`, 未被 trajectory evidence 污染。
 
 ### （四）阶段 3 → 阶段 4
 
 允许条件：
 
-1. trajectory evidence 有非零边际增益，或用户明确要求作为探索模块继续。
-2. score correlation 与 runtime overhead 已报告。
-3. trajectory 相关消融不破坏原有 tubelet_sync 结果。
-4. trajectory 模块可被配置禁用。
+1. `Stage3ImplementationDecision == PASS`。
+2. 若要作为正式机制进入阶段 4, 必须满足 `Stage3MechanismDecision == PASS`。
+3. 若 `Stage3MechanismDecision != PASS`, 只有在用户明确要求探索时, trajectory 模块才可作为 optional / exploratory 分支继续。
+4. `tubelet_sync_trajectory_fusion` 相对 frozen `tubelet_sync` 的 `delta_traj` 已报告。
+5. score correlation、trajectory control、negative leakage 与 runtime overhead 均已报告。
+6. trajectory 相关消融不破坏阶段 2 frozen `tubelet_sync` 结果。
+7. trajectory 模块可被配置禁用。
 
 ### （五）阶段 4 → 阶段 5
 

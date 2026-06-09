@@ -1,5 +1,78 @@
 # 方法机制：面向 DiT / Flow Matching 视频生成模型的时空同步轨迹水印框架
 
+
+## 最新实现口径补充：阶段 2 aligned payload safety gate
+
+本文件的高层方法机制仍以 `temporal_synchronized_tubelet_code`、`flow_matching_trajectory_statistic` 和 `fixed_low_fpr_calibrated_detector` 为三条主线。但当前项目的阶段 2 已经完成 gate 机制修复, 因此所有后续构建必须采用以下更新口径。
+
+### 1. Temporal synchronization 的职责拆分
+
+阶段 2 中的 temporal synchronization 不再被解释为“sync score 高就直接 rescue”。当前正式机制将其拆成两个职责:
+
+```text
+alignment search:
+  使用 sync_candidate_score 对 offset / scale 候选排序, 找到候选时间对齐关系。
+
+rescue gate:
+  使用 aligned_payload_safety_gate 判断该候选对齐是否真的带来 payload 证据增益, 并判断是否允许写入 S_final。
+```
+
+因此, `sync_candidate_score` 只保留为 alignment search 的内部排序分数和诊断 trace 字段。它不得作为阶段 2 默认 rescue gate, 也不得直接决定 `sync_rescue_applied`、`candidate_eligible` 或 `Stage2MechanismDecision`。
+
+### 2. 阶段 2 默认 rescue gate
+
+阶段 2 当前唯一允许的 sync confidence gate 为:
+
+```text
+sync_confidence_gate_rule = aligned_payload_safety_gate
+stage2_mechanism_protocol = aligned_payload_safety
+```
+
+该 gate 至少同时检查:
+
+```text
+S_payload_aligned
+S_payload_rescue_gain
+sync_alignment_coverage_ratio
+sync_alignment_matched_count
+```
+
+其中:
+
+```text
+S_payload_aligned 表示应用候选时间对齐后的 payload evidence score;
+S_payload_rescue_gain 表示 aligned payload 相对 unaligned payload 的非负增益;
+sync_alignment_coverage_ratio 表示候选对齐覆盖比例;
+sync_alignment_matched_count 表示候选对齐匹配 tubelet 数量。
+```
+
+只有当 aligned payload safety gate 通过时, rescue gain 才允许进入 `S_final`。未通过 gate 的 alignment 不得改变 `S_final`。
+
+### 3. calibration negative safety
+
+阶段 2 的方法级 safety 还必须检查 calibration negative 是否会被 rescue 推过阈值。正式口径为:
+
+```text
+negative_rescue_over_threshold_count == 0
+aligned_payload_negative_safety_status == PASS
+```
+
+这表示单条样本 gate 只决定“该样本是否允许 rescue”, 方法级 negative safety 决定“该方法配置是否可作为 eligible candidate”。
+
+### 4. 对阶段 3 的影响
+
+阶段 3 的 `tubelet_sync` baseline 必须来自阶段 2 frozen final formal result, 且必须满足:
+
+```text
+Stage2ImplementationDecision == PASS
+Stage2MechanismDecision == PASS
+stage2_mechanism_protocol == aligned_payload_safety
+Stage2MechanismBlockingReasons == []
+```
+
+阶段 3 不得重新搜索阶段 2 sync gate, 不得恢复旧 `sync_candidate_score` gate, 也不得用 trajectory evidence 反向修改阶段 2 的 threshold、fusion rule 或 mechanism decision。
+
+
 ## 一、项目目标与论文定位
 
 ### （一）总体目标
@@ -648,7 +721,7 @@ u_g
 2. Tubelet+Sync；
 3. Tubelet+Trajectory；
 4. Trajectory-only；
-5. Full。
+5. `tubelet_sync_trajectory_fusion`。
 
 #### 4. 预期结果
 
@@ -656,7 +729,7 @@ u_g
 
 1. \(S_{\mathrm{traj}}\) 在 positive 与 negative 之间具有统计分离；
 2. Tubelet+Trajectory 优于 Tubelet-only；
-3. Full 优于 Tubelet+Sync；
+3. `tubelet_sync_trajectory_fusion` 优于 frozen `tubelet_sync`；
 4. trajectory score 与 tubelet score 的相关性不是接近 1；
 5. trajectory evidence 的运行开销可量化。
 
@@ -992,4 +1065,4 @@ S_{\mathrm{final}}\ge \eta_\alpha。
 
 其中，temporal-synchronized tubelet code 是最稳健、最应优先验证的核心；Flow Matching trajectory statistic 是最具新颖性但风险最高的增量；fixed low-FPR protocol 是保证论文可信度和防止审稿质疑的基础。
 
-因此，项目应从 `video_tubelet_sync_probe_v1` 开始，先证明 tubelet synchronization 在受控 latent 条件下成立，再逐步进入真实视频 VAE latent、trajectory statistic、DiT / Flow Matching sampling-time embedding 和完整论文协议。每个阶段只回答一个核心机制问题，并设置明确通过标准。只有这样，最终论文才有可能达到顶会投稿要求，并避免被质疑为工程拼接。
+因此，项目应从 `synthetic_tubelet_sync_probe` 开始，先证明 tubelet synchronization 在受控 latent 条件下成立，再逐步进入真实视频 VAE latent、trajectory statistic、DiT / Flow Matching sampling-time embedding 和完整论文协议。每个阶段只回答一个核心机制问题，并设置明确通过标准。只有这样，最终论文才有可能达到顶会投稿要求，并避免被质疑为工程拼接。
