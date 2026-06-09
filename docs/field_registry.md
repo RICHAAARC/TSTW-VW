@@ -382,6 +382,7 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | trajectory_probe_report_path | artifact_layout | none | false | false | false | Relative layout path for the rebuilt stage-three trajectory probe report. |
 | trajectory_mechanism_decision_path | artifact_layout | none | false | false | false | Relative layout path for the persisted stage-three trajectory mechanism-decision artifact. |
 | stage2_frozen_baseline_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the frozen stage-two baseline manifest consumed by the trajectory statistic probe. |
+| stage2_frozen_baseline_handoff_path | artifact_layout | none | false | false | false | Drive family-result path for the Colab handoff JSON that tells users which stage-two frozen baseline package to download. |
 | left_score_name | protocol | none | false | false | false | Left score identifier used by rebuilt stage-three score-correlation rows. |
 | right_score_name | protocol | none | false | false | false | Right score identifier used by rebuilt stage-three score-correlation rows. |
 | correlation_value | protocol | none | false | false | false | Correlation summary value emitted by rebuilt stage-three score-correlation rows. |
@@ -402,6 +403,9 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | baseline_mechanism_decision_digest | governance | none | false | false | false | Digest of the frozen baseline mechanism decision artifact used to prove gate identity. |
 | baseline_record_count | governance | none | false | false | false | Count of frozen baseline event records accepted by the dependency loader. |
 | baseline_threshold_count | governance | none | false | false | false | Count of frozen baseline threshold records accepted by the dependency loader. |
+| handoff_kind | governance | none | false | false | false | Handoff JSON kind identifying the package as a stage-two frozen baseline for trajectory statistic replay. |
+| required_relpaths | governance | none | false | false | false | Relative paths that must exist after extracting the stage-two frozen baseline archive for the stage-three loader. |
+| recommended_local_baseline_root | governance | none | false | false | false | Human-readable instruction for selecting the extracted run root as the local frozen baseline root. |
 | TrajectoryLeakageSummary | governance | none | false | false | false | Stage-three mechanism-audit summary container for negative leakage rates. |
 | TrajectoryGainSummary | governance | none | false | false | false | Stage-three mechanism-audit summary container for trajectory incremental gain. |
 | TrajectoryCorrelationSummary | governance | none | false | false | false | Stage-three mechanism-audit summary container for control-score magnitude and enabled-variant coverage. |

@@ -3682,6 +3682,13 @@ def package_probe_family_results(
     }
     if resolved_mechanism_summary is not None:
         package_payload["stage2_mechanism_summary"] = _json_safe(resolved_mechanism_summary)
+    handoff_path = _write_stage2_frozen_baseline_handoff(
+        run_root=Path(run_root),
+        family_root=Path(family_root),
+        package_payload=package_payload,
+        mechanism_summary=resolved_mechanism_summary,
+    )
+    package_payload["stage2_frozen_baseline_handoff_path"] = str(handoff_path)
 
     if drive_root is not None and family_id is not None:
         registry_entry = {
@@ -3708,6 +3715,67 @@ def package_probe_family_results(
         package_payload["registry_paths"] = registry_paths
 
     return _json_safe(package_payload)
+
+
+def _write_stage2_frozen_baseline_handoff(
+    *,
+    run_root: Path,
+    family_root: Path,
+    package_payload: dict[str, Any],
+    mechanism_summary: dict[str, Any] | None,
+) -> Path:
+    """功能：写出供阶段 3 replay 使用的冻结 baseline handoff 摘要。
+
+    该函数不直接写 formal records 或 thresholds, 只把打包产物路径和后续
+    replay 所需的最小目录合同写成 JSON, 方便 Colab 用户手动下载后在本地 CPU
+    环境解包并传给 frozen baseline loader。
+    """
+    handoff_path = family_root / "stage2_frozen_baseline_handoff.json"
+    required_relpaths = [
+        "records/event_scores.jsonl",
+        "thresholds/thresholds.json",
+        "artifacts/run_manifest.json",
+        "artifacts/stage2_mechanism_decision.json",
+    ]
+    payload = {
+        "handoff_kind": "stage2_frozen_baseline_for_trajectory_statistic_probe",
+        "run_root_name": run_root.name,
+        "archive_path": package_payload.get("drive_archive_path"),
+        "zip_path": package_payload.get("zip_pack", {}).get("zip_path"),
+        "archive_format": package_payload.get("archive_format"),
+        "package_format": package_payload.get("package_format"),
+        "required_relpaths": required_relpaths,
+        "recommended_local_baseline_root": (
+            "解压归档后, 将包含这些相对路径的 run root 目录传给 "
+            "FormalReplayRequest.frozen_baseline_root"
+        ),
+        "Stage2ImplementationDecision": (
+            None
+            if mechanism_summary is None
+            else mechanism_summary.get("Stage2ImplementationDecision")
+        ),
+        "Stage2MechanismDecision": (
+            None
+            if mechanism_summary is None
+            else mechanism_summary.get("Stage2MechanismDecision")
+        ),
+        "stage2_mechanism_protocol": (
+            None
+            if mechanism_summary is None
+            else mechanism_summary.get("stage2_mechanism_protocol")
+        ),
+        "NextAllowedStageByMechanism": (
+            None
+            if mechanism_summary is None
+            else mechanism_summary.get("NextAllowedStageByMechanism")
+        ),
+    }
+    handoff_path.parent.mkdir(parents=True, exist_ok=True)
+    handoff_path.write_text(
+        json.dumps(_json_safe(payload), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return handoff_path
 
 
 def _load_stage2_mechanism_summary(run_root: str | Path) -> dict[str, Any] | None:

@@ -7,8 +7,8 @@
 - 测试根目录：`tests/`
 - 测试构建约束：`docs/test_case_constraints.md`
 - 当前 pytest 默认参数来自 `pyproject.toml`：`(constraint or unit or quick) and not integration and not smoke and not slow and not formal`
-- 当前全量测试节点：420 个
-- 当前默认会执行的测试节点：350 个
+- 当前全量测试节点：421 个
+- 当前默认会执行的测试节点：351 个
 - 当前默认排除的测试节点：70 个
 
 ## 2. 分层统计
@@ -16,7 +16,7 @@
 | Layer | Files | Nodes | Default role |
 | --- | --- | --- | --- |
 | constraints | 33 | 153 | default governance checks |
-| functional | 40 | 225 | default quick behavior checks |
+| functional | 40 | 226 | default quick behavior checks |
 | integration | 23 | 42 | excluded runner/smoke/formal checks |
 
 ## 3. 推荐执行命令
@@ -73,7 +73,7 @@ python tools/harness/run_all_audits.py
 | `tests/functional/test_mechanism_audit.py` | 2 | functional | `quick` | 2 | yes | no | yes | 验证阶段 2 mechanism audit 能重建表格与决策文件。 |
 | `tests/functional/test_mechanism_calibration_runner.py` | 7 | functional | `quick`, `unit` | 7 | yes | no | yes | 验证 real_video_vae_latent_probe mechanism calibration runner 的 orchestration 行为。 |
 | `tests/functional/test_mechanism_candidate_selection.py` | 16 | functional | `quick` | 16 | yes | no | yes | 验证 real_video_vae_latent_probe mechanism calibration candidate selector 的 quick 行为。 |
-| `tests/functional/test_packager.py` | 9 | functional | `quick` | 9 | yes | yes | yes | 验证 real-video zip / tar.zst 打包器的轻量功能契约。 |
+| `tests/functional/test_packager.py` | 10 | functional | `quick` | 10 | yes | yes | yes | 验证 real-video zip / tar.zst 打包器的轻量功能契约。 |
 | `tests/functional/test_projection_margin_embedding.py` | 3 | functional | `quick` | 3 | yes | no | no | 验证 stage-one projection-margin embedding 的最小语义。 |
 | `tests/functional/test_protocol_runner_dependency_injection.py` | 6 | functional | `quick` | 6 | no | no | no | 验证 ProtocolRunner 的依赖注入与方法家族解耦行为。File purpose: Validate ProtocolRunner dependency injection and method-family decoupling. |
 | `tests/functional/test_real_vae_backend_registry.py` | 5 | functional | `quick`, `unit` | 5 | yes | no | yes | 验证阶段 2 VAE registry 的 backend 解析行为。 |

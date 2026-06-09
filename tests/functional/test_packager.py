@@ -17,6 +17,9 @@ import pytest
 
 import scripts.package_results.drive_packager as drive_packager_module
 import scripts.package_results.package_real_video_vae_latent_tar_zst as family_tar_packager_module
+from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
+    _write_stage2_frozen_baseline_handoff,
+)
 
 from scripts.package_results.drive_packager import pack_real_video_vae_latent_run
 from scripts.package_results.tar_zst_packager import pack_run_to_tar_zst
@@ -301,6 +304,45 @@ def test_real_video_tar_zst_packager_archive_extension(tmp_path: Path) -> None:
     assert archive_name.endswith(".tar.zst")
     assert result["summary_path"].name.endswith("_summary.json")
     assert result["checks_path"].name.endswith("_checks.json")
+
+
+def test_notebook_family_packaging_writes_stage2_frozen_baseline_handoff(
+    tmp_path: Path,
+) -> None:
+    """验证 notebook handoff 摘要包含阶段 3 replay 需要的最小文件合同。"""
+    run_root = _make_run_root(tmp_path)
+    family_root = tmp_path / "family_root"
+    package_payload = {
+        "drive_archive_path": str(family_root / "packages" / "run.tar.zst"),
+        "zip_pack": {"zip_path": str(family_root / "packages" / "run.zip")},
+        "archive_format": "tar.zst",
+        "package_format": "tar.zst",
+    }
+
+    handoff_path = _write_stage2_frozen_baseline_handoff(
+        run_root=run_root,
+        family_root=family_root,
+        package_payload=package_payload,
+        mechanism_summary={
+            "Stage2ImplementationDecision": "PASS",
+            "Stage2MechanismDecision": "PASS",
+            "stage2_mechanism_protocol": "aligned_payload_safety",
+            "NextAllowedStageByMechanism": "trajectory_statistic_probe",
+        },
+    )
+
+    handoff_payload = json.loads(handoff_path.read_text(encoding="utf-8"))
+    assert handoff_payload["handoff_kind"] == (
+        "stage2_frozen_baseline_for_trajectory_statistic_probe"
+    )
+    for required_relpath in (
+        "records/event_scores.jsonl",
+        "thresholds/thresholds.json",
+        "artifacts/run_manifest.json",
+        "artifacts/stage2_mechanism_decision.json",
+    ):
+        assert required_relpath in handoff_payload["required_relpaths"]
+    assert handoff_payload["Stage2MechanismDecision"] == "PASS"
 
 
 def test_real_video_tar_zst_packager_raises_without_tar_zstd(tmp_path: Path) -> None:
