@@ -478,3 +478,22 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | sampling_readiness_decision_path | artifact_layout | none | false | false | false | Relative layout path for the trajectory-aware sampling readiness decision artifact. |
 | sampling_policy_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the trajectory-aware sampling policy manifest artifact. |
 | sampling_probe_report_path | artifact_layout | none | false | false | false | Relative layout path for the trajectory-aware sampling report artifact. |
+
+| selection_output_kind | governance | none | false | false | false | Output kind emitted by the trajectory-aware sampling scaffold; current value is `record_digest_selection_plan`. |
+| SamplingSelectionPlanDecision | governance | none | false | false | false | Decision emitted by the record digest selection-plan builder after readiness and candidate selection checks. |
+| SamplingSelectionBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent the sampling selection plan from becoming PASS. |
+| sampling_policy_kind | governance | none | false | false | false | Policy-kind field used inside per-policy selection sections. |
+| selection_policy_kind | governance | none | false | false | false | Policy-kind field copied into each selected record summary for auditability. |
+| candidate_record_count | governance | none | false | false | false | Number of records considered by a trajectory-aware sampling policy before selection limits are applied. |
+| selected_record_count | governance | none | false | false | false | Number of record summaries selected by a trajectory-aware sampling policy or plan. |
+| selected_records | governance | none | false | false | false | Ordered list of selected record summaries containing record digests and non-generative ranking metadata. |
+| policy_sections | governance | none | false | false | false | Mapping of allowed sampling policy kinds to their candidate and selected record summaries. |
+| source_record_count | governance | none | false | false | false | Number of upstream event score records read by the trajectory-aware sampling selection-plan builder. |
+| selection_plan_digest | trace | none | false | false | false | Digest of the trajectory-aware sampling selection plan payload excluding the digest field itself. |
+| record_digest | trace | none | false | false | false | Digest of the governed upstream record subset used by a selected record summary. |
+| trajectory_rank_score | governance | none | false | false | false | Deterministic ranking score used by the trajectory-ranked replay selection policy. |
+| control_abs_max | governance | none | false | false | false | Maximum absolute trajectory-control score copied into a selected record summary. |
+| requires_real_gpu_validation | governance | none | false | false | false | Boolean gate marker indicating whether the current scaffold requires a real GPU validation run before further progress. |
+| real_generation_allowed | governance | none | false | false | false | Boolean guard recording whether real video generation is allowed by the current sampling scaffold. |
+| real_watermark_integration_allowed | governance | none | false | false | false | Boolean guard recording whether real watermark integration is allowed by the current sampling scaffold. |
+| sampling_selection_plan_path | artifact_layout | none | false | false | false | Relative layout path for the trajectory-aware sampling record digest selection-plan artifact. |
