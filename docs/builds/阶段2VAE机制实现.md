@@ -3948,3 +3948,31 @@ fail_count = 0
 
 阶段 2 当前不需要继续修复 GPU profiler 未采样和 PSNR Infinity 两项作为机制证明阻塞项; 它们已经被工程化为可解释、可审计的诊断字段。阶段 2 的机制证明结果仍保持 PASS, 项目可以进入 `trajectory_statistic_probe` 的阶段 3 构建准备。
 
+
+---
+
+## 2026-06-09 阶段 2 Colab 结果命名与 Drive 路径修订
+
+当前 `paper_workflow/run_real_video_vae_latent_probe.ipynb` 的默认结果命名已改为单下划线格式:
+
+```text
+real_video_vae_latent_probe_formal_davis2017_trainval480p_<UTC_TIME>_<SHORT_COMMIT>
+```
+
+默认 Google Drive 结果根已从历史通用 family root:
+
+```text
+/content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>
+```
+
+调整为阶段语义 root:
+
+```text
+/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<RUN_ID>
+```
+
+该目录下的 `packages/real_video_vae_latent_probe_formal.zip` 仍是阶段 3 frozen baseline replay 的默认 handoff zip。阶段 3 notebook 会优先从以下位置自动发现最新阶段 2 zip:
+
+```text
+/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/*/packages/real_video_vae_latent_probe_formal.zip
+```

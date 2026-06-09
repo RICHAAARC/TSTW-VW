@@ -39,7 +39,7 @@
 Raw Dataset：官方原始数据仓库，长期保存在 /content/drive/MyDrive/Datasets/，不属于某一次 FAMILY_ID 结果包。
 Processed Dataset：正式实验输入，长期保存在 /content/drive/MyDrive/TSTW/datasets/processed/<PROCESSED_DATASET_KEY>/，不属于某一次 run 的临时结果。
 Session Model：所有模型相关文件均在 Colab 本地会话中下载、缓存与加载，不保存到 Google Drive。
-Family Result：除 raw dataset、processed dataset 与长期 registry 外，所有实验记录、日志、模型会话 manifest、配置快照、workflow 结果与最终结果均必须保存到 /content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/。
+Family Result：除 raw dataset、processed dataset 与长期 registry 外，所有实验记录、日志、模型会话 manifest、配置快照、workflow 结果与最终结果均必须保存到受治理结果根；当前允许通用 `/content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/` 与 workflow-specific `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/` 两类布局。
 Notebook Session：每个 notebook 都视为独立 Colab 会话，不能依赖上一个 notebook 的进程内状态、内存对象、临时缓存、/tmp 文件或 /content 中未归档目录。
 Artifact Handoff：跨 notebook 传递的事实只能来自已落盘、已校验、已登记的 family artifact。
 ```
@@ -272,7 +272,7 @@ Google Drive 目录固定为：
 ```text
 1. /content/drive/MyDrive/Datasets/ 只保存 raw dataset。
 2. /content/drive/MyDrive/TSTW/datasets/processed/<PROCESSED_DATASET_KEY>/ 保存正式 processed dataset。
-3. /content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/ 保存某一次实验、测试或 workflow family 的所有结果包。
+3. /content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/ 或 /content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/ 保存某一次实验、测试或 workflow family 的所有结果包；当前阶段 2 使用 /content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<RUN_ID>/。
 4. 不使用 /content/drive/MyDrive/Models/ 作为正式模型来源。
 5. 若历史上已经存在 /content/drive/MyDrive/Models/，后续 notebook 不得读取它作为正式模型来源。
 6. 除 raw dataset、processed dataset、registry 与 family result 外，不应在 Drive 根目录下新增项目相关散落目录。
@@ -287,7 +287,7 @@ Google Drive 目录固定为：
 如果一个实验包含多个 notebook、多个 step、多个 shard 或多个合并流程，应采用多步骤 family 目录：
 
 ```text
-/content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/
+/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/
 ├── family_manifest.json
 ├── family_summary.json
 ├── family_checks.json
@@ -335,7 +335,7 @@ Google Drive 目录固定为：
 如果某次测试不分 step，例如单一 sanity check、单 notebook smoke 或单次数据构建检查，则可以保存为一个结果文件包：
 
 ```text
-/content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/
+/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/
 ├── family_manifest.json
 ├── <FAMILY_ID>.tar.zst
 ├── <FAMILY_ID>_summary.json
@@ -365,7 +365,7 @@ Google Drive 目录固定为：
 DRIVE_ROOT = "/content/drive/MyDrive"
 RAW_DATASETS_ROOT = f"{DRIVE_ROOT}/Datasets"
 TSTW_ROOT = f"{DRIVE_ROOT}/TSTW"
-TSTW_FAMILY_RESULTS_ROOT = f"{TSTW_ROOT}/results/families"
+TSTW_FAMILY_RESULTS_ROOT = f"{TSTW_ROOT}/results/<WORKFLOW_KEY>"
 
 LOCAL_TSTW_ROOT = "/content/TSTW_runtime"
 LOCAL_REPO_DIR = f"{LOCAL_TSTW_ROOT}/repo"

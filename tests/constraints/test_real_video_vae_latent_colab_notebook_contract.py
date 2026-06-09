@@ -196,6 +196,16 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "probe_workflow.package_probe_non_formal_audit_bundle" in notebook_text
     assert "probe_workflow.package_probe_family_results" in notebook_text
     assert "FAMILY_ID_TEMPLATE" in notebook_text
+    assert (
+        "real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit"
+        in notebook_text
+    )
+    assert "real_video_vae_latent_probe__formal__davis2017_trainval480p__utc_time__short_commit" not in notebook_text
+    assert (
+        "FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / 'real_video_vae_latent_probe' / FAMILY_ID"
+        in notebook_text
+    )
+    assert "FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / 'families' / FAMILY_ID" not in notebook_text
     assert "PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "dataset_manifest_path=PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "dataset_manifest=PROCESSED_DATASET_MANIFEST" in notebook_text

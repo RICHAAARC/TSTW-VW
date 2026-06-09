@@ -79,6 +79,23 @@ def test_trajectory_statistic_probe_notebook_delegates_to_repository_cli() -> No
     assert "trajectory_workflow.extract_frozen_baseline_package(" in notebook_text
     assert "trajectory_workflow.package_trajectory_probe_run(" in notebook_text
     assert "experiments.trajectory_statistic_probe.formal_replay_cli" in workflow_text
+    assert (
+        "trajectory_statistic_probe_formal_gpu_validation_utc_time_short_commit"
+        in notebook_text
+    )
+    assert (
+        "'stage2_result_root': '/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe'"
+        in notebook_text
+    )
+    assert "TSTW_STAGE2_RESULT_ROOT" in notebook_text
+    assert "STAGE2_RESULT_ROOT.glob('*/packages/real_video_vae_latent_probe_formal.zip')" in notebook_text
+    assert "/content/drive/MyDrive/TSTW/results/families/" not in notebook_text
+    assert "datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')" in notebook_text
+    assert "git', 'rev-parse', '--short=7', 'HEAD'" in notebook_text
+    assert (
+        "PACKAGE_ROOT = DRIVE_ROOT / 'results' / 'trajectory_statistic_probe' / RUN_ID / 'packages'"
+        in notebook_text
+    )
     assert "write_event_score_records(" not in notebook_text
     assert "write_threshold_records(" not in notebook_text
     assert "TrajectoryStatisticProbeRunner(" not in notebook_text

@@ -225,3 +225,146 @@ def test_stage3_mechanism_audit_accepts_formal_source_candidate_but_requires_val
         "formal_source_candidate_requires_mechanism_validation"
         in decision["Stage3MechanismBlockingReasons"]
     )
+
+
+def test_stage3_mechanism_audit_accepts_margin_gain_when_baseline_tpr_is_saturated() -> None:
+    """验证 baseline TPR 饱和时, 正样本分数裕量增益可以支撑 gain gate。"""
+    event_score_records = []
+    runtime_method_configs = [
+        {"method_variant": "tubelet_only", "enable_trajectory": False},
+        {"method_variant": "tubelet_sync", "enable_trajectory": False},
+        {"method_variant": "tubelet_traj", "enable_trajectory": True},
+        {"method_variant": "tubelet_sync_trajectory_fusion", "enable_trajectory": True},
+    ]
+    threshold_records = [
+        {
+            "method_variant": "tubelet_only",
+            "threshold_value": 0.5,
+            "target_fpr": 0.001,
+            "runtime_profile": "formal",
+        },
+        {
+            "method_variant": "tubelet_sync",
+            "threshold_value": 0.5,
+            "target_fpr": 0.001,
+            "runtime_profile": "formal",
+        },
+        {
+            "method_variant": "tubelet_traj",
+            "threshold_value": 0.5,
+            "target_fpr": 0.001,
+            "runtime_profile": "formal",
+        },
+        {
+            "method_variant": "tubelet_sync_trajectory_fusion",
+            "threshold_value": 0.5,
+            "target_fpr": 0.001,
+            "runtime_profile": "formal",
+        },
+    ]
+    for index in range(2):
+        sample_id = f"positive_{index}"
+        for method_variant, score, s_traj in (
+            ("tubelet_only", 0.7, None),
+            ("tubelet_sync", 0.7, None),
+            ("tubelet_traj", 0.9, 0.4),
+            ("tubelet_sync_trajectory_fusion", 0.85, 0.3),
+        ):
+            event_score_records.append(
+                _build_margin_record(
+                    method_variant=method_variant,
+                    sample_id=sample_id,
+                    sample_role="attacked_positive",
+                    s_final=score,
+                    s_traj=s_traj,
+                    decision=True,
+                )
+            )
+    for index in range(2):
+        sample_id = f"negative_{index}"
+        for method_variant, s_traj in (
+            ("tubelet_only", None),
+            ("tubelet_sync", None),
+            ("tubelet_traj", -0.1),
+            ("tubelet_sync_trajectory_fusion", -0.1),
+        ):
+            event_score_records.append(
+                _build_margin_record(
+                    method_variant=method_variant,
+                    sample_id=sample_id,
+                    sample_role="attacked_negative",
+                    s_final=0.1,
+                    s_traj=s_traj,
+                    decision=False,
+                )
+            )
+
+    decision = build_stage3_mechanism_decision(
+        event_score_records,
+        threshold_records=threshold_records,
+        runtime_method_configs=runtime_method_configs,
+        frozen_baseline_manifest={"Stage2DependencyStatus": "PASSED"},
+        trajectory_backend_config={
+            "trajectory_source_kind": "stage2_frozen_endpoint_replay",
+            "max_trajectory_runtime_ms": 10.0,
+        },
+    )
+
+    assert decision["TrajectoryGainSummary"]["max_delta_traj"] == 0.0
+    assert decision["TrajectoryGainSummary"]["max_positive_margin_delta_traj"] > 0.0
+    assert decision["TrajectoryMechanismGateSummary"]["trajectory_gain_gate"] == "PASS"
+    assert (
+        decision["TrajectoryMechanismGateSummary"]["trajectory_negative_leakage_gate"]
+        == "PASS"
+    )
+    assert decision["TrajectoryMechanismGateSummary"]["trajectory_control_gate"] == "PASS"
+    assert decision["TrajectoryMechanismGateSummary"]["trajectory_runtime_gate"] == "PASS"
+    assert (
+        decision["TrajectoryMechanismGateSummary"][
+            "trajectory_formal_runtime_profile_gate"
+        ]
+        == "PASS"
+    )
+    assert decision["Stage3MechanismDecision"] == "PASS"
+
+
+def _build_margin_record(
+    *,
+    method_variant: str,
+    sample_id: str,
+    sample_role: str,
+    s_final: float,
+    s_traj: float | None,
+    decision: bool,
+) -> dict[str, object]:
+    source_kind = None if s_traj is None else "stage2_frozen_endpoint_replay"
+    return {
+        "run_id": "trajectory_probe_run",
+        "split": "test",
+        "method_variant": method_variant,
+        "sample_id": sample_id,
+        "sample_role": sample_role,
+        "attack_name": "temporal_crop",
+        "decision": decision,
+        "evidence_scores": {
+            "S_tubelet": 0.7 if s_traj is None else 0.6,
+            "S_sync": 0.7 if s_traj is None else 0.6,
+            "S_traj": s_traj,
+            "S_final": s_final,
+        },
+        "mechanism_trace": {
+            "trajectory_source_kind": source_kind,
+            "formal_trajectory_source_status": (
+                None if s_traj is None else "candidate_ready"
+            ),
+            "trajectory_source_provenance_digest": (
+                None if s_traj is None else "stage2_manifest_digest"
+            ),
+            "trajectory_statistic_kind": None if s_traj is None else "velocity_projection",
+            "trajectory_time_grid": None if s_traj is None else [0.0, 0.5, 1.0],
+            "trajectory_control_scores": (
+                {} if s_traj is None else {"traj_time_reversed": 0.05}
+            ),
+            "trajectory_runtime_ms": None if s_traj is None else 1.0,
+        },
+    }

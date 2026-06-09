@@ -117,7 +117,7 @@ Google Drive 中的数据组织应遵守 Notebook 治理文档中的分层：
 ```text
 Raw Dataset：/content/drive/MyDrive/Datasets/
 Processed Dataset：/content/drive/MyDrive/TSTW/datasets/processed/<PROCESSED_DATASET_KEY>/
-Family Result：/content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/
+Family Result：/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/ 或 /content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/
 Session Model：Colab 本地会话缓存，不保存到 Google Drive 作为正式模型仓库。
 ```
 

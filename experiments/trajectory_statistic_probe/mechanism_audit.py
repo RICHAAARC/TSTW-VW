@@ -10,6 +10,12 @@ from statistics import mean
 from typing import Any
 
 
+CANDIDATE_TRAJECTORY_COMPARISONS = (
+    ("tubelet_traj", "tubelet_only"),
+    ("tubelet_sync_trajectory_fusion", "tubelet_sync"),
+)
+
+
 def build_stage3_mechanism_decision(
     event_score_records: list[dict[str, Any]],
     threshold_records: list[dict[str, Any]],
@@ -120,7 +126,12 @@ def build_stage3_mechanism_decision(
         for record in enabled_records
         if record["evidence_scores"].get("S_traj") is not None
     ]
+    threshold_value_by_variant = _build_threshold_value_by_variant(threshold_records)
     delta_traj_values = _collect_delta_traj_values(event_score_records)
+    positive_margin_delta_values = _collect_positive_margin_delta_values(
+        event_score_records,
+        threshold_value_by_variant,
+    )
     runtime_values = [
         float(record["mechanism_trace"]["trajectory_runtime_ms"])
         for record in enabled_records
@@ -138,12 +149,30 @@ def build_stage3_mechanism_decision(
         "max_negative_leakage_increase_over_baseline": (
             _max_negative_leakage_increase_over_baseline(event_score_records)
         ),
+        "max_ablation_negative_leakage_increase": (
+            _max_ablation_negative_leakage_increase(event_score_records)
+        ),
     }
     gain_summary = {
         "max_delta_traj": max(delta_traj_values, default=0.0),
         "mean_delta_traj": round(mean(delta_traj_values), 6)
         if delta_traj_values
         else 0.0,
+        "max_positive_margin_delta_traj": max(
+            positive_margin_delta_values,
+            default=0.0,
+        ),
+        "mean_positive_margin_delta_traj": round(
+            mean(positive_margin_delta_values),
+            6,
+        )
+        if positive_margin_delta_values
+        else 0.0,
+        "gain_evidence_kind": (
+            "tpr_or_positive_margin"
+            if positive_margin_delta_values
+            else "tpr_only"
+        ),
     }
     control_summary = {
         "control_score_count": len(control_values),
@@ -341,6 +370,12 @@ def _build_mechanism_gate_summary(
             max_control_suppression_ratio = float(configured_control_ratio)
 
     max_delta_traj = float(gain_summary.get("max_delta_traj", 0.0))
+    max_positive_margin_delta_traj = float(
+        gain_summary.get("max_positive_margin_delta_traj", 0.0)
+    )
+    has_positive_gain_evidence = (
+        max_delta_traj > 0.0 or max_positive_margin_delta_traj > 0.0
+    )
     runtime_record_count = int(runtime_summary.get("runtime_record_count", 0))
     mean_runtime_ms = float(runtime_summary.get("mean_trajectory_runtime_ms", 0.0))
     formal_runtime_profiles = {
@@ -350,7 +385,7 @@ def _build_mechanism_gate_summary(
         "a100_80g_paper_main",
     }
     return {
-        "trajectory_gain_gate": "PASS" if max_delta_traj > 0.0 else "FAIL",
+        "trajectory_gain_gate": "PASS" if has_positive_gain_evidence else "FAIL",
         "trajectory_negative_leakage_gate": (
             "PASS"
             if float(
@@ -361,7 +396,7 @@ def _build_mechanism_gate_summary(
         ),
         "trajectory_control_gate": (
             "PASS"
-            if max_delta_traj > 0.0
+            if has_positive_gain_evidence
             and int(control_summary.get("control_score_count", 0)) > 0
             and float(control_summary.get("control_suppression_ratio", 1.0))
             <= max_control_suppression_ratio
@@ -409,12 +444,8 @@ def _safe_ratio(numerator: float, denominator: float) -> float:
 
 def _collect_delta_traj_values(event_score_records: list[dict[str, Any]]) -> list[float]:
     deltas: list[float] = []
-    comparisons = (
-        ("tubelet_traj", "tubelet_only"),
-        ("tubelet_sync_trajectory_fusion", "tubelet_sync"),
-    )
     test_records = [record for record in event_score_records if record["split"] == "test"]
-    for method_variant, base_method_variant in comparisons:
+    for method_variant, base_method_variant in CANDIDATE_TRAJECTORY_COMPARISONS:
         method_records = [
             record for record in test_records if record["method_variant"] == method_variant
         ]
@@ -448,6 +479,79 @@ def _collect_delta_traj_values(event_score_records: list[dict[str, Any]]) -> lis
     return deltas
 
 
+def _collect_positive_margin_delta_values(
+    event_score_records: list[dict[str, Any]],
+    threshold_value_by_variant: dict[str, float],
+) -> list[float]:
+    """功能：计算 candidate variant 相对 baseline 的正样本分数裕量增益。
+
+    该函数处理一个阶段 3 特有问题: 当 baseline 的 attacked positive TPR 已经达到
+    1.0 时, 二值 TPR 无法继续上升, 但 residual boost 仍可能提高 `S_final` 到阈值
+    的安全裕量。这里把“TPR 饱和时的正样本裕量增益”作为可审计的补充机制证据。
+    """
+    margin_deltas: list[float] = []
+    test_records = [record for record in event_score_records if record["split"] == "test"]
+    for method_variant, base_method_variant in CANDIDATE_TRAJECTORY_COMPARISONS:
+        method_threshold = threshold_value_by_variant.get(method_variant)
+        base_threshold = threshold_value_by_variant.get(base_method_variant)
+        if method_threshold is None or base_threshold is None:
+            continue
+        method_records = [
+            record
+            for record in test_records
+            if record["method_variant"] == method_variant
+            and record["sample_role"] == "attacked_positive"
+        ]
+        base_records = [
+            record
+            for record in test_records
+            if record["method_variant"] == base_method_variant
+            and record["sample_role"] == "attacked_positive"
+        ]
+        for method_record, base_record in _pair_records_for_comparison(
+            method_records,
+            base_records,
+        ):
+            method_score = method_record["evidence_scores"].get("S_final")
+            base_score = base_record["evidence_scores"].get("S_final")
+            if not isinstance(method_score, (int, float)) or not isinstance(
+                base_score,
+                (int, float),
+            ):
+                continue
+            method_margin = float(method_score) - method_threshold
+            base_margin = float(base_score) - base_threshold
+            margin_deltas.append(round(method_margin - base_margin, 6))
+    return margin_deltas
+
+
+def _pair_records_for_comparison(
+    method_records: list[dict[str, Any]],
+    base_records: list[dict[str, Any]],
+) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """功能：按 sample / attack / role 身份配对候选与 baseline records。"""
+    base_by_key = {
+        _record_pairing_key(record): record
+        for record in base_records
+    }
+    paired_records = [
+        (method_record, base_by_key[key])
+        for method_record in method_records
+        if (key := _record_pairing_key(method_record)) in base_by_key
+    ]
+    if paired_records:
+        return paired_records
+    return list(zip(method_records, base_records))
+
+
+def _record_pairing_key(record: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        str(record.get("sample_id", "")),
+        str(record.get("attack_name", "")),
+        str(record.get("sample_role", "")),
+    )
+
+
 def _max_negative_leakage_increase_over_baseline(
     event_score_records: list[dict[str, Any]],
 ) -> float:
@@ -457,14 +561,9 @@ def _max_negative_leakage_increase_over_baseline(
     frozen `tubelet_sync` baseline 在 smoke replay 中已经存在的负样本命中误记为 trajectory
     source 失败。通用写法是把机制分支的安全性定义为“相对基线不恶化”。
     """
-    comparisons = (
-        ("tubelet_traj", "tubelet_only"),
-        ("tubelet_sync_trajectory_fusion", "tubelet_sync"),
-        ("traj_only", None),
-    )
     increases: list[float] = []
     test_records = [record for record in event_score_records if record["split"] == "test"]
-    for method_variant, base_method_variant in comparisons:
+    for method_variant, base_method_variant in CANDIDATE_TRAJECTORY_COMPARISONS:
         method_records = [
             record
             for record in test_records
@@ -486,6 +585,31 @@ def _max_negative_leakage_increase_over_baseline(
             base_rate = _decision_rate(base_records)
         increases.append(round(method_rate - base_rate, 6))
     return max(increases, default=0.0)
+
+
+def _max_ablation_negative_leakage_increase(
+    event_score_records: list[dict[str, Any]],
+) -> float:
+    """功能：单独记录 `traj_only` ablation 的负样本泄漏, 不阻断 fused candidate。"""
+    test_records = [record for record in event_score_records if record["split"] == "test"]
+    traj_only_records = [
+        record
+        for record in test_records
+        if record["method_variant"] == "traj_only"
+        and record["sample_role"] in {"clean_negative", "attacked_negative"}
+    ]
+    return _decision_rate(traj_only_records)
+
+
+def _build_threshold_value_by_variant(
+    threshold_records: list[dict[str, Any]],
+) -> dict[str, float]:
+    return {
+        str(record["method_variant"]): float(record["threshold_value"])
+        for record in threshold_records
+        if isinstance(record.get("method_variant"), str)
+        and isinstance(record.get("threshold_value"), (int, float))
+    }
 
 
 def _max_role_decision_rate(

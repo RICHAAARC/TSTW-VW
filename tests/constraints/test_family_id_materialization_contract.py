@@ -29,8 +29,8 @@ def test_materialize_family_id_replaces_template_placeholders() -> None:
     """
     family_id = materialize_family_id(
         family_id_template=(
-            "real_video_vae_latent_probe__formal__davis2017_trainval480p__"
-            "utc_time__short_commit"
+            "real_video_vae_latent_probe_formal_davis2017_trainval480p_"
+            "utc_time_short_commit"
         ),
         git_commit="ef99828abc123456",
         utc_timestamp="2026-05-13T01:51:16Z",
@@ -39,9 +39,9 @@ def test_materialize_family_id_replaces_template_placeholders() -> None:
     assert "utc_time" not in family_id
     assert "short_commit" not in family_id
     assert "template" not in family_id
-    assert family_id.endswith("__20260513T015116Z__ef99828")
+    assert family_id.endswith("_20260513T015116Z_ef99828")
     assert re.fullmatch(
-        r"real_video_vae_latent_probe__formal__davis2017_trainval480p__\d{8}T\d{6}Z__[a-z0-9_]+",
+        r"real_video_vae_latent_probe_formal_davis2017_trainval480p_\d{8}T\d{6}Z_[a-z0-9_]+",
         family_id,
     )
 
@@ -56,9 +56,9 @@ def test_materialize_family_id_uses_unknown_commit_when_git_commit_missing() -> 
         None.
     """
     family_id = materialize_family_id(
-        family_id_template="probe__formal__dataset__utc_time__short_commit",
+        family_id_template="probe_formal_dataset_utc_time_short_commit",
         git_commit="",
         utc_timestamp="20260513T015116Z",
     )
 
-    assert family_id.endswith("__20260513T015116Z__unknown_commit")
+    assert family_id.endswith("_20260513T015116Z_unknown_commit")

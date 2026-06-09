@@ -60,6 +60,9 @@ TRAJECTORY_GAIN_COLUMNS = [
     "baseline_attacked_positive_TPR",
     "attacked_positive_TPR",
     "delta_traj",
+    "baseline_attacked_positive_margin",
+    "attacked_positive_margin",
+    "delta_positive_margin_traj",
 ]
 TRAJECTORY_CONTROL_COLUMNS = [
     "run_id",
@@ -112,7 +115,7 @@ class TrajectoryStatisticArtifactBuilder:
         output_paths = build_trajectory_statistic_probe_output_paths(output_root)
         ablation_rows = build_ablation_table_rows(event_score_records, threshold_records)
         correlation_rows = build_score_correlation_rows(event_score_records)
-        gain_rows = build_trajectory_gain_rows(event_score_records)
+        gain_rows = build_trajectory_gain_rows(event_score_records, threshold_records)
         control_rows = build_trajectory_control_rows(event_score_records)
         runtime_rows = build_runtime_breakdown_rows(event_score_records)
 
@@ -239,9 +242,11 @@ def build_score_correlation_rows(
 
 def build_trajectory_gain_rows(
     event_score_records: list[dict[str, Any]],
+    threshold_records: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     test_records = [record for record in event_score_records if record["split"] == "test"]
+    threshold_value_by_variant = _build_threshold_value_by_variant(threshold_records)
     comparisons = (
         ("tubelet_traj", "tubelet_only"),
         ("tubelet_sync_trajectory_fusion", "tubelet_sync"),
@@ -274,6 +279,14 @@ def build_trajectory_gain_rows(
                 continue
             method_tpr = _decision_rate(method_positive_records)
             base_tpr = _decision_rate(base_positive_records)
+            method_margin = _mean_positive_margin(
+                method_positive_records,
+                threshold_value_by_variant.get(method_variant),
+            )
+            base_margin = _mean_positive_margin(
+                base_positive_records,
+                threshold_value_by_variant.get(base_method_variant),
+            )
             rows.append(
                 {
                     "run_id": method_positive_records[0]["run_id"],
@@ -283,6 +296,9 @@ def build_trajectory_gain_rows(
                     "baseline_attacked_positive_TPR": base_tpr,
                     "attacked_positive_TPR": method_tpr,
                     "delta_traj": round(method_tpr - base_tpr, 6),
+                    "baseline_attacked_positive_margin": base_margin,
+                    "attacked_positive_margin": method_margin,
+                    "delta_positive_margin_traj": round(method_margin - base_margin, 6),
                 }
             )
     return rows
@@ -388,6 +404,10 @@ def build_trajectory_probe_report_text(
         sorted({record["attack_name"] for record in event_score_records})
     )
     max_delta_traj = max((float(row["delta_traj"]) for row in gain_rows), default=0.0)
+    max_delta_positive_margin = max(
+        (float(row["delta_positive_margin_traj"]) for row in gain_rows),
+        default=0.0,
+    )
     mean_runtime_ms = mean([float(row["trajectory_runtime_ms"]) for row in runtime_rows]) if runtime_rows else 0.0
     return "\n".join(
         [
@@ -397,6 +417,7 @@ def build_trajectory_probe_report_text(
             f"attack_names: {attack_names}",
             f"event_record_count: {len(event_score_records)}",
             f"max_delta_traj: {round(max_delta_traj, 6)}",
+            f"max_delta_positive_margin_traj: {round(max_delta_positive_margin, 6)}",
             f"correlation_row_count: {len(correlation_rows)}",
             f"mean_runtime_ms: {round(mean_runtime_ms, 6)}",
             "stage3_mechanism_status: deferred_by_stage2",
@@ -411,6 +432,31 @@ def _decision_rate(records: list[dict[str, Any]]) -> float:
     if not records:
         return 0.0
     return round(sum(1 for record in records if record["decision"]) / len(records), 6)
+
+
+def _build_threshold_value_by_variant(
+    threshold_records: list[dict[str, Any]],
+) -> dict[str, float]:
+    return {
+        str(record["method_variant"]): float(record["threshold_value"])
+        for record in threshold_records
+        if isinstance(record.get("method_variant"), str)
+        and isinstance(record.get("threshold_value"), (int, float))
+    }
+
+
+def _mean_positive_margin(
+    records: list[dict[str, Any]],
+    threshold_value: float | None,
+) -> float:
+    if threshold_value is None:
+        return 0.0
+    margins = [
+        float(record["evidence_scores"]["S_final"]) - threshold_value
+        for record in records
+        if isinstance(record.get("evidence_scores", {}).get("S_final"), (int, float))
+    ]
+    return round(mean(margins), 6) if margins else 0.0
 
 
 def _compute_correlation(paired_values: list[tuple[float, float]]) -> float:

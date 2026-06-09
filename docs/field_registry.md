@@ -394,6 +394,9 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | record_count | protocol | none | false | false | false | Count of records contributing to a rebuilt stage-three summary row. |
 | baseline_attacked_positive_TPR | protocol | none | false | false | false | Baseline attacked-positive TPR used by rebuilt stage-three trajectory gain rows. |
 | delta_traj | protocol | none | false | false | false | Incremental attacked-positive TPR gain contributed by a trajectory-enabled variant over its baseline. |
+| baseline_attacked_positive_margin | protocol | none | false | false | false | Mean baseline attacked-positive `S_final - threshold` margin used when TPR is saturated. |
+| attacked_positive_margin | protocol | none | false | false | false | Mean trajectory-enabled attacked-positive `S_final - threshold` margin used when TPR is saturated. |
+| delta_positive_margin_traj | protocol | none | false | false | false | Incremental attacked-positive score-margin gain contributed by a trajectory-enabled variant over its baseline. |
 | Stage3ImplementationDecision | governance | none | false | false | false | Implementation-completion decision emitted by the stage-three trajectory mechanism audit. |
 | Stage3MechanismDecision | governance | none | false | false | false | Mechanism-evidence decision emitted by the stage-three trajectory mechanism audit. |
 | Stage2DependencyStatus | governance | none | false | false | false | Stage-three mechanism-audit field recording whether the prerequisite stage-two gate has passed. |
@@ -406,6 +409,7 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | trajectory_runtime_gate | governance | none | false | false | false | Stage-three gate field indicating whether trajectory runtime records are complete and within the configured bound. |
 | trajectory_formal_runtime_profile_gate | governance | none | false | false | false | Stage-three gate field requiring formal runtime profiles before the mechanism decision can become PASS. |
 | max_negative_leakage_increase_over_baseline | protocol | none | false | false | false | Stage-three negative-leakage metric measuring whether trajectory-enabled variants increase negative decisions over the frozen baseline. |
+| max_ablation_negative_leakage_increase | protocol | none | false | false | false | Stage-three diagnostic metric reporting `traj_only` ablation leakage separately from fused candidate leakage. |
 | mean_abs_main_trajectory_score | protocol | none | false | false | false | Mean absolute main trajectory score used as the denominator for control suppression audit. |
 | control_suppression_ratio | protocol | none | false | false | false | Ratio between mean absolute control score and mean absolute main trajectory score for stage-three control audit. |
 | baseline_construction_phase | governance | none | false | false | false | Construction phase recorded in the frozen baseline run manifest. |
@@ -428,6 +432,9 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | NextAllowedStageByTrajectory | governance | none | false | false | false | Next-stage recommendation implied by the stage-three trajectory mechanism audit. |
 | max_delta_traj | governance | none | false | false | false | Maximum observed stage-three trajectory gain across rebuilt comparison rows. |
 | mean_delta_traj | governance | none | false | false | false | Mean stage-three trajectory gain across rebuilt comparison rows. |
+| max_positive_margin_delta_traj | governance | none | false | false | false | Maximum positive score-margin gain used as complementary stage-three gain evidence when baseline TPR is saturated. |
+| mean_positive_margin_delta_traj | governance | none | false | false | false | Mean positive score-margin gain used as complementary stage-three gain evidence when baseline TPR is saturated. |
+| gain_evidence_kind | governance | none | false | false | false | Stage-three gain evidence mode indicating whether gain was judged by TPR only or by TPR plus positive score margin. |
 | mean_abs_control_score | governance | none | false | false | false | Mean absolute control-score magnitude reported by the stage-three mechanism audit. |
 | trajectory_enabled_variant_count | governance | none | false | false | false | Count of trajectory-enabled method variants included in the stage-three mechanism audit. |
 | control_score_count | governance | none | false | false | false | Count of control-score observations summarized by the stage-three mechanism audit. |
