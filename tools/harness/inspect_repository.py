@@ -82,11 +82,14 @@ TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS = {
     "trajectory_aware_sampling_artifact_builder": "experiments/trajectory_aware_sampling_probe/artifact_builder.py",
     "trajectory_aware_sampling_runner": "experiments/trajectory_aware_sampling_probe/runner.py",
     "trajectory_aware_sampling_scaffold_cli": "experiments/trajectory_aware_sampling_probe/scaffold_cli.py",
+    "trajectory_aware_sampling_notebook_entrypoint": "paper_workflow/run_trajectory_aware_sampling_probe.ipynb",
+    "trajectory_aware_sampling_notebook_workflow": "paper_workflow/notebook_utils/trajectory_aware_sampling_probe_workflow.py",
     "trajectory_aware_sampling_contract_test": "tests/constraints/test_trajectory_aware_sampling_contract.py",
     "trajectory_aware_sampling_readiness_test": "tests/functional/test_trajectory_aware_sampling_readiness.py",
     "trajectory_aware_sampling_selection_plan_test": "tests/functional/test_trajectory_aware_sampling_selection_plan.py",
     "trajectory_aware_sampling_artifact_builder_test": "tests/functional/test_trajectory_aware_sampling_artifact_builder.py",
     "trajectory_aware_sampling_runner_test": "tests/functional/test_trajectory_aware_sampling_runner.py",
+    "trajectory_aware_sampling_notebook_contract_test": "tests/constraints/test_trajectory_aware_sampling_probe_notebook_contract.py",
 }
 
 

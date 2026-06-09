@@ -31,6 +31,7 @@ REQUIRED_PATHS = {
     "processed_dataset_notebook_entrypoint": "paper_workflow/build_processed_real_video_dataset.ipynb",
     "real_video_probe_notebook_entrypoint": "paper_workflow/run_real_video_vae_latent_probe.ipynb",
     "trajectory_probe_notebook_entrypoint": "paper_workflow/run_trajectory_statistic_probe.ipynb",
+    "trajectory_aware_sampling_probe_notebook_entrypoint": "paper_workflow/run_trajectory_aware_sampling_probe.ipynb",
     "paper_workflow_notebook_utils": "paper_workflow/notebook_utils",
     "paper_workflow_colab_utils": "paper_workflow/colab_utils",
 }
@@ -44,6 +45,7 @@ ALLOWED_ROOT_NOTEBOOKS = {
     "build_processed_real_video_dataset.ipynb",
     "run_real_video_vae_latent_probe.ipynb",
     "run_trajectory_statistic_probe.ipynb",
+    "run_trajectory_aware_sampling_probe.ipynb",
 }
 
 

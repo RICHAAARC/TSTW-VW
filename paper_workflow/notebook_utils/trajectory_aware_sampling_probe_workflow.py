@@ -1,0 +1,175 @@
+"""
+文件用途: 为 Colab notebook 提供 trajectory-aware sampling probe 调度工具。
+Module type: Notebook utility module
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import zipfile
+from typing import Any
+
+
+def prepare_repository_environment(repository_root: str | Path) -> dict[str, str]:
+    """功能: 构建 notebook 调用仓库 CLI 所需的 UTF-8 Python 环境。
+
+    该函数属于通用工程写法。notebook 只负责 session 调度, 所有正式 scaffold 产物都由仓库模块生成。
+    显式设置 `PYTHONPATH`、`PYTHONUTF8` 和 `PYTHONIOENCODING` 可以减少 Colab 与本地环境差异。
+    """
+    root_path = Path(repository_root).resolve()
+    env = dict(os.environ)
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        str(root_path)
+        if not existing_pythonpath
+        else str(root_path) + os.pathsep + existing_pythonpath
+    )
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
+    return env
+
+
+def find_latest_trajectory_probe_root(stage3_result_root: str | Path) -> Path:
+    """功能: 在 Google Drive 结果目录中查找最新的阶段 3 输出根目录。
+
+    查找条件是目录中存在 `records/event_scores.jsonl` 和 `artifacts/trajectory_mechanism_decision.json`。
+    这是项目特定的 handoff 约定, 用于让 sampling scaffold 复用阶段 3 formal 产物。
+    """
+    root_path = Path(stage3_result_root)
+    if not root_path.exists():
+        raise FileNotFoundError(root_path)
+    candidates = [
+        path
+        for path in root_path.iterdir()
+        if path.is_dir()
+        and (path / "records" / "event_scores.jsonl").exists()
+        and (path / "artifacts" / "trajectory_mechanism_decision.json").exists()
+    ]
+    if not candidates:
+        raise FileNotFoundError(
+            "no trajectory statistic probe run root found under "
+            f"{root_path}"
+        )
+    return sorted(candidates, key=lambda path: path.stat().st_mtime, reverse=True)[0]
+
+
+def find_latest_trajectory_probe_package(stage3_result_root: str | Path) -> Path:
+    """功能: 在 Google Drive 结果目录中查找最新的阶段 3 zip package。"""
+    root_path = Path(stage3_result_root)
+    if not root_path.exists():
+        raise FileNotFoundError(root_path)
+    candidates = sorted(
+        root_path.glob("*/packages/trajectory_statistic_probe_formal_gpu_validation_*.zip"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        raise FileNotFoundError(
+            "no trajectory statistic probe zip package found under "
+            f"{root_path}"
+        )
+    return candidates[0]
+
+
+def extract_trajectory_probe_package(
+    package_path: str | Path,
+    extract_root: str | Path,
+) -> Path:
+    """功能: 解压阶段 3 zip package 并返回其中的 run root。
+
+    该 helper 只处理整体 package handoff, 不直接修改 records 或正式报告。正式 sampling scaffold 仍由仓库 CLI 生成。
+    """
+    package = Path(package_path).expanduser()
+    if not package.exists():
+        raise FileNotFoundError(package)
+    if package.suffix.lower() != ".zip":
+        raise ValueError("trajectory probe package must be a .zip file")
+
+    output_root = Path(extract_root)
+    if output_root.exists():
+        shutil.rmtree(output_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(package) as zip_file:
+        zip_file.extractall(output_root)
+
+    candidates = [
+        path
+        for path in output_root.iterdir()
+        if path.is_dir()
+        and (path / "records" / "event_scores.jsonl").exists()
+        and (path / "artifacts" / "trajectory_mechanism_decision.json").exists()
+    ]
+    if len(candidates) != 1:
+        raise ValueError(
+            "expected exactly one extracted trajectory probe run root, "
+            f"found {len(candidates)}"
+        )
+    return candidates[0]
+
+
+def run_sampling_scaffold_cli(
+    repository_root: str | Path,
+    upstream_trajectory_root: str | Path,
+    output_root: str | Path,
+    sampling_config_path: str | Path = "configs/protocol/trajectory_aware_sampling_probe.json",
+) -> dict[str, Any]:
+    """功能: 调用 trajectory-aware sampling scaffold CLI 并读取 policy manifest。
+
+    该函数是 notebook 到 repository module 的边界。notebook 不直接写 readiness、selection plan、manifest 或 report,
+    这些产物只由 `experiments.trajectory_aware_sampling_probe.scaffold_cli` 和 runner 生成。
+    """
+    root_path = Path(repository_root).resolve()
+    output_path = Path(output_root)
+    if output_path.exists():
+        shutil.rmtree(output_path)
+    command = [
+        "python",
+        "-m",
+        "experiments.trajectory_aware_sampling_probe.scaffold_cli",
+        "--repository-root",
+        str(root_path),
+        "--upstream-trajectory-root",
+        str(Path(upstream_trajectory_root)),
+        "--output-root",
+        str(output_path),
+        "--sampling-config-path",
+        str(Path(sampling_config_path)),
+    ]
+    subprocess.run(
+        command,
+        cwd=root_path,
+        env=prepare_repository_environment(root_path),
+        check=True,
+    )
+    manifest_path = output_path / "artifacts" / "sampling_policy_manifest.json"
+    return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def package_sampling_probe_run(
+    run_root: str | Path,
+    package_root: str | Path,
+    package_name: str,
+) -> Path:
+    """功能: 将 sampling scaffold run root 整体打包为 zip 供 Google Drive 下载。
+
+    该函数只归档仓库 runner 已生成的 run root, 不手工拼接正式 scaffold 产物。
+    """
+    run_path = Path(run_root)
+    if not run_path.exists():
+        raise FileNotFoundError(run_path)
+    output_root = Path(package_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    archive_base = output_root / package_name
+    archive_path = Path(
+        shutil.make_archive(
+            str(archive_base),
+            "zip",
+            root_dir=run_path.parent,
+            base_dir=run_path.name,
+        )
+    )
+    return archive_path
