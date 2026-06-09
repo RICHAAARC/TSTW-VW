@@ -7,8 +7,8 @@
 - 测试根目录：`tests/`
 - 测试构建约束：`docs/test_case_constraints.md`
 - 当前 pytest 默认参数来自 `pyproject.toml`：`(constraint or unit or quick) and not integration and not smoke and not slow and not formal`
-- 当前全量测试节点：437 个
-- 当前默认会执行的测试节点：367 个
+- 当前全量测试节点：439 个
+- 当前默认会执行的测试节点：369 个
 - 当前默认排除的测试节点：70 个
 
 ## 2. 分层统计
@@ -16,7 +16,7 @@
 | Layer | Files | Nodes | Default role |
 | --- | --- | --- | --- |
 | constraints | 35 | 156 | default governance checks |
-| functional | 44 | 239 | default quick behavior checks |
+| functional | 45 | 241 | default quick behavior checks |
 | integration | 23 | 42 | excluded runner/smoke/formal checks |
 
 ## 3. 推荐执行命令
@@ -103,6 +103,7 @@ python tools/harness/run_all_audits.py
 | `tests/functional/test_trajectory_artifact_report.py` | 1 | functional | `quick` | 1 | no | no | no | 验证 trajectory statistic probe 报告读取正式机制决策产物。 |
 | `tests/functional/test_trajectory_aware_sampling_artifact_builder.py` | 1 | functional | `quick` | 1 | yes | no | no | 文件用途: 验证 trajectory-aware sampling scaffold 产物写出路径。 |
 | `tests/functional/test_trajectory_aware_sampling_readiness.py` | 4 | functional | `quick` | 4 | no | no | no | 验证 trajectory-aware sampling probe 的 readiness gate 语义。 |
+| `tests/functional/test_trajectory_aware_sampling_runner.py` | 2 | functional | `quick` | 2 | yes | no | no | 文件用途: 验证 trajectory-aware sampling runner 和 CLI 的 CPU scaffold 闭环。 |
 | `tests/functional/test_trajectory_aware_sampling_selection_plan.py` | 4 | functional | `quick` | 4 | no | no | no | 文件用途: 验证 trajectory-aware sampling 的记录摘要选择计划。 |
 | `tests/functional/test_trajectory_mechanism_audit.py` | 5 | functional | `quick` | 5 | no | no | no | 验证阶段 3 trajectory mechanism audit 的基本决策语义。 |
 | `tests/functional/test_trajectory_source_access_guard.py` | 2 | functional | `quick`, `unit` | 2 | yes | no | no | 验证 trajectory source 不允许读取 positive-only artifact。 |

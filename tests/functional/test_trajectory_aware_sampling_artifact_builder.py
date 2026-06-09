@@ -104,5 +104,8 @@ def test_sampling_artifact_builder_writes_decision_plan_manifest_and_report(
     assert manifest["selection_plan_digest"] == plan["selection_plan_digest"]
     assert manifest["real_generation_allowed"] is False
     assert manifest["real_watermark_integration_allowed"] is False
+    assert manifest["next_step_requires_real_gpu_validation"] is True
+    assert manifest["NextRequiredValidationBySampling"] == "real_gpu_validation"
     assert "Trajectory-Aware Sampling Probe Report" in report_text
     assert "requires_real_gpu_validation: False" in report_text
+    assert "next_step_requires_real_gpu_validation: True" in report_text

@@ -36,6 +36,7 @@ def test_trajectory_aware_sampling_protocol_config_is_decision_only() -> None:
     assert "flow_matching_generation" in config["forbidden_runtime_capabilities"]
     assert "real_watermark_embedding" in config["forbidden_runtime_capabilities"]
     assert config["outputs"]["sampling_selection_plan_path"] == "artifacts/sampling_selection_plan.json"
+    assert config["outputs"]["sampling_handoff_manifest_path"] == "artifacts/sampling_handoff_manifest.json"
     assert "record_digest_selection_plan" in config["enabled_runtime_capabilities"]
 
 

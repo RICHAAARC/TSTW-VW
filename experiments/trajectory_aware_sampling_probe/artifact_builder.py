@@ -81,6 +81,9 @@ def build_sampling_policy_manifest(
     outputs = sampling_probe_config.get("outputs", {})
     if not isinstance(outputs, dict):
         outputs = {}
+    selection_passed = (
+        selection_plan.get("SamplingSelectionPlanDecision") == "PASS"
+    )
     return {
         "construction_phase": sampling_probe_config.get("construction_phase"),
         "selection_output_kind": selection_plan.get("selection_output_kind"),
@@ -120,6 +123,10 @@ def build_sampling_policy_manifest(
         "real_generation_allowed": False,
         "real_watermark_integration_allowed": False,
         "requires_real_gpu_validation": False,
+        "next_step_requires_real_gpu_validation": selection_passed,
+        "NextRequiredValidationBySampling": (
+            "real_gpu_validation" if selection_passed else "finish_trajectory_aware_sampling_probe"
+        ),
     }
 
 
@@ -140,6 +147,8 @@ def build_trajectory_aware_sampling_report_text(
             f"source_record_count: {selection_plan.get('source_record_count')}",
             f"selection_plan_digest: {selection_plan.get('selection_plan_digest')}",
             f"requires_real_gpu_validation: {policy_manifest.get('requires_real_gpu_validation')}",
+            f"next_step_requires_real_gpu_validation: {policy_manifest.get('next_step_requires_real_gpu_validation')}",
+            f"next_required_validation_by_sampling: {policy_manifest.get('NextRequiredValidationBySampling')}",
             f"real_generation_allowed: {policy_manifest.get('real_generation_allowed')}",
             f"real_watermark_integration_allowed: {policy_manifest.get('real_watermark_integration_allowed')}",
             "",

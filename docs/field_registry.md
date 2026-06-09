@@ -497,3 +497,13 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | real_generation_allowed | governance | none | false | false | false | Boolean guard recording whether real video generation is allowed by the current sampling scaffold. |
 | real_watermark_integration_allowed | governance | none | false | false | false | Boolean guard recording whether real watermark integration is allowed by the current sampling scaffold. |
 | sampling_selection_plan_path | artifact_layout | none | false | false | false | Relative layout path for the trajectory-aware sampling record digest selection-plan artifact. |
+
+| upstream_trajectory_root | governance | none | false | false | false | Runtime path to the upstream trajectory statistic probe output root consumed by the sampling scaffold runner. |
+| upstream_trajectory_records_digest | trace | none | false | false | false | File digest of upstream trajectory event-score records consumed by the sampling scaffold runner. |
+| upstream_trajectory_mechanism_decision_digest | trace | none | false | false | false | File digest of the upstream trajectory mechanism decision consumed by the sampling scaffold runner. |
+| sampling_config_digest | trace | none | false | false | false | File digest of the governed trajectory-aware sampling config consumed by the scaffold runner. |
+| policy_manifest_digest | trace | none | false | false | false | Digest of the generated sampling policy manifest written into the handoff manifest. |
+| sampling_handoff_manifest_path | artifact_layout | none | false | false | false | Relative layout path for the trajectory-aware sampling scaffold handoff manifest. |
+
+| next_step_requires_real_gpu_validation | governance | none | false | false | false | Boolean boundary marker indicating that the current scaffold has finished and the next progression step requires real GPU validation. |
+| NextRequiredValidationBySampling | governance | none | false | false | false | Validation requirement emitted by the trajectory-aware sampling scaffold after selection-plan construction. |

@@ -12,11 +12,17 @@ from experiments.trajectory_aware_sampling_probe.artifact_builder import (
 from experiments.trajectory_aware_sampling_probe.readiness_audit import (
     build_trajectory_aware_sampling_readiness_decision,
 )
+from experiments.trajectory_aware_sampling_probe.runner import (
+    TrajectoryAwareSamplingProbeRunner,
+    TrajectoryAwareSamplingProbeRunResult,
+)
 from experiments.trajectory_aware_sampling_probe.selection_plan_builder import (
     build_record_digest_selection_plan,
 )
 
 __all__ = [
+    "TrajectoryAwareSamplingProbeRunner",
+    "TrajectoryAwareSamplingProbeRunResult",
     "build_record_digest_selection_plan",
     "build_sampling_policy_manifest",
     "build_trajectory_aware_sampling_artifacts",

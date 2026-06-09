@@ -78,8 +78,15 @@ TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS = {
     "trajectory_aware_sampling_package_root": "experiments/trajectory_aware_sampling_probe",
     "trajectory_aware_sampling_readiness_audit": "experiments/trajectory_aware_sampling_probe/readiness_audit.py",
     "trajectory_aware_sampling_output_layout": "experiments/trajectory_aware_sampling_probe/output_layout.py",
+    "trajectory_aware_sampling_selection_plan_builder": "experiments/trajectory_aware_sampling_probe/selection_plan_builder.py",
+    "trajectory_aware_sampling_artifact_builder": "experiments/trajectory_aware_sampling_probe/artifact_builder.py",
+    "trajectory_aware_sampling_runner": "experiments/trajectory_aware_sampling_probe/runner.py",
+    "trajectory_aware_sampling_scaffold_cli": "experiments/trajectory_aware_sampling_probe/scaffold_cli.py",
     "trajectory_aware_sampling_contract_test": "tests/constraints/test_trajectory_aware_sampling_contract.py",
     "trajectory_aware_sampling_readiness_test": "tests/functional/test_trajectory_aware_sampling_readiness.py",
+    "trajectory_aware_sampling_selection_plan_test": "tests/functional/test_trajectory_aware_sampling_selection_plan.py",
+    "trajectory_aware_sampling_artifact_builder_test": "tests/functional/test_trajectory_aware_sampling_artifact_builder.py",
+    "trajectory_aware_sampling_runner_test": "tests/functional/test_trajectory_aware_sampling_runner.py",
 }
 
 

@@ -33,7 +33,8 @@
     "sampling_readiness_decision_path": "artifacts/sampling_readiness_decision.json",
     "sampling_policy_manifest_path": "artifacts/sampling_policy_manifest.json",
     "sampling_probe_report_path": "reports/trajectory_aware_sampling_probe_report.md",
-    "sampling_selection_plan_path": "artifacts/sampling_selection_plan.json"
+    "sampling_selection_plan_path": "artifacts/sampling_selection_plan.json",
+    "sampling_handoff_manifest_path": "artifacts/sampling_handoff_manifest.json"
   },
   "real_generation_allowed": false,
   "real_watermark_integration_allowed": false,
