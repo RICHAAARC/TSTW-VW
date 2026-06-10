@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from experiments.synthetic_tubelet_sync_probe.ablation_runner import AblationRunner
 from main.core.records import RecordWriter
-from main.protocol.ablation_runner import AblationRunner
 
 
 PROFILE_SAMPLE_DEFAULTS = {

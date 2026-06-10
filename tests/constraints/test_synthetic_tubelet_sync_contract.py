@@ -89,3 +89,41 @@ def test_tubelet_sync_requires_sync_enabled() -> None:
         violation["reason"] == "unexpected_enable_sync_for_tubelet_sync"
         for violation in violations
     )
+
+
+def test_tubelet_sync_formal_config_keeps_stage_two_candidate_gate_values() -> None:
+    """验证 synthetic 正式配置复用阶段 2 frozen candidate 的同步安全 gate 口径。
+
+    Args:
+        None.
+
+    Returns:
+        None.
+    """
+    synthetic_config = load_json_config(ROOT / "configs" / "method" / "tubelet_sync.json")
+    stage_two_grid = load_json_config(
+        ROOT / "configs" / "ablation" / "stage2_vae_mechanism_calibration_grid.json"
+    )
+    stage_two_candidate = load_json_config(
+        ROOT / "configs" / "method" / "real_video_tubelet_sync_candidate_runtime.json"
+    )
+
+    synthetic_sync = synthetic_config["sync_search"]
+    stage_two_grid_sync = stage_two_grid["grid"]
+    stage_two_candidate_sync = stage_two_candidate["sync_search"]
+
+    assert synthetic_sync["min_sync_alignment_coverage_ratio"] == (
+        stage_two_grid_sync["min_sync_alignment_coverage_ratio"][0]
+    )
+    assert synthetic_sync["min_sync_alignment_coverage_ratio"] == (
+        stage_two_candidate_sync["min_sync_alignment_coverage_ratio"]
+    )
+    assert synthetic_sync["sync_confidence_gate_rule"] == (
+        stage_two_candidate_sync["sync_confidence_gate_rule"]
+    )
+    assert synthetic_sync["min_payload_rescue_gain"] == (
+        stage_two_candidate_sync["min_payload_rescue_gain"]
+    )
+    assert synthetic_sync["min_aligned_payload_score"] == (
+        stage_two_candidate_sync["min_aligned_payload_score"]
+    )
