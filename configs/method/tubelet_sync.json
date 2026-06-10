@@ -25,7 +25,10 @@
     "coverage_penalty_enabled": true,
     "min_sync_positive_margin": 0.0,
     "min_sync_alignment_coverage_ratio": 0.125,
-    "min_sync_alignment_matched_count": 1
+    "min_sync_alignment_matched_count": 1,
+    "sync_confidence_gate_rule": "aligned_payload_safety_gate",
+    "min_payload_rescue_gain": 0.01,
+    "min_aligned_payload_score": 0.095
   },
   "lambda_sync": 0.1,
   "fusion_rule": "sync_rescue_fusion"
