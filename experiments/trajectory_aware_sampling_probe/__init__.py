@@ -37,6 +37,10 @@ from experiments.trajectory_aware_sampling_probe.real_backend_runtime_validation
     build_real_backend_runtime_validation_report_section,
     build_trajectory_aware_sampling_real_backend_runtime_validation_gate,
 )
+from experiments.trajectory_aware_sampling_probe.explicit_real_generation_transition_decision import (
+    build_explicit_real_generation_transition_report_section,
+    build_trajectory_aware_sampling_explicit_real_generation_transition_decision,
+)
 from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
     build_trajectory_aware_sampling_gpu_validation_contract,
 )
@@ -69,6 +73,8 @@ __all__ = [
     "build_trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate",
     "build_trajectory_aware_sampling_real_backend_runtime_validation_gate",
     "build_real_backend_runtime_validation_report_section",
+    "build_trajectory_aware_sampling_explicit_real_generation_transition_decision",
+    "build_explicit_real_generation_transition_report_section",
     "build_trajectory_aware_sampling_runtime_interface_implementation",
     "build_trajectory_aware_sampling_runtime_interface_scaffold",
     "TrajectoryAwareSamplingProbeRunner",

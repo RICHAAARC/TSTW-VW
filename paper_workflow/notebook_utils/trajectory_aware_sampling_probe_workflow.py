@@ -687,6 +687,75 @@ def read_real_backend_runtime_validation_gate(run_root: str | Path) -> dict[str,
     return json.loads(gate_path.read_text(encoding="utf-8"))
 
 
+def run_explicit_real_generation_transition_decision(
+    repository_root: str | Path,
+    run_root: str | Path,
+    transition_decision_config_path: str | Path = "configs/protocol/trajectory_aware_sampling_explicit_real_generation_transition_decision.json",
+) -> dict[str, Any]:
+    """功能: 调用显式真实生成切换决策并写出 artifact 与报告补充.
+
+    该 helper 只调度 repository module. 它不连接真实生成后端, 不生成视频,
+    不执行真实 watermark. 当前阶段只允许生成单条受控请求的后续 scaffold 决策.
+    """
+    from experiments.trajectory_aware_sampling_probe.explicit_real_generation_transition_decision import (
+        build_explicit_real_generation_transition_report_section,
+        build_trajectory_aware_sampling_explicit_real_generation_transition_decision,
+    )
+    from experiments.trajectory_aware_sampling_probe.output_layout import (
+        build_trajectory_aware_sampling_probe_output_paths,
+    )
+
+    root_path = Path(repository_root).resolve()
+    config_path = Path(transition_decision_config_path)
+    if not config_path.is_absolute():
+        config_path = root_path / config_path
+    output_paths = build_trajectory_aware_sampling_probe_output_paths(run_root)
+    runtime_validation_gate = read_real_backend_runtime_validation_gate(run_root)
+    config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+    decision_payload = (
+        build_trajectory_aware_sampling_explicit_real_generation_transition_decision(
+            runtime_validation_gate,
+            config_payload,
+        )
+    )
+    output_paths.explicit_real_generation_transition_decision_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    output_paths.explicit_real_generation_transition_decision_path.write_text(
+        json.dumps(decision_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    report_section = build_explicit_real_generation_transition_report_section(
+        decision_payload
+    )
+    output_paths.sampling_probe_report_path.parent.mkdir(parents=True, exist_ok=True)
+    existing_report = (
+        output_paths.sampling_probe_report_path.read_text(encoding="utf-8")
+        if output_paths.sampling_probe_report_path.exists()
+        else ""
+    )
+    output_paths.sampling_probe_report_path.write_text(
+        existing_report.rstrip() + report_section,
+        encoding="utf-8",
+    )
+    return decision_payload
+
+
+def read_explicit_real_generation_transition_decision(
+    run_root: str | Path,
+) -> dict[str, Any]:
+    """功能: 读取显式真实生成切换决策 artifact."""
+    decision_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_explicit_real_generation_transition_decision.json"
+    )
+    if not decision_path.exists():
+        raise FileNotFoundError(decision_path)
+    return json.loads(decision_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

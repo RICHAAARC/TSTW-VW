@@ -1,0 +1,24 @@
+{
+  "approved_next_construction_after_transition_decision": "controlled_single_real_generation_request_scaffold",
+  "construction_phase": "trajectory_aware_sampling_probe",
+  "failure_manifest_required": true,
+  "formal_claim_support_allowed": false,
+  "maximum_controlled_request_count": 1,
+  "outputs": {
+    "explicit_real_generation_transition_decision_path": "artifacts/trajectory_aware_sampling_explicit_real_generation_transition_decision.json"
+  },
+  "project_stage": "trajectory_aware_sampling_probe",
+  "real_generation_execution_allowed": false,
+  "real_watermark_integration_allowed": false,
+  "required_next_allowed_construction_after_runtime_validation_gate": "explicit_real_generation_transition_decision",
+  "required_real_backend_runtime_validation_gate_decision": "PASS",
+  "required_request_scaffold_sections": [
+    "single_request_selection_contract",
+    "backend_invocation_boundary_contract",
+    "runtime_failure_manifest_contract",
+    "output_non_claim_contract",
+    "manual_gpu_execution_handoff_contract"
+  ],
+  "runtime_mode": "explicit_real_generation_transition_decision_only",
+  "target_construction_phase": "full_paper_protocol"
+}
