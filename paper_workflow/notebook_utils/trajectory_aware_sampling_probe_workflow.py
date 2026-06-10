@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import zipfile
 from typing import Any
+import urllib.request
 
 
 def prepare_repository_environment(repository_root: str | Path) -> dict[str, str]:
@@ -313,6 +314,7 @@ def read_real_backend_connection_smoke_handoff(run_root: str | Path) -> dict[str
 def write_environment_only_real_gpu_backend_connection_smoke_results(
     repository_root: str | Path,
     output_path: str | Path,
+    backend_connection_probe_config_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """功能: 在 Colab 中生成环境级真实 GPU smoke 结果摘要。
 
@@ -335,6 +337,7 @@ def write_environment_only_real_gpu_backend_connection_smoke_results(
         ["git", "rev-parse", "--short=7", "HEAD"],
         cwd=root_path,
     )
+    probe_result = _run_backend_connection_probe(backend_connection_probe_config_path)
     failure_reasons = []
     if not gpu_detected:
         failure_reasons.append("external_gpu_runtime_not_detected")
@@ -342,15 +345,23 @@ def write_environment_only_real_gpu_backend_connection_smoke_results(
         failure_reasons.append("torch_cuda_not_available")
     if not backend_dependencies_resolved:
         failure_reasons.append("external_backend_dependencies_not_resolved")
-    failure_reasons.append("real_backend_connection_executor_not_configured")
+    failure_reasons.extend(probe_result["failure_reasons"])
+    smoke_passed = (
+        gpu_detected
+        and torch_cuda_available
+        and backend_dependencies_resolved
+        and model_identity_recorded
+        and probe_result["external_real_backend_connection_attempted"]
+        and probe_result["external_real_backend_connection_succeeded"]
+    )
 
     external_results = {
-        "external_smoke_result_status": "INCONCLUSIVE",
+        "external_smoke_result_status": "PASS" if smoke_passed else "INCONCLUSIVE",
         "external_gpu_runtime_detected": gpu_detected,
         "external_model_identity_recorded": model_identity_recorded,
         "external_backend_dependencies_resolved": backend_dependencies_resolved,
-        "external_real_backend_connection_attempted": False,
-        "external_real_backend_connection_succeeded": False,
+        "external_real_backend_connection_attempted": probe_result["external_real_backend_connection_attempted"],
+        "external_real_backend_connection_succeeded": probe_result["external_real_backend_connection_succeeded"],
         "external_real_generation_attempted": False,
         "external_real_watermark_integration_attempted": False,
         "runtime_failure_manifest": {
@@ -375,7 +386,7 @@ def write_environment_only_real_gpu_backend_connection_smoke_results(
             },
             {
                 "result_artifact_kind": "single_request_execution_record",
-                "result_artifact_status": "not_attempted_by_governance",
+                "result_artifact_status": "present" if probe_result["external_real_backend_connection_attempted"] else "not_attempted_by_governance",
                 "formal_claim_support_allowed": False,
             },
             {
@@ -390,6 +401,119 @@ def write_environment_only_real_gpu_backend_connection_smoke_results(
         encoding="utf-8",
     )
     return external_results
+
+
+def write_default_backend_connection_probe_config(
+    output_path: str | Path,
+) -> Path:
+    """功能: 写出 notebook 一键运行所需的默认非生成式后端连接探针配置.
+
+    该函数属于项目特定的 Colab 调度辅助逻辑. 它只生成一个可审计的 `python_import`
+    探针配置, 用于验证真实 GPU session 中最基础的运行时入口是否可达.
+    该配置不会触发真实视频生成, 不会执行真实 watermark, 也不会接入真实 DiT /
+    Flow Matching / VAE 生成管线.
+    """
+    config_path = Path(output_path)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_payload = {
+        "backend_probe_kind": "python_import",
+        "module_name": "torch",
+        "callable_name": "cuda",
+        "default_probe_scope": "non_generative_runtime_import_only",
+        "real_generation_enabled": False,
+        "real_watermark_integration_enabled": False,
+    }
+    config_path.write_text(
+        json.dumps(config_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def _run_backend_connection_probe(
+    backend_connection_probe_config_path: str | Path | None,
+) -> dict[str, Any]:
+    """功能: 执行非生成式后端连接探针。
+
+    该函数只验证后端入口是否可达, 不发送视频生成请求, 不执行 watermark, 也不加载项目内真实生成 pipeline。
+    当前支持 `python_import` 和 `http_health_endpoint` 两类探针。
+    """
+    if backend_connection_probe_config_path is None:
+        return {
+            "external_real_backend_connection_attempted": False,
+            "external_real_backend_connection_succeeded": False,
+            "failure_reasons": ["real_backend_connection_probe_config_not_provided"],
+        }
+    config_path = Path(backend_connection_probe_config_path)
+    if not config_path.exists():
+        return {
+            "external_real_backend_connection_attempted": False,
+            "external_real_backend_connection_succeeded": False,
+            "failure_reasons": ["real_backend_connection_probe_config_not_found"],
+        }
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    probe_kind = str(config.get("backend_probe_kind", "")).strip()
+    if probe_kind == "python_import":
+        return _run_python_import_backend_probe(config)
+    if probe_kind == "http_health_endpoint":
+        return _run_http_health_backend_probe(config)
+    return {
+        "external_real_backend_connection_attempted": False,
+        "external_real_backend_connection_succeeded": False,
+        "failure_reasons": ["unsupported_backend_connection_probe_kind"],
+    }
+
+
+def _run_python_import_backend_probe(config: dict[str, Any]) -> dict[str, Any]:
+    module_name = str(config.get("module_name", "")).strip()
+    callable_name = str(config.get("callable_name", "")).strip()
+    if not module_name:
+        return {
+            "external_real_backend_connection_attempted": False,
+            "external_real_backend_connection_succeeded": False,
+            "failure_reasons": ["backend_probe_module_name_missing"],
+        }
+    try:
+        module = __import__(module_name, fromlist=[callable_name] if callable_name else [])
+        if callable_name:
+            getattr(module, callable_name)
+    except Exception:
+        return {
+            "external_real_backend_connection_attempted": True,
+            "external_real_backend_connection_succeeded": False,
+            "failure_reasons": ["backend_python_import_probe_failed"],
+        }
+    return {
+        "external_real_backend_connection_attempted": True,
+        "external_real_backend_connection_succeeded": True,
+        "failure_reasons": [],
+    }
+
+
+def _run_http_health_backend_probe(config: dict[str, Any]) -> dict[str, Any]:
+    url = str(config.get("http_health_url", "")).strip()
+    timeout_seconds = float(config.get("timeout_seconds", 10.0))
+    if not url:
+        return {
+            "external_real_backend_connection_attempted": False,
+            "external_real_backend_connection_succeeded": False,
+            "failure_reasons": ["backend_probe_http_health_url_missing"],
+        }
+    try:
+        request = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+            succeeded = 200 <= int(response.status) < 300
+    except Exception:
+        return {
+            "external_real_backend_connection_attempted": True,
+            "external_real_backend_connection_succeeded": False,
+            "failure_reasons": ["backend_http_health_probe_failed"],
+        }
+    return {
+        "external_real_backend_connection_attempted": True,
+        "external_real_backend_connection_succeeded": succeeded,
+        "failure_reasons": [] if succeeded else ["backend_http_health_probe_not_successful"],
+    }
 
 
 def _command_succeeds(command: list[str], cwd: Path | None = None) -> bool:

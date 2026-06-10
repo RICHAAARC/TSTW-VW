@@ -105,6 +105,8 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "experiments.trajectory_aware_sampling_probe.scaffold_cli" in workflow_text
     assert "build_trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate" in workflow_text
     assert "write_environment_only_real_gpu_backend_connection_smoke_results" in workflow_text
+    assert "write_default_backend_connection_probe_config" in workflow_text
+    assert "_run_backend_connection_probe" in workflow_text
     assert "read_external_real_gpu_backend_connection_smoke_results" in workflow_text
     assert "trajectory_aware_sampling_probe_scaffold_gpu_validation_utc_time_short_commit" in notebook_text
     assert "git', 'rev-parse', '--short=7', 'HEAD'" in notebook_text
@@ -113,6 +115,9 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "TSTW_STAGE3_TRAJECTORY_ROOT" in notebook_text
     assert "TSTW_STAGE3_TRAJECTORY_PACKAGE_PATH" in notebook_text
     assert "TSTW_EXTERNAL_REAL_GPU_SMOKE_RESULTS_PATH" in notebook_text
+    assert "TSTW_BACKEND_CONNECTION_PROBE_CONFIG_PATH" in notebook_text
+    assert "sampling_workflow.write_default_backend_connection_probe_config(" in notebook_text
+    assert "backend_connection_probe_config.json" in notebook_text
     assert "TSTW_RESULT_GATE_CONFIG_PATH" in notebook_text
     assert "STAGE3_RESULT_ROOT" in notebook_text
     assert "DRIVE_ROOT / 'results' / 'trajectory_aware_sampling_probe' / RUN_ID / 'packages'" in notebook_text
@@ -143,6 +148,7 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json" in notebook_text
     assert "trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json" in workflow_text
     assert "external_real_gpu_smoke_results.json" in notebook_text
+    assert "backend_connection_probe_config_path" in notebook_text
     assert "TrajectoryAwareSamplingGpuValidationContractDecision" in notebook_text
     assert "NextAllowedConstructionAfterGpuValidationContract" in notebook_text
     assert "TrajectoryAwareSamplingBackendTransitionGuardDecision" in notebook_text
@@ -173,6 +179,7 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "sampling_workflow.read_real_backend_connection_smoke(" in code_text
     assert "sampling_workflow.read_real_backend_connection_smoke_handoff(" in code_text
     assert "sampling_workflow.write_environment_only_real_gpu_backend_connection_smoke_results(" in code_text
+    assert "sampling_workflow.write_default_backend_connection_probe_config(" in code_text
     assert "sampling_workflow.run_real_gpu_backend_connection_smoke_result_gate(" in code_text
     assert "runtime_interface_implementation.get(" in code_text
     assert "backend_integration_decision.get(" in code_text

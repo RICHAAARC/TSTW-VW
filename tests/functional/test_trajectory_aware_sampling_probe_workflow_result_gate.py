@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from paper_workflow.notebook_utils import trajectory_aware_sampling_probe_workflow as workflow
 from paper_workflow.notebook_utils.trajectory_aware_sampling_probe_workflow import (
     run_real_gpu_backend_connection_smoke_result_gate,
 )
@@ -135,3 +136,92 @@ def test_notebook_workflow_generates_environment_only_smoke_results(tmp_path: Pa
     assert payload["external_real_generation_attempted"] is False
     assert payload["external_real_watermark_integration_attempted"] is False
     assert len(payload["result_artifacts"]) == 5
+
+
+def test_notebook_workflow_writes_default_backend_connection_probe_config(
+    tmp_path: Path,
+) -> None:
+    """验证 notebook helper 可以生成一键运行所需的默认非生成式探针配置."""
+    config_path = tmp_path / "backend_connection_probe_config.json"
+
+    written_path = workflow.write_default_backend_connection_probe_config(config_path)
+
+    assert written_path == config_path
+    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    assert payload["backend_probe_kind"] == "python_import"
+    assert payload["module_name"] == "torch"
+    assert payload["callable_name"] == "cuda"
+    assert payload["default_probe_scope"] == "non_generative_runtime_import_only"
+    assert payload["real_generation_enabled"] is False
+    assert payload["real_watermark_integration_enabled"] is False
+
+
+def test_notebook_workflow_generates_passing_probe_smoke_results(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """验证提供非生成式 backend 探针配置后, smoke 结果可以记录真实连接尝试成功。"""
+    output_path = tmp_path / "external_real_gpu_smoke_results.json"
+    probe_config_path = tmp_path / "backend_connection_probe_config.json"
+    probe_config_path.write_text(
+        json.dumps(
+            {
+                "backend_probe_kind": "python_import",
+                "module_name": "json",
+                "callable_name": "loads",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(workflow, "_torch_cuda_available", lambda: True)
+    monkeypatch.setattr(workflow, "_command_succeeds", lambda command, cwd=None: True)
+
+    payload = workflow.write_environment_only_real_gpu_backend_connection_smoke_results(
+        repository_root=ROOT,
+        output_path=output_path,
+        backend_connection_probe_config_path=probe_config_path,
+    )
+
+    assert payload["external_smoke_result_status"] == "PASS"
+    assert payload["external_real_backend_connection_attempted"] is True
+    assert payload["external_real_backend_connection_succeeded"] is True
+    assert payload["external_real_generation_attempted"] is False
+    assert payload["external_real_watermark_integration_attempted"] is False
+    assert payload["runtime_failure_manifest"]["failure_count"] == 0
+
+
+def test_notebook_workflow_blocks_failed_probe_smoke_results(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """验证探针配置不可导入时, smoke 结果明确记录连接尝试失败。"""
+    output_path = tmp_path / "external_real_gpu_smoke_results.json"
+    probe_config_path = tmp_path / "backend_connection_probe_config.json"
+    probe_config_path.write_text(
+        json.dumps(
+            {
+                "backend_probe_kind": "python_import",
+                "module_name": "module_that_should_not_exist_for_probe",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(workflow, "_torch_cuda_available", lambda: True)
+    monkeypatch.setattr(workflow, "_command_succeeds", lambda command, cwd=None: True)
+
+    payload = workflow.write_environment_only_real_gpu_backend_connection_smoke_results(
+        repository_root=ROOT,
+        output_path=output_path,
+        backend_connection_probe_config_path=probe_config_path,
+    )
+
+    assert payload["external_smoke_result_status"] == "INCONCLUSIVE"
+    assert payload["external_real_backend_connection_attempted"] is True
+    assert payload["external_real_backend_connection_succeeded"] is False
+    assert payload["runtime_failure_manifest"]["failure_count"] == 1
