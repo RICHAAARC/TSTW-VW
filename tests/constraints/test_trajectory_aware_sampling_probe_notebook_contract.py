@@ -93,6 +93,7 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "sampling_workflow.read_runtime_interface_implementation(" in notebook_text
     assert "sampling_workflow.read_backend_integration_decision(" in notebook_text
     assert "sampling_workflow.read_backend_adapter_scaffold(" in notebook_text
+    assert "sampling_workflow.read_backend_connection_contract(" in notebook_text
     assert "sampling_workflow.package_sampling_probe_run(" in notebook_text
     assert "sampling_workflow.find_latest_trajectory_probe_root(" in notebook_text
     assert "sampling_workflow.extract_trajectory_probe_package(" in notebook_text
@@ -123,6 +124,8 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "trajectory_aware_sampling_backend_integration_decision.json" in workflow_text
     assert "trajectory_aware_sampling_backend_adapter_scaffold.json" in notebook_text
     assert "trajectory_aware_sampling_backend_adapter_scaffold.json" in workflow_text
+    assert "trajectory_aware_sampling_backend_connection_contract.json" in notebook_text
+    assert "trajectory_aware_sampling_backend_connection_contract.json" in workflow_text
     assert "TrajectoryAwareSamplingGpuValidationContractDecision" in notebook_text
     assert "NextAllowedConstructionAfterGpuValidationContract" in notebook_text
     assert "TrajectoryAwareSamplingBackendTransitionGuardDecision" in notebook_text
@@ -137,14 +140,19 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "NextAllowedConstructionAfterBackendIntegrationDecision" in notebook_text
     assert "TrajectoryAwareSamplingBackendAdapterScaffoldDecision" in notebook_text
     assert "NextAllowedConstructionAfterBackendAdapterScaffold" in notebook_text
+    assert "TrajectoryAwareSamplingBackendConnectionContractDecision" in notebook_text
+    assert "NextAllowedConstructionAfterBackendConnectionContract" in notebook_text
     assert "sampling_workflow.run_sampling_scaffold_cli(" in code_text
     assert "sampling_workflow.read_runtime_interface_implementation(" in code_text
     assert "sampling_workflow.read_backend_integration_decision(" in code_text
     assert "sampling_workflow.read_backend_adapter_scaffold(" in code_text
+    assert "sampling_workflow.read_backend_connection_contract(" in code_text
     assert "runtime_interface_implementation.get(" in code_text
     assert "backend_integration_decision.get(" in code_text
     assert "backend_adapter_scaffold.get(" in code_text
+    assert "backend_connection_contract.get(" in code_text
     assert "sampling_workflow.run_sampling_scaffold_cli(" not in markdown_text
     assert "runtime_interface_implementation.get(" not in markdown_text
     assert "backend_integration_decision.get(" not in markdown_text
     assert "backend_adapter_scaffold.get(" not in markdown_text
+    assert "backend_connection_contract.get(" not in markdown_text

@@ -641,3 +641,57 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | NextAllowedConstructionAfterBackendAdapterScaffold | governance | none | false | false | false | Next construction recommendation emitted by the backend adapter scaffold. |
 
 | forbidden_runtime_capabilities_until_backend_connection_contract | governance | none | false | false | false | Runtime capabilities that remain blocked until a backend connection contract is separately created. |
+
+| TrajectoryAwareSamplingBackendConnectionContractDecision | governance | none | false | false | false | Decision emitted by the backend connection contract gate before real backend smoke. |
+
+| TrajectoryAwareSamplingBackendConnectionContractBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent progression to real backend connection smoke. |
+
+| backend_connection_contract_allowed | governance | none | false | false | false | Boolean marker indicating whether backend connection contract is ready. |
+
+| real_backend_connection_smoke_allowed_after_contract | governance | none | false | false | false | Boolean marker indicating whether the next step may be real backend connection smoke after this contract. |
+
+| backend_connection_contract_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling backend connection contract artifact. |
+
+| backend_connection_contract_digest | trace | none | false | false | false | Digest of the backend connection contract payload excluding the digest field itself. |
+
+| backend_adapter_scaffold_payload_digest | trace | none | false | false | false | Digest of the full backend adapter scaffold payload consumed by backend connection contract. |
+
+| contract_section_count | governance | none | false | false | false | Count of required backend connection contract sections. |
+
+| contract_sections | governance | none | false | false | false | Required backend connection contract section descriptors before real backend smoke. |
+
+| contract_section_id | governance | none | false | false | false | Stable identifier for one backend connection contract section. |
+
+| contract_section_kind | governance | none | false | false | false | Contract section kind required before real backend smoke. |
+
+| contract_section_status | governance | none | false | false | false | Status for one backend connection contract section. |
+
+| contract_section_digest | trace | none | false | false | false | Digest of one backend connection contract section descriptor. |
+
+| smoke_backend_family_count | governance | none | false | false | false | Count of backend families permitted for later smoke only. |
+
+| smoke_backend_families | governance | none | false | false | false | Backend family descriptors permitted for a later smoke gate without formal claim support. |
+
+| smoke_backend_family_id | governance | none | false | false | false | Stable identifier for one smoke backend family descriptor. |
+
+| smoke_backend_family_status | governance | none | false | false | false | Non-connected status for one smoke backend family descriptor. |
+
+| smoke_backend_family_digest | trace | none | false | false | false | Digest of one smoke backend family descriptor. |
+
+| minimum_gpu_requirements | governance | none | false | false | false | Minimum GPU requirements contract for future real backend smoke. |
+
+| smoke_output_governance | governance | none | false | false | false | Governance rules for outputs produced by later real backend smoke. |
+
+| formal_claim_support_allowed | governance | none | false | false | false | Boolean marker that must remain false for smoke outputs. |
+
+| records_required_before_claim_support | governance | none | false | false | false | Boolean marker requiring governed records before any claim support. |
+
+| failure_manifest_required | governance | none | false | false | false | Boolean marker requiring failure manifests during backend smoke. |
+
+| runtime_environment_snapshot_required | governance | none | false | false | false | Boolean marker requiring runtime environment snapshots during backend smoke. |
+
+| model_identity_record_required | governance | none | false | false | false | Boolean marker requiring model identity records during backend smoke. |
+
+| NextAllowedConstructionAfterBackendConnectionContract | governance | none | false | false | false | Next construction recommendation emitted by backend connection contract. |
+
+| forbidden_runtime_capabilities_until_real_backend_connection_smoke | governance | none | false | false | false | Formal capabilities that remain blocked until the separate real backend smoke gate. |

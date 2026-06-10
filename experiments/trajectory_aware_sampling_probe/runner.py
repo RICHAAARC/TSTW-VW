@@ -25,6 +25,9 @@ from experiments.trajectory_aware_sampling_probe.backend_integration_decision im
 from experiments.trajectory_aware_sampling_probe.backend_adapter_scaffold import (
     build_trajectory_aware_sampling_backend_adapter_scaffold,
 )
+from experiments.trajectory_aware_sampling_probe.backend_connection_contract import (
+    build_trajectory_aware_sampling_backend_connection_contract,
+)
 from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
     build_trajectory_aware_sampling_gpu_validation_contract,
 )
@@ -64,6 +67,9 @@ DEFAULT_BACKEND_INTEGRATION_DECISION_CONFIG_RELATIVE_PATH = Path(
 DEFAULT_BACKEND_ADAPTER_SCAFFOLD_CONFIG_RELATIVE_PATH = Path(
     "configs/protocol/trajectory_aware_sampling_backend_adapter_scaffold.json"
 )
+DEFAULT_BACKEND_CONNECTION_CONTRACT_CONFIG_RELATIVE_PATH = Path(
+    "configs/protocol/trajectory_aware_sampling_backend_connection_contract.json"
+)
 
 
 @dataclass(frozen=True)
@@ -86,6 +92,7 @@ class TrajectoryAwareSamplingProbeRunResult:
     runtime_interface_implementation: dict[str, Any]
     backend_integration_decision: dict[str, Any]
     backend_adapter_scaffold: dict[str, Any]
+    backend_connection_contract: dict[str, Any]
     artifact_paths: dict[str, Path]
 
 
@@ -192,6 +199,11 @@ class TrajectoryAwareSamplingProbeRunner:
             backend_integration_decision,
             self._read_backend_adapter_scaffold_config(),
         )
+        backend_connection_contract = self._write_backend_connection_contract(
+            output_root_path,
+            backend_adapter_scaffold,
+            self._read_backend_connection_contract_config(),
+        )
         output_paths = build_trajectory_aware_sampling_probe_output_paths(output_root_path)
         artifact_paths["sampling_handoff_manifest_path"] = (
             output_paths.sampling_handoff_manifest_path
@@ -217,6 +229,9 @@ class TrajectoryAwareSamplingProbeRunner:
         artifact_paths["backend_adapter_scaffold_path"] = (
             output_paths.backend_adapter_scaffold_path
         )
+        artifact_paths["backend_connection_contract_path"] = (
+            output_paths.backend_connection_contract_path
+        )
         return TrajectoryAwareSamplingProbeRunResult(
             run_id=output_root_path.name,
             output_root=output_root_path,
@@ -230,6 +245,7 @@ class TrajectoryAwareSamplingProbeRunner:
             runtime_interface_implementation=runtime_interface_implementation,
             backend_integration_decision=backend_integration_decision,
             backend_adapter_scaffold=backend_adapter_scaffold,
+            backend_connection_contract=backend_connection_contract,
             artifact_paths=artifact_paths,
         )
 
@@ -297,6 +313,13 @@ class TrajectoryAwareSamplingProbeRunner:
         config_path = (
             self._repository_root
             / DEFAULT_BACKEND_ADAPTER_SCAFFOLD_CONFIG_RELATIVE_PATH
+        )
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
+    def _read_backend_connection_contract_config(self) -> dict[str, Any]:
+        config_path = (
+            self._repository_root
+            / DEFAULT_BACKEND_CONNECTION_CONTRACT_CONFIG_RELATIVE_PATH
         )
         return json.loads(config_path.read_text(encoding="utf-8"))
 
@@ -524,3 +547,29 @@ class TrajectoryAwareSamplingProbeRunner:
             encoding="utf-8",
         )
         return scaffold_payload
+
+    def _write_backend_connection_contract(
+        self,
+        output_root_path: Path,
+        backend_adapter_scaffold: dict[str, Any],
+        backend_connection_contract_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        contract_payload = build_trajectory_aware_sampling_backend_connection_contract(
+            backend_adapter_scaffold,
+            backend_connection_contract_config,
+        )
+        contract_path = build_trajectory_aware_sampling_probe_output_paths(
+            output_root_path
+        ).backend_connection_contract_path
+        contract_path.parent.mkdir(parents=True, exist_ok=True)
+        contract_path.write_text(
+            json.dumps(
+                contract_payload,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return contract_payload

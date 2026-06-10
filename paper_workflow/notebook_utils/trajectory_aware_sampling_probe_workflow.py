@@ -262,6 +262,22 @@ def read_backend_adapter_scaffold(run_root: str | Path) -> dict[str, Any]:
     return json.loads(scaffold_path.read_text(encoding="utf-8"))
 
 
+def read_backend_connection_contract(run_root: str | Path) -> dict[str, Any]:
+    """功能: 读取 backend connection contract 产物。
+
+    该 helper 只读取 repository runner 生成的 contract artifact。该 artifact 表示下一步可以进入真实后端
+    smoke 的前置合同已经准备好, 但当前 notebook cell 本身不连接真实后端、不生成视频、不执行 watermark。
+    """
+    contract_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_backend_connection_contract.json"
+    )
+    if not contract_path.exists():
+        raise FileNotFoundError(contract_path)
+    return json.loads(contract_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

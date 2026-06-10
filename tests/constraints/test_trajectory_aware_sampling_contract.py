@@ -255,3 +255,39 @@ def test_trajectory_aware_sampling_backend_adapter_scaffold_is_schema_only() -> 
         == "artifacts/trajectory_aware_sampling_backend_adapter_scaffold.json"
     )
 
+
+def test_trajectory_aware_sampling_backend_connection_contract_allows_smoke_only_next() -> None:
+    """验证 backend connection contract 只批准下一步真实后端 smoke, 当前不连接后端。"""
+    config = json.loads((ROOT / "configs" / "protocol" / "trajectory_aware_sampling_backend_connection_contract.json").read_text(encoding="utf-8"))
+
+    assert config["project_stage"] == "trajectory_aware_sampling_probe"
+    assert config["construction_phase"] == "trajectory_aware_sampling_probe"
+    assert config["target_construction_phase"] == "full_paper_protocol"
+    assert config["runtime_mode"] == "backend_connection_contract_only"
+    assert (
+        config["required_backend_adapter_scaffold_decision"]
+        == "READY_FOR_BACKEND_CONNECTION_CONTRACT"
+    )
+    assert (
+        config["required_next_allowed_construction_after_backend_adapter_scaffold"]
+        == "backend_connection_contract"
+    )
+    assert config["backend_connection_contract_allowed"] is True
+    assert config["runtime_backend_connection_allowed"] is False
+    assert config["real_generation_allowed"] is False
+    assert config["real_watermark_integration_allowed"] is False
+    assert config["real_backend_connection_smoke_allowed_after_contract"] is True
+    assert config["approved_next_construction"] == "real_backend_connection_smoke"
+    assert "backend_dependency_resolution_contract" in config[
+        "required_smoke_contract_sections"
+    ]
+    assert config["smoke_output_governance"]["formal_claim_support_allowed"] is False
+    assert config["smoke_output_governance"]["failure_manifest_required"] is True
+    assert "formal_real_dit_generation_claim" in config[
+        "forbidden_runtime_capabilities_until_real_backend_connection_smoke"
+    ]
+    assert (
+        config["outputs"]["backend_connection_contract_path"]
+        == "artifacts/trajectory_aware_sampling_backend_connection_contract.json"
+    )
+

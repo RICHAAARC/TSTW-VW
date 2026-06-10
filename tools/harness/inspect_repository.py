@@ -111,6 +111,9 @@ TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS = {
     "trajectory_aware_sampling_backend_adapter_scaffold_config": "configs/protocol/trajectory_aware_sampling_backend_adapter_scaffold.json",
     "trajectory_aware_sampling_backend_adapter_scaffold_module": "experiments/trajectory_aware_sampling_probe/backend_adapter_scaffold.py",
     "trajectory_aware_sampling_backend_adapter_scaffold_test": "tests/functional/test_trajectory_aware_sampling_backend_adapter_scaffold.py",
+    "trajectory_aware_sampling_backend_connection_contract_config": "configs/protocol/trajectory_aware_sampling_backend_connection_contract.json",
+    "trajectory_aware_sampling_backend_connection_contract_module": "experiments/trajectory_aware_sampling_probe/backend_connection_contract.py",
+    "trajectory_aware_sampling_backend_connection_contract_test": "tests/functional/test_trajectory_aware_sampling_backend_connection_contract.py",
 }
 
 
