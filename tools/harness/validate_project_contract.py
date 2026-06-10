@@ -66,8 +66,8 @@ REQUIRED_PROTOCOL_RUNTIME_OBJECTS = {
     "manifest_builder",
 }
 REQUIRED_SUPPORTED_METHOD_VARIANTS = set(SYNTHETIC_TUBELET_SYNC_METHOD_VARIANTS)
-ACTIVE_PROJECT_STAGE = "trajectory_statistic_probe"
-ACTIVE_TARGET_CONSTRUCTION_PHASE = "trajectory_aware_sampling_probe"
+ACTIVE_PROJECT_STAGE = "trajectory_aware_sampling_probe"
+ACTIVE_TARGET_CONSTRUCTION_PHASE = "full_paper_protocol"
 REQUIRED_TRAJECTORY_METHOD_VARIANTS = {
     "traj_only",
     "tubelet_traj",
@@ -342,7 +342,7 @@ def validate_project_contract_data(data: dict[str, Any]) -> list[dict[str, str]]
         violations.append(
             {
                 "field": "project_stage",
-                "reason": "project_stage_must_equal_trajectory_statistic_probe",
+                "reason": "project_stage_must_equal_trajectory_aware_sampling_probe",
             }
         )
 
@@ -350,7 +350,7 @@ def validate_project_contract_data(data: dict[str, Any]) -> list[dict[str, str]]
         violations.append(
             {
                 "field": "construction_phase",
-                "reason": "construction_phase_must_equal_trajectory_statistic_probe",
+                "reason": "construction_phase_must_equal_trajectory_aware_sampling_probe",
             }
         )
 
@@ -358,7 +358,7 @@ def validate_project_contract_data(data: dict[str, Any]) -> list[dict[str, str]]
         violations.append(
             {
                 "field": "target_construction_phase",
-                "reason": "target_construction_phase_must_equal_trajectory_aware_sampling_probe",
+                "reason": "target_construction_phase_must_equal_full_paper_protocol",
             }
         )
 

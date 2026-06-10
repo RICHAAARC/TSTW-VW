@@ -90,10 +90,13 @@ TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS = {
     "trajectory_aware_sampling_artifact_builder_test": "tests/functional/test_trajectory_aware_sampling_artifact_builder.py",
     "trajectory_aware_sampling_runner_test": "tests/functional/test_trajectory_aware_sampling_runner.py",
     "trajectory_aware_sampling_notebook_contract_test": "tests/constraints/test_trajectory_aware_sampling_probe_notebook_contract.py",
+    "trajectory_aware_sampling_gpu_validation_contract_config": "configs/protocol/trajectory_aware_sampling_gpu_validation_contract.json",
+    "trajectory_aware_sampling_gpu_validation_contract_module": "experiments/trajectory_aware_sampling_probe/gpu_validation_contract.py",
+    "trajectory_aware_sampling_gpu_validation_contract_test": "tests/functional/test_trajectory_aware_sampling_gpu_validation_contract.py",
 }
 
 
-NEXT_STAGE_TARGET = "trajectory_aware_sampling_probe"
+NEXT_STAGE_TARGET = "full_paper_protocol"
 
 
 def _read_project_contract(root_path: Path) -> dict[str, Any]:
@@ -164,7 +167,7 @@ def _inspect_next_stage_readiness(root_path: Path, project_stage: str | None) ->
             "required_path_count": len(REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS),
             "required_paths": required_paths,
         }
-    if project_stage == "trajectory_statistic_probe":
+    if project_stage in {"trajectory_statistic_probe", "trajectory_aware_sampling_probe"}:
         present_count, required_paths = _build_required_paths(
             root_path,
             TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS,

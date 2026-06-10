@@ -1,7 +1,7 @@
 {
-  "project_stage": "trajectory_statistic_probe",
-  "construction_phase": "trajectory_statistic_probe",
-  "target_construction_phase": "trajectory_aware_sampling_probe",
+  "project_stage": "trajectory_aware_sampling_probe",
+  "construction_phase": "trajectory_aware_sampling_probe",
+  "target_construction_phase": "full_paper_protocol",
   "legacy_stage_id": null,
   "method_objects": [
     "temporal_synchronized_tubelet_code",

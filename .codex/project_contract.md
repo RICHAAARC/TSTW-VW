@@ -6,8 +6,8 @@
 
 ## Current Stage
 
-- `project_stage`: `trajectory_statistic_probe`
-- `target_construction_phase`: `trajectory_aware_sampling_probe`
+- `project_stage`: `trajectory_aware_sampling_probe`
+- `target_construction_phase`: `full_paper_protocol`
 - 当前阶段的文件组织边界以 `docs/file_organization.md` 为准：`main/` 仅保留核心方法、核心协议、核心评估与 CLI 能力；阶段性 runner 位于 `experiments/`；跨 notebook 共享的 Colab / Notebook session 工具位于 `paper_workflow/colab_utils/` 或 `scripts/`；单 notebook 或单阶段专用 helper 位于 `paper_workflow/notebook_utils/`。
 - 当前阶段允许在既有 protocol core 上运行 synthetic video latent、temporal attack matrix 与 `frame_prc` / `tubelet_only` / `tubelet_sync` 三个正式 method variant。
 - 当前阶段允许实现 synthetic / placeholder 驱动的最小 mechanism runtime，用于冻结 records、thresholds、manifest、table rebuild 与机制追踪口径。
@@ -18,9 +18,17 @@
 ### 2026-06-10 Stage Update
 
 - `trajectory_statistic_probe` formal GPU validation has produced `Stage3MechanismDecision = PASS`.
-- The active repository `project_stage` is now `trajectory_statistic_probe`.
-- The next target construction phase is `trajectory_aware_sampling_probe`.
-- `trajectory_aware_sampling_probe` work remains decision-only / record-selection scaffold until a later governed transition explicitly enables real generation or real watermark integration.
+- The active repository `project_stage` is now `trajectory_aware_sampling_probe`.
+- The next target construction phase is `full_paper_protocol`.
+- `trajectory_aware_sampling_probe` scaffold GPU-session validation has produced `SamplingSelectionPlanDecision = PASS`; current work may build the real-GPU-validation contract for the next runtime, but real generation and real watermark integration remain disabled until a separate backend-transition decision.
+
+
+### 2026-06-10 Sampling Scaffold Validation Update
+
+- `trajectory_aware_sampling_probe` scaffold GPU-session validation produced `SamplingReadinessDecision = PASS` and `SamplingSelectionPlanDecision = PASS`.
+- The active repository `project_stage` is advanced to `trajectory_aware_sampling_probe`.
+- The next target construction phase is `full_paper_protocol`.
+- Current implementation may define a real-GPU-validation contract and selected-record handoff for the next runtime, but must not implement or enable real DiT / Flow Matching generation, real video generation, or real watermark embedding / detection until a later explicit backend-transition decision.
 
 ## Ordered Semantic Stages
 

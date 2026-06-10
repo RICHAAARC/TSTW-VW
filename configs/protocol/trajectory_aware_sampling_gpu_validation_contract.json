@@ -1,0 +1,43 @@
+{
+  "project_stage": "trajectory_aware_sampling_probe",
+  "construction_phase": "trajectory_aware_sampling_probe",
+  "target_construction_phase": "full_paper_protocol",
+  "runtime_mode": "real_gpu_validation_contract_only",
+  "required_upstream_sampling_readiness_decision": "PASS",
+  "required_upstream_sampling_selection_plan_decision": "PASS",
+  "required_next_required_validation_by_sampling": "real_gpu_validation",
+  "required_input_artifacts": [
+    "artifacts/sampling_readiness_decision.json",
+    "artifacts/sampling_selection_plan.json",
+    "artifacts/sampling_policy_manifest.json",
+    "artifacts/sampling_handoff_manifest.json"
+  ],
+  "required_policy_manifest_fields": [
+    "SamplingReadinessDecision",
+    "SamplingSelectionPlanDecision",
+    "selected_record_count",
+    "selection_plan_digest",
+    "next_step_requires_real_gpu_validation",
+    "NextRequiredValidationBySampling"
+  ],
+  "minimum_selected_record_count": 1,
+  "real_generation_allowed_in_contract_builder": false,
+  "real_watermark_integration_allowed_in_contract_builder": false,
+  "runtime_backend_connection_allowed": false,
+  "next_runtime_capabilities_requiring_real_gpu_validation": [
+    "trajectory_aware_sampling_runtime",
+    "real_video_generation_backend",
+    "real_watermark_embedding_backend",
+    "real_watermark_detection_backend"
+  ],
+  "forbidden_runtime_capabilities_until_backend_transition": [
+    "real_dit_generation",
+    "flow_matching_generation",
+    "real_video_generation",
+    "real_watermark_embedding",
+    "real_watermark_detection"
+  ],
+  "outputs": {
+    "gpu_validation_contract_path": "artifacts/trajectory_aware_sampling_gpu_validation_contract.json"
+  }
+}

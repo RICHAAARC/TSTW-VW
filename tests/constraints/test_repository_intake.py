@@ -53,7 +53,7 @@ def test_governed_repository_reports_active_stage_status() -> None:
     """
     report = inspect_repository(ROOT)
     assert report["repository_mode"] == "governed_repository"
-    assert report["project_stage"] == "trajectory_statistic_probe"
+    assert report["project_stage"] == "trajectory_aware_sampling_probe"
     assert "outputs" not in EXPECTED_DIRECTORIES
     assert report["directory_boundary_contract"]["exists"] is True
     assert report["directory_boundary_contract"]["source_of_truth"] == "docs/file_organization.md"
@@ -72,7 +72,7 @@ def test_governed_repository_reports_active_stage_status() -> None:
     assert report["directory_status"]["release"]["exists"] is False
     assert "outputs/" in (ROOT / ".gitignore").read_text(encoding="utf-8")
     next_stage_readiness = report["next_stage_readiness"]
-    assert next_stage_readiness["target_construction_phase"] == "trajectory_aware_sampling_probe"
+    assert next_stage_readiness["target_construction_phase"] == "full_paper_protocol"
     assert next_stage_readiness["all_required_paths_present"] is True
     assert next_stage_readiness["present_required_path_count"] == len(
         TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS
@@ -100,5 +100,13 @@ def test_governed_repository_reports_active_stage_status() -> None:
     )
     assert (
         next_stage_readiness["required_paths"]["trajectory_aware_sampling_readiness_test"]["exists"]
+        is True
+    )
+    assert (
+        next_stage_readiness["required_paths"]["trajectory_aware_sampling_gpu_validation_contract_config"]["exists"]
+        is True
+    )
+    assert (
+        next_stage_readiness["required_paths"]["trajectory_aware_sampling_gpu_validation_contract_module"]["exists"]
         is True
     )

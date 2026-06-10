@@ -9,6 +9,9 @@ from experiments.trajectory_aware_sampling_probe.artifact_builder import (
     build_trajectory_aware_sampling_artifacts,
     build_trajectory_aware_sampling_report_text,
 )
+from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
+    build_trajectory_aware_sampling_gpu_validation_contract,
+)
 from experiments.trajectory_aware_sampling_probe.readiness_audit import (
     build_trajectory_aware_sampling_readiness_decision,
 )
@@ -21,6 +24,7 @@ from experiments.trajectory_aware_sampling_probe.selection_plan_builder import (
 )
 
 __all__ = [
+    "build_trajectory_aware_sampling_gpu_validation_contract",
     "TrajectoryAwareSamplingProbeRunner",
     "TrajectoryAwareSamplingProbeRunResult",
     "build_record_digest_selection_plan",

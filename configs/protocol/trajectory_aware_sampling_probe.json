@@ -1,7 +1,7 @@
 {
-  "project_stage": "trajectory_statistic_probe",
+  "project_stage": "trajectory_aware_sampling_probe",
   "construction_phase": "trajectory_aware_sampling_probe",
-  "target_construction_phase": "trajectory_aware_sampling_probe",
+  "target_construction_phase": "full_paper_protocol",
   "upstream_required_construction_phase": "trajectory_statistic_probe",
   "required_upstream_stage2_dependency_status": "PASSED",
   "required_upstream_implementation_decision": "PASS",

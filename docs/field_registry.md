@@ -507,3 +507,14 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 
 | next_step_requires_real_gpu_validation | governance | none | false | false | false | Boolean boundary marker indicating that the current scaffold has finished and the next progression step requires real GPU validation. |
 | NextRequiredValidationBySampling | governance | none | false | false | false | Validation requirement emitted by the trajectory-aware sampling scaffold after selection-plan construction. |
+
+| TrajectoryAwareSamplingGpuValidationContractDecision | governance | none | false | false | false | Decision emitted by the trajectory-aware sampling GPU-validation contract builder. |
+| TrajectoryAwareSamplingGpuValidationBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent the GPU-validation contract from becoming ready. |
+| next_runtime_capabilities_requiring_real_gpu_validation | governance | none | false | false | false | Runtime capabilities that require a later real GPU validation run before they can support claims. |
+| forbidden_runtime_capabilities_until_backend_transition | governance | none | false | false | false | Runtime capabilities that remain disabled until a separate backend-transition decision is made. |
+| runtime_backend_connection_allowed | governance | none | false | false | false | Boolean field recording whether the contract builder may connect a real runtime backend. |
+| NextAllowedConstructionAfterGpuValidationContract | governance | none | false | false | false | Next construction recommendation emitted after building the sampling GPU-validation contract. |
+| gpu_validation_contract_digest | trace | none | false | false | false | Digest of the GPU-validation contract payload excluding the digest field itself. |
+| gpu_validation_contract_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling GPU-validation contract artifact. |
+| real_generation_allowed_in_contract_builder | governance | none | false | false | false | Boolean config guard that keeps real generation disabled while building the GPU-validation contract. |
+| real_watermark_integration_allowed_in_contract_builder | governance | none | false | false | false | Boolean config guard that keeps real watermark integration disabled while building the GPU-validation contract. |
