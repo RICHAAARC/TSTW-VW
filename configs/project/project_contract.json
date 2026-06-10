@@ -1,18 +1,118 @@
 {
-  "project_stage": "trajectory_aware_sampling_probe",
   "construction_phase": "trajectory_aware_sampling_probe",
-  "target_construction_phase": "full_paper_protocol",
+  "controlled_real_generation_execution_policy": {
+    "external_controlled_single_request_handoff_allowed": true,
+    "formal_claim_support_allowed": false,
+    "maximum_external_controlled_request_count": 1,
+    "real_watermark_integration_allowed": false,
+    "repository_internal_real_generation_backend_integration_allowed": false,
+    "required_handoff_artifact": "trajectory_aware_sampling_external_controlled_real_generation_execution_handoff.json"
+  },
+  "core_boundary_policy": {
+    "forbidden_runtime_imports": [
+      "tools.harness",
+      "tests"
+    ],
+    "governance_layer_paths": [
+      "tools/harness",
+      ".codex",
+      "tests"
+    ],
+    "method_core_candidate_paths": [
+      "main/methods"
+    ],
+    "minimal_demo_excluded_paths": [
+      "tools/harness",
+      ".codex",
+      "docs/builds",
+      "audit_reports",
+      "tests"
+    ],
+    "protocol_core_candidate_paths": [
+      "main/core",
+      "main/protocol",
+      "main/analysis"
+    ]
+  },
+  "evidence_names": [
+    "tubelet_evidence",
+    "sync_evidence",
+    "trajectory_evidence",
+    "final_evidence"
+  ],
+  "field_governance": {
+    "excluded_roots": [
+      "docs/builds",
+      "audit_reports",
+      "outputs",
+      "__pycache__",
+      ".pytest_cache",
+      "dist",
+      "build"
+    ],
+    "placeholder_suffix": "_placeholder",
+    "random_digest_suffix": "_digest_random",
+    "random_suffix": "_random",
+    "registry_path": "docs/field_registry.md",
+    "scan_roots": [
+      "configs",
+      "docs",
+      "main",
+      "tests",
+      "tools",
+      ".codex",
+      "AGENTS.md",
+      "README.md"
+    ]
+  },
   "legacy_stage_id": null,
   "method_objects": [
     "temporal_synchronized_tubelet_code",
     "flow_matching_trajectory_statistic",
     "fixed_low_fpr_calibrated_detector"
   ],
-  "evidence_names": [
-    "tubelet_evidence",
-    "sync_evidence",
-    "trajectory_evidence",
-    "final_evidence"
+  "naming_governance": {
+    "allowed_semantic_stage_names": [
+      "protocol_skeleton",
+      "synthetic_tubelet_sync_probe",
+      "real_video_vae_latent_probe",
+      "trajectory_statistic_probe",
+      "trajectory_aware_sampling_probe",
+      "full_paper_protocol",
+      "minimal_release_extraction"
+    ],
+    "case_style": "snake_case",
+    "forbidden_method_variants": [
+      "full",
+      "default",
+      "new",
+      "old",
+      "best",
+      "final_method"
+    ],
+    "forbidden_suffixes": [
+      "_v[0-9]+",
+      "_p[0-9]+"
+    ],
+    "forbidden_weak_name_patterns": [
+      "stage[0-9]+",
+      "stage_[0-9]+",
+      "stage-[0-9]+",
+      "test_stage[0-9]+_*",
+      "run_stage[0-9]+_*"
+    ]
+  },
+  "project_stage": "trajectory_aware_sampling_probe",
+  "protocol_runtime_objects": [
+    "latent_backend",
+    "watermark_method",
+    "evidence_extractor",
+    "protocol_runner",
+    "threshold_calibrator",
+    "record_writer",
+    "ablation_runner",
+    "table_builder",
+    "manifest_builder"
   ],
   "sample_roles": [
     "clean_negative",
@@ -25,17 +125,6 @@
     "calibration",
     "test"
   ],
-  "protocol_runtime_objects": [
-    "latent_backend",
-    "watermark_method",
-    "evidence_extractor",
-    "protocol_runner",
-    "threshold_calibrator",
-    "record_writer",
-    "ablation_runner",
-    "table_builder",
-    "manifest_builder"
-  ],
   "supported_method_variants": [
     "frame_prc",
     "tubelet_only",
@@ -44,87 +133,6 @@
     "tubelet_traj",
     "tubelet_sync_trajectory_fusion"
   ],
-  "core_boundary_policy": {
-    "governance_layer_paths": [
-      "tools/harness",
-      ".codex",
-      "tests"
-    ],
-    "protocol_core_candidate_paths": [
-      "main/core",
-      "main/protocol",
-      "main/analysis"
-    ],
-    "method_core_candidate_paths": [
-      "main/methods"
-    ],
-    "forbidden_runtime_imports": [
-      "tools.harness",
-      "tests"
-    ],
-    "minimal_demo_excluded_paths": [
-      "tools/harness",
-      ".codex",
-      "docs/builds",
-      "audit_reports",
-      "tests"
-    ]
-  },
-  "target_fpr_placeholder": 0.001,
-  "field_governance": {
-    "placeholder_suffix": "_placeholder",
-    "random_suffix": "_random",
-    "random_digest_suffix": "_digest_random",
-    "registry_path": "docs/field_registry.md",
-    "scan_roots": [
-      "configs",
-      "docs",
-      "main",
-      "tests",
-      "tools",
-      ".codex",
-      "AGENTS.md",
-      "README.md"
-    ],
-    "excluded_roots": [
-      "docs/builds",
-      "audit_reports",
-      "outputs",
-      "__pycache__",
-      ".pytest_cache",
-      "dist",
-      "build"
-    ]
-  },
-  "naming_governance": {
-    "case_style": "snake_case",
-    "forbidden_suffixes": [
-      "_v[0-9]+",
-      "_p[0-9]+"
-    ],
-    "forbidden_weak_name_patterns": [
-      "stage[0-9]+",
-      "stage_[0-9]+",
-      "stage-[0-9]+",
-      "test_stage[0-9]+_*",
-      "run_stage[0-9]+_*"
-    ],
-    "allowed_semantic_stage_names": [
-      "protocol_skeleton",
-      "synthetic_tubelet_sync_probe",
-      "real_video_vae_latent_probe",
-      "trajectory_statistic_probe",
-      "trajectory_aware_sampling_probe",
-      "full_paper_protocol",
-      "minimal_release_extraction"
-    ],
-    "forbidden_method_variants": [
-      "full",
-      "default",
-      "new",
-      "old",
-      "best",
-      "final_method"
-    ]
-  }
+  "target_construction_phase": "full_paper_protocol",
+  "target_fpr_placeholder": 0.001
 }

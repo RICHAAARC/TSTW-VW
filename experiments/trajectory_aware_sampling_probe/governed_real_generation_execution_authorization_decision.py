@@ -23,8 +23,8 @@ def build_trajectory_aware_sampling_governed_real_generation_execution_authoriza
     """功能: 给出是否允许进入受控真实视频生成执行的显式治理决策.
 
     该函数属于项目特定的阶段治理实现. 它只读取已经落盘的手动单请求结果 gate, 不连接真实
-    生成后端, 不发起视频生成请求, 不执行真实 watermark. 当前项目契约仍禁止真实视频生成,
-    因此默认配置会产出未授权决策, 并把下一步明确为项目契约和阶段治理更新。
+    生成后端, 不发起视频生成请求, 不执行真实 watermark. 当前项目契约已允许外部 GPU 环境手动执行 1 条受控真实视频生成请求,
+    但仍禁止仓库内置真实生成后端、真实 watermark 和 formal claim。
     """
     blocking_reasons: list[str] = []
 

@@ -39,8 +39,8 @@ def _config() -> dict[str, object]:
     return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
 
-def test_authorization_decision_blocks_real_generation_under_current_stage_contract() -> None:
-    """验证当前阶段契约未允许真实生成时, 授权决策必须保持未授权状态."""
+def test_authorization_decision_allows_external_single_request_handoff_after_contract_update() -> None:
+    """验证契约更新后, 授权决策允许进入外部单请求 handoff."""
     payload = build_trajectory_aware_sampling_governed_real_generation_execution_authorization_decision(
         _passing_manual_result_gate(),
         _config(),
@@ -48,19 +48,14 @@ def test_authorization_decision_blocks_real_generation_under_current_stage_contr
 
     assert (
         payload["TrajectoryAwareSamplingGovernedRealGenerationExecutionAuthorizationDecision"]
-        == "REAL_GENERATION_EXECUTION_NOT_AUTHORIZED_CURRENT_STAGE_CONTRACT"
+        == "READY_FOR_EXTERNAL_CONTROLLED_REAL_GENERATION_EXECUTION_HANDOFF"
     )
-    assert "current_stage_contract_disallows_real_generation_execution" in payload[
-        "TrajectoryAwareSamplingGovernedRealGenerationExecutionAuthorizationBlockingReasons"
-    ]
-    assert payload["real_generation_execution_authorized"] is False
-    assert payload["controlled_real_generation_execution_handoff_allowed"] is False
+    assert payload["TrajectoryAwareSamplingGovernedRealGenerationExecutionAuthorizationBlockingReasons"] == []
+    assert payload["real_generation_execution_authorized"] is True
+    assert payload["controlled_real_generation_execution_handoff_allowed"] is True
     assert payload["real_watermark_integration_authorized"] is False
     assert payload["formal_claim_support_authorized"] is False
-    assert (
-        payload["required_governance_action_before_real_generation_execution"]
-        == "project_contract_update_for_controlled_real_generation_execution"
-    )
+    assert payload["required_governance_action_before_real_generation_execution"] == "none"
 
 
 def test_authorization_decision_blocks_unpassed_manual_result_gate() -> None:
@@ -82,10 +77,10 @@ def test_authorization_decision_blocks_unpassed_manual_result_gate() -> None:
     ]
 
 
-def test_authorization_decision_can_describe_future_handoff_only_when_config_explicitly_allows() -> None:
-    """验证未来只有在配置显式允许时, 决策才会进入外部执行 handoff 状态."""
+def test_authorization_decision_blocks_when_contract_flag_is_disabled() -> None:
+    """验证如果契约开关被关闭, 授权决策仍会阻断真实生成 handoff."""
     config = _config()
-    config["current_stage_contract_allows_real_generation_execution"] = True
+    config["current_stage_contract_allows_real_generation_execution"] = False
 
     payload = build_trajectory_aware_sampling_governed_real_generation_execution_authorization_decision(
         _passing_manual_result_gate(),
@@ -94,9 +89,9 @@ def test_authorization_decision_can_describe_future_handoff_only_when_config_exp
 
     assert (
         payload["TrajectoryAwareSamplingGovernedRealGenerationExecutionAuthorizationDecision"]
-        == "READY_FOR_EXTERNAL_CONTROLLED_REAL_GENERATION_EXECUTION_HANDOFF"
+        == "REAL_GENERATION_EXECUTION_NOT_AUTHORIZED_CURRENT_STAGE_CONTRACT"
     )
-    assert payload["real_generation_execution_authorized"] is True
-    assert payload["controlled_real_generation_execution_handoff_allowed"] is True
-    assert payload["real_watermark_integration_authorized"] is False
-    assert payload["formal_claim_support_authorized"] is False
+    assert "current_stage_contract_disallows_real_generation_execution" in payload[
+        "TrajectoryAwareSamplingGovernedRealGenerationExecutionAuthorizationBlockingReasons"
+    ]
+    assert payload["real_generation_execution_authorized"] is False

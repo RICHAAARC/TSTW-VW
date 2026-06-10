@@ -1042,6 +1042,83 @@ def read_governed_real_generation_execution_authorization_decision(
     return json.loads(decision_path.read_text(encoding="utf-8"))
 
 
+def run_external_controlled_real_generation_execution_handoff(
+    repository_root: str | Path,
+    run_root: str | Path,
+    handoff_config_path: str | Path = "configs/protocol/trajectory_aware_sampling_external_controlled_real_generation_execution_handoff.json",
+) -> dict[str, Any]:
+    """功能: 写出外部受控单条真实生成执行 handoff artifact.
+
+    该 helper 只生成 handoff 描述, 不在 notebook 或仓库内调用真实生成后端. 真实生成只能由用户
+    在外部 GPU 环境按 handoff 手动执行, 且输出仍属于 non-claim artifact.
+    """
+    from experiments.trajectory_aware_sampling_probe.external_controlled_real_generation_execution_handoff import (
+        build_external_controlled_real_generation_execution_handoff_report_section,
+        build_trajectory_aware_sampling_external_controlled_real_generation_execution_handoff,
+    )
+    from experiments.trajectory_aware_sampling_probe.output_layout import (
+        build_trajectory_aware_sampling_probe_output_paths,
+    )
+
+    root_path = Path(repository_root).resolve()
+    config_path = Path(handoff_config_path)
+    if not config_path.is_absolute():
+        config_path = root_path / config_path
+    output_paths = build_trajectory_aware_sampling_probe_output_paths(run_root)
+    authorization_decision = (
+        read_governed_real_generation_execution_authorization_decision(run_root)
+    )
+    controlled_scaffold = read_controlled_single_real_generation_request_scaffold(
+        run_root
+    )
+    config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+    handoff_payload = (
+        build_trajectory_aware_sampling_external_controlled_real_generation_execution_handoff(
+            authorization_decision,
+            controlled_scaffold,
+            config_payload,
+        )
+    )
+    output_paths.external_controlled_real_generation_execution_handoff_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    output_paths.external_controlled_real_generation_execution_handoff_path.write_text(
+        json.dumps(handoff_payload, ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+    report_section = (
+        build_external_controlled_real_generation_execution_handoff_report_section(
+            handoff_payload
+        )
+    )
+    existing_report = (
+        output_paths.sampling_probe_report_path.read_text(encoding="utf-8")
+        if output_paths.sampling_probe_report_path.exists()
+        else ""
+    )
+    output_paths.sampling_probe_report_path.write_text(
+        existing_report.rstrip() + report_section,
+        encoding="utf-8",
+    )
+    return handoff_payload
+
+
+def read_external_controlled_real_generation_execution_handoff(
+    run_root: str | Path,
+) -> dict[str, Any]:
+    """功能: 读取外部受控单条真实生成执行 handoff artifact."""
+    handoff_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_external_controlled_real_generation_execution_handoff.json"
+    )
+    if not handoff_path.exists():
+        raise FileNotFoundError(handoff_path)
+    return json.loads(handoff_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

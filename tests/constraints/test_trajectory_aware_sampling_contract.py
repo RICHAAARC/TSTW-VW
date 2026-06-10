@@ -376,3 +376,34 @@ def test_trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate
         config["outputs"]["real_gpu_backend_connection_smoke_result_gate_path"]
         == "artifacts/trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json"
     )
+
+
+def test_trajectory_aware_sampling_authorization_decision_allows_external_single_request_only() -> None:
+    """验证授权配置只允许外部单请求真实生成 handoff, 不打开 watermark 或 formal claim."""
+    config = json.loads((ROOT / "configs" / "protocol" / "trajectory_aware_sampling_governed_real_generation_execution_authorization_decision.json").read_text(encoding="utf-8"))
+
+    assert config["project_stage"] == "trajectory_aware_sampling_probe"
+    assert config["construction_phase"] == "governed_real_generation_execution_authorization_decision"
+    assert config["current_stage_contract_allows_real_generation_execution"] is True
+    assert config["maximum_authorized_controlled_request_count"] == 1
+    assert config["real_watermark_integration_authorized_after_decision"] is False
+    assert config["formal_claim_support_authorized_after_decision"] is False
+    assert config["approved_next_construction_after_authorization"] == "external_controlled_real_generation_execution_handoff"
+
+
+def test_trajectory_aware_sampling_external_controlled_real_generation_handoff_is_external_only() -> None:
+    """验证外部真实生成 handoff 不允许仓库内部后端调用, 且只允许单条请求."""
+    config = json.loads((ROOT / "configs" / "protocol" / "trajectory_aware_sampling_external_controlled_real_generation_execution_handoff.json").read_text(encoding="utf-8"))
+
+    assert config["project_stage"] == "trajectory_aware_sampling_probe"
+    assert config["construction_phase"] == "external_controlled_real_generation_execution_handoff"
+    assert config["runtime_mode"] == "external_single_request_handoff_only"
+    assert config["required_authorization_decision"] == "READY_FOR_EXTERNAL_CONTROLLED_REAL_GENERATION_EXECUTION_HANDOFF"
+    assert config["maximum_external_controlled_request_count"] == 1
+    assert config["required_runtime"] == "external_gpu"
+    assert config["repository_internal_backend_invocation_allowed"] is False
+    assert config["real_watermark_integration_allowed"] is False
+    assert config["formal_claim_support_allowed"] is False
+    assert "external_controlled_single_generation_result_record" in config["required_result_artifact_kinds"]
+    assert config["next_required_external_execution_after_handoff"] == "external_controlled_single_real_generation_execution_run"
+

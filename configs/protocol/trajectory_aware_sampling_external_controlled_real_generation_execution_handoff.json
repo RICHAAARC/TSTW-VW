@@ -1,0 +1,43 @@
+{
+  "allowed_output_artifact_kinds": [
+    "runtime_environment_snapshot",
+    "model_identity_record",
+    "external_controlled_single_generation_result_record",
+    "generated_video_artifact_metadata",
+    "runtime_failure_manifest"
+  ],
+  "construction_phase": "external_controlled_real_generation_execution_handoff",
+  "execution_boundary_kind": "manual_external_gpu_single_request_boundary",
+  "formal_claim_support_allowed": false,
+  "maximum_external_controlled_request_count": 1,
+  "next_required_external_execution_after_handoff": "external_controlled_single_real_generation_execution_run",
+  "project_stage": "trajectory_aware_sampling_probe",
+  "real_watermark_integration_allowed": false,
+  "repository_internal_backend_invocation_allowed": false,
+  "required_authorization_decision": "READY_FOR_EXTERNAL_CONTROLLED_REAL_GENERATION_EXECUTION_HANDOFF",
+  "required_external_result_fields": [
+    "controlled_request_digest",
+    "external_real_generation_execution_status",
+    "external_runtime_environment_digest",
+    "external_model_identity_digest",
+    "generated_video_artifact_digest",
+    "runtime_failure_manifest"
+  ],
+  "required_failure_fields": [
+    "failure_kind",
+    "failure_message",
+    "controlled_request_digest",
+    "runtime_environment_digest",
+    "recovery_recommendation"
+  ],
+  "required_result_artifact_kinds": [
+    "runtime_environment_snapshot",
+    "model_identity_record",
+    "external_controlled_single_generation_result_record",
+    "generated_video_artifact_metadata",
+    "runtime_failure_manifest"
+  ],
+  "required_runtime": "external_gpu",
+  "runtime_mode": "external_single_request_handoff_only",
+  "target_construction_phase": "full_paper_protocol"
+}

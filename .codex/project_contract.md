@@ -30,6 +30,15 @@
 - The next target construction phase is `full_paper_protocol`.
 - Current implementation may define a real-GPU-validation contract and selected-record handoff for the next runtime, but must not implement or enable real DiT / Flow Matching generation, real video generation, or real watermark embedding / detection until a later explicit backend-transition decision.
 
+
+
+### 2026-06-10 Controlled Real Generation Handoff Update
+
+- `trajectory_aware_sampling_probe` 已完成 real GPU smoke、runtime validation、controlled single request scaffold、manual controlled single request result gate 与 governed authorization decision 的闭环。
+- 当前阶段现在仅允许构建 `external_controlled_real_generation_execution_handoff`，用于把 1 条受控真实视频生成请求交给外部 GPU 环境手动执行。
+- 该授权不等于仓库内真实生成后端集成；repository module 和 notebook helper 只能写出 handoff schema、请求 digest、执行边界、失败 manifest schema 与 non-claim 输出边界。
+- 仍然禁止真实 watermark embedding / detection、正式 claim 支持、批量真实生成、仓库内 DiT / Flow Matching / VAE 生成后端自动调用。
+
 ## Ordered Semantic Stages
 
 1. `protocol_skeleton`
@@ -145,7 +154,8 @@
 ## Current-Stage Prohibitions
 
 1. Do not implement real watermark embedding or detection algorithms.
-2. Do not integrate real DiT backends, Flow Matching backends, or video VAE backends.
-3. Do not create notebook-only protocol logic; governed Colab entrypoints may exist only when they delegate formal outputs to repository modules, `run_trajectory_statistic_probe.ipynb` may only call repository helper / CLI code for trajectory formal GPU validation, and `run_trajectory_aware_sampling_probe.ipynb` may only call repository helper / CLI code for sampling scaffold GPU-session validation.
+2. Do not integrate repository-internal real DiT backends, Flow Matching backends, or video VAE backends for automatic invocation. The only currently allowed real-generation progression is an external, manual, single-request handoff artifact.
+3. Do not create notebook-only protocol logic; governed Colab entrypoints may exist only when they delegate formal outputs to repository modules, `run_trajectory_statistic_probe.ipynb` may only call repository helper / CLI code for trajectory formal GPU validation, and `run_trajectory_aware_sampling_probe.ipynb` may only call repository helper / CLI code for sampling scaffold GPU-session validation and external controlled single real generation handoff packaging.
 4. Do not check in formal experiment outputs under `outputs/`; protocol skeleton runtime tests may use temporary output roots or ephemeral `outputs/runs` paths.
 5. Do not bypass harness audits or pytest gates.
+6. Do not support formal claim from external controlled single real generation handoff outputs until a later explicit claim-support gate passes.
