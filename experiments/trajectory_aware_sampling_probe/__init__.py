@@ -12,6 +12,9 @@ from experiments.trajectory_aware_sampling_probe.artifact_builder import (
 from experiments.trajectory_aware_sampling_probe.backend_transition_guard import (
     build_trajectory_aware_sampling_backend_transition_guard,
 )
+from experiments.trajectory_aware_sampling_probe.backend_transition_decision import (
+    build_trajectory_aware_sampling_backend_transition_decision,
+)
 from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
     build_trajectory_aware_sampling_gpu_validation_contract,
 )
@@ -29,6 +32,7 @@ from experiments.trajectory_aware_sampling_probe.selection_plan_builder import (
 __all__ = [
     "build_trajectory_aware_sampling_gpu_validation_contract",
     "build_trajectory_aware_sampling_backend_transition_guard",
+    "build_trajectory_aware_sampling_backend_transition_decision",
     "TrajectoryAwareSamplingProbeRunner",
     "TrajectoryAwareSamplingProbeRunResult",
     "build_record_digest_selection_plan",

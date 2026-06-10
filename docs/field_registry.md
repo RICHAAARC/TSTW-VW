@@ -527,3 +527,15 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | backend_transition_guard_digest | trace | none | false | false | false | Digest of the backend-transition guard payload excluding the digest field itself. |
 | backend_transition_guard_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling backend-transition guard artifact. |
 | gpu_validation_contract_payload_digest | trace | none | false | false | false | Digest of the complete GPU-validation contract payload consumed by the backend-transition guard. |
+| TrajectoryAwareSamplingBackendTransitionDecision | governance | none | false | false | false | Explicit backend-transition decision emitted after the backend-transition guard. |
+| TrajectoryAwareSamplingBackendTransitionDecisionBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent the backend-transition decision from approving an interface scaffold. |
+| required_backend_transition_guard_decision | governance | none | false | false | false | Configured backend-transition guard decision required before an explicit transition decision can proceed. |
+| required_next_allowed_construction_after_guard | governance | none | false | false | false | Configured next-construction value required from the backend-transition guard. |
+| approved_next_construction | governance | none | false | false | false | Next construction target approved by the explicit backend-transition decision. |
+| runtime_interface_scaffold_allowed | governance | none | false | false | false | Boolean marker indicating whether real GPU runtime interface scaffolding is allowed without connecting real backends. |
+| approved_interface_scaffold_capabilities | governance | none | false | false | false | Interface-scaffold capabilities approved by the explicit backend-transition decision. |
+| forbidden_runtime_capabilities_until_backend_implementation | governance | none | false | false | false | Runtime capabilities that remain disabled until real backend implementation is explicitly approved. |
+| NextAllowedConstructionAfterBackendTransitionDecision | governance | none | false | false | false | Next construction recommendation emitted by the explicit backend-transition decision. |
+| backend_transition_decision_digest | trace | none | false | false | false | Digest of the backend-transition decision payload excluding the digest field itself. |
+| backend_transition_decision_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling backend-transition decision artifact. |
+| backend_transition_guard_payload_digest | trace | none | false | false | false | Digest of the complete backend-transition guard payload consumed by the explicit decision. |

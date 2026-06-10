@@ -94,3 +94,34 @@ def test_trajectory_aware_sampling_backend_transition_guard_requires_decision() 
         config["outputs"]["backend_transition_guard_path"]
         == "artifacts/trajectory_aware_sampling_backend_transition_guard.json"
     )
+
+
+def test_trajectory_aware_sampling_backend_transition_decision_allows_interface_only() -> None:
+    """验证显式后端切换决策只允许接口脚手架, 仍不允许真实后端。"""
+    config = json.loads((ROOT / "configs" / "protocol" / "trajectory_aware_sampling_backend_transition_decision.json").read_text(encoding="utf-8"))
+
+    assert config["project_stage"] == "trajectory_aware_sampling_probe"
+    assert config["construction_phase"] == "trajectory_aware_sampling_probe"
+    assert config["target_construction_phase"] == "full_paper_protocol"
+    assert config["runtime_mode"] == "backend_transition_decision_interface_scaffold_only"
+    assert (
+        config["required_backend_transition_guard_decision"]
+        == "BACKEND_TRANSITION_DECISION_REQUIRED"
+    )
+    assert (
+        config["required_next_allowed_construction_after_guard"]
+        == "explicit_backend_transition_decision"
+    )
+    assert config["approved_next_construction"] == "real_gpu_runtime_interface_scaffold"
+    assert config["runtime_interface_scaffold_allowed"] is True
+    assert config["runtime_backend_connection_allowed"] is False
+    assert config["real_generation_allowed"] is False
+    assert config["real_watermark_integration_allowed"] is False
+    assert "backend_protocol_shape" in config["approved_interface_scaffold_capabilities"]
+    assert "real_dit_generation" in config[
+        "forbidden_runtime_capabilities_until_backend_implementation"
+    ]
+    assert (
+        config["outputs"]["backend_transition_decision_path"]
+        == "artifacts/trajectory_aware_sampling_backend_transition_decision.json"
+    )

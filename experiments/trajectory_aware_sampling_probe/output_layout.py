@@ -26,6 +26,7 @@ class TrajectoryAwareSamplingProbeOutputPaths(BaseRunOutputPaths):
     sampling_handoff_manifest_path: Path
     gpu_validation_contract_path: Path
     backend_transition_guard_path: Path
+    backend_transition_decision_path: Path
     sampling_probe_report_path: Path
 
     def table_paths(self) -> list[Path]:
@@ -74,6 +75,11 @@ def build_trajectory_aware_sampling_probe_output_paths(
             output_root_path
             / "artifacts"
             / "trajectory_aware_sampling_backend_transition_guard.json"
+        ),
+        backend_transition_decision_path=(
+            output_root_path
+            / "artifacts"
+            / "trajectory_aware_sampling_backend_transition_decision.json"
         ),
         sampling_probe_report_path=(
             output_root_path / "reports" / "trajectory_aware_sampling_probe_report.md"

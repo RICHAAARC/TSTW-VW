@@ -181,6 +181,22 @@ def read_backend_transition_guard(run_root: str | Path) -> dict[str, Any]:
     return json.loads(guard_path.read_text(encoding="utf-8"))
 
 
+def read_backend_transition_decision(run_root: str | Path) -> dict[str, Any]:
+    """功能: 读取 runner 生成的显式后端切换决策。
+
+    该 helper 只读取 repository runner 产物。当前决策只允许真实 GPU runtime
+    接口脚手架, 不允许 notebook 直接启用真实生成或真实 watermark 后端。
+    """
+    decision_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_backend_transition_decision.json"
+    )
+    if not decision_path.exists():
+        raise FileNotFoundError(decision_path)
+    return json.loads(decision_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

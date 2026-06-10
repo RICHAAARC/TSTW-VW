@@ -16,6 +16,9 @@ from experiments.trajectory_aware_sampling_probe.artifact_builder import (
 from experiments.trajectory_aware_sampling_probe.backend_transition_guard import (
     build_trajectory_aware_sampling_backend_transition_guard,
 )
+from experiments.trajectory_aware_sampling_probe.backend_transition_decision import (
+    build_trajectory_aware_sampling_backend_transition_decision,
+)
 from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
     build_trajectory_aware_sampling_gpu_validation_contract,
 )
@@ -34,6 +37,9 @@ DEFAULT_GPU_VALIDATION_CONFIG_RELATIVE_PATH = Path(
 DEFAULT_BACKEND_TRANSITION_CONFIG_RELATIVE_PATH = Path(
     "configs/protocol/trajectory_aware_sampling_backend_transition_guard.json"
 )
+DEFAULT_BACKEND_TRANSITION_DECISION_CONFIG_RELATIVE_PATH = Path(
+    "configs/protocol/trajectory_aware_sampling_backend_transition_decision.json"
+)
 
 
 @dataclass(frozen=True)
@@ -51,6 +57,7 @@ class TrajectoryAwareSamplingProbeRunResult:
     policy_manifest: dict[str, Any]
     gpu_validation_contract: dict[str, Any]
     backend_transition_guard: dict[str, Any]
+    backend_transition_decision: dict[str, Any]
     artifact_paths: dict[str, Path]
 
 
@@ -129,6 +136,11 @@ class TrajectoryAwareSamplingProbeRunner:
             gpu_validation_contract,
             self._read_backend_transition_config(),
         )
+        backend_transition_decision = self._write_backend_transition_decision(
+            output_root_path,
+            backend_transition_guard,
+            self._read_backend_transition_decision_config(),
+        )
         output_paths = build_trajectory_aware_sampling_probe_output_paths(output_root_path)
         artifact_paths["sampling_handoff_manifest_path"] = (
             output_paths.sampling_handoff_manifest_path
@@ -139,6 +151,9 @@ class TrajectoryAwareSamplingProbeRunner:
         artifact_paths["backend_transition_guard_path"] = (
             output_paths.backend_transition_guard_path
         )
+        artifact_paths["backend_transition_decision_path"] = (
+            output_paths.backend_transition_decision_path
+        )
         return TrajectoryAwareSamplingProbeRunResult(
             run_id=output_root_path.name,
             output_root=output_root_path,
@@ -147,6 +162,7 @@ class TrajectoryAwareSamplingProbeRunner:
             policy_manifest=policy_manifest,
             gpu_validation_contract=gpu_validation_contract,
             backend_transition_guard=backend_transition_guard,
+            backend_transition_decision=backend_transition_decision,
             artifact_paths=artifact_paths,
         )
 
@@ -183,6 +199,13 @@ class TrajectoryAwareSamplingProbeRunner:
 
     def _read_backend_transition_config(self) -> dict[str, Any]:
         config_path = self._repository_root / DEFAULT_BACKEND_TRANSITION_CONFIG_RELATIVE_PATH
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
+    def _read_backend_transition_decision_config(self) -> dict[str, Any]:
+        config_path = (
+            self._repository_root
+            / DEFAULT_BACKEND_TRANSITION_DECISION_CONFIG_RELATIVE_PATH
+        )
         return json.loads(config_path.read_text(encoding="utf-8"))
 
     def _write_run_handoff_manifest(
@@ -284,3 +307,24 @@ class TrajectoryAwareSamplingProbeRunner:
             encoding="utf-8",
         )
         return guard_payload
+
+    def _write_backend_transition_decision(
+        self,
+        output_root_path: Path,
+        backend_transition_guard: dict[str, Any],
+        backend_transition_decision_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        decision_payload = build_trajectory_aware_sampling_backend_transition_decision(
+            backend_transition_guard,
+            backend_transition_decision_config,
+        )
+        decision_path = build_trajectory_aware_sampling_probe_output_paths(
+            output_root_path
+        ).backend_transition_decision_path
+        decision_path.parent.mkdir(parents=True, exist_ok=True)
+        decision_path.write_text(
+            json.dumps(decision_payload, ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        return decision_payload
