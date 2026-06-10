@@ -310,6 +310,76 @@ def read_real_backend_connection_smoke_handoff(run_root: str | Path) -> dict[str
     return json.loads(handoff_path.read_text(encoding="utf-8"))
 
 
+def read_external_real_gpu_backend_connection_smoke_results(
+    external_smoke_results_path: str | Path,
+) -> dict[str, Any]:
+    """功能: 读取外部真实 GPU backend connection smoke 结果摘要。
+
+    该 helper 只读取 Colab 或同等真实 GPU 环境已经落盘的 JSON 结果摘要。它不连接真实后端,
+    不生成视频, 也不执行 watermark 算法。通过把读取逻辑集中在 helper 中, notebook 可以保持调度入口属性。
+    """
+    results_path = Path(external_smoke_results_path)
+    if not results_path.exists():
+        raise FileNotFoundError(results_path)
+    return json.loads(results_path.read_text(encoding="utf-8"))
+
+
+def run_real_gpu_backend_connection_smoke_result_gate(
+    repository_root: str | Path,
+    run_root: str | Path,
+    external_smoke_results_path: str | Path,
+    result_gate_config_path: str | Path = "configs/protocol/trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json",
+) -> dict[str, Any]:
+    """功能: 调用仓库 result gate 校验外部真实 GPU smoke 结果并写出 artifact。
+
+    该函数属于 notebook 到 repository module 的边界。notebook 只提供外部结果路径和 run root,
+    具体校验规则由 `experiments.trajectory_aware_sampling_probe.real_gpu_backend_connection_smoke_result_gate` 执行。
+    该函数不会在本地连接真实后端, 不会生成真实视频, 也不会执行真实 watermark 集成。
+    """
+    from experiments.trajectory_aware_sampling_probe.output_layout import (
+        build_trajectory_aware_sampling_probe_output_paths,
+    )
+    from experiments.trajectory_aware_sampling_probe.real_gpu_backend_connection_smoke_result_gate import (
+        build_trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate,
+    )
+
+    root_path = Path(repository_root).resolve()
+    config_path = Path(result_gate_config_path)
+    if not config_path.is_absolute():
+        config_path = root_path / config_path
+    handoff_payload = read_real_backend_connection_smoke_handoff(run_root)
+    external_results = read_external_real_gpu_backend_connection_smoke_results(
+        external_smoke_results_path
+    )
+    config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+    gate_payload = build_trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate(
+        handoff_payload,
+        external_results,
+        config_payload,
+    )
+    gate_path = build_trajectory_aware_sampling_probe_output_paths(
+        run_root
+    ).real_gpu_backend_connection_smoke_result_gate_path
+    gate_path.parent.mkdir(parents=True, exist_ok=True)
+    gate_path.write_text(
+        json.dumps(gate_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return gate_payload
+
+
+def read_real_gpu_backend_connection_smoke_result_gate(run_root: str | Path) -> dict[str, Any]:
+    """功能: 读取真实 GPU backend connection smoke 结果 gate artifact。"""
+    gate_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json"
+    )
+    if not gate_path.exists():
+        raise FileNotFoundError(gate_path)
+    return json.loads(gate_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

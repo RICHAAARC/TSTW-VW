@@ -32,8 +32,9 @@ REQUIRED_STEP_KEYS = [
     "06_run_sampling_scaffold_smoke_tests",
     "07_locate_stage_three_trajectory_output",
     "08_run_sampling_scaffold_validation",
-    "09_package_sampling_results",
-    "10_print_final_summary",
+    "09_run_real_gpu_backend_connection_smoke_result_gate",
+    "10_package_sampling_results",
+    "11_print_final_summary",
 ]
 
 
@@ -96,16 +97,21 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "sampling_workflow.read_backend_connection_contract(" in notebook_text
     assert "sampling_workflow.read_real_backend_connection_smoke(" in notebook_text
     assert "sampling_workflow.read_real_backend_connection_smoke_handoff(" in notebook_text
+    assert "sampling_workflow.run_real_gpu_backend_connection_smoke_result_gate(" in notebook_text
     assert "sampling_workflow.package_sampling_probe_run(" in notebook_text
     assert "sampling_workflow.find_latest_trajectory_probe_root(" in notebook_text
     assert "sampling_workflow.extract_trajectory_probe_package(" in notebook_text
     assert "experiments.trajectory_aware_sampling_probe.scaffold_cli" in workflow_text
+    assert "build_trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate" in workflow_text
+    assert "read_external_real_gpu_backend_connection_smoke_results" in workflow_text
     assert "trajectory_aware_sampling_probe_scaffold_gpu_validation_utc_time_short_commit" in notebook_text
     assert "git', 'rev-parse', '--short=7', 'HEAD'" in notebook_text
     assert "datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')" in notebook_text
     assert "nvidia-smi" in notebook_text
     assert "TSTW_STAGE3_TRAJECTORY_ROOT" in notebook_text
     assert "TSTW_STAGE3_TRAJECTORY_PACKAGE_PATH" in notebook_text
+    assert "TSTW_EXTERNAL_REAL_GPU_SMOKE_RESULTS_PATH" in notebook_text
+    assert "TSTW_RESULT_GATE_CONFIG_PATH" in notebook_text
     assert "STAGE3_RESULT_ROOT" in notebook_text
     assert "DRIVE_ROOT / 'results' / 'trajectory_aware_sampling_probe' / RUN_ID / 'packages'" in notebook_text
     assert "write_event_score_records(" not in notebook_text
@@ -132,6 +138,8 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "trajectory_aware_sampling_real_backend_connection_smoke.json" in workflow_text
     assert "trajectory_aware_sampling_real_backend_connection_smoke_handoff.json" in notebook_text
     assert "trajectory_aware_sampling_real_backend_connection_smoke_handoff.json" in workflow_text
+    assert "trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json" in notebook_text
+    assert "trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json" in workflow_text
     assert "TrajectoryAwareSamplingGpuValidationContractDecision" in notebook_text
     assert "NextAllowedConstructionAfterGpuValidationContract" in notebook_text
     assert "TrajectoryAwareSamplingBackendTransitionGuardDecision" in notebook_text
@@ -152,6 +160,8 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "NextRequiredValidationAfterRealBackendConnectionSmokeRequest" in notebook_text
     assert "TrajectoryAwareSamplingRealBackendConnectionSmokeHandoffDecision" in notebook_text
     assert "NextRequiredExternalExecutionAfterSmokeHandoff" in notebook_text
+    assert "TrajectoryAwareSamplingRealGpuBackendConnectionSmokeResultGateDecision" in notebook_text
+    assert "NextAllowedConstructionAfterRealGpuBackendConnectionSmokeResultGate" in notebook_text
     assert "sampling_workflow.run_sampling_scaffold_cli(" in code_text
     assert "sampling_workflow.read_runtime_interface_implementation(" in code_text
     assert "sampling_workflow.read_backend_integration_decision(" in code_text
@@ -159,12 +169,14 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "sampling_workflow.read_backend_connection_contract(" in code_text
     assert "sampling_workflow.read_real_backend_connection_smoke(" in code_text
     assert "sampling_workflow.read_real_backend_connection_smoke_handoff(" in code_text
+    assert "sampling_workflow.run_real_gpu_backend_connection_smoke_result_gate(" in code_text
     assert "runtime_interface_implementation.get(" in code_text
     assert "backend_integration_decision.get(" in code_text
     assert "backend_adapter_scaffold.get(" in code_text
     assert "backend_connection_contract.get(" in code_text
     assert "real_backend_connection_smoke.get(" in code_text
     assert "real_backend_connection_smoke_handoff.get(" in code_text
+    assert "real_gpu_backend_connection_smoke_result_gate.get(" in code_text
     assert "sampling_workflow.run_sampling_scaffold_cli(" not in markdown_text
     assert "runtime_interface_implementation.get(" not in markdown_text
     assert "backend_integration_decision.get(" not in markdown_text
@@ -172,3 +184,4 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "backend_connection_contract.get(" not in markdown_text
     assert "real_backend_connection_smoke.get(" not in markdown_text
     assert "real_backend_connection_smoke_handoff.get(" not in markdown_text
+    assert "real_gpu_backend_connection_smoke_result_gate.get(" not in markdown_text
