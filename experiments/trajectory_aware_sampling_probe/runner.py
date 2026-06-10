@@ -13,6 +13,9 @@ from typing import Any
 from experiments.trajectory_aware_sampling_probe.artifact_builder import (
     build_trajectory_aware_sampling_artifacts,
 )
+from experiments.trajectory_aware_sampling_probe.backend_transition_guard import (
+    build_trajectory_aware_sampling_backend_transition_guard,
+)
 from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
     build_trajectory_aware_sampling_gpu_validation_contract,
 )
@@ -27,6 +30,9 @@ DEFAULT_SAMPLING_CONFIG_RELATIVE_PATH = Path(
 )
 DEFAULT_GPU_VALIDATION_CONFIG_RELATIVE_PATH = Path(
     "configs/protocol/trajectory_aware_sampling_gpu_validation_contract.json"
+)
+DEFAULT_BACKEND_TRANSITION_CONFIG_RELATIVE_PATH = Path(
+    "configs/protocol/trajectory_aware_sampling_backend_transition_guard.json"
 )
 
 
@@ -44,6 +50,7 @@ class TrajectoryAwareSamplingProbeRunResult:
     selection_plan: dict[str, Any]
     policy_manifest: dict[str, Any]
     gpu_validation_contract: dict[str, Any]
+    backend_transition_guard: dict[str, Any]
     artifact_paths: dict[str, Path]
 
 
@@ -117,12 +124,20 @@ class TrajectoryAwareSamplingProbeRunner:
             handoff_manifest,
             self._read_gpu_validation_config(),
         )
+        backend_transition_guard = self._write_backend_transition_guard(
+            output_root_path,
+            gpu_validation_contract,
+            self._read_backend_transition_config(),
+        )
         output_paths = build_trajectory_aware_sampling_probe_output_paths(output_root_path)
         artifact_paths["sampling_handoff_manifest_path"] = (
             output_paths.sampling_handoff_manifest_path
         )
         artifact_paths["gpu_validation_contract_path"] = (
             output_paths.gpu_validation_contract_path
+        )
+        artifact_paths["backend_transition_guard_path"] = (
+            output_paths.backend_transition_guard_path
         )
         return TrajectoryAwareSamplingProbeRunResult(
             run_id=output_root_path.name,
@@ -131,6 +146,7 @@ class TrajectoryAwareSamplingProbeRunner:
             selection_plan=selection_plan,
             policy_manifest=policy_manifest,
             gpu_validation_contract=gpu_validation_contract,
+            backend_transition_guard=backend_transition_guard,
             artifact_paths=artifact_paths,
         )
 
@@ -163,6 +179,10 @@ class TrajectoryAwareSamplingProbeRunner:
 
     def _read_gpu_validation_config(self) -> dict[str, Any]:
         config_path = self._repository_root / DEFAULT_GPU_VALIDATION_CONFIG_RELATIVE_PATH
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
+    def _read_backend_transition_config(self) -> dict[str, Any]:
+        config_path = self._repository_root / DEFAULT_BACKEND_TRANSITION_CONFIG_RELATIVE_PATH
         return json.loads(config_path.read_text(encoding="utf-8"))
 
     def _write_run_handoff_manifest(
@@ -243,3 +263,24 @@ class TrajectoryAwareSamplingProbeRunner:
             encoding="utf-8",
         )
         return contract_payload
+
+    def _write_backend_transition_guard(
+        self,
+        output_root_path: Path,
+        gpu_validation_contract: dict[str, Any],
+        backend_transition_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        guard_payload = build_trajectory_aware_sampling_backend_transition_guard(
+            gpu_validation_contract,
+            backend_transition_config,
+        )
+        guard_path = build_trajectory_aware_sampling_probe_output_paths(
+            output_root_path
+        ).backend_transition_guard_path
+        guard_path.parent.mkdir(parents=True, exist_ok=True)
+        guard_path.write_text(
+            json.dumps(guard_payload, ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        return guard_payload

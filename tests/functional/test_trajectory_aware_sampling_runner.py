@@ -87,17 +87,32 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
         ]
         == "READY_FOR_REAL_GPU_RUNTIME_VALIDATION"
     )
+    assert (
+        result.backend_transition_guard[
+            "TrajectoryAwareSamplingBackendTransitionGuardDecision"
+        ]
+        == "BACKEND_TRANSITION_DECISION_REQUIRED"
+    )
     handoff_manifest_path = output_root / "artifacts" / "sampling_handoff_manifest.json"
     gpu_validation_contract_path = (
         output_root
         / "artifacts"
         / "trajectory_aware_sampling_gpu_validation_contract.json"
     )
+    backend_transition_guard_path = (
+        output_root
+        / "artifacts"
+        / "trajectory_aware_sampling_backend_transition_guard.json"
+    )
     assert handoff_manifest_path.exists()
     assert gpu_validation_contract_path.exists()
+    assert backend_transition_guard_path.exists()
     handoff_manifest = json.loads(handoff_manifest_path.read_text(encoding="utf-8"))
     gpu_validation_contract = json.loads(
         gpu_validation_contract_path.read_text(encoding="utf-8")
+    )
+    backend_transition_guard = json.loads(
+        backend_transition_guard_path.read_text(encoding="utf-8")
     )
     assert handoff_manifest["handoff_kind"] == "trajectory_aware_sampling_scaffold"
     assert handoff_manifest["requires_real_gpu_validation"] is False
@@ -115,6 +130,20 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
         == "real_gpu_runtime_validation"
     )
     assert gpu_validation_contract["real_generation_allowed"] is False
+    assert (
+        backend_transition_guard[
+            "TrajectoryAwareSamplingBackendTransitionGuardDecision"
+        ]
+        == "BACKEND_TRANSITION_DECISION_REQUIRED"
+    )
+    assert (
+        backend_transition_guard[
+            "NextAllowedConstructionAfterBackendTransitionGuard"
+        ]
+        == "explicit_backend_transition_decision"
+    )
+    assert backend_transition_guard["backend_transition_decision_required"] is True
+    assert backend_transition_guard["real_generation_allowed"] is False
 
 
 def test_sampling_scaffold_cli_prints_policy_manifest(
@@ -148,4 +177,9 @@ def test_sampling_scaffold_cli_prints_policy_manifest(
         output_root
         / "artifacts"
         / "trajectory_aware_sampling_gpu_validation_contract.json"
+    ).exists()
+    assert (
+        output_root
+        / "artifacts"
+        / "trajectory_aware_sampling_backend_transition_guard.json"
     ).exists()

@@ -1,0 +1,22 @@
+{
+  "backend_transition_decision_required": true,
+  "construction_phase": "trajectory_aware_sampling_probe",
+  "forbidden_runtime_capabilities_until_backend_transition": [
+    "real_dit_generation",
+    "flow_matching_generation",
+    "real_video_generation",
+    "real_watermark_embedding",
+    "real_watermark_detection"
+  ],
+  "outputs": {
+    "backend_transition_guard_path": "artifacts/trajectory_aware_sampling_backend_transition_guard.json"
+  },
+  "project_stage": "trajectory_aware_sampling_probe",
+  "real_generation_allowed": false,
+  "real_watermark_integration_allowed": false,
+  "required_gpu_validation_contract_decision": "READY_FOR_REAL_GPU_RUNTIME_VALIDATION",
+  "required_next_allowed_construction": "real_gpu_runtime_validation",
+  "runtime_backend_connection_allowed": false,
+  "runtime_mode": "backend_transition_guard_only",
+  "target_construction_phase": "full_paper_protocol"
+}

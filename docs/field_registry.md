@@ -518,3 +518,12 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | gpu_validation_contract_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling GPU-validation contract artifact. |
 | real_generation_allowed_in_contract_builder | governance | none | false | false | false | Boolean config guard that keeps real generation disabled while building the GPU-validation contract. |
 | real_watermark_integration_allowed_in_contract_builder | governance | none | false | false | false | Boolean config guard that keeps real watermark integration disabled while building the GPU-validation contract. |
+| TrajectoryAwareSamplingBackendTransitionGuardDecision | governance | none | false | false | false | Decision emitted by the trajectory-aware sampling backend-transition guard. |
+| TrajectoryAwareSamplingBackendTransitionGuardBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent the backend-transition guard from reaching the explicit decision boundary. |
+| backend_transition_decision_required | governance | none | false | false | false | Boolean marker requiring a separate backend-transition decision before real runtime backend integration is allowed. |
+| required_gpu_validation_contract_decision | governance | none | false | false | false | Configured GPU-validation contract decision required by the backend-transition guard. |
+| required_next_allowed_construction | governance | none | false | false | false | Configured next-construction value required before backend-transition review can proceed. |
+| NextAllowedConstructionAfterBackendTransitionGuard | governance | none | false | false | false | Next construction recommendation emitted by the backend-transition guard. |
+| backend_transition_guard_digest | trace | none | false | false | false | Digest of the backend-transition guard payload excluding the digest field itself. |
+| backend_transition_guard_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling backend-transition guard artifact. |
+| gpu_validation_contract_payload_digest | trace | none | false | false | false | Digest of the complete GPU-validation contract payload consumed by the backend-transition guard. |

@@ -71,3 +71,26 @@ def test_trajectory_aware_sampling_gpu_validation_contract_keeps_backends_disabl
     assert config["real_watermark_integration_allowed_in_contract_builder"] is False
     assert "trajectory_aware_sampling_runtime" in config["next_runtime_capabilities_requiring_real_gpu_validation"]
     assert "real_dit_generation" in config["forbidden_runtime_capabilities_until_backend_transition"]
+
+
+def test_trajectory_aware_sampling_backend_transition_guard_requires_decision() -> None:
+    """验证后端切换前守卫只能要求显式决策, 不能提前打开真实后端。"""
+    config = json.loads((ROOT / "configs" / "protocol" / "trajectory_aware_sampling_backend_transition_guard.json").read_text(encoding="utf-8"))
+
+    assert config["project_stage"] == "trajectory_aware_sampling_probe"
+    assert config["construction_phase"] == "trajectory_aware_sampling_probe"
+    assert config["target_construction_phase"] == "full_paper_protocol"
+    assert config["runtime_mode"] == "backend_transition_guard_only"
+    assert (
+        config["required_gpu_validation_contract_decision"]
+        == "READY_FOR_REAL_GPU_RUNTIME_VALIDATION"
+    )
+    assert config["required_next_allowed_construction"] == "real_gpu_runtime_validation"
+    assert config["backend_transition_decision_required"] is True
+    assert config["runtime_backend_connection_allowed"] is False
+    assert config["real_generation_allowed"] is False
+    assert config["real_watermark_integration_allowed"] is False
+    assert (
+        config["outputs"]["backend_transition_guard_path"]
+        == "artifacts/trajectory_aware_sampling_backend_transition_guard.json"
+    )

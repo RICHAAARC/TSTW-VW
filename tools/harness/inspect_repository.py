@@ -93,6 +93,9 @@ TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS = {
     "trajectory_aware_sampling_gpu_validation_contract_config": "configs/protocol/trajectory_aware_sampling_gpu_validation_contract.json",
     "trajectory_aware_sampling_gpu_validation_contract_module": "experiments/trajectory_aware_sampling_probe/gpu_validation_contract.py",
     "trajectory_aware_sampling_gpu_validation_contract_test": "tests/functional/test_trajectory_aware_sampling_gpu_validation_contract.py",
+    "trajectory_aware_sampling_backend_transition_guard_config": "configs/protocol/trajectory_aware_sampling_backend_transition_guard.json",
+    "trajectory_aware_sampling_backend_transition_guard_module": "experiments/trajectory_aware_sampling_probe/backend_transition_guard.py",
+    "trajectory_aware_sampling_backend_transition_guard_test": "tests/functional/test_trajectory_aware_sampling_backend_transition_guard.py",
 }
 
 

@@ -165,6 +165,22 @@ def read_gpu_validation_contract(run_root: str | Path) -> dict[str, Any]:
     return json.loads(contract_path.read_text(encoding="utf-8"))
 
 
+def read_backend_transition_guard(run_root: str | Path) -> dict[str, Any]:
+    """功能: 读取 runner 生成的后端切换前治理守卫。
+
+    该 helper 只负责读取已落盘 artifact, 便于 notebook 在最终摘要中明确提示:
+    下一步不是直接接入真实后端, 而是需要单独的 backend-transition 决策。
+    """
+    guard_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_backend_transition_guard.json"
+    )
+    if not guard_path.exists():
+        raise FileNotFoundError(guard_path)
+    return json.loads(guard_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

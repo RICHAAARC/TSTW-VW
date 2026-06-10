@@ -77,6 +77,7 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "trajectory_aware_sampling_probe_workflow" in notebook_text
     assert "sampling_workflow.run_sampling_scaffold_cli(" in notebook_text
     assert "sampling_workflow.read_gpu_validation_contract(" in notebook_text
+    assert "sampling_workflow.read_backend_transition_guard(" in notebook_text
     assert "sampling_workflow.package_sampling_probe_run(" in notebook_text
     assert "sampling_workflow.find_latest_trajectory_probe_root(" in notebook_text
     assert "sampling_workflow.extract_trajectory_probe_package(" in notebook_text
@@ -95,5 +96,9 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "sampling_policy_manifest.json" in workflow_text
     assert "trajectory_aware_sampling_gpu_validation_contract.json" in notebook_text
     assert "trajectory_aware_sampling_gpu_validation_contract.json" in workflow_text
+    assert "trajectory_aware_sampling_backend_transition_guard.json" in notebook_text
+    assert "trajectory_aware_sampling_backend_transition_guard.json" in workflow_text
     assert "TrajectoryAwareSamplingGpuValidationContractDecision" in notebook_text
     assert "NextAllowedConstructionAfterGpuValidationContract" in notebook_text
+    assert "TrajectoryAwareSamplingBackendTransitionGuardDecision" in notebook_text
+    assert "NextAllowedConstructionAfterBackendTransitionGuard" in notebook_text
