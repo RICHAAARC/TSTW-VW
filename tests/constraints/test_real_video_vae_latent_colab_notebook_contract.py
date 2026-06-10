@@ -229,10 +229,13 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "probe_workflow.package_probe_family_results" in notebook_text
     assert "probe_workflow.materialize_probe_family_results_to_drive" in notebook_text
     assert "FAMILY_ID_TEMPLATE" in notebook_text
+    assert "RUN_ID_TEMPLATE" in notebook_text
+    assert "TSTW_RUN_ID_TEMPLATE" in notebook_text
     assert (
         "real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit"
         in notebook_text
     )
+    assert "real_video_vae_latent_probe_formal_utc_time_short_commit" in notebook_text
     assert _legacy_family_template() not in notebook_text
     assert (
         "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
@@ -247,6 +250,10 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
         "LOCAL_FAMILY_ROOT = LOCAL_RUNTIME_ROOT / 'families' / WORKFLOW_KEY / RUN_ID"
         in notebook_text
     )
+    assert "RUN_ID_BASE = RUN_ROOT.name" in notebook_text
+    assert "RUN_ID = RUN_ROOT.name" not in notebook_text
+    assert "RUN_TIMESTAMP_UTC = os.environ.get('TSTW_RUN_TIMESTAMP_UTC'" in notebook_text
+    assert "utc_timestamp=RUN_TIMESTAMP_UTC" in notebook_text
     assert "FAMILY_ROOT = LOCAL_FAMILY_ROOT" in notebook_text
     assert "FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / 'families' / FAMILY_ID" not in notebook_text
     assert "PROCESSED_DATASET_MANIFEST" in notebook_text

@@ -117,7 +117,7 @@ Google Drive 中的数据组织应遵守 Notebook 治理文档中的分层：
 ```text
 Raw Dataset：/content/drive/MyDrive/Datasets/
 Processed Dataset：/content/drive/MyDrive/TSTW/datasets/processed/<PROCESSED_DATASET_KEY>/
-Family Result：/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/
+Family Result：/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/
 Session Model：Colab 本地会话缓存，不保存到 Google Drive 作为正式模型仓库。
 ```
 
@@ -991,13 +991,13 @@ formal records、tables、figures、reports 均由正式 builder 生成，不依
 For `real_video_vae_latent_probe`, the governed Google Drive result layout is:
 
 ```text
-/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/
+/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/
 ```
 
 The legacy generic layout below is forbidden for this stage-two notebook workflow:
 
 ```text
-/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/
+/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/
 ```
 
 `FAMILY_ID` and `PROCESSED_DATASET_KEY` values used by governed notebooks must use single-underscore separators as separators. The following style is valid:

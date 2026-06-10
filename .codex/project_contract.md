@@ -137,6 +137,13 @@
 ## Stage-Two Notebook Result Naming And Drive Materialization
 
 - The governed stage-two notebooks must use single-underscore result identifiers for `FAMILY_ID` templates and `PROCESSED_DATASET_KEY` values. Double-underscore separator forms are forbidden for notebook result identities. Valid examples include `real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit` and `real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001`.
-- `run_real_video_vae_latent_probe.ipynb` must write its primary run outputs and family package into the Colab session-local runtime first, then materialize the completed family result into `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/` only after the runner, checker, mechanism audit, and packaging steps succeed.
+- `run_real_video_vae_latent_probe.ipynb` must write its primary run outputs and family package into the Colab session-local runtime first, then materialize the completed family result into `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/` only after the runner, checker, mechanism audit, and packaging steps succeed.
 - Notebook workspace preparation must not create an empty Google Drive family result directory before the formal run has produced packageable outputs.
 
+
+
+### 2026-06-11 Stage-Two Run Directory Naming Update
+
+- Stage-two real-video notebook Drive materialization must use `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/`.
+- `RUN_ID` for Drive and local family result directories must be materialized from `TSTW_RUN_ID_TEMPLATE` or the default `<base_run_id>_utc_time_short_commit`, using the same UTC timestamp and short commit as the formal family identity.
+- The fixed session `RUN_ROOT` may remain `/content/TSTW_runtime/runs/real_video_vae_latent_probe_formal`; only the family result directory identity receives the timestamp and commit suffix.

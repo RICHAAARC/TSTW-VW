@@ -76,11 +76,11 @@ def test_stage_two_notebook_result_layout_is_documented() -> None:
         assert "__".join(["real_video_vae_latent_probe", "davis2017"]) not in payload
 
     assert (
-        "/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/"
+        "/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/"
         in text
     )
     assert (
-        "/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/"
+        "/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/"
         in notebook_text
     )
     assert "LOCAL_FAMILY_ROOT" in notebook_text
@@ -168,7 +168,7 @@ def test_notebook_entrypoint_skill_mentions_notebook_utils() -> None:
     assert "build_processed_real_video_dataset.ipynb" in text
     assert "run_real_video_vae_latent_probe.ipynb" in text
     assert "single-underscore separators" in text
-    assert "/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/" in text
+    assert "/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/" in text
     assert "LOCAL_FAMILY_ROOT" in text
     assert "DRIVE_FAMILY_ROOT" in text
 
