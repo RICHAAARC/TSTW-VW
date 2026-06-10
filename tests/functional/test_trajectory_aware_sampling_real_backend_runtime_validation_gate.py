@@ -46,25 +46,25 @@ def _adapter_scaffold() -> dict[str, object]:
         "adapter_schema_count": 4,
         "adapter_schema_descriptors": [
             {
-                "schema_kind": "adapter_config_schema",
+                "schema_kind": "backend_adapter_config_schema",
                 "runtime_backend_connection_allowed": False,
                 "real_generation_allowed": False,
                 "real_watermark_integration_allowed": False,
             },
             {
-                "schema_kind": "request_mapping_schema",
+                "schema_kind": "backend_request_translation_schema",
                 "runtime_backend_connection_allowed": False,
                 "real_generation_allowed": False,
                 "real_watermark_integration_allowed": False,
             },
             {
-                "schema_kind": "result_normalization_schema",
+                "schema_kind": "backend_result_normalization_schema",
                 "runtime_backend_connection_allowed": False,
                 "real_generation_allowed": False,
                 "real_watermark_integration_allowed": False,
             },
             {
-                "schema_kind": "runtime_failure_manifest_schema",
+                "schema_kind": "backend_failure_manifest_schema",
                 "runtime_backend_connection_allowed": False,
                 "real_generation_allowed": False,
                 "real_watermark_integration_allowed": False,

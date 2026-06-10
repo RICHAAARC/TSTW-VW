@@ -9,10 +9,10 @@
   "real_generation_allowed_after_runtime_validation": false,
   "real_watermark_integration_allowed_after_runtime_validation": false,
   "required_adapter_schema_kinds": [
-    "adapter_config_schema",
-    "request_mapping_schema",
-    "result_normalization_schema",
-    "runtime_failure_manifest_schema"
+    "backend_adapter_config_schema",
+    "backend_request_translation_schema",
+    "backend_result_normalization_schema",
+    "backend_failure_manifest_schema"
   ],
   "required_backend_adapter_scaffold_decision": "READY_FOR_BACKEND_CONNECTION_CONTRACT",
   "required_backend_connection_contract_decision": "READY_FOR_REAL_BACKEND_CONNECTION_SMOKE",
