@@ -72,19 +72,20 @@ def test_stage_two_notebook_result_layout_is_documented() -> None:
         assert "single-underscore" in payload
         assert "real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit" in payload
         assert "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001" in payload
-        assert "real_video_vae_latent_probe__formal__" in payload
-        assert "real_video_vae_latent_probe__davis2017" in payload
+        assert "__".join(["real_video_vae_latent_probe", "formal", ""]) not in payload
+        assert "__".join(["real_video_vae_latent_probe", "davis2017"]) not in payload
 
     assert (
-        "/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<FAMILY_ID>/"
+        "/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/"
         in text
     )
     assert (
-        "/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<FAMILY_ID>/"
+        "/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/"
         in notebook_text
     )
     assert "LOCAL_FAMILY_ROOT" in notebook_text
     assert "DRIVE_FAMILY_ROOT" in notebook_text
+    assert "TSTW_FAMILY_RESULTS_ROOT = f\"{TSTW_ROOT}/results/<WORKFLOW_KEY>\"" in notebook_text
     assert "session-local" in project_contract
     assert "must not create an empty Google Drive family result directory" in project_contract
 
@@ -167,7 +168,7 @@ def test_notebook_entrypoint_skill_mentions_notebook_utils() -> None:
     assert "build_processed_real_video_dataset.ipynb" in text
     assert "run_real_video_vae_latent_probe.ipynb" in text
     assert "single-underscore separators" in text
-    assert "/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<FAMILY_ID>/" in text
+    assert "/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/" in text
     assert "LOCAL_FAMILY_ROOT" in text
     assert "DRIVE_FAMILY_ROOT" in text
 

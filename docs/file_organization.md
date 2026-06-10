@@ -117,7 +117,7 @@ Google Drive 中的数据组织应遵守 Notebook 治理文档中的分层：
 ```text
 Raw Dataset：/content/drive/MyDrive/Datasets/
 Processed Dataset：/content/drive/MyDrive/TSTW/datasets/processed/<PROCESSED_DATASET_KEY>/
-Family Result：/content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/
+Family Result：/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/
 Session Model：Colab 本地会话缓存，不保存到 Google Drive 作为正式模型仓库。
 ```
 
@@ -991,13 +991,13 @@ formal records、tables、figures、reports 均由正式 builder 生成，不依
 For `real_video_vae_latent_probe`, the governed Google Drive result layout is:
 
 ```text
-/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<FAMILY_ID>/
+/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/
 ```
 
 The legacy generic layout below is forbidden for this stage-two notebook workflow:
 
 ```text
-/content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/
+/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/
 ```
 
 `FAMILY_ID` and `PROCESSED_DATASET_KEY` values used by governed notebooks must use single-underscore separators as separators. The following style is valid:
@@ -1007,12 +1007,7 @@ real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit
 real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001
 ```
 
-The following double-underscore style is forbidden for notebook result identities:
-
-```text
-real_video_vae_latent_probe__formal__davis2017_trainval480p__utc_time__short_commit
-real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001
-```
+Double-underscore separators are forbidden for notebook result identities; governed result identities must use the single-underscore style shown above.
 
 The run notebook must not create the Google Drive family result directory during workspace preparation. It must first write runner outputs, checker outputs, mechanism summaries, package archives, and notebook final summaries into the Colab session-local family root, then copy the completed family result into the Google Drive result layout above. This prevents failed formal runs from leaving empty family result folders on Google Drive.
 

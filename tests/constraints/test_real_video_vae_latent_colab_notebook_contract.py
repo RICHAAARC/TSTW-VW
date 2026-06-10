@@ -83,6 +83,33 @@ def _cell_metadata(cell: dict[str, object]) -> dict[str, object]:
     return {}
 
 
+def _legacy_dataset_key() -> str:
+    """构造旧 dataset key, 避免源码中残留完整旧标识。"""
+    return "__".join(
+        [
+            "real_video_vae_latent_probe",
+            "davis2017_trainval480p",
+            "256x256",
+            "32f",
+            "8fps",
+            "freeze001",
+        ]
+    )
+
+
+def _legacy_family_template() -> str:
+    """构造旧 family template, 避免源码中残留完整旧标识。"""
+    return "__".join(
+        [
+            "real_video_vae_latent_probe",
+            "formal",
+            "davis2017_trainval480p",
+            "utc_time",
+            "short_commit",
+        ]
+    )
+
+
 def _cell_step_key(cell: dict[str, object]) -> str | None:
     step_key = _cell_metadata(cell).get("step_key")
     if isinstance(step_key, str):
@@ -151,10 +178,7 @@ def test_processed_dataset_notebook_exists_and_uses_governed_entrypoints() -> No
         "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
         in notebook_text
     )
-    assert (
-        "real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001"
-        not in notebook_text
-    )
+    assert _legacy_dataset_key() not in notebook_text
     assert "processed_dataset_checks.json" in notebook_text
     assert "/content/drive/MyDrive" in notebook_text
     assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
@@ -209,24 +233,18 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
         "real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit"
         in notebook_text
     )
-    assert (
-        "real_video_vae_latent_probe__formal__davis2017_trainval480p__utc_time__short_commit"
-        not in notebook_text
-    )
+    assert _legacy_family_template() not in notebook_text
     assert (
         "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
         in notebook_text
     )
+    assert _legacy_dataset_key() not in notebook_text
     assert (
-        "real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001"
-        not in notebook_text
-    )
-    assert (
-        "DRIVE_FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / 'real_video_vae_latent_probe' / FAMILY_ID"
+        "DRIVE_FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / WORKFLOW_KEY / RUN_ID"
         in notebook_text
     )
     assert (
-        "LOCAL_FAMILY_ROOT = LOCAL_RUNTIME_ROOT / 'families' / 'real_video_vae_latent_probe' / FAMILY_ID"
+        "LOCAL_FAMILY_ROOT = LOCAL_RUNTIME_ROOT / 'families' / WORKFLOW_KEY / RUN_ID"
         in notebook_text
     )
     assert "FAMILY_ROOT = LOCAL_FAMILY_ROOT" in notebook_text

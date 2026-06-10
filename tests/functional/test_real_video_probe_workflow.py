@@ -410,9 +410,9 @@ def test_materialize_probe_family_results_to_drive_copies_after_local_package(
     tmp_path: Path,
 ) -> None:
     """验证阶段 2 notebook 只在本地结果包存在后才创建 Drive family 目录。"""
-    local_family_root = tmp_path / "runtime" / "families" / "real_video_vae_latent_probe" / "family_a"
+    local_family_root = tmp_path / "runtime" / "families" / "workflow_a" / "run_a"
     drive_root = tmp_path / "drive" / "MyDrive"
-    drive_family_root = drive_root / "TSTW" / "results" / "real_video_vae_latent_probe" / "family_a"
+    drive_family_root = drive_root / "TSTW" / "results" / "workflow_a" / "run_a"
     local_package_path = local_family_root / "packages" / "run_a.tar.zst"
     local_summary_path = local_family_root / "family_summary.json"
     local_package_path.parent.mkdir(parents=True, exist_ok=True)
