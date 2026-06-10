@@ -351,3 +351,28 @@ def test_trajectory_aware_sampling_real_backend_connection_smoke_handoff_is_exte
         config["outputs"]["real_backend_connection_smoke_handoff_path"]
         == "artifacts/trajectory_aware_sampling_real_backend_connection_smoke_handoff.json"
     )
+
+
+def test_trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate_validates_external_results_only() -> None:
+    """验证真实 GPU smoke result gate 只校验外部结果, 本地仍不连接后端。"""
+    config = json.loads((ROOT / "configs" / "protocol" / "trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json").read_text(encoding="utf-8"))
+
+    assert config["project_stage"] == "trajectory_aware_sampling_probe"
+    assert config["construction_phase"] == "trajectory_aware_sampling_probe"
+    assert config["target_construction_phase"] == "full_paper_protocol"
+    assert config["runtime_mode"] == "external_real_gpu_smoke_result_gate_only"
+    assert config["required_handoff_decision"] == "READY_FOR_EXTERNAL_REAL_GPU_SMOKE_RUN"
+    assert (
+        config["required_next_external_execution_after_handoff"]
+        == "real_gpu_backend_connection_smoke"
+    )
+    assert config["runtime_backend_connection_allowed_in_local_runner"] is False
+    assert config["external_real_backend_connection_expected"] is True
+    assert config["external_real_generation_allowed"] is False
+    assert config["external_real_watermark_integration_allowed"] is False
+    assert config["required_result_status_for_pass"] == "PASS"
+    assert "runtime_failure_manifest" in config["required_download_artifact_kinds"]
+    assert (
+        config["outputs"]["real_gpu_backend_connection_smoke_result_gate_path"]
+        == "artifacts/trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json"
+    )

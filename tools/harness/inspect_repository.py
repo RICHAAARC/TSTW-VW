@@ -120,6 +120,9 @@ TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS = {
     "trajectory_aware_sampling_real_backend_connection_smoke_handoff_config": "configs/protocol/trajectory_aware_sampling_real_backend_connection_smoke_handoff.json",
     "trajectory_aware_sampling_real_backend_connection_smoke_handoff_module": "experiments/trajectory_aware_sampling_probe/real_backend_connection_smoke_handoff.py",
     "trajectory_aware_sampling_real_backend_connection_smoke_handoff_test": "tests/functional/test_trajectory_aware_sampling_real_backend_connection_smoke_handoff.py",
+    "trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate_config": "configs/protocol/trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json",
+    "trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate_module": "experiments/trajectory_aware_sampling_probe/real_gpu_backend_connection_smoke_result_gate.py",
+    "trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate_test": "tests/functional/test_trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.py",
 }
 
 

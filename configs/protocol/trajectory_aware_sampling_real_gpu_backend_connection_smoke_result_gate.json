@@ -1,0 +1,25 @@
+{
+  "approved_next_construction_after_external_smoke_pass": "real_backend_runtime_validation_gate",
+  "construction_phase": "trajectory_aware_sampling_probe",
+  "external_real_backend_connection_expected": true,
+  "external_real_generation_allowed": false,
+  "external_real_watermark_integration_allowed": false,
+  "minimum_required_result_artifact_count": 5,
+  "outputs": {
+    "real_gpu_backend_connection_smoke_result_gate_path": "artifacts/trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json"
+  },
+  "project_stage": "trajectory_aware_sampling_probe",
+  "required_download_artifact_kinds": [
+    "runtime_environment_snapshot",
+    "model_identity_record",
+    "backend_dependency_resolution_record",
+    "single_request_execution_record",
+    "runtime_failure_manifest"
+  ],
+  "required_handoff_decision": "READY_FOR_EXTERNAL_REAL_GPU_SMOKE_RUN",
+  "required_next_external_execution_after_handoff": "real_gpu_backend_connection_smoke",
+  "required_result_status_for_pass": "PASS",
+  "runtime_backend_connection_allowed_in_local_runner": false,
+  "runtime_mode": "external_real_gpu_smoke_result_gate_only",
+  "target_construction_phase": "full_paper_protocol"
+}

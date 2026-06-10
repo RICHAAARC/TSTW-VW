@@ -777,3 +777,33 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | handoff_artifact_kind | trace | none | false | false | false | Kind of an artifact in the external smoke handoff. |
 | handoff_artifact_status | trace | none | false | false | false | Required status of an artifact in the external smoke handoff. |
 | handoff_artifact_digest | trace | none | false | false | false | Digest of a handoff artifact entry. |
+
+| TrajectoryAwareSamplingRealGpuBackendConnectionSmokeResultGateDecision | governance | none | false | false | false | Decision emitted by the external real GPU backend connection smoke result gate. |
+| TrajectoryAwareSamplingRealGpuBackendConnectionSmokeResultGateBlockingReasons | governance | none | false | false | false | Blocking reasons emitted by the external real GPU backend connection smoke result gate. |
+| required_handoff_decision | governance | none | false | false | false | Required upstream handoff decision before external smoke result validation. |
+| required_next_external_execution_after_handoff | governance | none | false | false | false | Required external execution declared by handoff before result validation. |
+| required_result_status_for_pass | governance | none | false | false | false | Required external result status for a result gate pass. |
+| external_real_backend_connection_expected | governance | none | false | false | false | Boolean marker indicating whether external smoke is expected to attempt backend connection. |
+| external_smoke_result_status | governance | none | false | false | false | Status reported by the external real GPU smoke execution. |
+| external_gpu_runtime_detected | governance | none | false | false | false | Boolean marker indicating whether the external smoke observed a GPU runtime. |
+| external_model_identity_recorded | governance | none | false | false | false | Boolean marker indicating whether the external smoke recorded model identity. |
+| external_backend_dependencies_resolved | governance | none | false | false | false | Boolean marker indicating whether external backend dependencies resolved. |
+| external_real_backend_connection_attempted | governance | none | false | false | false | Boolean marker indicating whether the external smoke attempted real backend connection. |
+| external_real_backend_connection_succeeded | governance | none | false | false | false | Boolean marker indicating whether the external smoke connection succeeded. |
+| external_real_generation_attempted | governance | none | false | false | false | Boolean marker indicating whether the external smoke attempted real video generation. |
+| external_real_watermark_integration_attempted | governance | none | false | false | false | Boolean marker indicating whether the external smoke attempted real watermark integration. |
+| external_real_generation_allowed | governance | none | false | false | false | Boolean marker indicating whether external smoke may attempt real generation. |
+| external_real_watermark_integration_allowed | governance | none | false | false | false | Boolean marker indicating whether external smoke may attempt real watermark integration. |
+| result_artifacts | governance | none | false | false | false | External smoke result artifact entries returned for validation. |
+| result_artifact_kind | governance | none | false | false | false | Kind of an external smoke result artifact. |
+| result_artifact_status | governance | none | false | false | false | Status of an external smoke result artifact. |
+| observed_result_artifact_count | governance | none | false | false | false | Number of external smoke result artifacts observed by the result gate. |
+| missing_required_result_artifact_kinds | governance | none | false | false | false | Required external smoke result artifact kinds missing from a result bundle. |
+| failure_manifest_recorded | governance | none | false | false | false | Boolean marker indicating whether runtime failure manifest was recorded. |
+| failure_count | governance | none | false | false | false | Failure count reported by the external runtime failure manifest. |
+| real_backend_connection_smoke_handoff_payload_digest | trace | none | false | false | false | Digest of the full smoke handoff payload consumed by the result gate. |
+| external_smoke_results_payload_digest | trace | none | false | false | false | Digest of the external smoke results consumed by the result gate. |
+| real_gpu_backend_connection_smoke_result_gate_digest | trace | none | false | false | false | Digest of the external smoke result gate payload excluding the digest field itself. |
+| real_gpu_backend_connection_smoke_result_gate_path | artifact_layout | none | false | false | false | Relative path reserved for the external real GPU backend connection smoke result gate artifact. |
+| NextAllowedConstructionAfterRealGpuBackendConnectionSmokeResultGate | governance | none | false | false | false | Next construction allowed after the external real GPU backend connection smoke result gate. |
+| approved_next_construction_after_external_smoke_pass | governance | none | false | false | false | Approved next construction after external smoke result validation passes. |
