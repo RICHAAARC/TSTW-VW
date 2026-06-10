@@ -125,3 +125,36 @@ def test_trajectory_aware_sampling_backend_transition_decision_allows_interface_
         config["outputs"]["backend_transition_decision_path"]
         == "artifacts/trajectory_aware_sampling_backend_transition_decision.json"
     )
+
+
+def test_trajectory_aware_sampling_runtime_interface_scaffold_defines_schema_only() -> None:
+    """验证 runtime interface scaffold 只定义接口 schema, 不打开真实 backend。"""
+    config = json.loads((ROOT / "configs" / "protocol" / "trajectory_aware_sampling_runtime_interface_scaffold.json").read_text(encoding="utf-8"))
+
+    assert config["project_stage"] == "trajectory_aware_sampling_probe"
+    assert config["construction_phase"] == "trajectory_aware_sampling_probe"
+    assert config["target_construction_phase"] == "full_paper_protocol"
+    assert config["runtime_mode"] == "real_gpu_runtime_interface_scaffold_only"
+    assert (
+        config["required_backend_transition_decision"]
+        == "APPROVED_FOR_RUNTIME_INTERFACE_SCAFFOLD_ONLY"
+    )
+    assert (
+        config["required_next_allowed_construction_after_decision"]
+        == "real_gpu_runtime_interface_scaffold"
+    )
+    assert config["required_selection_plan_decision"] == "PASS"
+    assert config["runtime_interface_scaffold_allowed"] is True
+    assert config["runtime_backend_connection_allowed"] is False
+    assert config["real_generation_allowed"] is False
+    assert config["real_watermark_integration_allowed"] is False
+    assert config["request_schema_kind"] == "selected_record_replay_request_schema"
+    assert config["result_manifest_schema_kind"] == "runtime_result_manifest_schema"
+    assert config["gpu_preflight_schema_kind"] == "gpu_environment_preflight_schema"
+    assert "real_video_generation" in config[
+        "forbidden_runtime_capabilities_until_backend_implementation"
+    ]
+    assert (
+        config["outputs"]["runtime_interface_scaffold_path"]
+        == "artifacts/trajectory_aware_sampling_runtime_interface_scaffold.json"
+    )

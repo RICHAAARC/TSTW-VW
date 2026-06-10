@@ -25,6 +25,9 @@ from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import 
 from experiments.trajectory_aware_sampling_probe.output_layout import (
     build_trajectory_aware_sampling_probe_output_paths,
 )
+from experiments.trajectory_aware_sampling_probe.runtime_interface_scaffold import (
+    build_trajectory_aware_sampling_runtime_interface_scaffold,
+)
 from main.core.digest import compute_file_digest, compute_object_digest
 from main.core.records import RecordWriter
 
@@ -39,6 +42,9 @@ DEFAULT_BACKEND_TRANSITION_CONFIG_RELATIVE_PATH = Path(
 )
 DEFAULT_BACKEND_TRANSITION_DECISION_CONFIG_RELATIVE_PATH = Path(
     "configs/protocol/trajectory_aware_sampling_backend_transition_decision.json"
+)
+DEFAULT_RUNTIME_INTERFACE_CONFIG_RELATIVE_PATH = Path(
+    "configs/protocol/trajectory_aware_sampling_runtime_interface_scaffold.json"
 )
 
 
@@ -58,6 +64,7 @@ class TrajectoryAwareSamplingProbeRunResult:
     gpu_validation_contract: dict[str, Any]
     backend_transition_guard: dict[str, Any]
     backend_transition_decision: dict[str, Any]
+    runtime_interface_scaffold: dict[str, Any]
     artifact_paths: dict[str, Path]
 
 
@@ -141,6 +148,12 @@ class TrajectoryAwareSamplingProbeRunner:
             backend_transition_guard,
             self._read_backend_transition_decision_config(),
         )
+        runtime_interface_scaffold = self._write_runtime_interface_scaffold(
+            output_root_path,
+            selection_plan,
+            backend_transition_decision,
+            self._read_runtime_interface_config(),
+        )
         output_paths = build_trajectory_aware_sampling_probe_output_paths(output_root_path)
         artifact_paths["sampling_handoff_manifest_path"] = (
             output_paths.sampling_handoff_manifest_path
@@ -154,6 +167,9 @@ class TrajectoryAwareSamplingProbeRunner:
         artifact_paths["backend_transition_decision_path"] = (
             output_paths.backend_transition_decision_path
         )
+        artifact_paths["runtime_interface_scaffold_path"] = (
+            output_paths.runtime_interface_scaffold_path
+        )
         return TrajectoryAwareSamplingProbeRunResult(
             run_id=output_root_path.name,
             output_root=output_root_path,
@@ -163,6 +179,7 @@ class TrajectoryAwareSamplingProbeRunner:
             gpu_validation_contract=gpu_validation_contract,
             backend_transition_guard=backend_transition_guard,
             backend_transition_decision=backend_transition_decision,
+            runtime_interface_scaffold=runtime_interface_scaffold,
             artifact_paths=artifact_paths,
         )
 
@@ -206,6 +223,10 @@ class TrajectoryAwareSamplingProbeRunner:
             self._repository_root
             / DEFAULT_BACKEND_TRANSITION_DECISION_CONFIG_RELATIVE_PATH
         )
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
+    def _read_runtime_interface_config(self) -> dict[str, Any]:
+        config_path = self._repository_root / DEFAULT_RUNTIME_INTERFACE_CONFIG_RELATIVE_PATH
         return json.loads(config_path.read_text(encoding="utf-8"))
 
     def _write_run_handoff_manifest(
@@ -328,3 +349,26 @@ class TrajectoryAwareSamplingProbeRunner:
             encoding="utf-8",
         )
         return decision_payload
+
+    def _write_runtime_interface_scaffold(
+        self,
+        output_root_path: Path,
+        selection_plan: dict[str, Any],
+        backend_transition_decision: dict[str, Any],
+        runtime_interface_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        scaffold_payload = build_trajectory_aware_sampling_runtime_interface_scaffold(
+            selection_plan,
+            backend_transition_decision,
+            runtime_interface_config,
+        )
+        scaffold_path = build_trajectory_aware_sampling_probe_output_paths(
+            output_root_path
+        ).runtime_interface_scaffold_path
+        scaffold_path.parent.mkdir(parents=True, exist_ok=True)
+        scaffold_path.write_text(
+            json.dumps(scaffold_payload, ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        return scaffold_payload

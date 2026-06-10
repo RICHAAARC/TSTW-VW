@@ -197,6 +197,22 @@ def read_backend_transition_decision(run_root: str | Path) -> dict[str, Any]:
     return json.loads(decision_path.read_text(encoding="utf-8"))
 
 
+def read_runtime_interface_scaffold(run_root: str | Path) -> dict[str, Any]:
+    """功能: 读取真实 GPU runtime 接口脚手架产物。
+
+    该 helper 只读取 repository runner 写出的接口 schema artifact。当前 artifact
+    只描述后续真实 GPU runtime 的请求和结果边界, 不代表 notebook 已连接真实后端。
+    """
+    scaffold_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_runtime_interface_scaffold.json"
+    )
+    if not scaffold_path.exists():
+        raise FileNotFoundError(scaffold_path)
+    return json.loads(scaffold_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

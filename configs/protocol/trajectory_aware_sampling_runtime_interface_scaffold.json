@@ -1,0 +1,52 @@
+{
+  "backend_protocol_shape_kind": "backend_protocol_shape",
+  "construction_phase": "trajectory_aware_sampling_probe",
+  "forbidden_runtime_capabilities_until_backend_implementation": [
+    "real_dit_generation",
+    "flow_matching_generation",
+    "real_video_generation",
+    "real_watermark_embedding",
+    "real_watermark_detection"
+  ],
+  "gpu_preflight_required_fields": [
+    "gpu_available",
+    "cuda_available",
+    "device_name",
+    "driver_version",
+    "preflight_status"
+  ],
+  "gpu_preflight_schema_kind": "gpu_environment_preflight_schema",
+  "minimum_selected_record_count": 1,
+  "outputs": {
+    "runtime_interface_scaffold_path": "artifacts/trajectory_aware_sampling_runtime_interface_scaffold.json"
+  },
+  "project_stage": "trajectory_aware_sampling_probe",
+  "real_generation_allowed": false,
+  "real_watermark_integration_allowed": false,
+  "request_required_fields": [
+    "request_id",
+    "selected_record_digest",
+    "event_id",
+    "sample_id",
+    "method_variant",
+    "attack_name",
+    "selection_policy_kind"
+  ],
+  "request_schema_kind": "selected_record_replay_request_schema",
+  "required_backend_transition_decision": "APPROVED_FOR_RUNTIME_INTERFACE_SCAFFOLD_ONLY",
+  "required_next_allowed_construction_after_decision": "real_gpu_runtime_interface_scaffold",
+  "required_selection_output_kind": "record_digest_selection_plan",
+  "required_selection_plan_decision": "PASS",
+  "result_manifest_required_fields": [
+    "request_id",
+    "runtime_status",
+    "backend_status",
+    "result_artifact_digest",
+    "runtime_error_message"
+  ],
+  "result_manifest_schema_kind": "runtime_result_manifest_schema",
+  "runtime_backend_connection_allowed": false,
+  "runtime_interface_scaffold_allowed": true,
+  "runtime_mode": "real_gpu_runtime_interface_scaffold_only",
+  "target_construction_phase": "full_paper_protocol"
+}

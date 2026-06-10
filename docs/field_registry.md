@@ -539,3 +539,22 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | backend_transition_decision_digest | trace | none | false | false | false | Digest of the backend-transition decision payload excluding the digest field itself. |
 | backend_transition_decision_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling backend-transition decision artifact. |
 | backend_transition_guard_payload_digest | trace | none | false | false | false | Digest of the complete backend-transition guard payload consumed by the explicit decision. |
+| TrajectoryAwareSamplingRuntimeInterfaceScaffoldDecision | governance | none | false | false | false | Decision emitted by the real GPU runtime interface scaffold builder. |
+| TrajectoryAwareSamplingRuntimeInterfaceScaffoldBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent runtime interface scaffolding from becoming ready. |
+| required_next_allowed_construction_after_decision | governance | none | false | false | false | Configured next-construction value required from the backend-transition decision. |
+| required_selection_plan_decision | governance | none | false | false | false | Configured selection-plan decision required before runtime interface scaffolding. |
+| request_schema_kind | governance | none | false | false | false | Runtime interface scaffold kind for selected-record replay requests. |
+| result_manifest_schema_kind | governance | none | false | false | false | Runtime interface scaffold kind for real GPU runtime result manifests. |
+| gpu_preflight_schema_kind | governance | none | false | false | false | Runtime interface scaffold kind for GPU environment preflight summaries. |
+| backend_protocol_shape_kind | governance | none | false | false | false | Runtime interface scaffold kind for backend protocol shape. |
+| request_required_fields | governance | none | false | false | false | Required field list for runtime replay request prototypes. |
+| result_manifest_required_fields | governance | none | false | false | false | Required field list for future runtime result manifests. |
+| gpu_preflight_required_fields | governance | none | false | false | false | Required field list for future GPU preflight manifests. |
+| request_prototypes | governance | none | false | false | false | Selected-record replay request prototypes built without connecting real backends. |
+| request_prototype_count | governance | none | false | false | false | Number of runtime replay request prototypes emitted by the interface scaffold. |
+| selected_record_digest | trace | none | false | false | false | Record digest copied into a runtime replay request prototype. |
+| request_digest | trace | none | false | false | false | Digest of a runtime replay request prototype. |
+| backend_transition_decision_payload_digest | trace | none | false | false | false | Digest of the complete backend-transition decision consumed by the runtime interface scaffold. |
+| runtime_interface_scaffold_digest | trace | none | false | false | false | Digest of the runtime interface scaffold payload excluding the digest field itself. |
+| runtime_interface_scaffold_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling runtime interface scaffold artifact. |
+| NextAllowedConstructionAfterRuntimeInterfaceScaffold | governance | none | false | false | false | Next construction recommendation emitted by the runtime interface scaffold. |

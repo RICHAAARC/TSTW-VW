@@ -25,6 +25,9 @@ from experiments.trajectory_aware_sampling_probe.runner import (
     TrajectoryAwareSamplingProbeRunner,
     TrajectoryAwareSamplingProbeRunResult,
 )
+from experiments.trajectory_aware_sampling_probe.runtime_interface_scaffold import (
+    build_trajectory_aware_sampling_runtime_interface_scaffold,
+)
 from experiments.trajectory_aware_sampling_probe.selection_plan_builder import (
     build_record_digest_selection_plan,
 )
@@ -33,6 +36,7 @@ __all__ = [
     "build_trajectory_aware_sampling_gpu_validation_contract",
     "build_trajectory_aware_sampling_backend_transition_guard",
     "build_trajectory_aware_sampling_backend_transition_decision",
+    "build_trajectory_aware_sampling_runtime_interface_scaffold",
     "TrajectoryAwareSamplingProbeRunner",
     "TrajectoryAwareSamplingProbeRunResult",
     "build_record_digest_selection_plan",
