@@ -117,6 +117,12 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
         ]
         == "READY_FOR_BACKEND_ADAPTER_SCAFFOLD"
     )
+    assert (
+        result.backend_adapter_scaffold[
+            "TrajectoryAwareSamplingBackendAdapterScaffoldDecision"
+        ]
+        == "READY_FOR_BACKEND_CONNECTION_CONTRACT"
+    )
     handoff_manifest_path = output_root / "artifacts" / "sampling_handoff_manifest.json"
     gpu_validation_contract_path = (
         output_root
@@ -148,6 +154,11 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
         / "artifacts"
         / "trajectory_aware_sampling_backend_integration_decision.json"
     )
+    backend_adapter_scaffold_path = (
+        output_root
+        / "artifacts"
+        / "trajectory_aware_sampling_backend_adapter_scaffold.json"
+    )
     assert handoff_manifest_path.exists()
     assert gpu_validation_contract_path.exists()
     assert backend_transition_guard_path.exists()
@@ -155,6 +166,7 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
     assert runtime_interface_scaffold_path.exists()
     assert runtime_interface_implementation_path.exists()
     assert backend_integration_decision_path.exists()
+    assert backend_adapter_scaffold_path.exists()
     handoff_manifest = json.loads(handoff_manifest_path.read_text(encoding="utf-8"))
     gpu_validation_contract = json.loads(
         gpu_validation_contract_path.read_text(encoding="utf-8")
@@ -173,6 +185,9 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
     )
     backend_integration_decision = json.loads(
         backend_integration_decision_path.read_text(encoding="utf-8")
+    )
+    backend_adapter_scaffold = json.loads(
+        backend_adapter_scaffold_path.read_text(encoding="utf-8")
     )
     assert handoff_manifest["handoff_kind"] == "trajectory_aware_sampling_scaffold"
     assert handoff_manifest["requires_real_gpu_validation"] is False
@@ -251,6 +266,21 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
     assert backend_integration_decision["backend_adapter_scaffold_allowed"] is True
     assert backend_integration_decision["runtime_backend_connection_allowed"] is False
     assert backend_integration_decision["real_generation_allowed"] is False
+    assert (
+        backend_adapter_scaffold[
+            "TrajectoryAwareSamplingBackendAdapterScaffoldDecision"
+        ]
+        == "READY_FOR_BACKEND_CONNECTION_CONTRACT"
+    )
+    assert (
+        backend_adapter_scaffold[
+            "NextAllowedConstructionAfterBackendAdapterScaffold"
+        ]
+        == "backend_connection_contract"
+    )
+    assert backend_adapter_scaffold["backend_adapter_scaffold_allowed"] is True
+    assert backend_adapter_scaffold["runtime_backend_connection_allowed"] is False
+    assert backend_adapter_scaffold["real_generation_allowed"] is False
 
 
 def test_sampling_scaffold_cli_prints_policy_manifest(
@@ -309,4 +339,9 @@ def test_sampling_scaffold_cli_prints_policy_manifest(
         output_root
         / "artifacts"
         / "trajectory_aware_sampling_backend_integration_decision.json"
+    ).exists()
+    assert (
+        output_root
+        / "artifacts"
+        / "trajectory_aware_sampling_backend_adapter_scaffold.json"
     ).exists()

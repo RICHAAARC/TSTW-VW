@@ -18,6 +18,9 @@ from experiments.trajectory_aware_sampling_probe.backend_transition_decision imp
 from experiments.trajectory_aware_sampling_probe.backend_integration_decision import (
     build_trajectory_aware_sampling_backend_integration_decision,
 )
+from experiments.trajectory_aware_sampling_probe.backend_adapter_scaffold import (
+    build_trajectory_aware_sampling_backend_adapter_scaffold,
+)
 from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
     build_trajectory_aware_sampling_gpu_validation_contract,
 )
@@ -43,6 +46,7 @@ __all__ = [
     "build_trajectory_aware_sampling_backend_transition_guard",
     "build_trajectory_aware_sampling_backend_transition_decision",
     "build_trajectory_aware_sampling_backend_integration_decision",
+    "build_trajectory_aware_sampling_backend_adapter_scaffold",
     "build_trajectory_aware_sampling_runtime_interface_implementation",
     "build_trajectory_aware_sampling_runtime_interface_scaffold",
     "TrajectoryAwareSamplingProbeRunner",

@@ -245,6 +245,23 @@ def read_backend_integration_decision(run_root: str | Path) -> dict[str, Any]:
     return json.loads(decision_path.read_text(encoding="utf-8"))
 
 
+def read_backend_adapter_scaffold(run_root: str | Path) -> dict[str, Any]:
+    """功能: 读取 backend adapter scaffold 产物。
+
+    该 helper 只读取 repository runner 生成的 schema-only scaffold artifact。它用于 notebook 展示 adapter
+    配置 schema、请求转换 schema、结果归一化 schema 和失败 manifest schema 是否已经冻结。
+    它不连接真实后端, 不生成视频, 也不执行 watermark 算法。
+    """
+    scaffold_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_backend_adapter_scaffold.json"
+    )
+    if not scaffold_path.exists():
+        raise FileNotFoundError(scaffold_path)
+    return json.loads(scaffold_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

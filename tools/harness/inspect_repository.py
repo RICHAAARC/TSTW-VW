@@ -108,6 +108,9 @@ TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS = {
     "trajectory_aware_sampling_backend_integration_decision_config": "configs/protocol/trajectory_aware_sampling_backend_integration_decision.json",
     "trajectory_aware_sampling_backend_integration_decision_module": "experiments/trajectory_aware_sampling_probe/backend_integration_decision.py",
     "trajectory_aware_sampling_backend_integration_decision_test": "tests/functional/test_trajectory_aware_sampling_backend_integration_decision.py",
+    "trajectory_aware_sampling_backend_adapter_scaffold_config": "configs/protocol/trajectory_aware_sampling_backend_adapter_scaffold.json",
+    "trajectory_aware_sampling_backend_adapter_scaffold_module": "experiments/trajectory_aware_sampling_probe/backend_adapter_scaffold.py",
+    "trajectory_aware_sampling_backend_adapter_scaffold_test": "tests/functional/test_trajectory_aware_sampling_backend_adapter_scaffold.py",
 }
 
 

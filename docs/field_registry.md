@@ -605,3 +605,39 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | backend_integration_decision_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling backend integration decision artifact. |
 
 | NextAllowedConstructionAfterBackendIntegrationDecision | governance | none | false | false | false | Next construction recommendation emitted by the backend integration decision gate. |
+
+| TrajectoryAwareSamplingBackendAdapterScaffoldDecision | governance | none | false | false | false | Decision emitted by the schema-only backend adapter scaffold builder. |
+
+| TrajectoryAwareSamplingBackendAdapterScaffoldBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent backend adapter scaffold from reaching backend connection contract readiness. |
+
+| backend_adapter_scaffold_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling backend adapter scaffold artifact. |
+
+| backend_adapter_scaffold_digest | trace | none | false | false | false | Digest of the backend adapter scaffold payload excluding the digest field itself. |
+
+| backend_integration_decision_payload_digest | trace | none | false | false | false | Digest of the full backend integration decision payload consumed by backend adapter scaffold. |
+
+| adapter_schema_count | governance | none | false | false | false | Count of backend adapter schema descriptors reserved by the scaffold. |
+
+| adapter_stub_count | governance | none | false | false | false | Count of non-connected backend adapter stubs reserved by the scaffold. |
+
+| adapter_schema_descriptors | governance | none | false | false | false | Schema descriptor list for backend adapter config, request translation, result normalization, and failure manifest. |
+
+| adapter_stubs | governance | none | false | false | false | Non-connected backend adapter stub list reserved without importing or connecting real backends. |
+
+| schema_id | governance | none | false | false | false | Stable schema descriptor identifier within backend adapter scaffold. |
+
+| schema_status | governance | none | false | false | false | Status for a reserved backend adapter schema descriptor. |
+
+| adapter_schema_digest | trace | none | false | false | false | Digest of one backend adapter schema descriptor. |
+
+| adapter_stub_id | governance | none | false | false | false | Stable non-connected adapter stub identifier. |
+
+| adapter_kind | governance | none | false | false | false | Kind of backend adapter reserved by schema-only scaffold. |
+
+| adapter_status | governance | none | false | false | false | Non-connected status for a backend adapter stub. |
+
+| adapter_stub_digest | trace | none | false | false | false | Digest of one non-connected backend adapter stub. |
+
+| NextAllowedConstructionAfterBackendAdapterScaffold | governance | none | false | false | false | Next construction recommendation emitted by the backend adapter scaffold. |
+
+| forbidden_runtime_capabilities_until_backend_connection_contract | governance | none | false | false | false | Runtime capabilities that remain blocked until a backend connection contract is separately created. |

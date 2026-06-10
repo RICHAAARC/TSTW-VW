@@ -22,6 +22,9 @@ from experiments.trajectory_aware_sampling_probe.backend_transition_decision imp
 from experiments.trajectory_aware_sampling_probe.backend_integration_decision import (
     build_trajectory_aware_sampling_backend_integration_decision,
 )
+from experiments.trajectory_aware_sampling_probe.backend_adapter_scaffold import (
+    build_trajectory_aware_sampling_backend_adapter_scaffold,
+)
 from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
     build_trajectory_aware_sampling_gpu_validation_contract,
 )
@@ -58,6 +61,9 @@ DEFAULT_RUNTIME_INTERFACE_IMPLEMENTATION_CONFIG_RELATIVE_PATH = Path(
 DEFAULT_BACKEND_INTEGRATION_DECISION_CONFIG_RELATIVE_PATH = Path(
     "configs/protocol/trajectory_aware_sampling_backend_integration_decision.json"
 )
+DEFAULT_BACKEND_ADAPTER_SCAFFOLD_CONFIG_RELATIVE_PATH = Path(
+    "configs/protocol/trajectory_aware_sampling_backend_adapter_scaffold.json"
+)
 
 
 @dataclass(frozen=True)
@@ -79,6 +85,7 @@ class TrajectoryAwareSamplingProbeRunResult:
     runtime_interface_scaffold: dict[str, Any]
     runtime_interface_implementation: dict[str, Any]
     backend_integration_decision: dict[str, Any]
+    backend_adapter_scaffold: dict[str, Any]
     artifact_paths: dict[str, Path]
 
 
@@ -180,6 +187,11 @@ class TrajectoryAwareSamplingProbeRunner:
             runtime_interface_implementation,
             self._read_backend_integration_decision_config(),
         )
+        backend_adapter_scaffold = self._write_backend_adapter_scaffold(
+            output_root_path,
+            backend_integration_decision,
+            self._read_backend_adapter_scaffold_config(),
+        )
         output_paths = build_trajectory_aware_sampling_probe_output_paths(output_root_path)
         artifact_paths["sampling_handoff_manifest_path"] = (
             output_paths.sampling_handoff_manifest_path
@@ -202,6 +214,9 @@ class TrajectoryAwareSamplingProbeRunner:
         artifact_paths["backend_integration_decision_path"] = (
             output_paths.backend_integration_decision_path
         )
+        artifact_paths["backend_adapter_scaffold_path"] = (
+            output_paths.backend_adapter_scaffold_path
+        )
         return TrajectoryAwareSamplingProbeRunResult(
             run_id=output_root_path.name,
             output_root=output_root_path,
@@ -214,6 +229,7 @@ class TrajectoryAwareSamplingProbeRunner:
             runtime_interface_scaffold=runtime_interface_scaffold,
             runtime_interface_implementation=runtime_interface_implementation,
             backend_integration_decision=backend_integration_decision,
+            backend_adapter_scaffold=backend_adapter_scaffold,
             artifact_paths=artifact_paths,
         )
 
@@ -274,6 +290,13 @@ class TrajectoryAwareSamplingProbeRunner:
         config_path = (
             self._repository_root
             / DEFAULT_BACKEND_INTEGRATION_DECISION_CONFIG_RELATIVE_PATH
+        )
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
+    def _read_backend_adapter_scaffold_config(self) -> dict[str, Any]:
+        config_path = (
+            self._repository_root
+            / DEFAULT_BACKEND_ADAPTER_SCAFFOLD_CONFIG_RELATIVE_PATH
         )
         return json.loads(config_path.read_text(encoding="utf-8"))
 
@@ -475,3 +498,29 @@ class TrajectoryAwareSamplingProbeRunner:
             encoding="utf-8",
         )
         return decision_payload
+
+    def _write_backend_adapter_scaffold(
+        self,
+        output_root_path: Path,
+        backend_integration_decision: dict[str, Any],
+        backend_adapter_scaffold_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        scaffold_payload = build_trajectory_aware_sampling_backend_adapter_scaffold(
+            backend_integration_decision,
+            backend_adapter_scaffold_config,
+        )
+        scaffold_path = build_trajectory_aware_sampling_probe_output_paths(
+            output_root_path
+        ).backend_adapter_scaffold_path
+        scaffold_path.parent.mkdir(parents=True, exist_ok=True)
+        scaffold_path.write_text(
+            json.dumps(
+                scaffold_payload,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return scaffold_payload
