@@ -149,6 +149,22 @@ def run_sampling_scaffold_cli(
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
+def read_gpu_validation_contract(run_root: str | Path) -> dict[str, Any]:
+    """鍔熻兘: 璇诲彇 runner 鐢熸垚鐨勭湡瀹?GPU 楠岃瘉鍚堝悓銆?
+
+    璇ュ嚱鏁板彧妫€鏌ュ苟璇诲彇 repository runner 宸茬粡钀藉湴鐨?contract artifact銆?
+    notebook 浣跨敤瀹冩潵鏄剧ず涓嬩竴姝ラ渶瑕佺殑 GPU 楠岃瘉杈圭晫, 涓嶇洿鎺ョ敓鎴愭寮忓崗璁骇鐗┿€?
+    """
+    contract_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_gpu_validation_contract.json"
+    )
+    if not contract_path.exists():
+        raise FileNotFoundError(contract_path)
+    return json.loads(contract_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

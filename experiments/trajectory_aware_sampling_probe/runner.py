@@ -13,6 +13,9 @@ from typing import Any
 from experiments.trajectory_aware_sampling_probe.artifact_builder import (
     build_trajectory_aware_sampling_artifacts,
 )
+from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
+    build_trajectory_aware_sampling_gpu_validation_contract,
+)
 from experiments.trajectory_aware_sampling_probe.output_layout import (
     build_trajectory_aware_sampling_probe_output_paths,
 )
@@ -21,6 +24,9 @@ from main.core.records import RecordWriter
 
 DEFAULT_SAMPLING_CONFIG_RELATIVE_PATH = Path(
     "configs/protocol/trajectory_aware_sampling_probe.json"
+)
+DEFAULT_GPU_VALIDATION_CONFIG_RELATIVE_PATH = Path(
+    "configs/protocol/trajectory_aware_sampling_gpu_validation_contract.json"
 )
 
 
@@ -37,6 +43,7 @@ class TrajectoryAwareSamplingProbeRunResult:
     readiness_decision: dict[str, Any]
     selection_plan: dict[str, Any]
     policy_manifest: dict[str, Any]
+    gpu_validation_contract: dict[str, Any]
     artifact_paths: dict[str, Path]
 
 
@@ -96,7 +103,7 @@ class TrajectoryAwareSamplingProbeRunner:
                 encoding="utf-8"
             )
         )
-        self._write_run_handoff_manifest(
+        handoff_manifest = self._write_run_handoff_manifest(
             output_root_path,
             upstream_root_path,
             sampling_config_path,
@@ -104,12 +111,26 @@ class TrajectoryAwareSamplingProbeRunner:
             selection_plan,
             policy_manifest,
         )
+        gpu_validation_contract = self._write_gpu_validation_contract(
+            output_root_path,
+            policy_manifest,
+            handoff_manifest,
+            self._read_gpu_validation_config(),
+        )
+        output_paths = build_trajectory_aware_sampling_probe_output_paths(output_root_path)
+        artifact_paths["sampling_handoff_manifest_path"] = (
+            output_paths.sampling_handoff_manifest_path
+        )
+        artifact_paths["gpu_validation_contract_path"] = (
+            output_paths.gpu_validation_contract_path
+        )
         return TrajectoryAwareSamplingProbeRunResult(
             run_id=output_root_path.name,
             output_root=output_root_path,
             readiness_decision=readiness_decision,
             selection_plan=selection_plan,
             policy_manifest=policy_manifest,
+            gpu_validation_contract=gpu_validation_contract,
             artifact_paths=artifact_paths,
         )
 
@@ -140,6 +161,10 @@ class TrajectoryAwareSamplingProbeRunner:
             return config_path
         return self._repository_root / config_path
 
+    def _read_gpu_validation_config(self) -> dict[str, Any]:
+        config_path = self._repository_root / DEFAULT_GPU_VALIDATION_CONFIG_RELATIVE_PATH
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
     def _write_run_handoff_manifest(
         self,
         output_root_path: Path,
@@ -148,7 +173,7 @@ class TrajectoryAwareSamplingProbeRunner:
         readiness_decision: dict[str, Any],
         selection_plan: dict[str, Any],
         policy_manifest: dict[str, Any],
-    ) -> None:
+    ) -> dict[str, Any]:
         """功能: 写出只读 handoff manifest, 便于后续检查输入来源。"""
         resolved_config_path = self._resolve_sampling_config_path(sampling_config_path)
         upstream_decision_path = (
@@ -194,3 +219,27 @@ class TrajectoryAwareSamplingProbeRunner:
             + "\n",
             encoding="utf-8",
         )
+        return handoff_manifest
+
+    def _write_gpu_validation_contract(
+        self,
+        output_root_path: Path,
+        policy_manifest: dict[str, Any],
+        handoff_manifest: dict[str, Any],
+        gpu_validation_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        contract_payload = build_trajectory_aware_sampling_gpu_validation_contract(
+            policy_manifest,
+            handoff_manifest,
+            gpu_validation_config,
+        )
+        contract_path = build_trajectory_aware_sampling_probe_output_paths(
+            output_root_path
+        ).gpu_validation_contract_path
+        contract_path.parent.mkdir(parents=True, exist_ok=True)
+        contract_path.write_text(
+            json.dumps(contract_payload, ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        return contract_payload

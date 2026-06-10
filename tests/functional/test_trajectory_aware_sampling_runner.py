@@ -81,14 +81,40 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
     assert result.readiness_decision["SamplingReadinessDecision"] == "PASS"
     assert result.selection_plan["SamplingSelectionPlanDecision"] == "PASS"
     assert result.policy_manifest["selected_record_count"] == 1
+    assert (
+        result.gpu_validation_contract[
+            "TrajectoryAwareSamplingGpuValidationContractDecision"
+        ]
+        == "READY_FOR_REAL_GPU_RUNTIME_VALIDATION"
+    )
     handoff_manifest_path = output_root / "artifacts" / "sampling_handoff_manifest.json"
+    gpu_validation_contract_path = (
+        output_root
+        / "artifacts"
+        / "trajectory_aware_sampling_gpu_validation_contract.json"
+    )
     assert handoff_manifest_path.exists()
+    assert gpu_validation_contract_path.exists()
     handoff_manifest = json.loads(handoff_manifest_path.read_text(encoding="utf-8"))
+    gpu_validation_contract = json.loads(
+        gpu_validation_contract_path.read_text(encoding="utf-8")
+    )
     assert handoff_manifest["handoff_kind"] == "trajectory_aware_sampling_scaffold"
     assert handoff_manifest["requires_real_gpu_validation"] is False
     assert handoff_manifest["next_step_requires_real_gpu_validation"] is True
     assert handoff_manifest["NextRequiredValidationBySampling"] == "real_gpu_validation"
     assert handoff_manifest["real_generation_allowed"] is False
+    assert (
+        gpu_validation_contract[
+            "TrajectoryAwareSamplingGpuValidationContractDecision"
+        ]
+        == "READY_FOR_REAL_GPU_RUNTIME_VALIDATION"
+    )
+    assert (
+        gpu_validation_contract["NextAllowedConstructionAfterGpuValidationContract"]
+        == "real_gpu_runtime_validation"
+    )
+    assert gpu_validation_contract["real_generation_allowed"] is False
 
 
 def test_sampling_scaffold_cli_prints_policy_manifest(
@@ -118,3 +144,8 @@ def test_sampling_scaffold_cli_prints_policy_manifest(
     assert manifest["next_step_requires_real_gpu_validation"] is True
     assert manifest["NextRequiredValidationBySampling"] == "real_gpu_validation"
     assert (output_root / "artifacts" / "sampling_selection_plan.json").exists()
+    assert (
+        output_root
+        / "artifacts"
+        / "trajectory_aware_sampling_gpu_validation_contract.json"
+    ).exists()
