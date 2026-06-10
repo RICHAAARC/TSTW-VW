@@ -3717,6 +3717,116 @@ def package_probe_family_results(
     return _json_safe(package_payload)
 
 
+def materialize_probe_family_results_to_drive(
+    *,
+    local_family_root: str | Path,
+    drive_family_root: str | Path,
+    package_payload: dict[str, Any],
+    drive_root: str | Path | None = None,
+    family_id: str | None = None,
+    workflow_key: str | None = None,
+    step_key: str | None = None,
+    run_mode: str = "formal",
+    formal_validation_summary: dict[str, Any] | None = None,
+    mechanism_summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """功能：在本地结果包生成成功后, 再把 family 结果复制到 Google Drive。
+
+    该函数避免 notebook 在正式运行前创建 Drive 结果目录。调用方应先在
+    session-local family root 中完成 runner、checker、mechanism audit 与 package,
+    然后再调用本函数执行 Drive 落盘与 registry 登记。
+    """
+    local_family_root_path = Path(local_family_root)
+    drive_family_root_path = Path(drive_family_root)
+    if not local_family_root_path.exists():
+        raise FileNotFoundError(local_family_root_path)
+
+    shutil.copytree(
+        local_family_root_path,
+        drive_family_root_path,
+        dirs_exist_ok=True,
+    )
+
+    drive_package_payload = _remap_family_result_paths(
+        package_payload,
+        local_root_text=str(local_family_root_path),
+        drive_root_text=str(drive_family_root_path),
+    )
+    drive_archive_path = drive_package_payload.get("drive_archive_path")
+    drive_package_path = drive_package_payload.get("package_path", drive_archive_path)
+    drive_zip_path = (
+        drive_package_payload.get("zip_pack", {}).get("zip_path")
+        if isinstance(drive_package_payload.get("zip_pack"), dict)
+        else None
+    )
+
+    registry_paths: dict[str, str] = {}
+    if drive_root is not None and family_id is not None:
+        registry_entry: dict[str, Any] = {
+            "family_id": family_id,
+            "workflow_key": workflow_key,
+            "step_key": step_key,
+            "run_mode": run_mode,
+            "package_format": drive_package_payload.get("package_format", "tar.zst"),
+            "archive_format": drive_package_payload.get("archive_format", "tar.zst"),
+            "archive_path": drive_archive_path,
+            "package_path": drive_package_path,
+            "zip_path": drive_zip_path,
+            "compat_pack_root": str(drive_family_root_path),
+            "formal_validation_summary": formal_validation_summary or {},
+        }
+        if mechanism_summary is not None:
+            registry_entry["stage2_mechanism_summary"] = _json_safe(mechanism_summary)
+        registry_paths = _append_registry_entries(
+            drive_root=drive_root,
+            registry_entry=registry_entry,
+        )
+
+    return _json_safe(
+        {
+            "local_family_root": str(local_family_root_path),
+            "drive_family_root": str(drive_family_root_path),
+            "drive_archive_path": drive_archive_path,
+            "drive_package_path": drive_package_path,
+            "drive_zip_path": drive_zip_path,
+            "registry_paths": registry_paths,
+            "package_payload": drive_package_payload,
+        }
+    )
+
+
+def _remap_family_result_paths(
+    value: Any,
+    *,
+    local_root_text: str,
+    drive_root_text: str,
+) -> Any:
+    """功能：把 package payload 中的本地 family 路径映射为 Drive 路径。"""
+    if isinstance(value, dict):
+        return {
+            key: _remap_family_result_paths(
+                item,
+                local_root_text=local_root_text,
+                drive_root_text=drive_root_text,
+            )
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [
+            _remap_family_result_paths(
+                item,
+                local_root_text=local_root_text,
+                drive_root_text=drive_root_text,
+            )
+            for item in value
+        ]
+    if isinstance(value, str):
+        if value.startswith(local_root_text):
+            return value.replace(local_root_text, drive_root_text, 1)
+        return value
+    return value
+
+
 def _write_stage2_frozen_baseline_handoff(
     *,
     run_root: Path,

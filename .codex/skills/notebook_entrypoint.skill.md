@@ -31,6 +31,9 @@ Applies to future `.ipynb` files, notebook execution entrypoints, `paper_workflo
 - Governed notebook entrypoints must use `snake_case` semantic names and must not append `_Colab`, `_Notebook`, `Run_`, or weak stage-number prefixes.
 - Notebook-specific or notebook-adjacent helpers may live under `paper_workflow/notebook_utils/`, but they must also use stage-free `snake_case`; reusable helpers may stay under `paper_workflow/colab_utils/`.
 - Governed notebook config and helper guidance must distinguish outer shard parallelism from in-shard worker parallelism: `shard_count` is the outer event-shard count, `shard_index` selects the current outer shard, and `worker_count` is the in-shard local worker count after shard selection.
+- Stage-two real-video notebook family identifiers and processed dataset keys must use single underscore separators; legacy double-underscore family or dataset identifiers are forbidden.
+- Stage-two real-video formal notebook outputs must use session-local `LOCAL_FAMILY_ROOT` first, then materialize successful formal packages to `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/` through repository helper code.
+- Notebook-side LPIPS evidence checks must count only non-bool numeric `watermarked_video_lpips` values as evidence.
 - While `project_stage` remains `synthetic_tubelet_sync_probe`, only `paper_workflow/build_processed_real_video_dataset.ipynb`, `paper_workflow/run_real_video_vae_latent_probe.ipynb`, and `paper_workflow/run_trajectory_statistic_probe.ipynb` may exist as governed notebook entrypoints; the trajectory notebook is limited to Colab GPU validation through repository helper / CLI code.
 
 ## Allowed Changes

@@ -53,7 +53,8 @@ def test_real_video_tar_zst_packager_notebook_contract() -> None:
         in workflow_text
     )
     assert "package_real_video_vae_latent_tar_zst(" in workflow_text
-    assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
+    assert "local_archive_path = package_payload['drive_archive_path']" in notebook_text
+    assert "probe_workflow.materialize_probe_family_results_to_drive(" in notebook_text
     assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
     assert '"drive_archive_path": str(tar_pack["archive_path"])' in workflow_text or "'drive_archive_path': str(tar_pack[\"archive_path\"])" in workflow_text
     assert "runtime_profile" in zip_packager_text

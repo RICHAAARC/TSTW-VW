@@ -159,3 +159,11 @@
 4. Do not check in formal experiment outputs under `outputs/`; protocol skeleton runtime tests may use temporary output roots or ephemeral `outputs/runs` paths.
 5. Do not bypass harness audits or pytest gates.
 6. Do not support formal claim from external controlled single real generation handoff outputs until a later explicit claim-support gate passes.
+
+
+### 2026-06-11 Main Notebook Naming And LPIPS Evidence Patch
+
+- Stage-two real-video notebook result landing must use `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/`.
+- `run_real_video_vae_latent_probe.ipynb` must write formal family outputs to session-local `LOCAL_FAMILY_ROOT` first, then copy the completed package to `DRIVE_FAMILY_ROOT`; it must not create the Drive family directory before formal packaging succeeds.
+- Stage-two notebook family identifiers and processed dataset keys must use single underscore separators. Legacy double-underscore dataset or family identifiers are forbidden.
+- Notebook-side LPIPS evidence accounting must treat only non-bool numeric `watermarked_video_lpips` values as valid LPIPS evidence.

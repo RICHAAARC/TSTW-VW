@@ -104,6 +104,32 @@ def _assert_step_key_order(cells: list[object], required_step_keys: list[str]) -
     )
 
 
+
+
+def _legacy_dataset_key() -> str:
+    return "__".join(
+        [
+            "real_video_vae_latent_probe",
+            "davis2017_trainval480p",
+            "256x256",
+            "32f",
+            "8fps",
+            "freeze001",
+        ]
+    )
+
+
+def _legacy_family_template() -> str:
+    return "__".join(
+        [
+            "real_video_vae_latent_probe",
+            "formal",
+            "davis2017_trainval480p",
+            "utc_time",
+            "short_commit",
+        ]
+    )
+
 def _all_indices(text: str, substring: str) -> list[int]:
     indices: list[int] = []
     start = 0
@@ -151,10 +177,7 @@ def test_processed_dataset_notebook_exists_and_uses_governed_entrypoints() -> No
         "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
         in notebook_text
     )
-    assert (
-        "real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001"
-        not in notebook_text
-    )
+    assert _legacy_dataset_key() not in notebook_text
     assert "processed_dataset_checks.json" in notebook_text
     assert "/content/drive/MyDrive" in notebook_text
     assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
@@ -208,21 +231,18 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
         "real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit"
         in notebook_text
     )
-    assert "real_video_vae_latent_probe__formal__davis2017_trainval480p__utc_time__short_commit" not in notebook_text
-    assert (
-        "FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / 'real_video_vae_latent_probe' / FAMILY_ID"
-        in notebook_text
-    )
+    assert _legacy_family_template() not in notebook_text
+    assert "DRIVE_FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / WORKFLOW_KEY / RUN_ID" in notebook_text
+    assert "LOCAL_FAMILY_ROOT = LOCAL_RUNTIME_ROOT / 'families' / WORKFLOW_KEY / RUN_ID" in notebook_text
+    assert "FAMILY_ROOT = LOCAL_FAMILY_ROOT" in notebook_text
+    assert "FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / 'real_video_vae_latent_probe' / FAMILY_ID" not in notebook_text
     assert "FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / 'families' / FAMILY_ID" not in notebook_text
     assert "PROCESSED_DATASET_MANIFEST" in notebook_text
     assert (
         "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
         in notebook_text
     )
-    assert (
-        "real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001"
-        not in notebook_text
-    )
+    assert _legacy_dataset_key() not in notebook_text
     assert "dataset_manifest_path=PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "dataset_manifest=PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "attack_matrix=ATTACK_MATRIX_PATH" in notebook_text
@@ -347,9 +367,14 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "shard_index=SHARD_INDEX" in notebook_text
     assert "worker_count=WORKER_COUNT" in notebook_text
     assert "lpips_evidence_summary" in notebook_text
+    assert "def _is_non_bool_number(value):" in notebook_text
+    assert "lpips_score = quality_metrics.get('watermarked_video_lpips')" in notebook_text
+    assert "if _is_non_bool_number(lpips_score):" in notebook_text
+    assert "quality_metrics.get('watermarked_video_lpips') is not None" not in notebook_text
     assert "tubelet_anchor_forensics_summary" in notebook_text
     assert "non_formal_audit_bundle_summary" in notebook_text
-    assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
+    assert "local_archive_path = package_payload['drive_archive_path']" in notebook_text
+    assert "probe_workflow.materialize_probe_family_results_to_drive(" in notebook_text
     assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
     summarize_run_timing_call = "run_timing_summary = run_timing_workflow.summarize_run_timing("
     summarize_run_timing_indices = _all_indices(notebook_text, summarize_run_timing_call)

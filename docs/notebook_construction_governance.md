@@ -39,7 +39,7 @@
 Raw Dataset：官方原始数据仓库，长期保存在 /content/drive/MyDrive/Datasets/，不属于某一次 FAMILY_ID 结果包。
 Processed Dataset：正式实验输入，长期保存在 /content/drive/MyDrive/TSTW/datasets/processed/<PROCESSED_DATASET_KEY>/，不属于某一次 run 的临时结果。
 Session Model：所有模型相关文件均在 Colab 本地会话中下载、缓存与加载，不保存到 Google Drive。
-Family Result：除 raw dataset、processed dataset 与长期 registry 外，所有实验记录、日志、模型会话 manifest、配置快照、workflow 结果与最终结果均必须保存到受治理结果根；当前允许通用 `/content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/` 与 workflow-specific `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/` 两类布局。
+Family Result：除 raw dataset、processed dataset 与长期 registry 外，所有实验记录、日志、模型会话 manifest、配置快照、workflow 结果与最终结果均必须保存到受治理结果根；阶段 2 正式 notebook 必须先写 session-local family root, formal 成功打包后再落盘到 `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/`。
 Notebook Session：每个 notebook 都视为独立 Colab 会话，不能依赖上一个 notebook 的进程内状态、内存对象、临时缓存、/tmp 文件或 /content 中未归档目录。
 Artifact Handoff：跨 notebook 传递的事实只能来自已落盘、已校验、已登记的 family artifact。
 ```
@@ -59,7 +59,7 @@ Artifact Handoff：跨 notebook 传递的事实只能来自已落盘、已校验
 推荐命名格式：
 
 ```text
-<FAMILY_SCOPE>__<PROTOCOL_KEY>__<DATASET_KEY>__<UTC_TIME>__<SHORT_COMMIT>
+<FAMILY_SCOPE>_<PROTOCOL_KEY>_<DATASET_KEY>_<UTC_TIME>_<SHORT_COMMIT>
 ```
 
 其中，`FAMILY_SCOPE` 表示本次结果包的研究或工程范围；`PROTOCOL_KEY` 表示实验协议或运行模式；`DATASET_KEY` 表示输入数据集身份；`UTC_TIME` 表示启动时间；`SHORT_COMMIT` 表示仓库短提交号。
@@ -104,13 +104,13 @@ sanity_check
 推荐格式：
 
 ```text
-<dataset_source>__<task_scope>__<resolution>__<frames>__<fps>__<version>
+<dataset_source>_<task_scope>_<resolution>_<frames>_<fps>_<version>
 ```
 
 示例格式：
 
 ```text
-<dataset>__<workflow_scope>__256x256__32f__8fps__freeze001
+<dataset>_<workflow_scope>_256x256_32f_8fps_freeze001
 ```
 
 ### （四）`STEP_KEY`
@@ -272,7 +272,7 @@ Google Drive 目录固定为：
 ```text
 1. /content/drive/MyDrive/Datasets/ 只保存 raw dataset。
 2. /content/drive/MyDrive/TSTW/datasets/processed/<PROCESSED_DATASET_KEY>/ 保存正式 processed dataset。
-3. /content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/ 或 /content/drive/MyDrive/TSTW/results/families/<FAMILY_ID>/ 保存某一次实验、测试或 workflow family 的所有结果包；当前阶段 2 使用 /content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<RUN_ID>/。
+3. /content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>/ 保存某一次实验、测试或 workflow family 的所有结果包；当前阶段 2 使用 /content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<RUN_ID>/, 且必须在本地结果包生成成功后再复制到 Drive。
 4. 不使用 /content/drive/MyDrive/Models/ 作为正式模型来源。
 5. 若历史上已经存在 /content/drive/MyDrive/Models/，后续 notebook 不得读取它作为正式模型来源。
 6. 除 raw dataset、processed dataset、registry 与 family result 外，不应在 Drive 根目录下新增项目相关散落目录。

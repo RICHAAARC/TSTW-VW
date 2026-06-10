@@ -28,6 +28,7 @@ import paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow as wor
 
 from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
     export_probe_stage2_calibration_family_snapshot,
+    materialize_probe_family_results_to_drive,
     merge_probe_method_variant_split_outputs,
     package_probe_non_formal_audit_bundle,
     prepare_probe_runtime_workspace,
@@ -2185,3 +2186,56 @@ def test_merge_probe_method_variant_split_outputs_combines_records_and_runtime_c
         "tubelet_only_lt01",
     ]
     assert len(summary["method_variant_split_schedule"]) == 2
+
+
+@pytest.mark.unit
+def test_materialize_probe_family_results_to_drive_copies_after_local_package(
+    tmp_path: Path,
+) -> None:
+    """验证正式 family 结果先在本地生成, 再复制到 Drive 并登记 registry。"""
+    local_family_root = tmp_path / "runtime" / "families" / "real_video_vae_latent_probe" / "run_a"
+    drive_root = tmp_path / "drive" / "MyDrive"
+    drive_family_root = drive_root / "TSTW" / "results" / "real_video_vae_latent_probe" / "run_a"
+    local_package_path = local_family_root / "packages" / "run_a.tar.zst"
+    local_zip_path = local_family_root / "packages" / "run_a.zip"
+    local_package_path.parent.mkdir(parents=True, exist_ok=True)
+    local_package_path.write_bytes(b"tar-zst-placeholder")
+    local_zip_path.write_bytes(b"zip-placeholder")
+    (local_family_root / "notebook_final_summary.json").write_text(
+        json.dumps({"status": "local_complete"}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    package_payload = {
+        "drive_archive_path": str(local_package_path),
+        "package_path": str(local_package_path),
+        "zip_pack": {"zip_path": str(local_zip_path)},
+        "package_format": "tar.zst",
+        "archive_format": "tar.zst",
+        "compat_pack_root": str(local_family_root),
+    }
+
+    summary = materialize_probe_family_results_to_drive(
+        local_family_root=local_family_root,
+        drive_family_root=drive_family_root,
+        package_payload=package_payload,
+        drive_root=drive_root,
+        family_id="real_video_vae_latent_probe_formal_dataset_20260611T000000Z_abcdef0",
+        workflow_key="real_video_vae_latent_probe",
+        step_key="run_real_video_vae_latent_probe",
+        run_mode="formal",
+        formal_validation_summary={"pass": True},
+        mechanism_summary={"Stage2MechanismDecision": "PASS"},
+    )
+
+    assert (drive_family_root / "packages" / "run_a.tar.zst").exists()
+    assert summary["drive_archive_path"] == str(drive_family_root / "packages" / "run_a.tar.zst")
+    assert summary["drive_zip_path"] == str(drive_family_root / "packages" / "run_a.zip")
+    assert summary["package_payload"]["compat_pack_root"] == str(drive_family_root)
+    registry_paths = summary["registry_paths"]
+    result_registry_path = Path(registry_paths["result_registry.jsonl"])
+    family_registry_path = Path(registry_paths["family_registry.jsonl"])
+    assert result_registry_path.exists()
+    assert family_registry_path.exists()
+    registry_entry = json.loads(result_registry_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert registry_entry["archive_path"] == str(drive_family_root / "packages" / "run_a.tar.zst")
+    assert registry_entry["compat_pack_root"] == str(drive_family_root)
