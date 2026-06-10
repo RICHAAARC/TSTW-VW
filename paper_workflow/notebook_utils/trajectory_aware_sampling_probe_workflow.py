@@ -213,6 +213,22 @@ def read_runtime_interface_scaffold(run_root: str | Path) -> dict[str, Any]:
     return json.loads(scaffold_path.read_text(encoding="utf-8"))
 
 
+def read_runtime_interface_implementation(run_root: str | Path) -> dict[str, Any]:
+    """功能: 读取非后端连接版 runtime interface implementation 产物。
+
+    该 helper 只读取 repository runner 写出的 dry-run artifact, 用于 notebook 汇总接口实现层状态。
+    它不连接真实生成后端, 不生成视频, 不执行 watermark 嵌入或检测。
+    """
+    implementation_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_runtime_interface_implementation.json"
+    )
+    if not implementation_path.exists():
+        raise FileNotFoundError(implementation_path)
+    return json.loads(implementation_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

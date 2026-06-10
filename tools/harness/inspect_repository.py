@@ -102,6 +102,9 @@ TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS = {
     "trajectory_aware_sampling_runtime_interface_scaffold_config": "configs/protocol/trajectory_aware_sampling_runtime_interface_scaffold.json",
     "trajectory_aware_sampling_runtime_interface_scaffold_module": "experiments/trajectory_aware_sampling_probe/runtime_interface_scaffold.py",
     "trajectory_aware_sampling_runtime_interface_scaffold_test": "tests/functional/test_trajectory_aware_sampling_runtime_interface_scaffold.py",
+    "trajectory_aware_sampling_runtime_interface_implementation_config": "configs/protocol/trajectory_aware_sampling_runtime_interface_implementation.json",
+    "trajectory_aware_sampling_runtime_interface_implementation_module": "experiments/trajectory_aware_sampling_probe/runtime_interface_implementation.py",
+    "trajectory_aware_sampling_runtime_interface_implementation_test": "tests/functional/test_trajectory_aware_sampling_runtime_interface_implementation.py",
 }
 
 

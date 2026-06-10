@@ -558,3 +558,32 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | runtime_interface_scaffold_digest | trace | none | false | false | false | Digest of the runtime interface scaffold payload excluding the digest field itself. |
 | runtime_interface_scaffold_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling runtime interface scaffold artifact. |
 | NextAllowedConstructionAfterRuntimeInterfaceScaffold | governance | none | false | false | false | Next construction recommendation emitted by the runtime interface scaffold. |
+
+| TrajectoryAwareSamplingRuntimeInterfaceImplementationDecision | governance | none | false | false | false | Decision emitted by the non-backend runtime interface implementation builder. |
+| TrajectoryAwareSamplingRuntimeInterfaceImplementationBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent the non-backend runtime interface implementation from becoming ready. |
+| runtime_interface_implementation_allowed | governance | none | false | false | false | Boolean marker indicating whether non-backend runtime interface implementation is allowed. |
+| runtime_interface_implementation_digest | trace | none | false | false | false | Digest of the runtime interface implementation payload excluding the digest field itself. |
+| runtime_interface_implementation_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling runtime interface implementation artifact. |
+| runtime_interface_scaffold_payload_digest | trace | none | false | false | false | Digest of the full runtime interface scaffold payload consumed by the implementation builder. |
+| gpu_preflight_summary | governance | none | false | false | false | GPU environment preflight summary emitted by the non-backend runtime interface implementation. |
+| gpu_available | governance | none | false | false | false | Boolean GPU visibility field in the runtime interface implementation preflight summary. |
+| cuda_available | governance | none | false | false | false | Boolean CUDA availability field in the runtime interface implementation preflight summary. |
+| device_name | governance | none | false | false | false | GPU device name observed by preflight when available. |
+| driver_version | governance | none | false | false | false | GPU driver version observed by preflight when available. |
+| preflight_status | governance | none | false | false | false | Normalized GPU preflight status, such as `available` or `unavailable`. |
+| nvidia_smi_visible | governance | none | false | false | false | Boolean marker indicating whether `nvidia-smi` is visible to the runtime environment. |
+| python_platform | governance | none | false | false | false | Platform string recorded by runtime interface implementation preflight. |
+| cuda_visible_devices | governance | none | false | false | false | CUDA_VISIBLE_DEVICES environment value recorded by runtime interface implementation preflight. |
+| dry_run_request_count | governance | none | false | false | false | Count of dry-run requests materialized by the non-backend runtime interface implementation. |
+| dry_run_result_manifest_count | governance | none | false | false | false | Count of dry-run result manifests materialized by the non-backend runtime interface implementation. |
+| dry_run_requests | governance | none | false | false | false | Dry-run request list derived from scaffold request prototypes without connecting a backend. |
+| dry_run_result_manifests | governance | none | false | false | false | Dry-run result manifest list emitted without generating videos or watermark outputs. |
+| dry_run_only | governance | none | false | false | false | Boolean request marker indicating the request is an interface dry run only. |
+| dry_run_request_digest | trace | none | false | false | false | Digest of one dry-run runtime request. |
+| dry_run_result_manifest_digest | trace | none | false | false | false | Digest of one dry-run result manifest. |
+| dry_run_backend_status | governance | none | false | false | false | Configured backend status for non-backend dry-run result manifests. |
+| dry_run_runtime_status | governance | none | false | false | false | Configured runtime status for non-backend dry-run result manifests. |
+| result_artifact_digest | trace | none | false | false | false | Nullable result artifact digest field reserved by dry-run result manifests. |
+| runtime_error_message | governance | none | false | false | false | Nullable runtime error message field reserved by dry-run result manifests. |
+| NextAllowedConstructionAfterRuntimeInterfaceImplementation | governance | none | false | false | false | Next construction recommendation emitted by the non-backend runtime interface implementation. |
+| forbidden_runtime_capabilities_until_backend_integration_decision | governance | none | false | false | false | Runtime capabilities that remain blocked until a later backend integration decision. |

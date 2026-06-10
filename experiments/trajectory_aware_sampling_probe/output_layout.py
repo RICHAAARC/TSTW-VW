@@ -28,6 +28,7 @@ class TrajectoryAwareSamplingProbeOutputPaths(BaseRunOutputPaths):
     backend_transition_guard_path: Path
     backend_transition_decision_path: Path
     runtime_interface_scaffold_path: Path
+    runtime_interface_implementation_path: Path
     sampling_probe_report_path: Path
 
     def table_paths(self) -> list[Path]:
@@ -86,6 +87,11 @@ def build_trajectory_aware_sampling_probe_output_paths(
             output_root_path
             / "artifacts"
             / "trajectory_aware_sampling_runtime_interface_scaffold.json"
+        ),
+        runtime_interface_implementation_path=(
+            output_root_path
+            / "artifacts"
+            / "trajectory_aware_sampling_runtime_interface_implementation.json"
         ),
         sampling_probe_report_path=(
             output_root_path / "reports" / "trajectory_aware_sampling_probe_report.md"

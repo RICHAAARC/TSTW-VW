@@ -25,6 +25,9 @@ from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import 
 from experiments.trajectory_aware_sampling_probe.output_layout import (
     build_trajectory_aware_sampling_probe_output_paths,
 )
+from experiments.trajectory_aware_sampling_probe.runtime_interface_implementation import (
+    build_trajectory_aware_sampling_runtime_interface_implementation,
+)
 from experiments.trajectory_aware_sampling_probe.runtime_interface_scaffold import (
     build_trajectory_aware_sampling_runtime_interface_scaffold,
 )
@@ -46,6 +49,9 @@ DEFAULT_BACKEND_TRANSITION_DECISION_CONFIG_RELATIVE_PATH = Path(
 DEFAULT_RUNTIME_INTERFACE_CONFIG_RELATIVE_PATH = Path(
     "configs/protocol/trajectory_aware_sampling_runtime_interface_scaffold.json"
 )
+DEFAULT_RUNTIME_INTERFACE_IMPLEMENTATION_CONFIG_RELATIVE_PATH = Path(
+    "configs/protocol/trajectory_aware_sampling_runtime_interface_implementation.json"
+)
 
 
 @dataclass(frozen=True)
@@ -65,6 +71,7 @@ class TrajectoryAwareSamplingProbeRunResult:
     backend_transition_guard: dict[str, Any]
     backend_transition_decision: dict[str, Any]
     runtime_interface_scaffold: dict[str, Any]
+    runtime_interface_implementation: dict[str, Any]
     artifact_paths: dict[str, Path]
 
 
@@ -154,6 +161,13 @@ class TrajectoryAwareSamplingProbeRunner:
             backend_transition_decision,
             self._read_runtime_interface_config(),
         )
+        runtime_interface_implementation = (
+            self._write_runtime_interface_implementation(
+                output_root_path,
+                runtime_interface_scaffold,
+                self._read_runtime_interface_implementation_config(),
+            )
+        )
         output_paths = build_trajectory_aware_sampling_probe_output_paths(output_root_path)
         artifact_paths["sampling_handoff_manifest_path"] = (
             output_paths.sampling_handoff_manifest_path
@@ -170,6 +184,9 @@ class TrajectoryAwareSamplingProbeRunner:
         artifact_paths["runtime_interface_scaffold_path"] = (
             output_paths.runtime_interface_scaffold_path
         )
+        artifact_paths["runtime_interface_implementation_path"] = (
+            output_paths.runtime_interface_implementation_path
+        )
         return TrajectoryAwareSamplingProbeRunResult(
             run_id=output_root_path.name,
             output_root=output_root_path,
@@ -180,6 +197,7 @@ class TrajectoryAwareSamplingProbeRunner:
             backend_transition_guard=backend_transition_guard,
             backend_transition_decision=backend_transition_decision,
             runtime_interface_scaffold=runtime_interface_scaffold,
+            runtime_interface_implementation=runtime_interface_implementation,
             artifact_paths=artifact_paths,
         )
 
@@ -227,6 +245,13 @@ class TrajectoryAwareSamplingProbeRunner:
 
     def _read_runtime_interface_config(self) -> dict[str, Any]:
         config_path = self._repository_root / DEFAULT_RUNTIME_INTERFACE_CONFIG_RELATIVE_PATH
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
+    def _read_runtime_interface_implementation_config(self) -> dict[str, Any]:
+        config_path = (
+            self._repository_root
+            / DEFAULT_RUNTIME_INTERFACE_IMPLEMENTATION_CONFIG_RELATIVE_PATH
+        )
         return json.loads(config_path.read_text(encoding="utf-8"))
 
     def _write_run_handoff_manifest(
@@ -372,3 +397,32 @@ class TrajectoryAwareSamplingProbeRunner:
             encoding="utf-8",
         )
         return scaffold_payload
+
+    def _write_runtime_interface_implementation(
+        self,
+        output_root_path: Path,
+        runtime_interface_scaffold: dict[str, Any],
+        runtime_interface_implementation_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        implementation_payload = (
+            build_trajectory_aware_sampling_runtime_interface_implementation(
+                runtime_interface_scaffold,
+                runtime_interface_implementation_config,
+            )
+        )
+        implementation_path = build_trajectory_aware_sampling_probe_output_paths(
+            output_root_path
+        ).runtime_interface_implementation_path
+        implementation_path.parent.mkdir(parents=True, exist_ok=True)
+        implementation_path.write_text(
+            json.dumps(
+                implementation_payload,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return implementation_payload
+

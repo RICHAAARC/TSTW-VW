@@ -158,3 +158,35 @@ def test_trajectory_aware_sampling_runtime_interface_scaffold_defines_schema_onl
         config["outputs"]["runtime_interface_scaffold_path"]
         == "artifacts/trajectory_aware_sampling_runtime_interface_scaffold.json"
     )
+
+
+def test_trajectory_aware_sampling_runtime_interface_implementation_is_no_backend() -> None:
+    """验证 runtime interface implementation 只允许非后端连接版 dry-run。"""
+    config = json.loads((ROOT / "configs" / "protocol" / "trajectory_aware_sampling_runtime_interface_implementation.json").read_text(encoding="utf-8"))
+
+    assert config["project_stage"] == "trajectory_aware_sampling_probe"
+    assert config["construction_phase"] == "trajectory_aware_sampling_probe"
+    assert config["target_construction_phase"] == "full_paper_protocol"
+    assert config["runtime_mode"] == "real_gpu_runtime_interface_implementation_no_backend"
+    assert (
+        config["required_runtime_interface_scaffold_decision"]
+        == "READY_FOR_REAL_GPU_RUNTIME_INTERFACE_IMPLEMENTATION"
+    )
+    assert (
+        config["required_next_allowed_construction_after_scaffold"]
+        == "real_gpu_runtime_interface_implementation"
+    )
+    assert config["runtime_interface_implementation_allowed"] is True
+    assert config["runtime_backend_connection_allowed"] is False
+    assert config["real_generation_allowed"] is False
+    assert config["real_watermark_integration_allowed"] is False
+    assert config["approved_next_construction"] == "backend_integration_decision"
+    assert config["dry_run_backend_status"] == "not_connected_by_governance"
+    assert "real_dit_generation" in config[
+        "forbidden_runtime_capabilities_until_backend_integration_decision"
+    ]
+    assert (
+        config["outputs"]["runtime_interface_implementation_path"]
+        == "artifacts/trajectory_aware_sampling_runtime_interface_implementation.json"
+    )
+

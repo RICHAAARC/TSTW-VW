@@ -105,6 +105,12 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
         ]
         == "READY_FOR_REAL_GPU_RUNTIME_INTERFACE_IMPLEMENTATION"
     )
+    assert (
+        result.runtime_interface_implementation[
+            "TrajectoryAwareSamplingRuntimeInterfaceImplementationDecision"
+        ]
+        == "READY_FOR_BACKEND_INTEGRATION_DECISION"
+    )
     handoff_manifest_path = output_root / "artifacts" / "sampling_handoff_manifest.json"
     gpu_validation_contract_path = (
         output_root
@@ -126,11 +132,17 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
         / "artifacts"
         / "trajectory_aware_sampling_runtime_interface_scaffold.json"
     )
+    runtime_interface_implementation_path = (
+        output_root
+        / "artifacts"
+        / "trajectory_aware_sampling_runtime_interface_implementation.json"
+    )
     assert handoff_manifest_path.exists()
     assert gpu_validation_contract_path.exists()
     assert backend_transition_guard_path.exists()
     assert backend_transition_decision_path.exists()
     assert runtime_interface_scaffold_path.exists()
+    assert runtime_interface_implementation_path.exists()
     handoff_manifest = json.loads(handoff_manifest_path.read_text(encoding="utf-8"))
     gpu_validation_contract = json.loads(
         gpu_validation_contract_path.read_text(encoding="utf-8")
@@ -143,6 +155,9 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
     )
     runtime_interface_scaffold = json.loads(
         runtime_interface_scaffold_path.read_text(encoding="utf-8")
+    )
+    runtime_interface_implementation = json.loads(
+        runtime_interface_implementation_path.read_text(encoding="utf-8")
     )
     assert handoff_manifest["handoff_kind"] == "trajectory_aware_sampling_scaffold"
     assert handoff_manifest["requires_real_gpu_validation"] is False
@@ -197,6 +212,15 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
     assert runtime_interface_scaffold["request_prototype_count"] == 1
     assert runtime_interface_scaffold["runtime_backend_connection_allowed"] is False
     assert runtime_interface_scaffold["real_generation_allowed"] is False
+    assert (
+        runtime_interface_implementation[
+            "TrajectoryAwareSamplingRuntimeInterfaceImplementationDecision"
+        ]
+        == "READY_FOR_BACKEND_INTEGRATION_DECISION"
+    )
+    assert runtime_interface_implementation["dry_run_request_count"] == 1
+    assert runtime_interface_implementation["runtime_backend_connection_allowed"] is False
+    assert runtime_interface_implementation["real_generation_allowed"] is False
 
 
 def test_sampling_scaffold_cli_prints_policy_manifest(
@@ -245,4 +269,9 @@ def test_sampling_scaffold_cli_prints_policy_manifest(
         output_root
         / "artifacts"
         / "trajectory_aware_sampling_runtime_interface_scaffold.json"
+    ).exists()
+    assert (
+        output_root
+        / "artifacts"
+        / "trajectory_aware_sampling_runtime_interface_implementation.json"
     ).exists()
