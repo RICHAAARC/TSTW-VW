@@ -294,6 +294,22 @@ def read_real_backend_connection_smoke(run_root: str | Path) -> dict[str, Any]:
     return json.loads(smoke_path.read_text(encoding="utf-8"))
 
 
+def read_real_backend_connection_smoke_handoff(run_root: str | Path) -> dict[str, Any]:
+    """功能: 读取真实 GPU smoke 的外部执行 handoff artifact。
+
+    该 helper 只读取 repository runner 已经写出的 handoff 文件, 用于 notebook 明确下一步需要在 Colab 或同等真实 GPU 环境中执行。
+    它不连接真实后端, 不生成视频, 也不执行 watermark 算法。
+    """
+    handoff_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_real_backend_connection_smoke_handoff.json"
+    )
+    if not handoff_path.exists():
+        raise FileNotFoundError(handoff_path)
+    return json.loads(handoff_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

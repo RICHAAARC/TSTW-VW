@@ -31,6 +31,9 @@ from experiments.trajectory_aware_sampling_probe.backend_connection_contract imp
 from experiments.trajectory_aware_sampling_probe.real_backend_connection_smoke import (
     build_trajectory_aware_sampling_real_backend_connection_smoke,
 )
+from experiments.trajectory_aware_sampling_probe.real_backend_connection_smoke_handoff import (
+    build_trajectory_aware_sampling_real_backend_connection_smoke_handoff,
+)
 from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
     build_trajectory_aware_sampling_gpu_validation_contract,
 )
@@ -76,6 +79,9 @@ DEFAULT_BACKEND_CONNECTION_CONTRACT_CONFIG_RELATIVE_PATH = Path(
 DEFAULT_REAL_BACKEND_CONNECTION_SMOKE_CONFIG_RELATIVE_PATH = Path(
     "configs/protocol/trajectory_aware_sampling_real_backend_connection_smoke.json"
 )
+DEFAULT_REAL_BACKEND_CONNECTION_SMOKE_HANDOFF_CONFIG_RELATIVE_PATH = Path(
+    "configs/protocol/trajectory_aware_sampling_real_backend_connection_smoke_handoff.json"
+)
 
 
 @dataclass(frozen=True)
@@ -100,6 +106,7 @@ class TrajectoryAwareSamplingProbeRunResult:
     backend_adapter_scaffold: dict[str, Any]
     backend_connection_contract: dict[str, Any]
     real_backend_connection_smoke: dict[str, Any]
+    real_backend_connection_smoke_handoff: dict[str, Any]
     artifact_paths: dict[str, Path]
 
 
@@ -216,6 +223,13 @@ class TrajectoryAwareSamplingProbeRunner:
             backend_connection_contract,
             self._read_real_backend_connection_smoke_config(),
         )
+        real_backend_connection_smoke_handoff = (
+            self._write_real_backend_connection_smoke_handoff(
+                output_root_path,
+                real_backend_connection_smoke,
+                self._read_real_backend_connection_smoke_handoff_config(),
+            )
+        )
         output_paths = build_trajectory_aware_sampling_probe_output_paths(output_root_path)
         artifact_paths["sampling_handoff_manifest_path"] = (
             output_paths.sampling_handoff_manifest_path
@@ -247,6 +261,9 @@ class TrajectoryAwareSamplingProbeRunner:
         artifact_paths["real_backend_connection_smoke_path"] = (
             output_paths.real_backend_connection_smoke_path
         )
+        artifact_paths["real_backend_connection_smoke_handoff_path"] = (
+            output_paths.real_backend_connection_smoke_handoff_path
+        )
         return TrajectoryAwareSamplingProbeRunResult(
             run_id=output_root_path.name,
             output_root=output_root_path,
@@ -262,6 +279,7 @@ class TrajectoryAwareSamplingProbeRunner:
             backend_adapter_scaffold=backend_adapter_scaffold,
             backend_connection_contract=backend_connection_contract,
             real_backend_connection_smoke=real_backend_connection_smoke,
+            real_backend_connection_smoke_handoff=real_backend_connection_smoke_handoff,
             artifact_paths=artifact_paths,
         )
 
@@ -343,6 +361,13 @@ class TrajectoryAwareSamplingProbeRunner:
         config_path = (
             self._repository_root
             / DEFAULT_REAL_BACKEND_CONNECTION_SMOKE_CONFIG_RELATIVE_PATH
+        )
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
+    def _read_real_backend_connection_smoke_handoff_config(self) -> dict[str, Any]:
+        config_path = (
+            self._repository_root
+            / DEFAULT_REAL_BACKEND_CONNECTION_SMOKE_HANDOFF_CONFIG_RELATIVE_PATH
         )
         return json.loads(config_path.read_text(encoding="utf-8"))
 
@@ -622,3 +647,32 @@ class TrajectoryAwareSamplingProbeRunner:
             encoding="utf-8",
         )
         return smoke_payload
+
+
+    def _write_real_backend_connection_smoke_handoff(
+        self,
+        output_root_path: Path,
+        real_backend_connection_smoke: dict[str, Any],
+        real_backend_connection_smoke_handoff_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        handoff_payload = (
+            build_trajectory_aware_sampling_real_backend_connection_smoke_handoff(
+                real_backend_connection_smoke,
+                real_backend_connection_smoke_handoff_config,
+            )
+        )
+        handoff_path = build_trajectory_aware_sampling_probe_output_paths(
+            output_root_path
+        ).real_backend_connection_smoke_handoff_path
+        handoff_path.parent.mkdir(parents=True, exist_ok=True)
+        handoff_path.write_text(
+            json.dumps(
+                handoff_payload,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return handoff_payload

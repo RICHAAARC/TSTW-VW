@@ -1,0 +1,47 @@
+{
+  "approved_next_external_execution": "real_gpu_backend_connection_smoke",
+  "construction_phase": "trajectory_aware_sampling_probe",
+  "external_gpu_required": true,
+  "forbidden_runtime_capabilities_until_external_smoke_passes": [
+    "formal_real_dit_generation_claim",
+    "formal_flow_matching_generation_claim",
+    "formal_real_video_generation_claim",
+    "formal_real_watermark_embedding_claim",
+    "formal_real_watermark_detection_claim"
+  ],
+  "minimum_required_result_artifact_count": 5,
+  "minimum_smoke_execution_request_count": 1,
+  "outputs": {
+    "real_backend_connection_smoke_handoff_path": "artifacts/trajectory_aware_sampling_real_backend_connection_smoke_handoff.json"
+  },
+  "project_stage": "trajectory_aware_sampling_probe",
+  "real_backend_connection_attempted": false,
+  "real_backend_connection_smoke_handoff_allowed": true,
+  "real_generation_allowed": false,
+  "real_watermark_integration_allowed": false,
+  "required_download_artifact_kinds": [
+    "runtime_environment_snapshot",
+    "model_identity_record",
+    "backend_dependency_resolution_record",
+    "single_request_execution_record",
+    "runtime_failure_manifest"
+  ],
+  "required_handoff_sections": [
+    "external_execution_requirements",
+    "required_upload_artifacts",
+    "required_download_artifacts",
+    "governance_boundaries"
+  ],
+  "required_next_validation_after_smoke_request": "real_gpu_backend_connection_smoke",
+  "required_real_backend_connection_smoke_decision": "READY_FOR_REAL_GPU_BACKEND_CONNECTION_SMOKE_EXECUTION",
+  "required_upload_artifact_kinds": [
+    "trajectory_aware_sampling_run_package",
+    "real_backend_connection_smoke_request",
+    "backend_connection_contract",
+    "runtime_interface_implementation",
+    "sampling_selection_plan"
+  ],
+  "runtime_backend_connection_allowed": false,
+  "runtime_mode": "real_backend_connection_smoke_handoff_only",
+  "target_construction_phase": "full_paper_protocol"
+}

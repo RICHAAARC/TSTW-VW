@@ -33,6 +33,7 @@ class TrajectoryAwareSamplingProbeOutputPaths(BaseRunOutputPaths):
     backend_adapter_scaffold_path: Path
     backend_connection_contract_path: Path
     real_backend_connection_smoke_path: Path
+    real_backend_connection_smoke_handoff_path: Path
     sampling_probe_report_path: Path
 
     def table_paths(self) -> list[Path]:
@@ -116,6 +117,11 @@ def build_trajectory_aware_sampling_probe_output_paths(
             output_root_path
             / "artifacts"
             / "trajectory_aware_sampling_real_backend_connection_smoke.json"
+        ),
+        real_backend_connection_smoke_handoff_path=(
+            output_root_path
+            / "artifacts"
+            / "trajectory_aware_sampling_real_backend_connection_smoke_handoff.json"
         ),
         sampling_probe_report_path=(
             output_root_path / "reports" / "trajectory_aware_sampling_probe_report.md"

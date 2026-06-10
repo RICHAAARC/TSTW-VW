@@ -741,3 +741,39 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | NextAllowedConstructionAfterRealBackendConnectionSmokePasses | governance | none | false | false | false | Next construction allowed only after external real GPU backend smoke passes. |
 
 | forbidden_runtime_capabilities_until_real_gpu_backend_smoke_passes | governance | none | false | false | false | Formal capabilities that remain blocked until real GPU backend smoke passes. |
+
+| TrajectoryAwareSamplingRealBackendConnectionSmokeHandoffDecision | governance | none | false | false | false | Decision emitted by the external real GPU smoke handoff gate. |
+| TrajectoryAwareSamplingRealBackendConnectionSmokeHandoffBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent creating the external real GPU smoke handoff. |
+| real_backend_connection_smoke_handoff_allowed | governance | none | false | false | false | Boolean marker indicating whether an external real GPU smoke handoff is ready. |
+| external_gpu_required | governance | none | false | false | false | Boolean marker indicating that the next execution must happen in an external real GPU environment. |
+| required_handoff_section_count | governance | none | false | false | false | Number of governed sections required by the external smoke handoff. |
+| required_handoff_sections | governance | none | false | false | false | Governed section names that must appear in the external smoke handoff. |
+| required_upload_artifact_count | governance | none | false | false | false | Number of artifacts that should be uploaded for external real GPU smoke execution. |
+| required_upload_artifacts | governance | none | false | false | false | Artifacts that should be uploaded for external real GPU smoke execution. |
+| required_download_artifact_count | governance | none | false | false | false | Number of artifacts that must be downloaded after external real GPU smoke execution. |
+| required_download_artifacts | governance | none | false | false | false | Artifacts that must be downloaded after external real GPU smoke execution. |
+| external_execution_requirements | governance | none | false | false | false | Requirements for the external real GPU smoke execution environment. |
+| required_external_execution | governance | none | false | false | false | Semantic name of the next external execution required by handoff. |
+| must_return_download_artifacts | governance | none | false | false | false | Boolean marker indicating that external smoke must return all required download artifacts. |
+| governance_boundaries | governance | none | false | false | false | Runtime boundaries preserved by the handoff artifact. |
+| runtime_backend_connection_allowed_in_local_runner | governance | none | false | false | false | Boolean marker showing whether local runner may connect a backend. |
+| real_generation_allowed_in_local_runner | governance | none | false | false | false | Boolean marker showing whether local runner may generate real video. |
+| real_watermark_integration_allowed_in_local_runner | governance | none | false | false | false | Boolean marker showing whether local runner may integrate real watermark logic. |
+| real_backend_connection_attempted_in_local_runner | governance | none | false | false | false | Boolean marker showing whether local runner attempted real backend connection. |
+| forbidden_runtime_capabilities_until_external_smoke_passes | governance | none | false | false | false | Runtime capabilities blocked until external real GPU smoke passes. |
+| real_backend_connection_smoke_payload_digest | trace | none | false | false | false | Digest of the full real backend connection smoke payload consumed by the handoff gate. |
+| real_backend_connection_smoke_handoff_digest | trace | none | false | false | false | Digest of the real backend connection smoke handoff payload excluding the digest field itself. |
+| real_backend_connection_smoke_handoff_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling real backend connection smoke handoff artifact. |
+| NextRequiredExternalExecutionAfterSmokeHandoff | governance | none | false | false | false | Required next external execution after creating the smoke handoff artifact. |
+| required_real_backend_connection_smoke_decision | governance | none | false | false | false | Required upstream real backend connection smoke decision for handoff construction. |
+| required_next_validation_after_smoke_request | governance | none | false | false | false | Required next validation declared by the upstream smoke request before handoff construction. |
+| approved_next_external_execution | governance | none | false | false | false | Approved next external execution after smoke handoff is ready. |
+| minimum_smoke_execution_request_count | governance | none | false | false | false | Minimum number of smoke execution requests required before handoff construction. |
+| minimum_required_result_artifact_count | governance | none | false | false | false | Minimum number of required result artifacts required before handoff construction. |
+| required_upload_artifact_kinds | governance | none | false | false | false | Required upload artifact kinds for external real GPU smoke execution. |
+| required_download_artifact_kinds | governance | none | false | false | false | Required download artifact kinds for external real GPU smoke execution. |
+| handoff_artifact_id | trace | none | false | false | false | Identifier of an artifact listed in the external smoke handoff. |
+| handoff_artifact_direction | trace | none | false | false | false | Direction of an artifact in the external smoke handoff. |
+| handoff_artifact_kind | trace | none | false | false | false | Kind of an artifact in the external smoke handoff. |
+| handoff_artifact_status | trace | none | false | false | false | Required status of an artifact in the external smoke handoff. |
+| handoff_artifact_digest | trace | none | false | false | false | Digest of a handoff artifact entry. |
