@@ -113,3 +113,25 @@ def test_notebook_workflow_writes_real_gpu_backend_connection_smoke_result_gate(
         written_payload["NextAllowedConstructionAfterRealGpuBackendConnectionSmokeResultGate"]
         == "real_backend_runtime_validation_gate"
     )
+
+
+def test_notebook_workflow_generates_environment_only_smoke_results(tmp_path: Path) -> None:
+    """验证 Colab helper 可以生成可检查的环境级 smoke 结果 JSON。"""
+    output_path = tmp_path / "external_real_gpu_smoke_results.json"
+
+    payload = __import__(
+        "paper_workflow.notebook_utils.trajectory_aware_sampling_probe_workflow",
+        fromlist=["write_environment_only_real_gpu_backend_connection_smoke_results"],
+    ).write_environment_only_real_gpu_backend_connection_smoke_results(
+        repository_root=ROOT,
+        output_path=output_path,
+    )
+
+    assert output_path.exists()
+    written_payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert written_payload == payload
+    assert payload["external_smoke_result_status"] == "INCONCLUSIVE"
+    assert payload["external_real_backend_connection_attempted"] is False
+    assert payload["external_real_generation_attempted"] is False
+    assert payload["external_real_watermark_integration_attempted"] is False
+    assert len(payload["result_artifacts"]) == 5

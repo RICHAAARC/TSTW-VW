@@ -97,12 +97,14 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "sampling_workflow.read_backend_connection_contract(" in notebook_text
     assert "sampling_workflow.read_real_backend_connection_smoke(" in notebook_text
     assert "sampling_workflow.read_real_backend_connection_smoke_handoff(" in notebook_text
+    assert "sampling_workflow.write_environment_only_real_gpu_backend_connection_smoke_results(" in notebook_text
     assert "sampling_workflow.run_real_gpu_backend_connection_smoke_result_gate(" in notebook_text
     assert "sampling_workflow.package_sampling_probe_run(" in notebook_text
     assert "sampling_workflow.find_latest_trajectory_probe_root(" in notebook_text
     assert "sampling_workflow.extract_trajectory_probe_package(" in notebook_text
     assert "experiments.trajectory_aware_sampling_probe.scaffold_cli" in workflow_text
     assert "build_trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate" in workflow_text
+    assert "write_environment_only_real_gpu_backend_connection_smoke_results" in workflow_text
     assert "read_external_real_gpu_backend_connection_smoke_results" in workflow_text
     assert "trajectory_aware_sampling_probe_scaffold_gpu_validation_utc_time_short_commit" in notebook_text
     assert "git', 'rev-parse', '--short=7', 'HEAD'" in notebook_text
@@ -140,6 +142,7 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "trajectory_aware_sampling_real_backend_connection_smoke_handoff.json" in workflow_text
     assert "trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json" in notebook_text
     assert "trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.json" in workflow_text
+    assert "external_real_gpu_smoke_results.json" in notebook_text
     assert "TrajectoryAwareSamplingGpuValidationContractDecision" in notebook_text
     assert "NextAllowedConstructionAfterGpuValidationContract" in notebook_text
     assert "TrajectoryAwareSamplingBackendTransitionGuardDecision" in notebook_text
@@ -169,6 +172,7 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "sampling_workflow.read_backend_connection_contract(" in code_text
     assert "sampling_workflow.read_real_backend_connection_smoke(" in code_text
     assert "sampling_workflow.read_real_backend_connection_smoke_handoff(" in code_text
+    assert "sampling_workflow.write_environment_only_real_gpu_backend_connection_smoke_results(" in code_text
     assert "sampling_workflow.run_real_gpu_backend_connection_smoke_result_gate(" in code_text
     assert "runtime_interface_implementation.get(" in code_text
     assert "backend_integration_decision.get(" in code_text

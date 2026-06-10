@@ -310,6 +310,121 @@ def read_real_backend_connection_smoke_handoff(run_root: str | Path) -> dict[str
     return json.loads(handoff_path.read_text(encoding="utf-8"))
 
 
+def write_environment_only_real_gpu_backend_connection_smoke_results(
+    repository_root: str | Path,
+    output_path: str | Path,
+) -> dict[str, Any]:
+    """功能: 在 Colab 中生成环境级真实 GPU smoke 结果摘要。
+
+    该 helper 只采集 GPU 可见性、Python 依赖可导入性、仓库提交信息和失败清单。
+    它不会连接真实 DiT / Flow Matching 后端, 不会生成真实视频, 也不会执行 watermark 算法。
+    因此在当前没有真实后端连接执行器时, 它会产出可检查但通常不会通过 result gate 的 `INCONCLUSIVE` 结果。
+    """
+    root_path = Path(repository_root).resolve()
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    gpu_detected = _command_succeeds(["nvidia-smi"])
+    torch_cuda_available = _torch_cuda_available()
+    dependency_checks = {
+        "torch": _module_importable("torch"),
+        "pytest": _module_importable("pytest"),
+    }
+    backend_dependencies_resolved = all(dependency_checks.values())
+    model_identity_recorded = _command_succeeds(
+        ["git", "rev-parse", "--short=7", "HEAD"],
+        cwd=root_path,
+    )
+    failure_reasons = []
+    if not gpu_detected:
+        failure_reasons.append("external_gpu_runtime_not_detected")
+    if not torch_cuda_available:
+        failure_reasons.append("torch_cuda_not_available")
+    if not backend_dependencies_resolved:
+        failure_reasons.append("external_backend_dependencies_not_resolved")
+    failure_reasons.append("real_backend_connection_executor_not_configured")
+
+    external_results = {
+        "external_smoke_result_status": "INCONCLUSIVE",
+        "external_gpu_runtime_detected": gpu_detected,
+        "external_model_identity_recorded": model_identity_recorded,
+        "external_backend_dependencies_resolved": backend_dependencies_resolved,
+        "external_real_backend_connection_attempted": False,
+        "external_real_backend_connection_succeeded": False,
+        "external_real_generation_attempted": False,
+        "external_real_watermark_integration_attempted": False,
+        "runtime_failure_manifest": {
+            "failure_manifest_recorded": True,
+            "failure_count": len(failure_reasons),
+        },
+        "result_artifacts": [
+            {
+                "result_artifact_kind": "runtime_environment_snapshot",
+                "result_artifact_status": "present",
+                "formal_claim_support_allowed": False,
+            },
+            {
+                "result_artifact_kind": "model_identity_record",
+                "result_artifact_status": "present" if model_identity_recorded else "incomplete",
+                "formal_claim_support_allowed": False,
+            },
+            {
+                "result_artifact_kind": "backend_dependency_resolution_record",
+                "result_artifact_status": "present" if backend_dependencies_resolved else "incomplete",
+                "formal_claim_support_allowed": False,
+            },
+            {
+                "result_artifact_kind": "single_request_execution_record",
+                "result_artifact_status": "not_attempted_by_governance",
+                "formal_claim_support_allowed": False,
+            },
+            {
+                "result_artifact_kind": "runtime_failure_manifest",
+                "result_artifact_status": "present",
+                "formal_claim_support_allowed": False,
+            },
+        ],
+    }
+    output_file.write_text(
+        json.dumps(external_results, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return external_results
+
+
+def _command_succeeds(command: list[str], cwd: Path | None = None) -> bool:
+    try:
+        subprocess.run(
+            command,
+            cwd=cwd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+    except Exception:
+        return False
+    return True
+
+
+def _module_importable(module_name: str) -> bool:
+    try:
+        __import__(module_name)
+    except Exception:
+        return False
+    return True
+
+
+def _torch_cuda_available() -> bool:
+    try:
+        import torch
+    except Exception:
+        return False
+    try:
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
+
+
 def read_external_real_gpu_backend_connection_smoke_results(
     external_smoke_results_path: str | Path,
 ) -> dict[str, Any]:
