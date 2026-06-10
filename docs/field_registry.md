@@ -695,3 +695,49 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | NextAllowedConstructionAfterBackendConnectionContract | governance | none | false | false | false | Next construction recommendation emitted by backend connection contract. |
 
 | forbidden_runtime_capabilities_until_real_backend_connection_smoke | governance | none | false | false | false | Formal capabilities that remain blocked until the separate real backend smoke gate. |
+
+| TrajectoryAwareSamplingRealBackendConnectionSmokeDecision | governance | none | false | false | false | Decision emitted by the real backend connection smoke request gate. |
+
+| TrajectoryAwareSamplingRealBackendConnectionSmokeBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent creating a real GPU backend connection smoke execution request. |
+
+| real_backend_connection_smoke_request_allowed | governance | none | false | false | false | Boolean marker indicating whether a later external real GPU backend smoke request is allowed. |
+
+| real_backend_connection_attempted | governance | none | false | false | false | Boolean marker indicating whether this local runner attempted a real backend connection. |
+
+| gpu_execution_required_for_next_step | governance | none | false | false | false | Boolean marker indicating that the next validation must run in a real GPU environment. |
+
+| smoke_execution_request_count | governance | none | false | false | false | Count of external real GPU backend smoke execution requests. |
+
+| smoke_execution_requests | governance | none | false | false | false | Execution request descriptors for later real GPU backend smoke. |
+
+| smoke_execution_request_id | governance | none | false | false | false | Stable identifier for one real backend connection smoke request. |
+
+| smoke_execution_request_kind | governance | none | false | false | false | Kind of real backend connection smoke request to run externally. |
+
+| execution_location | governance | none | false | false | false | Location requirement for executing the real backend smoke request. |
+
+| smoke_execution_request_digest | trace | none | false | false | false | Digest of one real backend smoke execution request descriptor. |
+
+| required_result_artifact_count | governance | none | false | false | false | Count of artifacts required after external real GPU backend smoke. |
+
+| required_result_artifacts | governance | none | false | false | false | Required artifact descriptors for external real GPU backend smoke results. |
+
+| required_result_artifact_id | governance | none | false | false | false | Stable identifier for one required real backend smoke result artifact. |
+
+| required_result_artifact_kind | governance | none | false | false | false | Required real backend smoke result artifact kind. |
+
+| required_result_artifact_status | governance | none | false | false | false | Status requirement for one real backend smoke result artifact. |
+
+| required_result_artifact_digest | trace | none | false | false | false | Digest of one required real backend smoke result artifact descriptor. |
+
+| backend_connection_contract_payload_digest | trace | none | false | false | false | Digest of the full backend connection contract consumed by the smoke request gate. |
+
+| real_backend_connection_smoke_digest | trace | none | false | false | false | Digest of the real backend connection smoke request payload excluding the digest field itself. |
+
+| real_backend_connection_smoke_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling real backend connection smoke request artifact. |
+
+| NextRequiredValidationAfterRealBackendConnectionSmokeRequest | governance | none | false | false | false | Required next external validation after creating the real backend smoke request. |
+
+| NextAllowedConstructionAfterRealBackendConnectionSmokePasses | governance | none | false | false | false | Next construction allowed only after external real GPU backend smoke passes. |
+
+| forbidden_runtime_capabilities_until_real_gpu_backend_smoke_passes | governance | none | false | false | false | Formal capabilities that remain blocked until real GPU backend smoke passes. |

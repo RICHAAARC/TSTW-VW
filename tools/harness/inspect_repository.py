@@ -114,6 +114,9 @@ TRAJECTORY_AWARE_SAMPLING_REQUIRED_PATHS = {
     "trajectory_aware_sampling_backend_connection_contract_config": "configs/protocol/trajectory_aware_sampling_backend_connection_contract.json",
     "trajectory_aware_sampling_backend_connection_contract_module": "experiments/trajectory_aware_sampling_probe/backend_connection_contract.py",
     "trajectory_aware_sampling_backend_connection_contract_test": "tests/functional/test_trajectory_aware_sampling_backend_connection_contract.py",
+    "trajectory_aware_sampling_real_backend_connection_smoke_config": "configs/protocol/trajectory_aware_sampling_real_backend_connection_smoke.json",
+    "trajectory_aware_sampling_real_backend_connection_smoke_module": "experiments/trajectory_aware_sampling_probe/real_backend_connection_smoke.py",
+    "trajectory_aware_sampling_real_backend_connection_smoke_test": "tests/functional/test_trajectory_aware_sampling_real_backend_connection_smoke.py",
 }
 
 

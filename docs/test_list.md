@@ -7,16 +7,16 @@
 - 测试根目录：`tests/`
 - 测试构建约束：`docs/test_case_constraints.md`
 - 当前 pytest 默认参数来自 `pyproject.toml`：`(constraint or unit or quick) and not integration and not smoke and not slow and not formal`
-- 当前全量测试节点：472 个
-- 当前默认会执行的测试节点：402 个
+- 当前全量测试节点：476 个
+- 当前默认会执行的测试节点：406 个
 - 当前默认排除的测试节点：70 个
 
 ## 2. 分层统计
 
 | Layer | Files | Nodes | Default role |
 | --- | --- | --- | --- |
-| constraints | 36 | 165 | default governance checks |
-| functional | 53 | 265 | default quick behavior checks |
+| constraints | 36 | 166 | default governance checks |
+| functional | 54 | 268 | default quick behavior checks |
 | integration | 23 | 42 | excluded runner/smoke/formal checks |
 
 ## 3. 推荐执行命令
@@ -67,7 +67,7 @@ python tools/harness/run_all_audits.py
 | `tests/constraints/test_synthetic_tubelet_sync_contract.py` | 4 | constraints | `constraint`, `unit` | 4 | no | no | no | 验证阶段 1 synthetic tubelet sync 入口 method config 契约。 |
 | `tests/constraints/test_synthetic_tubelet_sync_no_dit_dependency.py` | 1 | constraints | `constraint`, `unit` | 1 | no | no | yes | 验证 stage-one runtime 不依赖真实视频生成模型栈。File purpose: Validate that the stage-one runtime has no real video model dependency. |
 | `tests/constraints/test_threshold_protocol_fields.py` | 4 | constraints | `constraint`, `unit` | 4 | no | no | no | 验证 fixed low-FPR 阈值协议字段。File purpose: Validate threshold protocol governance for the protocol_skeleton stage. |
-| `tests/constraints/test_trajectory_aware_sampling_contract.py` | 10 | constraints | `constraint`, `unit` | 10 | no | no | no | 验证 trajectory-aware sampling probe 的配置与边界契约。 |
+| `tests/constraints/test_trajectory_aware_sampling_contract.py` | 11 | constraints | `constraint`, `unit` | 11 | no | no | no | 验证 trajectory-aware sampling probe 的配置与边界契约。 |
 | `tests/constraints/test_trajectory_aware_sampling_probe_notebook_contract.py` | 1 | constraints | `constraint`, `unit` | 1 | no | no | no | 文件用途: 验证 trajectory-aware sampling probe notebook 入口遵守受治理合同。 |
 | `tests/constraints/test_trajectory_statistic_probe_notebook_contract.py` | 1 | constraints | `constraint`, `unit` | 1 | no | no | yes | 验证阶段 3 trajectory statistic probe notebook 入口遵循受治理合同。 |
 | `tests/functional/test_cross_event_vae_batching_config.py` | 5 | functional | `quick`, `unit` | 5 | no | no | yes | 验证 cross-event VAE batching 配置解析与批处理工具。 |
@@ -110,6 +110,7 @@ python tools/harness/run_all_audits.py
 | `tests/functional/test_trajectory_aware_sampling_backend_transition_guard.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证 trajectory-aware sampling 后端切换前治理守卫。 |
 | `tests/functional/test_trajectory_aware_sampling_gpu_validation_contract.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证 trajectory-aware sampling 后续真实 GPU runtime 合同。 |
 | `tests/functional/test_trajectory_aware_sampling_readiness.py` | 4 | functional | `quick` | 4 | no | no | no | 验证 trajectory-aware sampling probe 的 readiness gate 语义。 |
+| `tests/functional/test_trajectory_aware_sampling_real_backend_connection_smoke.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证 trajectory-aware sampling 的真实后端连接 smoke 请求 gate。 |
 | `tests/functional/test_trajectory_aware_sampling_runner.py` | 2 | functional | `quick` | 2 | yes | no | no | 文件用途: 验证 trajectory-aware sampling runner 和 CLI 的 CPU scaffold 闭环。 |
 | `tests/functional/test_trajectory_aware_sampling_runtime_interface_implementation.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证 trajectory-aware sampling 的非后端连接版 runtime interface implementation。 |
 | `tests/functional/test_trajectory_aware_sampling_runtime_interface_scaffold.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证 trajectory-aware sampling 真实 GPU runtime 接口脚手架。 |

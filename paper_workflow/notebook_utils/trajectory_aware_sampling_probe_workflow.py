@@ -278,6 +278,22 @@ def read_backend_connection_contract(run_root: str | Path) -> dict[str, Any]:
     return json.loads(contract_path.read_text(encoding="utf-8"))
 
 
+def read_real_backend_connection_smoke(run_root: str | Path) -> dict[str, Any]:
+    """功能: 读取真实后端连接 smoke 执行请求 gate 产物。
+
+    该 helper 只读取 repository runner 生成的 smoke request artifact。该 artifact 表示下一步需要在真实
+    GPU 环境中执行 smoke, 但当前 notebook 的 scaffold 流程本身不连接真实后端、不生成视频、不执行 watermark。
+    """
+    smoke_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_real_backend_connection_smoke.json"
+    )
+    if not smoke_path.exists():
+        raise FileNotFoundError(smoke_path)
+    return json.loads(smoke_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

@@ -291,3 +291,33 @@ def test_trajectory_aware_sampling_backend_connection_contract_allows_smoke_only
         == "artifacts/trajectory_aware_sampling_backend_connection_contract.json"
     )
 
+
+def test_trajectory_aware_sampling_real_backend_connection_smoke_is_execution_request_only() -> None:
+    """验证 real backend connection smoke 当前只生成真实 GPU 执行请求, 不连接后端。"""
+    config = json.loads((ROOT / "configs" / "protocol" / "trajectory_aware_sampling_real_backend_connection_smoke.json").read_text(encoding="utf-8"))
+
+    assert config["project_stage"] == "trajectory_aware_sampling_probe"
+    assert config["construction_phase"] == "trajectory_aware_sampling_probe"
+    assert config["target_construction_phase"] == "full_paper_protocol"
+    assert config["runtime_mode"] == "real_backend_connection_smoke_execution_request_only"
+    assert (
+        config["required_backend_connection_contract_decision"]
+        == "READY_FOR_REAL_BACKEND_CONNECTION_SMOKE"
+    )
+    assert (
+        config["required_next_allowed_construction_after_backend_connection_contract"]
+        == "real_backend_connection_smoke"
+    )
+    assert config["real_backend_connection_smoke_request_allowed"] is True
+    assert config["runtime_backend_connection_allowed"] is False
+    assert config["real_generation_allowed"] is False
+    assert config["real_watermark_integration_allowed"] is False
+    assert config["real_backend_connection_attempted"] is False
+    assert config["gpu_execution_required_for_next_step"] is True
+    assert config["approved_next_validation"] == "real_gpu_backend_connection_smoke"
+    assert "runtime_failure_manifest" in config["required_smoke_result_artifacts"]
+    assert (
+        config["outputs"]["real_backend_connection_smoke_path"]
+        == "artifacts/trajectory_aware_sampling_real_backend_connection_smoke.json"
+    )
+

@@ -129,6 +129,12 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
         ]
         == "READY_FOR_REAL_BACKEND_CONNECTION_SMOKE"
     )
+    assert (
+        result.real_backend_connection_smoke[
+            "TrajectoryAwareSamplingRealBackendConnectionSmokeDecision"
+        ]
+        == "READY_FOR_REAL_GPU_BACKEND_CONNECTION_SMOKE_EXECUTION"
+    )
     handoff_manifest_path = output_root / "artifacts" / "sampling_handoff_manifest.json"
     gpu_validation_contract_path = (
         output_root
@@ -170,6 +176,11 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
         / "artifacts"
         / "trajectory_aware_sampling_backend_connection_contract.json"
     )
+    real_backend_connection_smoke_path = (
+        output_root
+        / "artifacts"
+        / "trajectory_aware_sampling_real_backend_connection_smoke.json"
+    )
     assert handoff_manifest_path.exists()
     assert gpu_validation_contract_path.exists()
     assert backend_transition_guard_path.exists()
@@ -179,6 +190,7 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
     assert backend_integration_decision_path.exists()
     assert backend_adapter_scaffold_path.exists()
     assert backend_connection_contract_path.exists()
+    assert real_backend_connection_smoke_path.exists()
     handoff_manifest = json.loads(handoff_manifest_path.read_text(encoding="utf-8"))
     gpu_validation_contract = json.loads(
         gpu_validation_contract_path.read_text(encoding="utf-8")
@@ -203,6 +215,9 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
     )
     backend_connection_contract = json.loads(
         backend_connection_contract_path.read_text(encoding="utf-8")
+    )
+    real_backend_connection_smoke = json.loads(
+        real_backend_connection_smoke_path.read_text(encoding="utf-8")
     )
     assert handoff_manifest["handoff_kind"] == "trajectory_aware_sampling_scaffold"
     assert handoff_manifest["requires_real_gpu_validation"] is False
@@ -312,6 +327,21 @@ def test_sampling_runner_reads_trajectory_root_and_writes_handoff_manifest(
     assert backend_connection_contract["real_backend_connection_smoke_allowed_after_contract"] is True
     assert backend_connection_contract["runtime_backend_connection_allowed"] is False
     assert backend_connection_contract["real_generation_allowed"] is False
+    assert (
+        real_backend_connection_smoke[
+            "TrajectoryAwareSamplingRealBackendConnectionSmokeDecision"
+        ]
+        == "READY_FOR_REAL_GPU_BACKEND_CONNECTION_SMOKE_EXECUTION"
+    )
+    assert (
+        real_backend_connection_smoke[
+            "NextRequiredValidationAfterRealBackendConnectionSmokeRequest"
+        ]
+        == "real_gpu_backend_connection_smoke"
+    )
+    assert real_backend_connection_smoke["gpu_execution_required_for_next_step"] is True
+    assert real_backend_connection_smoke["real_backend_connection_attempted"] is False
+    assert real_backend_connection_smoke["runtime_backend_connection_allowed"] is False
 
 
 def test_sampling_scaffold_cli_prints_policy_manifest(
@@ -380,4 +410,9 @@ def test_sampling_scaffold_cli_prints_policy_manifest(
         output_root
         / "artifacts"
         / "trajectory_aware_sampling_backend_connection_contract.json"
+    ).exists()
+    assert (
+        output_root
+        / "artifacts"
+        / "trajectory_aware_sampling_real_backend_connection_smoke.json"
     ).exists()
