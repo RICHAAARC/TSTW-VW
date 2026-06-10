@@ -1,0 +1,14 @@
+{
+  "approved_next_construction_after_authorization": "external_controlled_real_generation_execution_handoff",
+  "construction_phase": "governed_real_generation_execution_authorization_decision",
+  "current_stage_contract_allows_real_generation_execution": false,
+  "formal_claim_support_authorized_after_decision": false,
+  "maximum_authorized_controlled_request_count": 1,
+  "project_stage": "trajectory_aware_sampling_probe",
+  "real_watermark_integration_authorized_after_decision": false,
+  "required_governance_action_before_real_generation_execution": "project_contract_update_for_controlled_real_generation_execution",
+  "required_manual_controlled_single_request_result_gate_decision": "PASS",
+  "required_next_allowed_construction_after_manual_result_gate": "governed_real_generation_execution_authorization_decision",
+  "runtime_mode": "governed_authorization_decision_only",
+  "target_construction_phase": "full_paper_protocol"
+}

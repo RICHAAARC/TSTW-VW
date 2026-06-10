@@ -971,6 +971,77 @@ def read_manual_controlled_single_request_result_gate(
     return json.loads(gate_path.read_text(encoding="utf-8"))
 
 
+def run_governed_real_generation_execution_authorization_decision(
+    repository_root: str | Path,
+    run_root: str | Path,
+    authorization_config_path: str | Path = "configs/protocol/trajectory_aware_sampling_governed_real_generation_execution_authorization_decision.json",
+) -> dict[str, Any]:
+    """功能: 写出真实生成执行授权决策 artifact.
+
+    该 helper 只调度 repository module. 当前项目契约仍禁止真实视频生成, 因此默认配置会明确
+    写出未授权决策和所需治理动作, 不会连接真实生成后端, 不会执行 watermark.
+    """
+    from experiments.trajectory_aware_sampling_probe.governed_real_generation_execution_authorization_decision import (
+        build_governed_real_generation_execution_authorization_report_section,
+        build_trajectory_aware_sampling_governed_real_generation_execution_authorization_decision,
+    )
+    from experiments.trajectory_aware_sampling_probe.output_layout import (
+        build_trajectory_aware_sampling_probe_output_paths,
+    )
+
+    root_path = Path(repository_root).resolve()
+    config_path = Path(authorization_config_path)
+    if not config_path.is_absolute():
+        config_path = root_path / config_path
+    output_paths = build_trajectory_aware_sampling_probe_output_paths(run_root)
+    manual_result_gate = read_manual_controlled_single_request_result_gate(run_root)
+    config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+    authorization_payload = (
+        build_trajectory_aware_sampling_governed_real_generation_execution_authorization_decision(
+            manual_result_gate,
+            config_payload,
+        )
+    )
+    output_paths.governed_real_generation_execution_authorization_decision_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    output_paths.governed_real_generation_execution_authorization_decision_path.write_text(
+        json.dumps(authorization_payload, ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+    report_section = (
+        build_governed_real_generation_execution_authorization_report_section(
+            authorization_payload
+        )
+    )
+    existing_report = (
+        output_paths.sampling_probe_report_path.read_text(encoding="utf-8")
+        if output_paths.sampling_probe_report_path.exists()
+        else ""
+    )
+    output_paths.sampling_probe_report_path.write_text(
+        existing_report.rstrip() + report_section,
+        encoding="utf-8",
+    )
+    return authorization_payload
+
+
+def read_governed_real_generation_execution_authorization_decision(
+    run_root: str | Path,
+) -> dict[str, Any]:
+    """功能: 读取真实生成执行授权决策 artifact."""
+    decision_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_governed_real_generation_execution_authorization_decision.json"
+    )
+    if not decision_path.exists():
+        raise FileNotFoundError(decision_path)
+    return json.loads(decision_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

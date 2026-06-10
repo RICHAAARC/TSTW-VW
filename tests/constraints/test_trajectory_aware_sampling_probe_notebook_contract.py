@@ -103,6 +103,7 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "sampling_workflow.run_explicit_real_generation_transition_decision(" in notebook_text
     assert "sampling_workflow.run_controlled_single_real_generation_request_scaffold(" in notebook_text
     assert "sampling_workflow.run_manual_controlled_single_request_result_gate(" in notebook_text
+    assert "sampling_workflow.run_governed_real_generation_execution_authorization_decision(" in notebook_text
     assert "sampling_workflow.package_sampling_probe_run(" in notebook_text
     assert "sampling_workflow.find_latest_trajectory_probe_root(" in notebook_text
     assert "sampling_workflow.extract_trajectory_probe_package(" in notebook_text
@@ -112,6 +113,7 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "build_trajectory_aware_sampling_explicit_real_generation_transition_decision" in workflow_text
     assert "build_trajectory_aware_sampling_controlled_single_real_generation_request_scaffold" in workflow_text
     assert "build_trajectory_aware_sampling_manual_controlled_single_request_result_gate" in workflow_text
+    assert "build_trajectory_aware_sampling_governed_real_generation_execution_authorization_decision" in workflow_text
     assert "write_environment_only_real_gpu_backend_connection_smoke_results" in workflow_text
     assert "write_environment_only_manual_controlled_single_request_results" in workflow_text
     assert "write_default_backend_connection_probe_config" in workflow_text
@@ -132,6 +134,7 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "TSTW_EXPLICIT_REAL_GENERATION_TRANSITION_DECISION_CONFIG_PATH" in notebook_text
     assert "TSTW_CONTROLLED_SINGLE_REAL_GENERATION_REQUEST_SCAFFOLD_CONFIG_PATH" in notebook_text
     assert "TSTW_MANUAL_CONTROLLED_SINGLE_REQUEST_RESULT_GATE_CONFIG_PATH" in notebook_text
+    assert "TSTW_GOVERNED_REAL_GENERATION_EXECUTION_AUTHORIZATION_DECISION_CONFIG_PATH" in notebook_text
     assert "TSTW_EXTERNAL_MANUAL_CONTROLLED_SINGLE_REQUEST_RESULTS_PATH" in notebook_text
     assert "STAGE3_RESULT_ROOT" in notebook_text
     assert "DRIVE_ROOT / 'results' / 'trajectory_aware_sampling_probe' / RUN_ID / 'packages'" in notebook_text
@@ -169,6 +172,8 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "trajectory_aware_sampling_controlled_single_real_generation_request_scaffold.json" in workflow_text
     assert "trajectory_aware_sampling_manual_controlled_single_request_result_gate.json" in notebook_text
     assert "trajectory_aware_sampling_manual_controlled_single_request_result_gate.json" in workflow_text
+    assert "trajectory_aware_sampling_governed_real_generation_execution_authorization_decision.json" in notebook_text
+    assert "trajectory_aware_sampling_governed_real_generation_execution_authorization_decision.json" in workflow_text
     assert "external_manual_controlled_single_request_results.json" in notebook_text
     assert "external_real_gpu_smoke_results.json" in notebook_text
     assert "backend_connection_probe_config_path" in notebook_text
@@ -202,6 +207,8 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "NextRequiredExternalExecutionAfterControlledSingleRequestScaffold" in notebook_text
     assert "TrajectoryAwareSamplingManualControlledSingleRequestResultGateDecision" in notebook_text
     assert "NextAllowedConstructionAfterManualControlledSingleRequestResultGate" in notebook_text
+    assert "TrajectoryAwareSamplingGovernedRealGenerationExecutionAuthorizationDecision" in notebook_text
+    assert "NextAllowedConstructionAfterGovernedRealGenerationExecutionAuthorizationDecision" in notebook_text
     assert "sampling_workflow.run_sampling_scaffold_cli(" in code_text
     assert "sampling_workflow.read_runtime_interface_implementation(" in code_text
     assert "sampling_workflow.read_backend_integration_decision(" in code_text
@@ -216,6 +223,7 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "sampling_workflow.run_explicit_real_generation_transition_decision(" in code_text
     assert "sampling_workflow.run_controlled_single_real_generation_request_scaffold(" in code_text
     assert "sampling_workflow.run_manual_controlled_single_request_result_gate(" in code_text
+    assert "sampling_workflow.run_governed_real_generation_execution_authorization_decision(" in code_text
     assert "runtime_interface_implementation.get(" in code_text
     assert "backend_integration_decision.get(" in code_text
     assert "backend_adapter_scaffold.get(" in code_text
@@ -227,6 +235,7 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "explicit_real_generation_transition_decision.get(" in code_text
     assert "controlled_single_real_generation_request_scaffold.get(" in code_text
     assert "manual_controlled_single_request_result_gate.get(" in code_text
+    assert "governed_real_generation_execution_authorization_decision.get(" in code_text
     assert "sampling_workflow.run_sampling_scaffold_cli(" not in markdown_text
     assert "runtime_interface_implementation.get(" not in markdown_text
     assert "backend_integration_decision.get(" not in markdown_text
@@ -239,3 +248,4 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "explicit_real_generation_transition_decision.get(" not in markdown_text
     assert "controlled_single_real_generation_request_scaffold.get(" not in markdown_text
     assert "manual_controlled_single_request_result_gate.get(" not in markdown_text
+    assert "governed_real_generation_execution_authorization_decision.get(" not in markdown_text
