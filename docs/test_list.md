@@ -7,8 +7,8 @@
 - 测试根目录：`tests/`
 - 测试构建约束：`docs/test_case_constraints.md`
 - 当前 pytest 默认参数来自 `pyproject.toml`：`(constraint or unit or quick) and not integration and not smoke and not slow and not formal`
-- 当前全量测试节点：490 个
-- 当前默认会执行的测试节点：420 个
+- 当前全量测试节点：492 个
+- 当前默认会执行的测试节点：422 个
 - 当前默认排除的测试节点：70 个
 
 ## 2. 分层统计
@@ -16,7 +16,7 @@
 | Layer | Files | Nodes | Default role |
 | --- | --- | --- | --- |
 | constraints | 36 | 168 | default governance checks |
-| functional | 57 | 280 | default quick behavior checks |
+| functional | 58 | 282 | default quick behavior checks |
 | integration | 23 | 42 | excluded runner/smoke/formal checks |
 
 ## 3. 推荐执行命令
@@ -113,6 +113,7 @@ python tools/harness/run_all_audits.py
 | `tests/functional/test_trajectory_aware_sampling_readiness.py` | 4 | functional | `quick` | 4 | no | no | no | 验证 trajectory-aware sampling probe 的 readiness gate 语义。 |
 | `tests/functional/test_trajectory_aware_sampling_real_backend_connection_smoke.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证 trajectory-aware sampling 的真实后端连接 smoke 请求 gate。 |
 | `tests/functional/test_trajectory_aware_sampling_real_backend_connection_smoke_handoff.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证真实 GPU smoke handoff gate。 |
+| `tests/functional/test_trajectory_aware_sampling_real_backend_runtime_validation_gate.py` | 2 | functional | `quick` | 2 | no | no | no | 文件用途: 验证 trajectory-aware sampling 的真实后端 runtime validation gate. |
 | `tests/functional/test_trajectory_aware_sampling_real_gpu_backend_connection_smoke_result_gate.py` | 4 | functional | `quick` | 4 | no | no | yes | 文件用途: 验证外部真实 GPU backend connection smoke 结果 gate。 |
 | `tests/functional/test_trajectory_aware_sampling_runner.py` | 2 | functional | `quick` | 2 | yes | no | no | 文件用途: 验证 trajectory-aware sampling runner 和 CLI 的 CPU scaffold 闭环。 |
 | `tests/functional/test_trajectory_aware_sampling_runtime_interface_implementation.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证 trajectory-aware sampling 的非后端连接版 runtime interface implementation。 |
