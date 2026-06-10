@@ -139,6 +139,7 @@
 - The governed stage-two notebooks must use single-underscore result identifiers for `FAMILY_ID` templates and `PROCESSED_DATASET_KEY` values. Double-underscore separator forms are forbidden for notebook result identities. Valid examples include `real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit` and `real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001`.
 - `run_real_video_vae_latent_probe.ipynb` must write its primary run outputs and family package into the Colab session-local runtime first, then materialize the completed family result into `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/` only after the runner, checker, mechanism audit, and packaging steps succeed.
 - Notebook workspace preparation must not create an empty Google Drive family result directory before the formal run has produced packageable outputs.
+- Stage-two final formal notebook defaults must enable CLIP similarity evidence by setting `TSTW_ENABLE_CLIP_SIMILARITY=1`, while debug review presets may explicitly disable it to control runtime cost.
 
 
 

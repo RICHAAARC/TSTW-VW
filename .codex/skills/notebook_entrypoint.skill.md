@@ -66,6 +66,7 @@ Applies to future `.ipynb` files, notebook execution entrypoints, `paper_workflo
 
 - `run_real_video_vae_latent_probe.ipynb` and `build_processed_real_video_dataset.ipynb` must use single-underscore separators for `FAMILY_ID_TEMPLATE` and `PROCESSED_DATASET_KEY` identities.
 - Double-underscore result identities are forbidden in governed notebook defaults; use single-underscore separators for result identities instead.
+- Stage-two final formal real-video notebook defaults must enable CLIP similarity through `TSTW_ENABLE_CLIP_SIMILARITY=1`; small review presets may still override it to `0` for cost control.
 - Stage-two real-video probe family results must land in `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/`.
 - The run notebook must package into a session-local `LOCAL_FAMILY_ROOT` first and materialize to `DRIVE_FAMILY_ROOT` only after the formal runner, checker, mechanism audit, and package steps succeed. Creating the Drive family result directory before the run succeeds is forbidden.
 

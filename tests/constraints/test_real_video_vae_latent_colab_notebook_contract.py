@@ -305,6 +305,9 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TSTW_SHARD_INDEX" in notebook_text
     assert "TSTW_WORKER_COUNT" in notebook_text
     assert "TSTW_REQUIRE_LPIPS_EVIDENCE" in notebook_text
+    assert "TSTW_ENABLE_CLIP_SIMILARITY" in notebook_text
+    assert "'enable_clip_similarity': True" in notebook_text
+    assert "ENABLE_CLIP_SIMILARITY = os.environ.get('TSTW_ENABLE_CLIP_SIMILARITY', '1' if RUN_MODE == 'formal' else '0') == '1'" in notebook_text
     assert "TSTW_SAMPLES_PER_ROLE_OVERRIDE" in notebook_text
     assert "TSTW_RUN_MAIN_FORMAL" in notebook_text
     assert "TSTW_PACKAGE_NON_FORMAL_AUDIT_BUNDLE" in notebook_text
