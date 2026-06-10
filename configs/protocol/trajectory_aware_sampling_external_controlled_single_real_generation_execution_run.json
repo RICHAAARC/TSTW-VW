@@ -1,0 +1,42 @@
+{
+  "allowed_external_model_interface_kinds": [
+    "external_text_to_video_model",
+    "external_image_to_video_model",
+    "external_video_generation_api"
+  ],
+  "construction_phase": "external_controlled_single_real_generation_execution_run",
+  "formal_claim_support_allowed": false,
+  "manual_execution_step_kinds": [
+    "inspect_execution_descriptor",
+    "select_external_video_generation_model",
+    "record_runtime_environment_snapshot",
+    "record_model_identity",
+    "execute_single_controlled_generation_request",
+    "write_generated_video_artifact_metadata",
+    "write_runtime_failure_manifest",
+    "upload_external_result_summary_for_intake_gate"
+  ],
+  "maximum_external_controlled_request_count": 1,
+  "next_required_external_action_after_run_package": "manual_external_model_execution_and_result_upload",
+  "project_stage": "trajectory_aware_sampling_probe",
+  "real_watermark_integration_allowed": false,
+  "repository_internal_backend_invocation_allowed": false,
+  "required_external_execution_handoff_decision": "READY_FOR_EXTERNAL_CONTROLLED_REAL_GENERATION_EXECUTION_RUN",
+  "required_result_artifact_kinds": [
+    "runtime_environment_snapshot",
+    "model_identity_record",
+    "external_controlled_single_generation_result_record",
+    "generated_video_artifact_metadata",
+    "runtime_failure_manifest"
+  ],
+  "required_result_fields": [
+    "controlled_request_digest",
+    "external_real_generation_execution_status",
+    "external_runtime_environment_digest",
+    "external_model_identity_digest",
+    "generated_video_artifact_digest",
+    "runtime_failure_manifest"
+  ],
+  "runtime_mode": "manual_external_model_execution_run_package_only",
+  "target_construction_phase": "full_paper_protocol"
+}

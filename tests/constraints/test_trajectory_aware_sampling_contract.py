@@ -407,3 +407,20 @@ def test_trajectory_aware_sampling_external_controlled_real_generation_handoff_i
     assert "external_controlled_single_generation_result_record" in config["required_result_artifact_kinds"]
     assert config["next_required_external_execution_after_handoff"] == "external_controlled_single_real_generation_execution_run"
 
+
+def test_trajectory_aware_sampling_external_controlled_single_real_generation_run_is_manual_external_only() -> None:
+    """验证外部单条真实生成 run package 只允许手动外部模型执行."""
+    config = json.loads((ROOT / "configs" / "protocol" / "trajectory_aware_sampling_external_controlled_single_real_generation_execution_run.json").read_text(encoding="utf-8"))
+
+    assert config["project_stage"] == "trajectory_aware_sampling_probe"
+    assert config["construction_phase"] == "external_controlled_single_real_generation_execution_run"
+    assert config["runtime_mode"] == "manual_external_model_execution_run_package_only"
+    assert config["required_external_execution_handoff_decision"] == "READY_FOR_EXTERNAL_CONTROLLED_REAL_GENERATION_EXECUTION_RUN"
+    assert config["maximum_external_controlled_request_count"] == 1
+    assert config["repository_internal_backend_invocation_allowed"] is False
+    assert config["real_watermark_integration_allowed"] is False
+    assert config["formal_claim_support_allowed"] is False
+    assert "external_text_to_video_model" in config["allowed_external_model_interface_kinds"]
+    assert "upload_external_result_summary_for_intake_gate" in config["manual_execution_step_kinds"]
+    assert config["next_required_external_action_after_run_package"] == "manual_external_model_execution_and_result_upload"
+

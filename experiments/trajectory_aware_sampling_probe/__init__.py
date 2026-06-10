@@ -57,6 +57,10 @@ from experiments.trajectory_aware_sampling_probe.external_controlled_real_genera
     build_external_controlled_real_generation_execution_handoff_report_section,
     build_trajectory_aware_sampling_external_controlled_real_generation_execution_handoff,
 )
+from experiments.trajectory_aware_sampling_probe.external_controlled_single_real_generation_execution_run import (
+    build_external_controlled_single_real_generation_execution_run_report_section,
+    build_trajectory_aware_sampling_external_controlled_single_real_generation_execution_run,
+)
 from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
     build_trajectory_aware_sampling_gpu_validation_contract,
 )
@@ -99,6 +103,8 @@ __all__ = [
     "build_governed_real_generation_execution_authorization_report_section",
     "build_trajectory_aware_sampling_external_controlled_real_generation_execution_handoff",
     "build_external_controlled_real_generation_execution_handoff_report_section",
+    "build_trajectory_aware_sampling_external_controlled_single_real_generation_execution_run",
+    "build_external_controlled_single_real_generation_execution_run_report_section",
     "build_trajectory_aware_sampling_runtime_interface_implementation",
     "build_trajectory_aware_sampling_runtime_interface_scaffold",
     "TrajectoryAwareSamplingProbeRunner",

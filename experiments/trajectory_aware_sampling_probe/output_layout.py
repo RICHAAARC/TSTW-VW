@@ -41,6 +41,7 @@ class TrajectoryAwareSamplingProbeOutputPaths(BaseRunOutputPaths):
     manual_controlled_single_request_result_gate_path: Path
     governed_real_generation_execution_authorization_decision_path: Path
     external_controlled_real_generation_execution_handoff_path: Path
+    external_controlled_single_real_generation_execution_run_path: Path
     sampling_probe_report_path: Path
 
     def table_paths(self) -> list[Path]:
@@ -164,6 +165,11 @@ def build_trajectory_aware_sampling_probe_output_paths(
             output_root_path
             / "artifacts"
             / "trajectory_aware_sampling_external_controlled_real_generation_execution_handoff.json"
+        ),
+        external_controlled_single_real_generation_execution_run_path=(
+            output_root_path
+            / "artifacts"
+            / "trajectory_aware_sampling_external_controlled_single_real_generation_execution_run.json"
         ),
         sampling_probe_report_path=(
             output_root_path / "reports" / "trajectory_aware_sampling_probe_report.md"
