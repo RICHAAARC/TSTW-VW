@@ -587,3 +587,21 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | runtime_error_message | governance | none | false | false | false | Nullable runtime error message field reserved by dry-run result manifests. |
 | NextAllowedConstructionAfterRuntimeInterfaceImplementation | governance | none | false | false | false | Next construction recommendation emitted by the non-backend runtime interface implementation. |
 | forbidden_runtime_capabilities_until_backend_integration_decision | governance | none | false | false | false | Runtime capabilities that remain blocked until a later backend integration decision. |
+
+| TrajectoryAwareSamplingBackendIntegrationDecision | governance | none | false | false | false | Decision emitted by the backend integration gate after non-backend runtime interface implementation. |
+
+| TrajectoryAwareSamplingBackendIntegrationDecisionBlockingReasons | governance | none | false | false | false | Blocking reasons that prevent backend adapter scaffold construction. |
+
+| backend_adapter_scaffold_allowed | governance | none | false | false | false | Boolean marker indicating whether backend adapter scaffold construction is allowed without backend connection. |
+
+| approved_backend_adapter_scaffold_capabilities | governance | none | false | false | false | Capabilities approved for the next backend adapter scaffold construction step. |
+
+| forbidden_runtime_capabilities_until_backend_adapter_scaffold | governance | none | false | false | false | Runtime capabilities that remain blocked until backend adapter scaffold construction is separately implemented. |
+
+| runtime_interface_implementation_payload_digest | trace | none | false | false | false | Digest of the full runtime interface implementation payload consumed by backend integration decision. |
+
+| backend_integration_decision_digest | trace | none | false | false | false | Digest of the backend integration decision payload excluding the digest field itself. |
+
+| backend_integration_decision_path | artifact_layout | none | false | false | false | Relative path reserved for the trajectory-aware sampling backend integration decision artifact. |
+
+| NextAllowedConstructionAfterBackendIntegrationDecision | governance | none | false | false | false | Next construction recommendation emitted by the backend integration decision gate. |

@@ -190,3 +190,36 @@ def test_trajectory_aware_sampling_runtime_interface_implementation_is_no_backen
         == "artifacts/trajectory_aware_sampling_runtime_interface_implementation.json"
     )
 
+
+def test_trajectory_aware_sampling_backend_integration_decision_allows_adapter_scaffold_only() -> None:
+    """验证 backend integration decision 只批准 adapter scaffold, 不连接真实后端。"""
+    config = json.loads((ROOT / "configs" / "protocol" / "trajectory_aware_sampling_backend_integration_decision.json").read_text(encoding="utf-8"))
+
+    assert config["project_stage"] == "trajectory_aware_sampling_probe"
+    assert config["construction_phase"] == "trajectory_aware_sampling_probe"
+    assert config["target_construction_phase"] == "full_paper_protocol"
+    assert config["runtime_mode"] == "backend_integration_decision_adapter_scaffold_only"
+    assert (
+        config["required_runtime_interface_implementation_decision"]
+        == "READY_FOR_BACKEND_INTEGRATION_DECISION"
+    )
+    assert (
+        config["required_next_allowed_construction_after_implementation"]
+        == "backend_integration_decision"
+    )
+    assert config["backend_adapter_scaffold_allowed"] is True
+    assert config["runtime_backend_connection_allowed"] is False
+    assert config["real_generation_allowed"] is False
+    assert config["real_watermark_integration_allowed"] is False
+    assert config["approved_next_construction"] == "backend_adapter_scaffold"
+    assert "backend_adapter_config_schema" in config[
+        "approved_backend_adapter_scaffold_capabilities"
+    ]
+    assert "real_dit_generation" in config[
+        "forbidden_runtime_capabilities_until_backend_adapter_scaffold"
+    ]
+    assert (
+        config["outputs"]["backend_integration_decision_path"]
+        == "artifacts/trajectory_aware_sampling_backend_integration_decision.json"
+    )
+

@@ -19,6 +19,9 @@ from experiments.trajectory_aware_sampling_probe.backend_transition_guard import
 from experiments.trajectory_aware_sampling_probe.backend_transition_decision import (
     build_trajectory_aware_sampling_backend_transition_decision,
 )
+from experiments.trajectory_aware_sampling_probe.backend_integration_decision import (
+    build_trajectory_aware_sampling_backend_integration_decision,
+)
 from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
     build_trajectory_aware_sampling_gpu_validation_contract,
 )
@@ -52,6 +55,9 @@ DEFAULT_RUNTIME_INTERFACE_CONFIG_RELATIVE_PATH = Path(
 DEFAULT_RUNTIME_INTERFACE_IMPLEMENTATION_CONFIG_RELATIVE_PATH = Path(
     "configs/protocol/trajectory_aware_sampling_runtime_interface_implementation.json"
 )
+DEFAULT_BACKEND_INTEGRATION_DECISION_CONFIG_RELATIVE_PATH = Path(
+    "configs/protocol/trajectory_aware_sampling_backend_integration_decision.json"
+)
 
 
 @dataclass(frozen=True)
@@ -72,6 +78,7 @@ class TrajectoryAwareSamplingProbeRunResult:
     backend_transition_decision: dict[str, Any]
     runtime_interface_scaffold: dict[str, Any]
     runtime_interface_implementation: dict[str, Any]
+    backend_integration_decision: dict[str, Any]
     artifact_paths: dict[str, Path]
 
 
@@ -168,6 +175,11 @@ class TrajectoryAwareSamplingProbeRunner:
                 self._read_runtime_interface_implementation_config(),
             )
         )
+        backend_integration_decision = self._write_backend_integration_decision(
+            output_root_path,
+            runtime_interface_implementation,
+            self._read_backend_integration_decision_config(),
+        )
         output_paths = build_trajectory_aware_sampling_probe_output_paths(output_root_path)
         artifact_paths["sampling_handoff_manifest_path"] = (
             output_paths.sampling_handoff_manifest_path
@@ -187,6 +199,9 @@ class TrajectoryAwareSamplingProbeRunner:
         artifact_paths["runtime_interface_implementation_path"] = (
             output_paths.runtime_interface_implementation_path
         )
+        artifact_paths["backend_integration_decision_path"] = (
+            output_paths.backend_integration_decision_path
+        )
         return TrajectoryAwareSamplingProbeRunResult(
             run_id=output_root_path.name,
             output_root=output_root_path,
@@ -198,6 +213,7 @@ class TrajectoryAwareSamplingProbeRunner:
             backend_transition_decision=backend_transition_decision,
             runtime_interface_scaffold=runtime_interface_scaffold,
             runtime_interface_implementation=runtime_interface_implementation,
+            backend_integration_decision=backend_integration_decision,
             artifact_paths=artifact_paths,
         )
 
@@ -251,6 +267,13 @@ class TrajectoryAwareSamplingProbeRunner:
         config_path = (
             self._repository_root
             / DEFAULT_RUNTIME_INTERFACE_IMPLEMENTATION_CONFIG_RELATIVE_PATH
+        )
+        return json.loads(config_path.read_text(encoding="utf-8"))
+
+    def _read_backend_integration_decision_config(self) -> dict[str, Any]:
+        config_path = (
+            self._repository_root
+            / DEFAULT_BACKEND_INTEGRATION_DECISION_CONFIG_RELATIVE_PATH
         )
         return json.loads(config_path.read_text(encoding="utf-8"))
 
@@ -426,3 +449,29 @@ class TrajectoryAwareSamplingProbeRunner:
         )
         return implementation_payload
 
+
+    def _write_backend_integration_decision(
+        self,
+        output_root_path: Path,
+        runtime_interface_implementation: dict[str, Any],
+        backend_integration_decision_config: dict[str, Any],
+    ) -> dict[str, Any]:
+        decision_payload = build_trajectory_aware_sampling_backend_integration_decision(
+            runtime_interface_implementation,
+            backend_integration_decision_config,
+        )
+        decision_path = build_trajectory_aware_sampling_probe_output_paths(
+            output_root_path
+        ).backend_integration_decision_path
+        decision_path.parent.mkdir(parents=True, exist_ok=True)
+        decision_path.write_text(
+            json.dumps(
+                decision_payload,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return decision_payload

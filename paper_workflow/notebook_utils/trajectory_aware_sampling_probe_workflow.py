@@ -229,6 +229,22 @@ def read_runtime_interface_implementation(run_root: str | Path) -> dict[str, Any
     return json.loads(implementation_path.read_text(encoding="utf-8"))
 
 
+def read_backend_integration_decision(run_root: str | Path) -> dict[str, Any]:
+    """功能: 读取 backend integration decision gate 产物。
+
+    该 helper 只读取 repository runner 已经生成的决策 artifact, 便于 notebook 显示下一步是否可以构建
+    backend adapter scaffold。它不连接真实生成后端, 不生成视频, 也不执行 watermark 算法。
+    """
+    decision_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_backend_integration_decision.json"
+    )
+    if not decision_path.exists():
+        raise FileNotFoundError(decision_path)
+    return json.loads(decision_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

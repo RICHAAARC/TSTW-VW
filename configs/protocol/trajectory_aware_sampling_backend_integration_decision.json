@@ -1,0 +1,32 @@
+{
+  "approved_backend_adapter_scaffold_capabilities": [
+    "backend_adapter_config_schema",
+    "backend_request_translation_schema",
+    "backend_result_normalization_schema",
+    "backend_failure_manifest_schema"
+  ],
+  "approved_next_construction": "backend_adapter_scaffold",
+  "backend_adapter_scaffold_allowed": true,
+  "construction_phase": "trajectory_aware_sampling_probe",
+  "forbidden_runtime_capabilities_until_backend_adapter_scaffold": [
+    "real_dit_generation",
+    "flow_matching_generation",
+    "real_video_generation",
+    "real_watermark_embedding",
+    "real_watermark_detection"
+  ],
+  "minimum_dry_run_request_count": 1,
+  "minimum_dry_run_result_manifest_count": 1,
+  "outputs": {
+    "backend_integration_decision_path": "artifacts/trajectory_aware_sampling_backend_integration_decision.json"
+  },
+  "project_stage": "trajectory_aware_sampling_probe",
+  "real_generation_allowed": false,
+  "real_watermark_integration_allowed": false,
+  "require_gpu_preflight_observation": true,
+  "required_next_allowed_construction_after_implementation": "backend_integration_decision",
+  "required_runtime_interface_implementation_decision": "READY_FOR_BACKEND_INTEGRATION_DECISION",
+  "runtime_backend_connection_allowed": false,
+  "runtime_mode": "backend_integration_decision_adapter_scaffold_only",
+  "target_construction_phase": "full_paper_protocol"
+}
