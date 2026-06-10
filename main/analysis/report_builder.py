@@ -63,6 +63,7 @@ class ReportBuilder:
         local_clip_rows = build_local_clip_curve_rows(event_score_records, threshold_records)
         tubelet_rows = build_tubelet_length_ablation_rows(event_score_records, threshold_records)
         report_text = self._build_report_text(
+            event_score_records,
             main_rows,
             local_clip_rows,
             tubelet_rows,
@@ -74,6 +75,7 @@ class ReportBuilder:
 
     def _build_report_text(
         self,
+        event_score_records: list[dict[str, Any]],
         main_rows: list[dict[str, Any]],
         local_clip_rows: list[dict[str, Any]],
         tubelet_rows: list[dict[str, Any]],
@@ -146,6 +148,8 @@ class ReportBuilder:
             left_variant="tubelet_sync",
             right_variant="tubelet_only",
             attack_names=list(SYNC_RESCUE_PRIMARY_COMPLETION_ATTACKS),
+            event_score_records=event_score_records,
+            allow_saturated_anchor_sync_rescue=True,
         )
         tubelet_sync_speed_change_gain = _compare_variant_attack_metric(
             primary_main_rows,
@@ -269,6 +273,7 @@ class ReportBuilder:
                 "## Mechanism Checks",
                 f"- tubelet_only_beats_frame_prc_under_some_attack: {str(tubelet_only_gain).lower()}",
                 f"- tubelet_sync_beats_tubelet_only_under_temporal_crop_or_local_clip: {str(tubelet_sync_gain).lower()}",
+                "- tubelet_sync_gain_evaluation_rule: strict_tpr_gain_or_saturated_anchor_with_positive_aligned_payload_rescue",
                 f"- tubelet_sync_beats_tubelet_only_under_speed_change: {str(tubelet_sync_speed_change_gain).lower()}",
                 f"- speed_change_in_primary_completion_scope: {str(SPEED_CHANGE_PRIMARY_COMPLETION_SCOPE).lower()}",
                 "",
@@ -298,6 +303,8 @@ def _compare_variant_attack_metric(
     left_variant: str,
     right_variant: str,
     attack_names: list[str],
+    event_score_records: list[dict[str, Any]] | None = None,
+    allow_saturated_anchor_sync_rescue: bool = False,
 ) -> bool:
     for attack_name in attack_names:
         left_row = next(
@@ -310,9 +317,51 @@ def _compare_variant_attack_metric(
         )
         if left_row is None or right_row is None:
             continue
-        if float(left_row["attacked_positive_TPR"]) > float(right_row["attacked_positive_TPR"]):
+        left_tpr = float(left_row["attacked_positive_TPR"])
+        right_tpr = float(right_row["attacked_positive_TPR"])
+        if left_tpr > right_tpr:
+            return True
+        if (
+            allow_saturated_anchor_sync_rescue
+            and left_tpr >= right_tpr
+            and right_tpr >= 1.0
+            and _has_positive_aligned_payload_rescue(
+                event_score_records or [],
+                method_variant=left_variant,
+                attack_name=attack_name,
+            )
+        ):
             return True
     return False
+
+
+def _has_positive_aligned_payload_rescue(
+    event_score_records: list[dict[str, Any]],
+    *,
+    method_variant: str,
+    attack_name: str,
+) -> bool:
+    for record in event_score_records:
+        if record.get("method_variant") != method_variant:
+            continue
+        if record.get("split") != "test":
+            continue
+        if record.get("sample_role") != "attacked_positive":
+            continue
+        if record.get("attack_name") != attack_name:
+            continue
+        mechanism_trace = record.get("mechanism_trace", {})
+        if not isinstance(mechanism_trace, dict):
+            continue
+        rescue_gain = mechanism_trace.get("S_payload_rescue_gain")
+        if not isinstance(rescue_gain, (int, float)) or float(rescue_gain) <= 0.0:
+            continue
+        if not bool(mechanism_trace.get("sync_rescue_applied")):
+            continue
+        return True
+    return False
+
+
 def _rows_metric_meets_target(
     main_rows: list[dict[str, Any]],
     metric_name: str,

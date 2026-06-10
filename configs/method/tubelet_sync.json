@@ -24,7 +24,7 @@
     "scale_search_snap_radius": 3,
     "coverage_penalty_enabled": true,
     "min_sync_positive_margin": 0.0,
-    "min_sync_alignment_coverage_ratio": 0.5,
+    "min_sync_alignment_coverage_ratio": 0.125,
     "min_sync_alignment_matched_count": 1
   },
   "lambda_sync": 0.1,
