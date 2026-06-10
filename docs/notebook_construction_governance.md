@@ -826,3 +826,37 @@ Notebook 之间彼此隔离；
 非分步骤流程保存单一结果包；
 治理契约不显式说明任何具体阶段构建。
 ```
+
+## Stage-Two Result Naming And Delayed Drive Materialization
+
+For the governed `real_video_vae_latent_probe` notebook workflow, result identities must use single-underscore separators only. This applies to both `FAMILY_ID_TEMPLATE` and `PROCESSED_DATASET_KEY`.
+
+Valid examples:
+
+```text
+real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit
+real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001
+```
+
+Forbidden examples:
+
+```text
+real_video_vae_latent_probe__formal__davis2017_trainval480p__utc_time__short_commit
+real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001
+```
+
+The final Google Drive landing directory for stage-two real-video probe results is:
+
+```text
+/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<FAMILY_ID>/
+```
+
+The notebook must use two separate roots:
+
+```text
+LOCAL_FAMILY_ROOT = /content/TSTW_runtime/families/real_video_vae_latent_probe/<FAMILY_ID>
+DRIVE_FAMILY_ROOT = /content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<FAMILY_ID>
+```
+
+The formal runner, checker, artifact rebuild, mechanism audit, package creation, and notebook final summary must complete under `LOCAL_FAMILY_ROOT` first. Only after those steps succeed may the notebook call the repository wrapper that materializes the completed family result to `DRIVE_FAMILY_ROOT` and appends registry entries. Creating `DRIVE_FAMILY_ROOT` before the run succeeds is forbidden, because it can leave empty result folders after failed Colab runs.
+

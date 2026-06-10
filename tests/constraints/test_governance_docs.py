@@ -63,6 +63,32 @@ def test_file_organization_contract_mentions_release_boundaries() -> None:
     assert "run_real_video_vae_latent_probe.ipynb" in text
 
 
+def test_stage_two_notebook_result_layout_is_documented() -> None:
+    text = _read("docs/file_organization.md")
+    notebook_text = _read("docs/notebook_construction_governance.md")
+    project_contract = _read(".codex/project_contract.md")
+
+    for payload in (text, notebook_text, project_contract):
+        assert "single-underscore" in payload
+        assert "real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit" in payload
+        assert "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001" in payload
+        assert "real_video_vae_latent_probe__formal__" in payload
+        assert "real_video_vae_latent_probe__davis2017" in payload
+
+    assert (
+        "/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<FAMILY_ID>/"
+        in text
+    )
+    assert (
+        "/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<FAMILY_ID>/"
+        in notebook_text
+    )
+    assert "LOCAL_FAMILY_ROOT" in notebook_text
+    assert "DRIVE_FAMILY_ROOT" in notebook_text
+    assert "session-local" in project_contract
+    assert "must not create an empty Google Drive family result directory" in project_contract
+
+
 def test_harness_engineering_mentions_file_organization_gate() -> None:
     text = _read("docs/harness_engineering.md")
     assert "docs/file_organization.md" in text
@@ -140,6 +166,10 @@ def test_notebook_entrypoint_skill_mentions_notebook_utils() -> None:
     assert "`paper_workflow/notebook_utils/`" in text
     assert "build_processed_real_video_dataset.ipynb" in text
     assert "run_real_video_vae_latent_probe.ipynb" in text
+    assert "single-underscore separators" in text
+    assert "/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<FAMILY_ID>/" in text
+    assert "LOCAL_FAMILY_ROOT" in text
+    assert "DRIVE_FAMILY_ROOT" in text
 
 
 def test_notebook_entrypoint_skill_mentions_outer_shard_and_in_shard_worker_semantics() -> None:

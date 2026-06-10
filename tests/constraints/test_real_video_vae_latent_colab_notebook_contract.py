@@ -147,6 +147,14 @@ def test_processed_dataset_notebook_exists_and_uses_governed_entrypoints() -> No
     assert "scripts.prepare_datasets.build_processed_real_video_dataset" in workflow_text
     assert "raw_dataset_download_manifest.json" in notebook_text
     assert "PROCESSED_DATASET_KEY" in notebook_text
+    assert (
+        "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
+        in notebook_text
+    )
+    assert (
+        "real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001"
+        not in notebook_text
+    )
     assert "processed_dataset_checks.json" in notebook_text
     assert "/content/drive/MyDrive" in notebook_text
     assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
@@ -195,7 +203,34 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "probe_workflow.write_probe_tubelet_anchor_forensics" in notebook_text
     assert "probe_workflow.package_probe_non_formal_audit_bundle" in notebook_text
     assert "probe_workflow.package_probe_family_results" in notebook_text
+    assert "probe_workflow.materialize_probe_family_results_to_drive" in notebook_text
     assert "FAMILY_ID_TEMPLATE" in notebook_text
+    assert (
+        "real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit"
+        in notebook_text
+    )
+    assert (
+        "real_video_vae_latent_probe__formal__davis2017_trainval480p__utc_time__short_commit"
+        not in notebook_text
+    )
+    assert (
+        "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
+        in notebook_text
+    )
+    assert (
+        "real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001"
+        not in notebook_text
+    )
+    assert (
+        "DRIVE_FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / 'real_video_vae_latent_probe' / FAMILY_ID"
+        in notebook_text
+    )
+    assert (
+        "LOCAL_FAMILY_ROOT = LOCAL_RUNTIME_ROOT / 'families' / 'real_video_vae_latent_probe' / FAMILY_ID"
+        in notebook_text
+    )
+    assert "FAMILY_ROOT = LOCAL_FAMILY_ROOT" in notebook_text
+    assert "FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / 'families' / FAMILY_ID" not in notebook_text
     assert "PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "dataset_manifest_path=PROCESSED_DATASET_MANIFEST" in notebook_text
     assert "dataset_manifest=PROCESSED_DATASET_MANIFEST" in notebook_text
@@ -323,7 +358,8 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "lpips_evidence_summary" in notebook_text
     assert "tubelet_anchor_forensics_summary" in notebook_text
     assert "non_formal_audit_bundle_summary" in notebook_text
-    assert "drive_archive_path = package_payload['drive_archive_path']" in notebook_text
+    assert "local_archive_path = package_payload['drive_archive_path']" in notebook_text
+    assert "drive_archive_path = drive_family_materialization_summary.get('drive_archive_path')" in notebook_text
     assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
     summarize_run_timing_call = "run_timing_summary = run_timing_workflow.summarize_run_timing("
     summarize_run_timing_indices = _all_indices(notebook_text, summarize_run_timing_call)

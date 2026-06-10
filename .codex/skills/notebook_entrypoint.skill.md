@@ -61,3 +61,11 @@ Applies to future `.ipynb` files, notebook execution entrypoints, `paper_workflo
 - `audit_notebook_naming_contract.py`
 - `audit_notebook_formal_output_bypass.py`
 - `run_all_audits.py`
+
+## Stage-Two Result Naming And Drive Materialization
+
+- `run_real_video_vae_latent_probe.ipynb` and `build_processed_real_video_dataset.ipynb` must use single-underscore separators for `FAMILY_ID_TEMPLATE` and `PROCESSED_DATASET_KEY` identities.
+- Double-underscore result identities such as `real_video_vae_latent_probe__formal__davis2017_trainval480p__utc_time__short_commit` and `real_video_vae_latent_probe__davis2017_trainval480p__256x256__32f__8fps__freeze001` are forbidden in governed notebook defaults.
+- Stage-two real-video probe family results must land in `/content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe/<FAMILY_ID>/`.
+- The run notebook must package into a session-local `LOCAL_FAMILY_ROOT` first and materialize to `DRIVE_FAMILY_ROOT` only after the formal runner, checker, mechanism audit, and package steps succeed. Creating the Drive family result directory before the run succeeds is forbidden.
+

@@ -28,6 +28,7 @@ import paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow as wor
 
 from paper_workflow.notebook_utils.real_video_vae_latent_probe_workflow import (
     export_probe_stage2_calibration_family_snapshot,
+    materialize_probe_family_results_to_drive,
     merge_probe_method_variant_split_outputs,
     package_probe_non_formal_audit_bundle,
     prepare_probe_runtime_workspace,
@@ -402,6 +403,57 @@ def test_prepare_probe_runtime_workspace_preserves_build_aligned_drive_root(
     )
     assert handoff["family_root"] == str(family_root)
     assert handoff["dataset_source_mode"] == "processed_dataset_in_place"
+
+
+@pytest.mark.unit
+def test_materialize_probe_family_results_to_drive_copies_after_local_package(
+    tmp_path: Path,
+) -> None:
+    """验证阶段 2 notebook 只在本地结果包存在后才创建 Drive family 目录。"""
+    local_family_root = tmp_path / "runtime" / "families" / "real_video_vae_latent_probe" / "family_a"
+    drive_root = tmp_path / "drive" / "MyDrive"
+    drive_family_root = drive_root / "TSTW" / "results" / "real_video_vae_latent_probe" / "family_a"
+    local_package_path = local_family_root / "packages" / "run_a.tar.zst"
+    local_summary_path = local_family_root / "family_summary.json"
+    local_package_path.parent.mkdir(parents=True, exist_ok=True)
+    local_package_path.write_bytes(b"package")
+    local_summary_path.write_text('{"status": true}\n', encoding="utf-8")
+
+    assert not drive_family_root.exists()
+
+    summary = materialize_probe_family_results_to_drive(
+        local_family_root=local_family_root,
+        drive_family_root=drive_family_root,
+        package_payload={
+            "drive_archive_path": str(local_package_path),
+            "package_path": str(local_package_path),
+            "package_format": "tar.zst",
+            "archive_format": "tar.zst",
+            "compat_pack_root": str(local_family_root),
+            "zip_pack": {
+                "zip_path": str(local_family_root / "packages" / "run_a.zip"),
+            },
+        },
+        drive_root=drive_root,
+        family_id="family_a",
+        workflow_key="workflow_a",
+        step_key="step_a",
+        run_mode="formal",
+        formal_validation_summary={"status": True},
+        mechanism_summary={"Stage2MechanismDecision": "PASS"},
+    )
+
+    assert drive_family_root.exists()
+    assert (drive_family_root / "packages" / "run_a.tar.zst").exists()
+    assert summary["drive_archive_path"] == str(drive_family_root / "packages" / "run_a.tar.zst")
+    assert summary["package_payload"]["compat_pack_root"] == str(drive_family_root)
+    result_registry_path = Path(summary["registry_paths"]["result_registry.jsonl"])
+    assert result_registry_path.as_posix().endswith("TSTW/registry/result_registry.jsonl")
+    registry_entry = json.loads(result_registry_path.read_text(encoding="utf-8").splitlines()[0])
+    assert registry_entry["archive_path"] == str(
+        drive_family_root / "packages" / "run_a.tar.zst"
+    )
+    assert registry_entry["archive_path"] != str(local_package_path)
 
 
 @pytest.mark.unit
