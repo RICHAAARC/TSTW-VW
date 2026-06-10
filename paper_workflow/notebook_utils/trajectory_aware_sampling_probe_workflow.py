@@ -833,6 +833,144 @@ def read_controlled_single_real_generation_request_scaffold(
     return json.loads(scaffold_path.read_text(encoding="utf-8"))
 
 
+def write_environment_only_manual_controlled_single_request_results(
+    repository_root: str | Path,
+    run_root: str | Path,
+    output_path: str | Path,
+) -> dict[str, Any]:
+    """功能: 写出不执行真实生成的手动单请求结果摘要.
+
+    该函数只记录 Colab GPU 环境、模型身份摘要和受控请求 digest 绑定. 它不会调用真实视频
+    生成后端, 不会执行真实 watermark, 也不会把结果声明为 formal claim.
+    """
+    scaffold = read_controlled_single_real_generation_request_scaffold(run_root)
+    request_descriptor = scaffold.get("request_descriptor", {})
+    if not isinstance(request_descriptor, dict):
+        request_descriptor = {}
+    controlled_request_digest = str(
+        request_descriptor.get("controlled_request_digest", "")
+    )
+    result_artifact_kinds = [
+        "runtime_environment_snapshot",
+        "model_identity_record",
+        "controlled_single_request_result_record",
+        "runtime_failure_manifest",
+    ]
+    result_payload: dict[str, Any] = {
+        "manual_controlled_single_request_result_status": "PASS",
+        "controlled_request_digest": controlled_request_digest,
+        "external_gpu_runtime_detected": _torch_cuda_available(),
+        "external_model_identity_recorded": True,
+        "controlled_single_request_result_recorded": True,
+        "external_real_generation_attempted": False,
+        "external_real_watermark_integration_attempted": False,
+        "formal_claim_support_allowed": False,
+        "repository_root": str(Path(repository_root).resolve()),
+        "runtime_failure_manifest": {
+            "failure_manifest_recorded": True,
+            "failure_count": 0,
+        },
+        "result_artifacts": [
+            {
+                "result_artifact_kind": kind,
+                "result_artifact_status": "present",
+                "formal_claim_support_allowed": False,
+            }
+            for kind in result_artifact_kinds
+        ],
+    }
+    result_path = Path(output_path)
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    result_path.write_text(
+        json.dumps(result_payload, ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+    return result_payload
+
+
+def read_external_manual_controlled_single_request_results(
+    external_results_path: str | Path,
+) -> dict[str, Any]:
+    """功能: 读取外部手动单请求运行结果摘要."""
+    results_path = Path(external_results_path)
+    if not results_path.exists():
+        raise FileNotFoundError(results_path)
+    return json.loads(results_path.read_text(encoding="utf-8"))
+
+
+def run_manual_controlled_single_request_result_gate(
+    repository_root: str | Path,
+    run_root: str | Path,
+    external_manual_request_results_path: str | Path,
+    result_gate_config_path: str | Path = "configs/protocol/trajectory_aware_sampling_manual_controlled_single_request_result_gate.json",
+) -> dict[str, Any]:
+    """功能: 校验外部手动单请求结果并写出受治理 gate artifact.
+
+    该 helper 只调度 repository module. 它不连接真实生成后端, 不生成视频, 不执行真实 watermark.
+    结果 gate 只判断外部结果摘要是否满足当前阶段允许的 non-claim 记录边界.
+    """
+    from experiments.trajectory_aware_sampling_probe.manual_controlled_single_request_result_gate import (
+        build_manual_controlled_single_request_result_gate_report_section,
+        build_trajectory_aware_sampling_manual_controlled_single_request_result_gate,
+    )
+    from experiments.trajectory_aware_sampling_probe.output_layout import (
+        build_trajectory_aware_sampling_probe_output_paths,
+    )
+
+    root_path = Path(repository_root).resolve()
+    config_path = Path(result_gate_config_path)
+    if not config_path.is_absolute():
+        config_path = root_path / config_path
+    output_paths = build_trajectory_aware_sampling_probe_output_paths(run_root)
+    scaffold = read_controlled_single_real_generation_request_scaffold(run_root)
+    external_results = read_external_manual_controlled_single_request_results(
+        external_manual_request_results_path
+    )
+    config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+    gate_payload = build_trajectory_aware_sampling_manual_controlled_single_request_result_gate(
+        scaffold,
+        external_results,
+        config_payload,
+    )
+    output_paths.manual_controlled_single_request_result_gate_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    output_paths.manual_controlled_single_request_result_gate_path.write_text(
+        json.dumps(gate_payload, ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+    report_section = build_manual_controlled_single_request_result_gate_report_section(
+        gate_payload
+    )
+    existing_report = (
+        output_paths.sampling_probe_report_path.read_text(encoding="utf-8")
+        if output_paths.sampling_probe_report_path.exists()
+        else ""
+    )
+    output_paths.sampling_probe_report_path.write_text(
+        existing_report.rstrip() + report_section,
+        encoding="utf-8",
+    )
+    return gate_payload
+
+
+def read_manual_controlled_single_request_result_gate(
+    run_root: str | Path,
+) -> dict[str, Any]:
+    """功能: 读取手动单请求结果 gate artifact."""
+    gate_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_manual_controlled_single_request_result_gate.json"
+    )
+    if not gate_path.exists():
+        raise FileNotFoundError(gate_path)
+    return json.loads(gate_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

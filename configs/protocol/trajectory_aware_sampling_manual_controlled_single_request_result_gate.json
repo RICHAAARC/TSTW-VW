@@ -1,0 +1,20 @@
+{
+  "approved_next_construction_after_manual_result_gate_pass": "governed_real_generation_execution_authorization_decision",
+  "construction_phase": "manual_controlled_single_request_result_gate",
+  "external_real_generation_attempt_allowed": false,
+  "formal_claim_support_allowed_after_result_gate": false,
+  "project_stage": "trajectory_aware_sampling_probe",
+  "real_generation_execution_allowed_after_result_gate": false,
+  "real_watermark_integration_allowed_after_result_gate": false,
+  "required_controlled_single_request_scaffold_decision": "READY_FOR_MANUAL_CONTROLLED_REAL_GENERATION_REQUEST_RUN",
+  "required_manual_request_result_status_for_pass": "PASS",
+  "required_next_external_execution_after_scaffold": "manual_controlled_single_real_generation_request_run",
+  "required_result_artifact_kinds": [
+    "runtime_environment_snapshot",
+    "model_identity_record",
+    "controlled_single_request_result_record",
+    "runtime_failure_manifest"
+  ],
+  "runtime_mode": "external_gpu_result_intake_only",
+  "target_construction_phase": "full_paper_protocol"
+}

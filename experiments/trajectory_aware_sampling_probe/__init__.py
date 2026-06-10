@@ -45,6 +45,10 @@ from experiments.trajectory_aware_sampling_probe.controlled_single_real_generati
     build_controlled_single_real_generation_request_scaffold_report_section,
     build_trajectory_aware_sampling_controlled_single_real_generation_request_scaffold,
 )
+from experiments.trajectory_aware_sampling_probe.manual_controlled_single_request_result_gate import (
+    build_manual_controlled_single_request_result_gate_report_section,
+    build_trajectory_aware_sampling_manual_controlled_single_request_result_gate,
+)
 from experiments.trajectory_aware_sampling_probe.gpu_validation_contract import (
     build_trajectory_aware_sampling_gpu_validation_contract,
 )
@@ -81,6 +85,8 @@ __all__ = [
     "build_explicit_real_generation_transition_report_section",
     "build_trajectory_aware_sampling_controlled_single_real_generation_request_scaffold",
     "build_controlled_single_real_generation_request_scaffold_report_section",
+    "build_trajectory_aware_sampling_manual_controlled_single_request_result_gate",
+    "build_manual_controlled_single_request_result_gate_report_section",
     "build_trajectory_aware_sampling_runtime_interface_implementation",
     "build_trajectory_aware_sampling_runtime_interface_scaffold",
     "TrajectoryAwareSamplingProbeRunner",

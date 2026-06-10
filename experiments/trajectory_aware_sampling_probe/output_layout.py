@@ -38,6 +38,7 @@ class TrajectoryAwareSamplingProbeOutputPaths(BaseRunOutputPaths):
     real_backend_runtime_validation_gate_path: Path
     explicit_real_generation_transition_decision_path: Path
     controlled_single_real_generation_request_scaffold_path: Path
+    manual_controlled_single_request_result_gate_path: Path
     sampling_probe_report_path: Path
 
     def table_paths(self) -> list[Path]:
@@ -146,6 +147,11 @@ def build_trajectory_aware_sampling_probe_output_paths(
             output_root_path
             / "artifacts"
             / "trajectory_aware_sampling_controlled_single_real_generation_request_scaffold.json"
+        ),
+        manual_controlled_single_request_result_gate_path=(
+            output_root_path
+            / "artifacts"
+            / "trajectory_aware_sampling_manual_controlled_single_request_result_gate.json"
         ),
         sampling_probe_report_path=(
             output_root_path / "reports" / "trajectory_aware_sampling_probe_report.md"
