@@ -1,0 +1,31 @@
+{
+  "allowed_output_artifact_kinds": [
+    "runtime_environment_snapshot",
+    "model_identity_record",
+    "controlled_single_request_result_record",
+    "runtime_failure_manifest"
+  ],
+  "backend_invocation_boundary_kind": "manual_gpu_backend_invocation_boundary",
+  "construction_phase": "trajectory_aware_sampling_probe",
+  "formal_claim_support_allowed": false,
+  "maximum_controlled_request_count": 1,
+  "next_required_external_execution_after_scaffold": "manual_controlled_single_real_generation_request_run",
+  "outputs": {
+    "controlled_single_real_generation_request_scaffold_path": "artifacts/trajectory_aware_sampling_controlled_single_real_generation_request_scaffold.json"
+  },
+  "project_stage": "trajectory_aware_sampling_probe",
+  "real_generation_execution_allowed": false,
+  "real_watermark_integration_allowed": false,
+  "required_explicit_real_generation_transition_decision": "READY_FOR_CONTROLLED_SINGLE_REAL_GENERATION_REQUEST_SCAFFOLD",
+  "required_failure_fields": [
+    "failure_kind",
+    "failure_message",
+    "controlled_request_digest",
+    "runtime_environment_digest",
+    "recovery_recommendation"
+  ],
+  "required_next_allowed_construction_after_transition_decision": "controlled_single_real_generation_request_scaffold",
+  "required_runtime": "external_gpu",
+  "runtime_mode": "controlled_single_real_generation_request_scaffold_only",
+  "target_construction_phase": "full_paper_protocol"
+}

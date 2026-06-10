@@ -756,6 +756,83 @@ def read_explicit_real_generation_transition_decision(
     return json.loads(decision_path.read_text(encoding="utf-8"))
 
 
+def run_controlled_single_real_generation_request_scaffold(
+    repository_root: str | Path,
+    run_root: str | Path,
+    request_scaffold_config_path: str | Path = "configs/protocol/trajectory_aware_sampling_controlled_single_real_generation_request_scaffold.json",
+) -> dict[str, Any]:
+    """功能: 生成单条受控真实生成请求 scaffold 并写出报告补充.
+
+    该 helper 只调度 repository module, 不连接真实生成后端, 不生成视频,
+    不执行真实 watermark. 其产物用于下一步手动 GPU 执行前的请求边界检查.
+    """
+    from experiments.trajectory_aware_sampling_probe.controlled_single_real_generation_request_scaffold import (
+        build_controlled_single_real_generation_request_scaffold_report_section,
+        build_trajectory_aware_sampling_controlled_single_real_generation_request_scaffold,
+    )
+    from experiments.trajectory_aware_sampling_probe.output_layout import (
+        build_trajectory_aware_sampling_probe_output_paths,
+    )
+
+    root_path = Path(repository_root).resolve()
+    config_path = Path(request_scaffold_config_path)
+    if not config_path.is_absolute():
+        config_path = root_path / config_path
+    output_paths = build_trajectory_aware_sampling_probe_output_paths(run_root)
+    explicit_transition_decision = read_explicit_real_generation_transition_decision(
+        run_root
+    )
+    selection_plan = json.loads(
+        output_paths.sampling_selection_plan_path.read_text(encoding="utf-8")
+    )
+    config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+    scaffold_payload = (
+        build_trajectory_aware_sampling_controlled_single_real_generation_request_scaffold(
+            explicit_transition_decision,
+            selection_plan,
+            config_payload,
+        )
+    )
+    output_paths.controlled_single_real_generation_request_scaffold_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    output_paths.controlled_single_real_generation_request_scaffold_path.write_text(
+        json.dumps(scaffold_payload, ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+    report_section = (
+        build_controlled_single_real_generation_request_scaffold_report_section(
+            scaffold_payload
+        )
+    )
+    existing_report = (
+        output_paths.sampling_probe_report_path.read_text(encoding="utf-8")
+        if output_paths.sampling_probe_report_path.exists()
+        else ""
+    )
+    output_paths.sampling_probe_report_path.write_text(
+        existing_report.rstrip() + report_section,
+        encoding="utf-8",
+    )
+    return scaffold_payload
+
+
+def read_controlled_single_real_generation_request_scaffold(
+    run_root: str | Path,
+) -> dict[str, Any]:
+    """功能: 读取单条受控真实生成请求 scaffold artifact."""
+    scaffold_path = (
+        Path(run_root)
+        / "artifacts"
+        / "trajectory_aware_sampling_controlled_single_real_generation_request_scaffold.json"
+    )
+    if not scaffold_path.exists():
+        raise FileNotFoundError(scaffold_path)
+    return json.loads(scaffold_path.read_text(encoding="utf-8"))
+
+
 def package_sampling_probe_run(
     run_root: str | Path,
     package_root: str | Path,

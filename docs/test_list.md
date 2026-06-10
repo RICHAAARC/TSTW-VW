@@ -7,8 +7,8 @@
 - 测试根目录：`tests/`
 - 测试构建约束：`docs/test_case_constraints.md`
 - 当前 pytest 默认参数来自 `pyproject.toml`：`(constraint or unit or quick) and not integration and not smoke and not slow and not formal`
-- 当前全量测试节点：494 个
-- 当前默认会执行的测试节点：424 个
+- 当前全量测试节点：496 个
+- 当前默认会执行的测试节点：426 个
 - 当前默认排除的测试节点：70 个
 
 ## 2. 分层统计
@@ -16,7 +16,7 @@
 | Layer | Files | Nodes | Default role |
 | --- | --- | --- | --- |
 | constraints | 36 | 168 | default governance checks |
-| functional | 59 | 284 | default quick behavior checks |
+| functional | 60 | 286 | default quick behavior checks |
 | integration | 23 | 42 | excluded runner/smoke/formal checks |
 
 ## 3. 推荐执行命令
@@ -108,6 +108,7 @@ python tools/harness/run_all_audits.py
 | `tests/functional/test_trajectory_aware_sampling_backend_integration_decision.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证 trajectory-aware sampling 的后端集成决策 gate。 |
 | `tests/functional/test_trajectory_aware_sampling_backend_transition_decision.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证 trajectory-aware sampling 显式后端切换决策。 |
 | `tests/functional/test_trajectory_aware_sampling_backend_transition_guard.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证 trajectory-aware sampling 后端切换前治理守卫。 |
+| `tests/functional/test_trajectory_aware_sampling_controlled_single_real_generation_request_scaffold.py` | 2 | functional | `quick` | 2 | no | no | no | 文件用途: 验证 trajectory-aware sampling 的单条受控真实生成请求 scaffold. |
 | `tests/functional/test_trajectory_aware_sampling_explicit_real_generation_transition_decision.py` | 2 | functional | `quick` | 2 | no | no | no | 文件用途: 验证 trajectory-aware sampling 的显式真实生成切换决策. |
 | `tests/functional/test_trajectory_aware_sampling_gpu_validation_contract.py` | 3 | functional | `quick` | 3 | no | no | no | 文件用途: 验证 trajectory-aware sampling 后续真实 GPU runtime 合同。 |
 | `tests/functional/test_trajectory_aware_sampling_probe_workflow_result_gate.py` | 5 | functional | `quick` | 5 | yes | no | yes | 文件用途: 验证 trajectory-aware sampling notebook helper 的 result gate 写出流程。 |
