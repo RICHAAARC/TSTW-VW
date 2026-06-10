@@ -71,6 +71,16 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     notebook_text = "\n".join(
         _cell_text(cell) for cell in cells if isinstance(cell, dict)
     )
+    code_text = "\n".join(
+        _cell_text(cell)
+        for cell in cells
+        if isinstance(cell, dict) and cell.get("cell_type") == "code"
+    )
+    markdown_text = "\n".join(
+        _cell_text(cell)
+        for cell in cells
+        if isinstance(cell, dict) and cell.get("cell_type") == "markdown"
+    )
     workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert observed_step_keys == REQUIRED_STEP_KEYS
@@ -117,3 +127,8 @@ def test_trajectory_aware_sampling_probe_notebook_delegates_to_repository_cli() 
     assert "NextAllowedConstructionAfterRuntimeInterfaceScaffold" in notebook_text
     assert "TrajectoryAwareSamplingRuntimeInterfaceImplementationDecision" in notebook_text
     assert "NextAllowedConstructionAfterRuntimeInterfaceImplementation" in notebook_text
+    assert "sampling_workflow.run_sampling_scaffold_cli(" in code_text
+    assert "sampling_workflow.read_runtime_interface_implementation(" in code_text
+    assert "runtime_interface_implementation.get(" in code_text
+    assert "sampling_workflow.run_sampling_scaffold_cli(" not in markdown_text
+    assert "runtime_interface_implementation.get(" not in markdown_text
