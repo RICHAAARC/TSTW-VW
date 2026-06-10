@@ -308,6 +308,8 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | Stage2MechanismDecision | governance | none | false | false | false | Mechanism-evidence decision emitted by the stage-two mechanism audit and family summaries. |
 | Stage2MechanismBlockingReasons | governance | none | false | false | false | Ordered blocking-reason list explaining why the stage-two mechanism decision is not PASS. |
 | Stage2MechanismWarnings | governance | none | false | false | false | Ordered warning list emitted by the stage-two mechanism audit when optional metrics or gates are not fully enabled. |
+| lpips_evidence_available | governance | none | false | false | false | Boolean mechanism-audit summary flag indicating whether at least one stage-two event record contains numeric LPIPS evidence. |
+| lpips_record_count | governance | none | false | false | false | Count of stage-two event records containing numeric LPIPS evidence in formal checker and notebook summaries. |
 | SyncRescueDecision | governance | none | false | false | false | Separate stage-two rescue decision recording whether governed sync rescue evidence passes independently of leakage control. |
 | SyncLeakageDecision | governance | none | false | false | false | Separate stage-two leakage decision recording whether governed sync leakage remains PASS, RISK, or FAIL independently of rescue evidence. |
 | SyncCandidateSelectionStatus | governance | none | false | false | false | Stage-two sync selection status summarizing whether the observed sync behavior is eligible, rescue_with_leakage, saturated_anchor_no_increment, or insufficient_signal. |
@@ -347,6 +349,7 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | absolute_rescue_tpr_threshold | governance | none | true | false | false | Governed attacked-positive TPR threshold used to declare absolute rescue success for sync semantics. |
 | leakage_exceeded_multiplier | governance | none | true | false | false | Governed multiplier above max_attacked_negative_fpr used to distinguish leakage_risk from leakage_exceeded. |
 | require_quality_not_collapsed | governance | none | true | false | false | Boolean mechanism-gate flag requiring stage-two quality metrics to stay above configured floors. |
+| require_lpips_evidence | governance | none | true | false | false | Boolean mechanism-gate flag requiring numeric LPIPS evidence before the real_video_vae_latent_probe mechanism decision can PASS. |
 | min_watermarked_video_psnr | governance | none | true | false | false | Minimum watermarked-video PSNR floor used by the stage-two mechanism gate. |
 | min_watermarked_video_ssim | governance | none | true | false | false | Minimum watermarked-video SSIM floor used by the stage-two mechanism gate. |
 | video_vae_backend_placeholder | placeholder | _placeholder | true | false | true | Placeholder VAE backend field reserved while the repository remains under synthetic_tubelet_sync_probe governance. |

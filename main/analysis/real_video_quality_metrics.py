@@ -269,7 +269,13 @@ def build_real_video_quality_metrics_payload_from_frames(
     lpips_model_root = runtime_config.get("local_lpips_model_root") or runtime_config.get(
         "lpips_model_root"
     )
-    lpips_batch_size = int(quality_config.get("lpips_batch_size", 8) or 8)
+    lpips_batch_size = int(
+        quality_config.get(
+            "lpips_batch_size",
+            runtime_config.get("lpips_batch_size", 8),
+        )
+        or 8
+    )
     if not enable_lpips:
         lpips_failure_reason = "lpips_disabled_by_config"
     elif lpips_model_root:

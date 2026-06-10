@@ -133,6 +133,7 @@ def _perform_formal_checks(
         "has_real_video_runtime": False,
         "has_real_vae_backend": False,
         "has_real_quality_metrics": False,
+        "lpips_evidence_available": False,
         "has_real_temporal_metrics": False,
         "no_placeholder_containers": False,
         "has_mp4_artifacts": False,
@@ -186,6 +187,18 @@ def _perform_formal_checks(
         record.get("mechanism_trace", {}).get("quality_metrics_runtime")
         for record in event_score_records[:1]
     ]
+
+    lpips_scores = [
+        record.get("quality_metrics", {}).get("watermarked_video_lpips")
+        for record in event_score_records
+        if isinstance(record.get("quality_metrics", {}), dict)
+    ]
+    checks["lpips_evidence_available"] = any(
+        _is_non_bool_number(lpips_score) for lpips_score in lpips_scores
+    )
+    checks["details"]["lpips_record_count"] = sum(
+        1 for lpips_score in lpips_scores if _is_non_bool_number(lpips_score)
+    )
     
     # 检查真实时序指标运行时
     checks["has_real_temporal_metrics"] = all(
@@ -248,6 +261,7 @@ def _perform_formal_checks(
         checks["has_real_video_runtime"]
         and checks["has_real_vae_backend"]
         and checks["has_real_quality_metrics"]
+        and checks["lpips_evidence_available"]
         and checks["has_real_temporal_metrics"]
         and checks["no_placeholder_containers"]
         and checks["has_mp4_artifacts"]
@@ -268,6 +282,18 @@ def _read_json_payload(path: Path, default: Any) -> Any:
     if not path.exists():
         return default
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _is_non_bool_number(value: Any) -> bool:
+    """判断 value 是否为非布尔数值。
+
+    Args:
+        value: 待检查对象。
+
+    Returns:
+        仅当 value 是 int 或 float 且不是 bool 时返回 True。
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _validate_reencoded_latent_record(record: dict[str, Any], run_root: Path) -> bool:

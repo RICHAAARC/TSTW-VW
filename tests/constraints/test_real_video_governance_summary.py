@@ -1,6 +1,6 @@
 """
-文件用途：验证 governance summary 中的 18 个 PASS 条件。
-File purpose: Verify 18-condition PASS criteria for governance summary.
+文件用途：验证 governance summary 中的 19 个 PASS 条件。
+File purpose: Verify 19-condition PASS criteria for governance summary.
 Module type: General module
 """
 
@@ -43,6 +43,9 @@ def _build_governance_event_record(
         "sample_role": sample_role,
         "decision": decision,
         "evidence_scores": {"S_traj": None},
+        "quality_metrics": {
+            "watermarked_video_lpips": 0.123,
+        },
         "mechanism_trace": {
             "construction_phase": "real_video_vae_latent_probe",
             "video_runtime_status": "real_mp4_runtime",
@@ -290,6 +293,68 @@ def test_governance_summary_pass_condition_15_temporal_metrics_real() -> None:
     assert not check_temporal_metrics(placeholder_temporal_records), "Placeholder temporal metrics should fail"
 
 
+def test_governance_summary_pass_condition_lpips_evidence_available() -> None:
+    """功能：formal PASS 必须要求数值型 LPIPS 证据。
+
+    Test that formal PASS requires numeric LPIPS evidence.
+    """
+    event_score_records = [
+        _build_governance_event_record(
+            method_variant="frame_prc",
+            base_method_variant="frame_prc",
+            derived_variant="base",
+            ablation_axis="none",
+            tubelet_length=1,
+            attack_name="h264_compression",
+            sample_role="watermarked_positive",
+            decision=True,
+        )
+    ]
+    threshold_records = [_build_governance_threshold_record("frame_prc")]
+    attack_breakdown_rows = [
+        {
+            "method_variant": "frame_prc",
+            "attack_name": "h264_compression",
+            "attacked_negative_FPR": 0.0,
+        }
+    ]
+
+    summary_row = build_real_video_vae_latent_governance_summary_rows(
+        event_score_records,
+        threshold_records,
+        attack_breakdown_rows,
+        [{"video_count": 1}],
+        [{"video_count": 1}],
+    )[0]
+    assert summary_row["lpips_evidence_available"] is True
+    assert summary_row["lpips_record_count"] == 1
+
+    event_score_records[0]["quality_metrics"]["watermarked_video_lpips"] = None
+    summary_row = build_real_video_vae_latent_governance_summary_rows(
+        event_score_records,
+        threshold_records,
+        attack_breakdown_rows,
+        [{"video_count": 1}],
+        [{"video_count": 1}],
+    )[0]
+
+    assert summary_row["lpips_evidence_available"] is False
+    assert "lpips_evidence_available" in summary_row["blocking_reasons"]
+
+    event_score_records[0]["quality_metrics"]["watermarked_video_lpips"] = True
+    summary_row = build_real_video_vae_latent_governance_summary_rows(
+        event_score_records,
+        threshold_records,
+        attack_breakdown_rows,
+        [{"video_count": 1}],
+        [{"video_count": 1}],
+    )[0]
+
+    assert summary_row["lpips_evidence_available"] is False
+    assert summary_row["lpips_record_count"] == 0
+    assert "lpips_evidence_available" in summary_row["blocking_reasons"]
+
+
 def test_governance_summary_pass_condition_10_real_video_runtime() -> None:
     """功能：条件 10：video_runtime_status == real_mp4_runtime。
 
@@ -339,9 +404,9 @@ def test_governance_summary_pass_condition_17_s_traj_all_null() -> None:
 
 
 def test_governance_summary_all_pass_conditions() -> None:
-    """功能：综合检查所有 18 个 PASS 条件。
+    """功能：综合检查所有 19 个 PASS 条件。
 
-    Test all 18 PASS conditions are properly defined.
+    Test all 19 PASS conditions are properly defined.
     """
     pass_conditions = [
         ("records_non_empty", True),
@@ -358,14 +423,15 @@ def test_governance_summary_all_pass_conditions() -> None:
         ("artifacts_container_valid", True),
         ("compression_codec_real", True),
         ("quality_metrics_real", True),
+        ("lpips_evidence_available", True),
         ("temporal_metrics_real", True),
         ("no_placeholder_fields", True),
         ("all_s_traj_null", True),
         ("no_dit_dependency", True),
     ]
     
-    # 验证有 18 个条件
-    assert len(pass_conditions) == 18, "Should have 18 PASS conditions"
+    # 验证有 19 个条件
+    assert len(pass_conditions) == 19, "Should have 19 PASS conditions"
     
     # 所有条件都在满足状态时应该可以 PASS
     all_pass = all(condition for _, condition in pass_conditions)

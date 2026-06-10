@@ -259,7 +259,10 @@ class RealVideoVaeLatentRunner:
             ablation_config_path,
             self._repository_root / "configs" / "ablation" / "real_video_vae_latent_ablation.json",
         )
-        runtime_config_overrides = self._load_runtime_config(runtime_config_path)
+        runtime_config_overrides = self._apply_formal_quality_metric_defaults(
+            self._load_runtime_config(runtime_config_path),
+            run_mode=run_mode,
+        )
         if batch_size_frames is not None:
             runtime_config_overrides["batch_size_frames"] = int(batch_size_frames)
         if shard_count is not None:
@@ -3259,6 +3262,31 @@ class RealVideoVaeLatentRunner:
         if not isinstance(runtime_config, dict):
             raise TypeError("runtime_config must be a dictionary")
         return runtime_config
+
+    def _apply_formal_quality_metric_defaults(
+        self,
+        runtime_config: dict[str, Any],
+        *,
+        run_mode: str,
+    ) -> dict[str, Any]:
+        """为 formal 运行补齐质量指标默认值。
+
+        Args:
+            runtime_config: 已加载的 runtime config。
+            run_mode: 当前运行模式。
+
+        Returns:
+            返回新的 runtime config 字典。formal 模式默认启用 LPIPS, 但保留调用方显式传入的
+            `enable_lpips=False`, 以便阶段二机制校准等非最终 formal 任务可以主动降级并由后续
+            mechanism gate 阻断缺失证据。
+        """
+        resolved_config = copy.deepcopy(runtime_config)
+        if run_mode != "formal":
+            return resolved_config
+        quality_config = dict(resolved_config.get("quality_metrics") or {})
+        quality_config.setdefault("enable_lpips", True)
+        resolved_config["quality_metrics"] = quality_config
+        return resolved_config
 
     def _resolve_samples_per_role(
         self,

@@ -160,6 +160,75 @@ def test_stage2_mechanism_audit_writes_expected_artifacts(tmp_path: Path) -> Non
     assert any(row["attack_name"] == "local_clip" for row in sync_rows)
 
 
+def test_stage2_mechanism_audit_blocks_when_required_lpips_evidence_missing(
+    tmp_path: Path,
+) -> None:
+    """验证 formal 机制 gate 要求真实 LPIPS 数值证据。
+
+    Args:
+        tmp_path: 临时输出根目录。
+
+    Returns:
+        None.
+    """
+    run_root = _build_stage2_mechanism_run_root(tmp_path)
+    output_paths = build_real_video_vae_latent_output_paths(run_root)
+    records = [
+        json.loads(line)
+        for line in output_paths.event_scores_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    for record in records:
+        quality_metrics = record.get("quality_metrics", {})
+        if isinstance(quality_metrics, dict):
+            quality_metrics["watermarked_video_lpips"] = None
+            quality_metrics["lpips_failure_reason"] = "lpips_model_not_configured"
+    output_paths.event_scores_path.write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+    result = run_stage2_mechanism_audit(run_root=run_root)
+
+    assert result["Stage2MechanismDecision"] != "PASS"
+    assert "lpips_evidence_missing" in result["Stage2MechanismBlockingReasons"]
+    assert result["mechanism_metrics"]["lpips_evidence_available"] is False
+
+
+def test_stage2_mechanism_audit_rejects_boolean_lpips_evidence(
+    tmp_path: Path,
+) -> None:
+    """验证布尔值不能冒充 formal LPIPS 数值证据。
+
+    Args:
+        tmp_path: 临时输出根目录。
+
+    Returns:
+        None.
+    """
+    run_root = _build_stage2_mechanism_run_root(tmp_path)
+    output_paths = build_real_video_vae_latent_output_paths(run_root)
+    records = [
+        json.loads(line)
+        for line in output_paths.event_scores_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    for record in records:
+        quality_metrics = record.get("quality_metrics", {})
+        if isinstance(quality_metrics, dict):
+            quality_metrics["watermarked_video_lpips"] = True
+    output_paths.event_scores_path.write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+        encoding="utf-8",
+    )
+
+    result = run_stage2_mechanism_audit(run_root=run_root)
+
+    assert result["Stage2MechanismDecision"] != "PASS"
+    assert "lpips_evidence_missing" in result["Stage2MechanismBlockingReasons"]
+    assert result["mechanism_metrics"]["lpips_evidence_available"] is False
+
+
 def _build_stage2_mechanism_run_root(tmp_path: Path) -> Path:
     run_root = tmp_path / "outputs" / "runs" / "real_video_vae_latent_probe_formal"
     output_paths = build_real_video_vae_latent_output_paths(run_root)

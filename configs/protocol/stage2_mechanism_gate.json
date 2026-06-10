@@ -32,6 +32,7 @@
   "absolute_rescue_tpr_threshold": 1.0,
   "leakage_exceeded_multiplier": 2.0,
   "require_quality_not_collapsed": true,
+  "require_lpips_evidence": true,
   "min_watermarked_video_psnr": 20.0,
   "min_watermarked_video_ssim": 0.5
 }

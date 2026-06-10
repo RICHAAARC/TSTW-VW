@@ -582,6 +582,12 @@ def build_stage2_mechanism_decision(
 
     quality_metrics_enabled = _quality_metrics_enabled(runtime_config, test_records)
     temporal_metrics_enabled = _temporal_metrics_enabled(runtime_config, test_records)
+    require_lpips_evidence = bool(
+        mechanism_config.get("require_lpips_evidence", False)
+    )
+    lpips_evidence_available = _lpips_evidence_available(test_records)
+    if require_lpips_evidence and not lpips_evidence_available:
+        blocking_reasons.append("lpips_evidence_missing")
     if not quality_metrics_enabled["lpips"]:
         warnings.append("lpips_not_enabled")
     if not quality_metrics_enabled["clip_similarity"]:
@@ -653,6 +659,7 @@ def build_stage2_mechanism_decision(
             ],
             "watermarked_video_psnr_total_count": psnr_stats["total_count"],
             "mean_watermarked_video_ssim": _round_or_none(mean_ssim),
+            "lpips_evidence_available": lpips_evidence_available,
         },
         "SyncRescueDecision": sync_semantics["sync_rescue_decision"],
         "SyncLeakageDecision": sync_semantics["sync_leakage_decision"],
@@ -1213,6 +1220,37 @@ def _quality_metrics_enabled(runtime_config: dict[str, Any], records: list[dict[
         "lpips": bool(quality_config.get("enable_lpips", any_lpips_signal)),
         "clip_similarity": bool(quality_config.get("enable_clip_similarity", any_clip_signal)),
     }
+
+
+def _lpips_evidence_available(records: list[dict[str, Any]]) -> bool:
+    """检查 records 中是否存在真实 LPIPS 数值证据。
+
+    Args:
+        records: 事件级记录列表。
+
+    Returns:
+        如果至少一个记录包含数值型 `watermarked_video_lpips`, 返回 True。
+    """
+    for record in records:
+        quality_metrics = record.get("quality_metrics", {})
+        if not isinstance(quality_metrics, dict):
+            continue
+        lpips_score = quality_metrics.get("watermarked_video_lpips")
+        if _is_non_bool_number(lpips_score):
+            return True
+    return False
+
+
+def _is_non_bool_number(value: Any) -> bool:
+    """判断 value 是否为非布尔数值。
+
+    Args:
+        value: 待检查对象。
+
+    Returns:
+        仅当 value 是 int 或 float 且不是 bool 时返回 True。
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _temporal_metrics_enabled(runtime_config: dict[str, Any], records: list[dict[str, Any]]) -> dict[str, bool]:

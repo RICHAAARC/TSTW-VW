@@ -259,3 +259,55 @@ def test_lpips_score_creates_cache_dir_and_routes_torch_hub(
     assert cache_root.exists()
     assert fake_torch.hub.received_dir == str(cache_root)
     assert os.environ["TORCH_HOME"] == str(cache_root)
+
+
+def test_lpips_batch_size_accepts_notebook_top_level_runtime_config(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    """验证 notebook 顶层 `lpips_batch_size` 会传递给 LPIPS 计算函数。
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+        tmp_path: Temporary path fixture.
+
+    Returns:
+        None.
+    """
+    captured: dict[str, object] = {}
+
+    def _fake_compute_lpips_score(
+        reference_frames: np.ndarray,
+        comparison_frames: np.ndarray,
+        lpips_model_root: str,
+        *,
+        lpips_backbone: str,
+        lpips_device: str,
+        lpips_batch_size: int,
+    ) -> float:
+        del reference_frames, comparison_frames, lpips_model_root, lpips_backbone, lpips_device
+        captured["lpips_batch_size"] = lpips_batch_size
+        return 0.234
+
+    monkeypatch.setattr(
+        real_quality_metrics,
+        "_compute_lpips_score",
+        _fake_compute_lpips_score,
+    )
+    frames = np.ones((4, 8, 8, 3), dtype=np.float32) * 0.5
+
+    payload = real_quality_metrics.build_real_video_quality_metrics_payload_from_frames(
+        frames,
+        frames,
+        runtime_config={
+            "local_lpips_model_root": str(tmp_path / "lpips"),
+            "lpips_batch_size": 32,
+            "quality_metrics": {
+                "enable_lpips": True,
+                "enable_clip_similarity": False,
+            },
+        },
+    )
+
+    assert captured["lpips_batch_size"] == 32
+    assert payload["watermarked_video_lpips"] == pytest.approx(0.234)

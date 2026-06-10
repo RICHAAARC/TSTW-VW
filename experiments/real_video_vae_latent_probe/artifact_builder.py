@@ -92,6 +92,8 @@ REAL_VIDEO_VAE_LATENT_GOVERNANCE_SUMMARY_COLUMNS = [
     "attacked_negative_fpr_reported",
     "quality_table_non_empty",
     "quality_metrics_runtime",
+    "lpips_evidence_available",
+    "lpips_record_count",
     "temporal_table_non_empty",
     "temporal_metrics_runtime",
     "records_to_tables",
@@ -573,6 +575,8 @@ def build_real_video_vae_latent_report_text(governance_summary_row: dict[str, An
             "## Quality Summary",
             f"- quality_table_non_empty: {_bool_to_report_value(governance_summary_row['quality_table_non_empty'])}",
             f"- quality_metrics_runtime: {governance_summary_row['quality_metrics_runtime']}",
+            f"- lpips_evidence_available: {_bool_to_report_value(governance_summary_row['lpips_evidence_available'])}",
+            f"- lpips_record_count: {governance_summary_row['lpips_record_count']}",
             "",
             "## Temporal Consistency Summary",
             f"- temporal_table_non_empty: {_bool_to_report_value(governance_summary_row['temporal_table_non_empty'])}",
@@ -648,6 +652,8 @@ def build_real_video_vae_latent_governance_summary_rows(
     # 从 records 中提取真实的 runtime 信息
     quality_metrics_runtime = _extract_quality_metrics_runtime(event_score_records, quality_rows)
     temporal_metrics_runtime = _extract_temporal_metrics_runtime(event_score_records, temporal_rows)
+    lpips_record_count = _count_lpips_evidence_records(event_score_records)
+    lpips_evidence_available = lpips_record_count > 0
     
     # 条件 10-11：真实 runtime 检查
     all_video_runtime_real = _check_all_real_video_runtime(event_score_records)
@@ -705,6 +711,7 @@ def build_real_video_vae_latent_governance_summary_rows(
             ("artifacts_container_valid", artifacts_container_valid),
             ("compression_codec_real", compression_codec_real),
             ("quality_metrics_real", quality_metrics_real),
+            ("lpips_evidence_available", lpips_evidence_available),
             ("temporal_metrics_real", temporal_metrics_real),
             ("no_placeholder_fields", no_placeholder_fields),
             ("all_s_traj_null", all_s_traj_null),
@@ -754,6 +761,8 @@ def build_real_video_vae_latent_governance_summary_rows(
             "attacked_negative_fpr_reported": attacked_negative_fpr_reported,
             "quality_table_non_empty": quality_table_non_empty,
             "quality_metrics_runtime": quality_metrics_runtime,
+            "lpips_evidence_available": lpips_evidence_available,
+            "lpips_record_count": lpips_record_count,
             "temporal_table_non_empty": temporal_table_non_empty,
             "temporal_metrics_runtime": temporal_metrics_runtime,
             "records_to_tables": records_to_tables,
@@ -784,6 +793,26 @@ def _extract_quality_metrics_runtime(
     # 如果 event records 中没有，检查质量行中是否有标记
     # 默认返回 placeholder（如果没有找到任何真实运行时）
     return "placeholder_tensor_video_metrics"
+
+
+def _count_lpips_evidence_records(event_score_records: list[dict[str, Any]]) -> int:
+    """统计 records 中包含数值型 LPIPS 证据的记录数。
+
+    Args:
+        event_score_records: 阶段 2 event score records。
+
+    Returns:
+        `quality_metrics.watermarked_video_lpips` 为数值型的记录数量。
+    """
+    lpips_record_count = 0
+    for record in event_score_records:
+        quality_metrics = record.get("quality_metrics", {})
+        if not isinstance(quality_metrics, dict):
+            continue
+        lpips_score = quality_metrics.get("watermarked_video_lpips")
+        if _is_non_bool_number(lpips_score):
+            lpips_record_count += 1
+    return lpips_record_count
 
 
 def _extract_temporal_metrics_runtime(
@@ -1010,7 +1039,7 @@ def _mean_payload_value(
     positive_infinity_present = False
     for record in records:
         raw_value = record.get(payload_name, {}).get(field_name)
-        if not isinstance(raw_value, (int, float)):
+        if not _is_non_bool_number(raw_value):
             continue
         numeric_value = float(raw_value)
         if math.isfinite(numeric_value):
@@ -1037,7 +1066,7 @@ def _build_psnr_distribution_stats(
     total_count = 0
     for record in records:
         raw_value = record.get(payload_name, {}).get(field_name)
-        if not isinstance(raw_value, (int, float)):
+        if not _is_non_bool_number(raw_value):
             continue
         total_count += 1
         numeric_value = float(raw_value)
@@ -1060,6 +1089,18 @@ def _build_psnr_distribution_stats(
 
 def _bool_to_report_value(value: Any) -> str:
     return str(bool(value)).lower()
+
+
+def _is_non_bool_number(value: Any) -> bool:
+    """判断一个值是否为非布尔数值。
+
+    Args:
+        value: 待检查的对象。
+
+    Returns:
+        仅当 value 是 int 或 float 且不是 bool 时返回 True。
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _draw_rect(

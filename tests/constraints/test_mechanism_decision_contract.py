@@ -25,6 +25,7 @@ def test_default_stage2_mechanism_gate_uses_aligned_payload_protocol() -> None:
     mechanism_config = load_json_config("configs/protocol/stage2_mechanism_gate.json")
 
     assert mechanism_config["stage2_mechanism_protocol"] == "aligned_payload_safety"
+    assert mechanism_config["require_lpips_evidence"] is True
     assert "min_sync_positive_negative_score_gap" not in mechanism_config
 
 
