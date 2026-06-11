@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -22,6 +24,15 @@ from main.core.digest import compute_file_digest, compute_object_digest
 WORKFLOW_KEY = "baseline_comparison_gate"
 WORK_ITEMS_FILENAME = "baseline_scoring_work_items.jsonl"
 ADAPTER_PREPARE_LOCK = threading.Lock()
+
+
+@dataclass(frozen=True)
+class PreparedDetectionInput:
+    """保存待检测视频输入, 允许路径检测和内存帧检测两种执行方式。"""
+
+    video_path: Path | None
+    frames: Any | None = None
+    fps: float | None = None
 
 
 def iter_jsonl(path: str | Path):
@@ -250,7 +261,7 @@ def prepare_video_for_detection(
     work_item: dict[str, Any],
     adapter: Any,
     payload_bits: list[int],
-) -> tuple[Path, dict[str, Any], dict[str, Any]]:
+) -> tuple[PreparedDetectionInput, dict[str, Any], dict[str, Any]]:
     """为单个 work item 准备待检测视频。
 
     positive 样本会先调用外部 baseline embed, 再按 work item 的 attack_name 施加攻击。
@@ -282,7 +293,19 @@ def prepare_video_for_detection(
         trace_update["negative_sample_policy"] = "detect_without_external_watermark_embedding"
 
     if attack_name == "no_attack":
-        return input_for_attack, runtime_metrics, trace_update
+        return PreparedDetectionInput(video_path=Path(input_for_attack)), runtime_metrics, trace_update
+
+    if should_use_in_memory_detection(adapter, attack_name):
+        attacked_frames, attacked_fps, attack_metadata = apply_formal_video_attack_in_memory(
+            input_video_path=input_for_attack,
+            attack_name=attack_name,
+            attack_params=attack_params,
+            work_item=work_item,
+        )
+        runtime_metrics["attack_metadata_digest"] = compute_object_digest(attack_metadata)
+        runtime_metrics["attack_output_mode"] = "in_memory_frames"
+        trace_update["attack_output_digest"] = attack_metadata.get("attacked_video_digest")
+        return PreparedDetectionInput(video_path=None, frames=attacked_frames, fps=attacked_fps), runtime_metrics, trace_update
 
     attacked_path = sample_dir / f"attacked_{attack_name}.mp4"
     attack_metadata = apply_formal_video_attack(
@@ -293,8 +316,9 @@ def prepare_video_for_detection(
         work_item=work_item,
     )
     runtime_metrics["attack_metadata_digest"] = compute_object_digest(attack_metadata)
+    runtime_metrics["attack_output_mode"] = "materialized_video_path"
     trace_update["attack_output_digest"] = attack_metadata.get("attacked_video_digest") or attack_metadata.get("video_digest")
-    return attacked_path, runtime_metrics, trace_update
+    return PreparedDetectionInput(video_path=attacked_path), runtime_metrics, trace_update
 
 
 def apply_formal_video_attack(
@@ -336,6 +360,48 @@ def apply_formal_video_attack(
     raise ValueError(f"unsupported formal video attack: {attack_name}")
 
 
+def should_use_in_memory_detection(adapter: Any, attack_name: str) -> bool:
+    """判断当前 adapter 是否可以跳过 attacked mp4 写盘后直接检测内存帧。"""
+    return callable(getattr(adapter, "detect_frames", None)) and attack_name not in {
+        "h264_compression",
+        "h265_compression",
+    }
+
+
+def digest_video_frames(frames: Any) -> str:
+    """为内存帧序列生成稳定 digest, 用于替代写盘视频的追踪标识。"""
+    digest = hashlib.sha256()
+    digest.update(str(getattr(frames, "shape", "")).encode("utf-8"))
+    digest.update(str(getattr(frames, "dtype", "")).encode("utf-8"))
+    digest.update(frames.tobytes())
+    return digest.hexdigest()
+
+
+def apply_formal_video_attack_in_memory(
+    *,
+    input_video_path: str | Path,
+    attack_name: str,
+    attack_params: dict[str, Any],
+    work_item: dict[str, Any],
+) -> tuple[Any, float, dict[str, Any]]:
+    """执行非压缩攻击并返回内存帧, 避免先写 mp4 再解码。"""
+    if attack_name in {"spatial_resize", "crop_resize", "blur", "gaussian_noise"}:
+        return apply_frame_level_video_attack_in_memory(
+            input_video_path=input_video_path,
+            attack_name=attack_name,
+            attack_params=attack_params,
+            work_item=work_item,
+        )
+    if attack_name in {"temporal_crop", "local_clip", "frame_dropping", "speed_change"}:
+        return apply_temporal_video_attack_in_memory(
+            input_video_path=input_video_path,
+            attack_name=attack_name,
+            attack_params=attack_params,
+            work_item=work_item,
+        )
+    raise ValueError(f"unsupported in-memory formal video attack: {attack_name}")
+
+
 def apply_frame_level_video_attack(
     *,
     input_video_path: str | Path,
@@ -365,6 +431,41 @@ def apply_frame_level_video_attack(
     metadata.update({"attack_name": attack_name, "attack_params": dict(attack_params)})
     metadata["attacked_video_digest"] = metadata.get("video_digest")
     return metadata
+
+
+def apply_frame_level_video_attack_in_memory(
+    *,
+    input_video_path: str | Path,
+    attack_name: str,
+    attack_params: dict[str, Any],
+    work_item: dict[str, Any],
+) -> tuple[Any, float, dict[str, Any]]:
+    """执行空间类逐帧攻击并保留在内存中。"""
+    from main.attacks.spatial import BlurAttack, CropResizeAttack, SpatialResizeAttack
+    from main.attacks.video_noise import GaussianNoiseVideoAttack
+    from main.video.video_io import read_video_frames
+
+    attack_by_name = {
+        "spatial_resize": SpatialResizeAttack,
+        "crop_resize": CropResizeAttack,
+        "blur": BlurAttack,
+        "gaussian_noise": GaussianNoiseVideoAttack,
+    }
+    video = read_video_frames(input_video_path)
+    attack = attack_by_name[attack_name](attack_params)
+    attacked_frames = attack.apply_frames(
+        video.frames,
+        runtime_config={"sample_id": work_item.get("sample_id"), "work_item_id": work_item.get("work_item_id")},
+    )
+    metadata = {
+        "attack_name": attack_name,
+        "attack_params": dict(attack_params),
+        "output_mode": "in_memory_frames",
+        "frame_count": int(attacked_frames.shape[0]),
+        "fps": float(video.fps),
+        "attacked_video_digest": digest_video_frames(attacked_frames),
+    }
+    return attacked_frames, float(video.fps), metadata
 
 
 def apply_temporal_video_attack(
@@ -416,6 +517,74 @@ def apply_temporal_video_attack(
     metadata.update({"attack_name": attack_name, "attack_params": dict(attack_params)})
     metadata["attacked_video_digest"] = metadata.get("video_digest")
     return metadata
+
+
+def apply_temporal_video_attack_in_memory(
+    *,
+    input_video_path: str | Path,
+    attack_name: str,
+    attack_params: dict[str, Any],
+    work_item: dict[str, Any],
+) -> tuple[Any, float, dict[str, Any]]:
+    """执行时间轴攻击并保留在内存中。"""
+    selected, fps = select_temporal_attack_frames(
+        input_video_path=input_video_path,
+        attack_name=attack_name,
+        attack_params=attack_params,
+    )
+    metadata = {
+        "attack_name": attack_name,
+        "attack_params": dict(attack_params),
+        "output_mode": "in_memory_frames",
+        "frame_count": int(selected.shape[0]),
+        "fps": float(fps),
+        "attacked_video_digest": digest_video_frames(selected),
+        "sample_id": work_item.get("sample_id"),
+        "work_item_id": work_item.get("work_item_id"),
+    }
+    return selected, float(fps), metadata
+
+
+def select_temporal_attack_frames(
+    *,
+    input_video_path: str | Path,
+    attack_name: str,
+    attack_params: dict[str, Any],
+) -> tuple[Any, float]:
+    """读取视频并返回时间轴攻击后的帧序列。"""
+    import numpy as np
+    from main.video.video_io import read_video_frames
+
+    video = read_video_frames(input_video_path)
+    frames = video.frames
+    frame_count = int(frames.shape[0])
+    if attack_name == "temporal_crop":
+        crop_start = int(attack_params.get("crop_start", 0))
+        candidates = attack_params.get("crop_start_candidates")
+        if isinstance(candidates, list) and candidates:
+            crop_start = int(candidates[0])
+        crop_start = max(0, min(crop_start, frame_count - 1))
+        crop_length = int(attack_params.get("crop_length", frame_count))
+        selected = frames[crop_start : min(frame_count, crop_start + max(1, crop_length))]
+    elif attack_name == "local_clip":
+        clip_length = attack_params.get("clip_length")
+        if clip_length is None:
+            clip_lengths = attack_params.get("clip_lengths") or [frame_count]
+            clip_length = int(clip_lengths[0])
+        selected = frames[: max(1, min(frame_count, int(clip_length)))]
+    elif attack_name == "frame_dropping":
+        drop_rate = float(attack_params.get("drop_rate", 0.25))
+        drop_stride = max(2, int(round(1.0 / max(1e-6, drop_rate))))
+        kept_indices = [index for index in range(frame_count) if index % drop_stride != 0]
+        selected = frames[kept_indices or [0]]
+    elif attack_name == "speed_change":
+        speed_ratio = float(attack_params.get("speed_ratio", 1.25))
+        observed_count = max(1, int(round(frame_count / max(1e-6, speed_ratio))))
+        source_indices = np.linspace(0, frame_count - 1, observed_count).round().astype(int)
+        selected = frames[source_indices]
+    else:
+        raise ValueError(f"unsupported temporal attack: {attack_name}")
+    return selected, float(video.fps)
 
 
 def build_formal_score_record(
@@ -584,7 +753,7 @@ def process_formal_scoring_worker(
     for batch_index, indexed_batch in enumerate(indexed_batches):
         for original_index, item in indexed_batch:
             payload_bits = build_payload_bits(item.get("payload_digest"), length=32)
-            detection_video_path, runtime_metrics, trace_update = prepare_video_for_detection(
+            detection_input, runtime_metrics, trace_update = prepare_video_for_detection(
                 run_root=run_root_path,
                 stage_two_package_root=stage_two_package_root,
                 work_item=item,
@@ -598,10 +767,19 @@ def process_formal_scoring_worker(
                     "batch_size_config": len(indexed_batch),
                 }
             )
-            detection = adapter.detect(
-                detection_video_path,
-                {"payload_bits": payload_bits, "work_item": item},
-            )
+            if detection_input.frames is not None and callable(getattr(adapter, "detect_frames", None)):
+                detection = adapter.detect_frames(
+                    detection_input.frames,
+                    fps=float(detection_input.fps or item.get("video_fps") or 8),
+                    payload_bits=payload_bits,
+                )
+            elif detection_input.video_path is not None:
+                detection = adapter.detect(
+                    detection_input.video_path,
+                    {"payload_bits": payload_bits, "work_item": item},
+                )
+            else:
+                raise RuntimeError("prepared detection input has neither frames nor path")
             worker_records.append(
                 (
                     original_index,

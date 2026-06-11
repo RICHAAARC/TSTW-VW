@@ -142,9 +142,9 @@ def test_baseline_notebook_defines_score_aggregation_config_before_use() -> None
     assert definition_index < use_index
     assert "BASELINE_SCORE_AGGREGATION_RECORD_PATHS = []" in notebook_source
     assert "BASELINE_SCORE_AGGREGATION_RUN_ROOT =" in notebook_source
-    assert "BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS = 72" in notebook_source
-    assert "BASELINE_FORMAL_SCORING_WORKER_COUNT = 4" in notebook_source
-    assert 'BASELINE_FORMAL_SCORING_EXECUTION_BASELINE_NAMES = ["external_videoseal", "external_rivagan", "external_hidden_framewise"]' in notebook_source
+    assert "BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS = 240" in notebook_source
+    assert "BASELINE_FORMAL_SCORING_WORKER_COUNT = 12" in notebook_source
+    assert 'BASELINE_FORMAL_SCORING_EXECUTION_BASELINE_NAMES = ["external_videoseal"]' in notebook_source
 
 
 def test_baseline_notebook_passes_gpu_profile_to_formal_execution() -> None:

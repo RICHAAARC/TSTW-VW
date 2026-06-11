@@ -135,7 +135,7 @@ class ExternalVideoSealAdapter:
         import torch
 
         frames, fps = read_video_with_ffmpeg(input_video_path)
-        video_tensor = frames_to_tensor(frames)
+        video_tensor = frames_to_tensor(frames, device=handle.device)
         model_payload = normalize_payload_bits(
             payload_bits=payload_bits,
             expected_length=get_model_message_length(handle.model),
@@ -173,16 +173,30 @@ class ExternalVideoSealAdapter:
         metadata: dict[str, Any],
     ) -> BaselineDetectionResult:
         """检测视频中的 VideoSeal 消息并映射为统一 score。"""
-        handle = self._require_handle()
         payload_bits = metadata.get("payload_bits") or self.payload_bits
         if payload_bits is None:
             raise ValueError("payload_bits is required for VideoSeal real smoke detection")
 
         started_at = time.perf_counter()
+        frames, fps = read_video_with_ffmpeg(input_video_path)
+        result = self.detect_frames(frames, fps=fps, payload_bits=payload_bits)
+        result.runtime_metrics["detect_seconds"] = time.perf_counter() - started_at
+        result.runtime_metrics["detect_input_mode"] = "ffmpeg_path"
+        return result
+
+    def detect_frames(
+        self,
+        frames: Any,
+        *,
+        fps: float,
+        payload_bits: list[int],
+    ) -> BaselineDetectionResult:
+        """直接检测内存中的 RGB 帧序列, 避免非压缩攻击后再次写盘和解码。"""
+        handle = self._require_handle()
+        started_at = time.perf_counter()
         import torch
 
-        frames, fps = read_video_with_ffmpeg(input_video_path)
-        video_tensor = frames_to_tensor(frames)
+        video_tensor = frames_to_tensor(frames, device=handle.device)
         with torch.no_grad():
             outputs = handle.model.detect(video_tensor, is_video=True)
         logits = outputs["preds"][:, 1:]
@@ -211,13 +225,14 @@ class ExternalVideoSealAdapter:
                 "fps": float(fps),
                 "frame_count": int(frames.shape[0]),
             },
-            runtime_metrics={"detect_seconds": detect_seconds},
+            runtime_metrics={"detect_seconds": detect_seconds, "detect_input_mode": "in_memory_frames"},
             baseline_trace={
                 "adapter_version": ADAPTER_VERSION,
                 "model_digest": handle.model_digest,
                 "score_mapping_rule": SCORE_MAPPING_RULE,
             },
         )
+
 
     def evaluate(
         self,
@@ -366,11 +381,11 @@ def write_video_with_ffmpeg(frames: Any, output_video_path: Path, *, fps: float)
         raise RuntimeError(stderr.decode("utf-8", errors="replace"))
 
 
-def frames_to_tensor(frames: Any) -> Any:
+def frames_to_tensor(frames: Any, *, device: str | None = None) -> Any:
     """把 uint8 RGB 帧数组转换为 VideoSeal 需要的 FCHW float tensor。"""
     import torch
 
-    return torch.tensor(frames, dtype=torch.float32).permute(0, 3, 1, 2) / 255.0
+    return torch.as_tensor(frames, dtype=torch.float32, device=device).permute(0, 3, 1, 2) / 255.0
 
 
 def tensor_to_frames(tensor: Any) -> Any:

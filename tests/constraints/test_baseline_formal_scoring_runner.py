@@ -11,6 +11,7 @@ from experiments.baseline_comparison_gate.formal_scoring_runner import (
     build_scoring_work_items,
     build_stage_two_event_universe,
     materialize_formal_scoring_plan_run,
+    prepare_video_for_detection,
     run_formal_scoring_execution,
     run_formal_scoring_plan,
 )
@@ -169,6 +170,13 @@ class FakeAdapter:
         return FakeDetectionResult()
 
 
+class FakeInMemoryAdapter(FakeAdapter):
+    """测试用 adapter, 用于声明支持内存帧检测。"""
+
+    def detect_frames(self, frames, *, fps, payload_bits):
+        return FakeDetectionResult()
+
+
 def write_stage_two_records_with_source_video(root: Path) -> Path:
     """写出带源视频文件的最小阶段二包, 用于 execution runner 约束测试。"""
     package_root = write_stage_two_records(root)
@@ -215,3 +223,54 @@ def test_run_formal_scoring_execution_writes_score_records_with_fake_adapter(tmp
     assert rows[0]["baseline_name"] == "external_videoseal"
     assert rows[0]["decision"] == "pending_threshold_calibration"
     assert rows[0]["baseline_score"] == 0.75
+
+
+def test_prepare_video_for_detection_uses_in_memory_path_for_supported_adapter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """确认支持 `detect_frames` 的 adapter 对非压缩攻击会跳过 attacked mp4 写盘路径。"""
+    import numpy as np
+    from experiments.baseline_comparison_gate import formal_scoring_runner
+
+    package_root = tmp_path / "package"
+    source_path = package_root / "artifacts" / "videos" / "source" / "dev" / "sample.mp4"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_bytes(b"fake video bytes")
+
+    def fake_in_memory_attack(**kwargs):
+        frames = np.zeros((2, 8, 8, 3), dtype=np.uint8)
+        return frames, 8.0, {
+            "attack_name": kwargs["attack_name"],
+            "output_mode": "in_memory_frames",
+            "attacked_video_digest": "fake_digest",
+        }
+
+    monkeypatch.setattr(
+        formal_scoring_runner,
+        "apply_formal_video_attack_in_memory",
+        fake_in_memory_attack,
+    )
+
+    detection_input, runtime_metrics, trace_update = prepare_video_for_detection(
+        run_root=tmp_path / "run",
+        stage_two_package_root=package_root,
+        work_item={
+            "work_item_id": "abc123",
+            "baseline_name": "external_videoseal",
+            "sample_role": "attacked_negative",
+            "attack_name": "blur",
+            "attack_params": {},
+            "source_video_relpath": "artifacts/videos/source/dev/sample.mp4",
+            "source_video_digest": "source_digest",
+            "video_fps": 8,
+            "video_resolution": [8, 8],
+        },
+        adapter=FakeInMemoryAdapter(),
+        payload_bits=[0, 1],
+    )
+
+    assert detection_input.video_path is None
+    assert detection_input.frames is not None
+    assert runtime_metrics["attack_output_mode"] == "in_memory_frames"
+    assert trace_update["attack_output_digest"] == "fake_digest"
