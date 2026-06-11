@@ -29,6 +29,18 @@ def test_required_gpu_profile_paths_are_under_runtime_profile() -> None:
     ]
 
 
+def test_formal_execution_gpu_profile_paths_use_runtime_profile_contract() -> None:
+    """验证 formal execution 级 GPU profiling 也使用统一 runtime_profile 结构。"""
+    paths = required_gpu_profile_paths("formal_scoring_execution")
+
+    assert paths == [
+        "runtime_profile/baseline_gpu_profiles/formal_scoring_execution/gpu_runtime_trace.csv",
+        "runtime_profile/baseline_gpu_profiles/formal_scoring_execution/gpu_runtime_summary.json",
+        "runtime_profile/baseline_gpu_profiles/formal_scoring_execution/gpu_runtime_report.md",
+        "runtime_profile/baseline_gpu_profiles/formal_scoring_execution/gpu_runtime_profile_manifest.json",
+    ]
+
+
 def test_attach_gpu_profile_to_manifest_records_utilization_fields(tmp_path: Path) -> None:
     """确认 baseline manifest 会记录后续判断并行可行性所需的 GPU 利用率字段。"""
     run_root = tmp_path / "run_root"

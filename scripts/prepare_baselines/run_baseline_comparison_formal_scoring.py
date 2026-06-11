@@ -18,6 +18,11 @@ from experiments.baseline_comparison_gate.formal_scoring_runner import (
     run_formal_scoring_execution,
     run_formal_scoring_plan,
 )
+from experiments.baseline_comparison_gate.baseline_gpu_profile import (
+    BaselineGpuProfileSession,
+    attach_gpu_profile_to_manifest,
+    required_gpu_profile_paths,
+)
 from experiments.baseline_comparison_gate.smoke_runner import build_smoke_run_id
 
 
@@ -62,6 +67,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--worker-count", type=int, default=1, help="当前 shard 内的并发 worker 数。")
     parser.add_argument("--batch-size", type=int, default=1, help="每个 worker 一次领取的 work item 数。")
     parser.add_argument("--include-large-cache", action="store_true", help="复制 execution 结果包时包含大型模型权重缓存。默认不包含。")
+    parser.add_argument("--profile-gpu", action=argparse.BooleanOptionalAction, default=True, help="execution 阶段是否采样 GPU runtime trace。默认开启。")
+    parser.add_argument("--gpu-profile-interval-seconds", type=float, default=0.5, help="execution 阶段 GPU profiling 采样间隔秒数。")
     return parser.parse_args()
 
 
@@ -80,20 +87,32 @@ def main() -> None:
     ).replace("baseline_comparison_smoke", default_prefix)
 
     if args.execute:
-        summary = run_formal_scoring_execution(
+        with BaselineGpuProfileSession(
             run_root=args.run_root,
-            stage_two_package_root=args.stage_two_package_root,
-            formal_input_contract_path=args.formal_input_contract,
-            config_dir=args.config_dir,
-            external_root=args.external_root,
-            run_id=run_id,
-            baseline_names=args.baseline_name,
-            shard_count=args.shard_count,
-            shard_index=args.shard_index,
-            max_work_items=args.max_work_items,
-            worker_count=args.worker_count,
-            batch_size=args.batch_size,
+            baseline_name="formal_scoring_execution",
+            interval_seconds=args.gpu_profile_interval_seconds,
+            enabled=args.profile_gpu,
+        ) as gpu_profile_session:
+            summary = run_formal_scoring_execution(
+                run_root=args.run_root,
+                stage_two_package_root=args.stage_two_package_root,
+                formal_input_contract_path=args.formal_input_contract,
+                config_dir=args.config_dir,
+                external_root=args.external_root,
+                run_id=run_id,
+                baseline_names=args.baseline_name,
+                shard_count=args.shard_count,
+                shard_index=args.shard_index,
+                max_work_items=args.max_work_items,
+                worker_count=args.worker_count,
+                batch_size=args.batch_size,
+            )
+        gpu_profile_payload = attach_gpu_profile_to_manifest(
+            summary["manifest_path"],
+            gpu_profile_session,
         )
+        summary["gpu_profile"] = gpu_profile_payload
+        summary["gpu_profile_summary_path"] = str(gpu_profile_session.summary_json)
     else:
         summary = run_formal_scoring_plan(
             run_root=args.run_root,
@@ -116,7 +135,18 @@ def main() -> None:
             result_root=args.result_root,
             run_id=run_id,
             overwrite=args.overwrite,
-            **({"include_large_cache": args.include_large_cache} if args.execute else {}),
+            **(
+                {
+                    "include_large_cache": args.include_large_cache,
+                    "required_relative_paths": (
+                        required_gpu_profile_paths("formal_scoring_execution")
+                        if args.profile_gpu
+                        else None
+                    ),
+                }
+                if args.execute
+                else {}
+            ),
         ).as_posix()
 
     print(json.dumps({"summary": summary, "materialized_path": materialized_path}, ensure_ascii=False, indent=2))

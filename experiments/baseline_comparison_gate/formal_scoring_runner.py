@@ -806,6 +806,7 @@ def materialize_formal_scoring_execution_run(
     workflow_key: str = WORKFLOW_KEY,
     overwrite: bool = False,
     include_large_cache: bool = False,
+    required_relative_paths: list[str] | None = None,
 ) -> Path:
     """将已完成的 formal scoring execution 复制到 Drive。"""
     run_root_path = Path(run_root)
@@ -814,6 +815,8 @@ def materialize_formal_scoring_execution_run(
         run_root_path / "records" / FORMAL_SCORE_RECORDS_FILENAME,
         run_root_path / "artifacts" / FORMAL_EXECUTION_MANIFEST_FILENAME,
     ]
+    if required_relative_paths:
+        required_files.extend(run_root_path / relative_path for relative_path in required_relative_paths)
     missing_files = [path.as_posix() for path in required_files if not path.exists()]
     if missing_files:
         raise FileNotFoundError("formal scoring execution run is incomplete: " + ", ".join(missing_files))

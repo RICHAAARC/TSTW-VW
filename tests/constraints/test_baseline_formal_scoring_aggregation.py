@@ -88,6 +88,44 @@ def test_execution_materialization_excludes_large_checkpoint_cache(tmp_path: Pat
     assert not (dest / "work" / "external_videoseal" / "worker_00" / "ckpts" / "model.pth").exists()
 
 
+def test_execution_materialization_can_require_gpu_profile_files(tmp_path: Path) -> None:
+    """验证 formal execution 物化时可以强制检查 GPU profiling 产物。"""
+    run_root = tmp_path / "run"
+    write_jsonl(run_root / "records" / "baseline_formal_score_records.jsonl", [make_record("dev", "attacked_negative", 0.5)])
+    manifest = run_root / "artifacts" / "baseline_comparison_formal_scoring_execution_manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text("{}", encoding="utf-8")
+    profile_dir = run_root / "runtime_profile" / "baseline_gpu_profiles" / "formal_scoring_execution"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "gpu_runtime_trace.csv",
+        "gpu_runtime_summary.json",
+        "gpu_runtime_report.md",
+        "gpu_runtime_profile_manifest.json",
+    ):
+        (profile_dir / name).write_text("ok\n", encoding="utf-8")
+
+    dest = materialize_formal_scoring_execution_run(
+        run_root=run_root,
+        result_root=tmp_path / "results",
+        run_id="execution_run",
+        required_relative_paths=[
+            "runtime_profile/baseline_gpu_profiles/formal_scoring_execution/gpu_runtime_trace.csv",
+            "runtime_profile/baseline_gpu_profiles/formal_scoring_execution/gpu_runtime_summary.json",
+            "runtime_profile/baseline_gpu_profiles/formal_scoring_execution/gpu_runtime_report.md",
+            "runtime_profile/baseline_gpu_profiles/formal_scoring_execution/gpu_runtime_profile_manifest.json",
+        ],
+    )
+
+    assert (
+        dest
+        / "runtime_profile"
+        / "baseline_gpu_profiles"
+        / "formal_scoring_execution"
+        / "gpu_runtime_summary.json"
+    ).exists()
+
+
 def test_baseline_notebook_defines_score_aggregation_config_before_use() -> None:
     """验证 notebook 在聚合 cell 之前定义聚合开关和输入路径配置。"""
     notebook_path = ROOT / "paper_workflow" / "run_baseline_comparison_gate.ipynb"
@@ -106,3 +144,47 @@ def test_baseline_notebook_defines_score_aggregation_config_before_use() -> None
     assert "BASELINE_SCORE_AGGREGATION_RUN_ROOT =" in notebook_source
     assert "BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS = 8" in notebook_source
     assert "BASELINE_FORMAL_SCORING_WORKER_COUNT = 2" in notebook_source
+
+
+def test_baseline_notebook_passes_gpu_profile_to_formal_execution() -> None:
+    """验证 notebook 的 formal execution cell 会把 GPU profiling 参数传给仓库脚本。"""
+    notebook_path = ROOT / "paper_workflow" / "run_baseline_comparison_gate.ipynb"
+    notebook_payload = json.loads(notebook_path.read_text(encoding="utf-8"))
+    notebook_source = "\n".join(
+        "".join(cell.get("source", []))
+        for cell in notebook_payload.get("cells", [])
+        if cell.get("cell_type") == "code"
+    )
+
+    execution_cell_index = notebook_source.index("RUN_BASELINE_FORMAL_SCORING_SMALL_VALIDATION")
+    profile_arg_index = notebook_source.index('"--gpu-profile-interval-seconds", str(BASELINE_GPU_PROFILE_INTERVAL_SECONDS)')
+
+    assert execution_cell_index < profile_arg_index
+
+
+def test_baseline_notebook_decouples_smoke_from_execution_dependency_install() -> None:
+    """验证跳过 smoke 时仍会为 formal execution 安装所需 baseline 依赖。"""
+    notebook_path = ROOT / "paper_workflow" / "run_baseline_comparison_gate.ipynb"
+    notebook_payload = json.loads(notebook_path.read_text(encoding="utf-8"))
+    notebook_source = "\n".join(
+        "".join(cell.get("source", []))
+        for cell in notebook_payload.get("cells", [])
+        if cell.get("cell_type") == "code"
+    )
+
+    assert "RUN_VIDEOSEAL_REAL_SMOKE = False" in notebook_source
+    assert "RUN_RIVAGAN_REAL_SMOKE = False" in notebook_source
+    assert "RUN_HIDDEN_FRAMEWISE_REAL_SMOKE = False" in notebook_source
+    assert "RUN_BASELINE_REAL_SMOKE_SUMMARY = False" in notebook_source
+    assert (
+        'if RUN_VIDEOSEAL_REAL_SMOKE or "external_videoseal" in BASELINE_FORMAL_SCORING_EXECUTION_BASELINE_NAMES:'
+        in notebook_source
+    )
+    assert (
+        'if RUN_RIVAGAN_REAL_SMOKE or "external_rivagan" in BASELINE_FORMAL_SCORING_EXECUTION_BASELINE_NAMES:'
+        in notebook_source
+    )
+    assert (
+        'if RUN_HIDDEN_FRAMEWISE_REAL_SMOKE or "external_hidden_framewise" in BASELINE_FORMAL_SCORING_EXECUTION_BASELINE_NAMES:'
+        in notebook_source
+    )
