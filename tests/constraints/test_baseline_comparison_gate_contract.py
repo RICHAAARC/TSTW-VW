@@ -73,6 +73,20 @@ def test_baseline_comparison_protocol_config_declares_fixed_fpr_gate() -> None:
     assert threshold_protocol["test_threshold_update_allowed"] is False
     assert threshold_protocol["allow_attack_specific_threshold"] is False
     assert threshold_protocol["target_fprs"] == [0.001]
+    assert config["formal_attack_names"] == [
+        "no_attack",
+        "h264_compression",
+        "h265_compression",
+        "spatial_resize",
+        "crop_resize",
+        "blur",
+        "gaussian_noise",
+        "temporal_crop",
+        "local_clip",
+        "frame_dropping",
+        "speed_change",
+    ]
+    assert {item["attack_name"]: item["display_name"] for item in config["attack_display_names"]}["no_attack"] == "clean"
 
 
 def test_baseline_record_schema_accepts_complete_record() -> None:

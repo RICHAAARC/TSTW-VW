@@ -11,7 +11,9 @@
 3. `external_videoseal` 真实 smoke adapter 可下载权重、计算 model digest、执行 clean 与 H.264 CRF 28 检测。
 4. `external_rivagan` 真实 smoke adapter 可下载社区公开 32-bit checkpoint、计算 model digest、执行 clean 与 H.264 CRF 28 解码。
 5. `external_hidden_framewise` 真实 smoke adapter 可加载 HiDDeN combined-noise checkpoint, 对视频帧逐帧执行 clean 与 H.264 CRF 28 解码。
-6. `summarize_baseline_real_smoke.py` 可读取三个真实 smoke 结果包, 生成 JSON、CSV 和 Markdown 摘要。
+6. `check_real_video_vae_package_for_baseline.py` 可检查阶段二 real-video VAE 正式结果包, 并在 Colab 会话本地解压 zip 兼容包。
+7. `summarize_baseline_real_smoke.py` 可读取三个真实 smoke 结果包, 生成 JSON、CSV 和 Markdown 摘要。
+8. `prepare_baseline_comparison_formal_inputs.py` 可冻结正式 baseline comparison runner 的输入契约。
 
 这些结果仍然只是工程可运行性 smoke。它们不能替代正式 fixed-FPR baseline comparison, 也不能直接支持论文 superiority claim。
 
@@ -34,6 +36,11 @@ cd /content
 git clone <REPO_URL> TSTW-VW
 cd /content/TSTW-VW
 git checkout explicit-sync
+python scripts/prepare_baselines/check_real_video_vae_package_for_baseline.py \
+  --package-root /content/drive/MyDrive/TSTW/results/real_video_vae_latent_probe_stage2_final_formal_audit/real_video_vae_latent_probe_formal_20260611T012845Z_2dbc783 \
+  --extract \
+  --extract-root /content/TSTW_runtime/input_packages \
+  --summary-path /content/TSTW_runtime/input_checks/real_video_vae_for_baseline_check.json
 python scripts/prepare_baselines/fetch_external_baselines.py --print-plan
 python scripts/prepare_baselines/probe_external_baseline_sources.py
 python scripts/prepare_baselines/check_baseline_colab_preflight.py
@@ -93,7 +100,7 @@ baseline_real_smoke_summary.md
 
 ## 7. 下一步正式 baseline comparison 工作
 
-完成三个真实 smoke 后, 下一步应构建正式 comparison runner:
+完成阶段二输入包检查、三个真实 smoke 和正式输入契约冻结后, 下一步应继续实现正式 scoring runner:
 
 1. 读取阶段二正式 real-video VAE 结果包与 processed dataset 身份。
 2. 为内部 `tubelet_sync` 与三个外部 baseline 使用同一 split、同一 payload 规则和同一 attack matrix。

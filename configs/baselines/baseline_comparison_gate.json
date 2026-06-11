@@ -38,16 +38,17 @@
     "allow_attack_specific_threshold": false
   },
   "formal_attack_names": [
-    "clean",
-    "h264_crf_23",
-    "h264_crf_28",
-    "h265_crf_28",
-    "spatial_resize_0_75",
-    "spatial_center_crop_0_875",
-    "spatial_random_crop_0_875",
+    "no_attack",
+    "h264_compression",
+    "h265_compression",
+    "spatial_resize",
+    "crop_resize",
+    "blur",
+    "gaussian_noise",
     "temporal_crop",
     "local_clip",
-    "frame_drop"
+    "frame_dropping",
+    "speed_change"
   ],
   "required_quality_metrics": [
     "psnr",
@@ -66,5 +67,51 @@
     "tables/ablation_summary_table.csv",
     "reports/baseline_limitation_report.md",
     "claim_audit/baseline_claim_audit.csv"
+  ],
+  "attack_display_names": [
+    {
+      "attack_name": "no_attack",
+      "display_name": "clean"
+    },
+    {
+      "attack_name": "h264_compression",
+      "display_name": "H.264 compression"
+    },
+    {
+      "attack_name": "h265_compression",
+      "display_name": "H.265 compression"
+    },
+    {
+      "attack_name": "spatial_resize",
+      "display_name": "spatial resize"
+    },
+    {
+      "attack_name": "crop_resize",
+      "display_name": "spatial crop-resize"
+    },
+    {
+      "attack_name": "blur",
+      "display_name": "spatial blur"
+    },
+    {
+      "attack_name": "gaussian_noise",
+      "display_name": "spatial Gaussian noise"
+    },
+    {
+      "attack_name": "temporal_crop",
+      "display_name": "temporal crop"
+    },
+    {
+      "attack_name": "local_clip",
+      "display_name": "local clip"
+    },
+    {
+      "attack_name": "frame_dropping",
+      "display_name": "frame dropping"
+    },
+    {
+      "attack_name": "speed_change",
+      "display_name": "speed change"
+    }
   ]
 }
