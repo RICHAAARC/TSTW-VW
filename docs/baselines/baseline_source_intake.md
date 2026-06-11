@@ -7,7 +7,7 @@
 | baseline_name | baseline_family | source manifest | 当前状态 |
 | --- | --- | --- | --- |
 | `external_videoseal` | `external_video_watermark` | `configs/baselines/external_videoseal_source.json` | 已提供真实 smoke adapter 入口, 等待 Colab 权重下载和真实 smoke 验证 |
-| `external_rivagan` | `external_video_watermark` | `configs/baselines/external_rivagan_source.json` | 已固定上游 commit, 等待 Colab 权重下载和 smoke |
+| `external_rivagan` | `external_video_watermark` | `configs/baselines/external_rivagan_source.json` | 已提供真实 smoke adapter 入口, 等待 Colab 权重下载和真实 smoke 验证 |
 | `external_hidden_framewise` | `external_image_watermark_framewise` | `configs/baselines/external_hidden_framewise_source.json` | 已固定上游 commit, 等待 Colab 权重下载和 smoke |
 
 ## 2. 审计原则
@@ -123,3 +123,25 @@ python scripts/prepare_baselines/run_videoseal_real_smoke.py \
 3. 仅修复上游包内配置查找路径, 不修改权重、模型结构、嵌入算法或检测分数定义。
 
 该修复属于允许的复现路径修复, 不是方法语义修改。
+
+## 8. external_rivagan 真实 smoke 入口
+
+当前已经补充 `external_rivagan` 的真实 smoke adapter 与命令行入口:
+
+```bash
+python scripts/prepare_baselines/run_rivagan_real_smoke.py \
+  --run-root /content/TSTW_runtime/runs/external_rivagan_real_smoke \
+  --result-root /content/drive/MyDrive/TSTW/results
+```
+
+该入口会在 Colab 中完成以下工作:
+
+1. 从 `external_baselines/external_rivagan/upstream` 动态导入 DAI-Lab RivaGAN 上游实现。
+2. 下载公开的 32-bit RivaGAN checkpoint, 并计算权重 SHA-256 digest。
+3. 为该 checkpoint 注册 PyTorch 反序列化兼容类名。
+4. 生成或读取一个单视频 smoke 输入。
+5. 执行 clean encode / decode。
+6. 执行 H.264 CRF 28 攻击后 decode。
+7. 写出 `records/external_rivagan_real_smoke_records.jsonl`、`manifest.json` 与 `reports/external_rivagan_real_smoke_report.md`。
+
+该结果仍然只表示 `external_rivagan` 单 baseline 可运行性 smoke, 不支持正式论文 claim。由于 DAI-Lab 官方仓库未随源码提供正式 checkpoint, 当前权重来源必须在 limitation report 和 claim audit 中显式标注。
