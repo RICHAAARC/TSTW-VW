@@ -10,6 +10,7 @@ import pytest
 from experiments.baseline_comparison_gate.baseline_gpu_profile import (
     BaselineGpuProfileSession,
     attach_gpu_profile_to_manifest,
+    ensure_gpu_profile_trace_exists,
     required_gpu_profile_paths,
 )
 
@@ -63,3 +64,19 @@ def test_attach_gpu_profile_to_manifest_records_utilization_fields(tmp_path: Pat
     assert manifest["gpu_profile"]["mean_gpu_util_percent"] == 42.0
     assert manifest["gpu_profile"]["peak_memory_ratio"] == 0.25
     assert manifest["gpu_profile"]["recommended_batch_size_direction"] == "increase_or_check_io"
+
+
+
+def test_gpu_profile_trace_fallback_writes_unavailable_csv(tmp_path: Path) -> None:
+    """确认 profiler 子进程失败时仍会留下可汇总的 unavailable trace。"""
+    trace_csv = tmp_path / "runtime_profile" / "gpu_runtime_trace.csv"
+
+    ensure_gpu_profile_trace_exists(
+        trace_csv=trace_csv,
+        baseline_name="external_videoseal",
+    )
+
+    text = trace_csv.read_text(encoding="utf-8")
+    assert "event_tag" in text
+    assert "external_videoseal" in text
+    assert "unavailable" in text

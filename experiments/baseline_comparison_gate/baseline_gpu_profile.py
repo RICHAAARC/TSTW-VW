@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import csv
 import json
 from pathlib import Path
 import subprocess
@@ -15,6 +16,8 @@ from typing import Any
 
 from main.core.digest import compute_file_digest, compute_object_digest
 from scripts.profile_runtime.summarize_gpu_profile import summarize_gpu_runtime_profile
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass
@@ -62,7 +65,8 @@ class BaselineGpuProfileSession:
 
         command = [
             sys.executable,
-            str(Path("scripts") / "profile_runtime" / "profile_gpu_runtime.py"),
+            "-m",
+            "scripts.profile_runtime.profile_gpu_runtime",
             "--run-root",
             str(self.run_root),
             "--interval-seconds",
@@ -75,7 +79,7 @@ class BaselineGpuProfileSession:
             str(self.event_tag_file),
         ]
         try:
-            self.process = subprocess.Popen(command, cwd=Path.cwd(), text=True)
+            self.process = subprocess.Popen(command, cwd=ROOT, text=True)
             session_payload = {
                 "status": True,
                 "process_started": True,
@@ -110,6 +114,10 @@ class BaselineGpuProfileSession:
                 except subprocess.TimeoutExpired:
                     self.process.kill()
                     self.process.wait(timeout=5)
+        ensure_gpu_profile_trace_exists(
+            trace_csv=self.trace_csv,
+            baseline_name=self.baseline_name,
+        )
         self.summary = summarize_gpu_runtime_profile(
             run_root=self.run_root,
             trace_csv=self.trace_csv,
@@ -129,6 +137,42 @@ class BaselineGpuProfileSession:
         manifest_path = self.profile_dir / "gpu_runtime_profile_manifest.json"
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+
+
+def ensure_gpu_profile_trace_exists(*, trace_csv: str | Path, baseline_name: str) -> None:
+    """确保即使 profiler 子进程启动失败也会留下可汇总 trace。
+
+    该兜底路径把 profiling 状态标记为 unavailable, 目的是保留完整结果包和失败原因,
+    而不是让 smoke 本身因为工程采样失败而丢失已经完成的模型可运行性证据。
+    """
+    path = Path(trace_csv)
+    if path.exists() and path.stat().st_size > 0:
+        return
+    from scripts.profile_runtime.profile_gpu_runtime import TRACE_HEADER
+    from scripts.profile_runtime import iso_timestamp_utc
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=TRACE_HEADER)
+        writer.writeheader()
+        writer.writerow(
+            {
+                "timestamp_utc": iso_timestamp_utc(),
+                "elapsed_seconds": 0.0,
+                "event_tag": baseline_name,
+                "gpu_index": "",
+                "gpu_name": "unavailable",
+                "gpu_util_percent": "",
+                "memory_used_mb": "",
+                "memory_total_mb": "",
+                "memory_util_percent": "",
+                "power_draw_w": "",
+                "temperature_c": "",
+                "cpu_percent": "",
+                "ram_used_gb": "",
+                "ram_total_gb": "",
+            }
+        )
 
 def attach_gpu_profile_to_manifest(manifest_path: str | Path, profile_session: BaselineGpuProfileSession) -> dict[str, Any]:
     """把 GPU profiling 摘要路径和关键指标追加到 baseline manifest。"""
