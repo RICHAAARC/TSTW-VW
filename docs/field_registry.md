@@ -417,3 +417,14 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | payload_digest | trace | none | true | false | false | Digest of the payload or message bits used for a governed event record. |
 | quality_metrics | protocol | none | true | false | false | Container for PSNR, SSIM, LPIPS, CLIP similarity, bitrate, file size, and related quality evidence. |
 | temporal_metrics | protocol | none | true | false | false | Container for frame-count, fps, temporal consistency, and attack-specific temporal evidence. |
+| baseline_isolation_enabled | governance | none | false | false | false | Boolean execution-manifest field indicating that external baselines are executed in isolated baseline groups rather than mixed in one worker pool. |
+| worker_count | runtime_profile | none | false | false | false | Execution-manifest field recording the configured number of shard-internal workers for baseline scoring execution. |
+| active_worker_count | runtime_profile | none | false | false | false | Execution-manifest field recording the number of workers that received at least one work item. |
+| batch_size | runtime_profile | none | false | false | false | Execution-manifest field recording the configured work-item batch size used by each shard-internal worker. |
+| batch_count | runtime_profile | none | false | false | false | Execution-manifest field recording how many work-item batches were scheduled for one baseline group. |
+| parallelism_strategy | governance | none | false | false | false | Execution-manifest label describing the baseline isolation, shard, and worker scheduling strategy. |
+| baseline_execution_plan | governance | none | false | false | false | Execution-manifest object describing per-baseline worker_count, active_worker_count, batch_size, batch_count, and worker prepare results. |
+| prepare_results_by_worker | trace | none | false | false | false | Execution-manifest object preserving adapter prepare metadata separately for each worker. |
+| worker_index | runtime_profile | none | true | false | false | Runtime metric and trace field identifying which shard-internal worker produced a baseline scoring record. |
+| batch_index | runtime_profile | none | true | false | false | Runtime metric field identifying the worker-local batch index for a baseline scoring record. |
+| batch_size_config | runtime_profile | none | true | false | false | Runtime metric field recording the actual work-item count of the batch that produced a baseline scoring record. |

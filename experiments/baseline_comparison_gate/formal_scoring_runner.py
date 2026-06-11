@@ -8,9 +8,11 @@ calibration 和 test 冻结后, 才能生成投稿 claim 可用的正式表格�
 from __future__ import annotations
 
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 from pathlib import Path
 import shutil
+import threading
 from typing import Any, Iterable
 
 from experiments.baseline_comparison_gate.formal_input_contract import load_json
@@ -19,6 +21,7 @@ from main.core.digest import compute_file_digest, compute_object_digest
 
 WORKFLOW_KEY = "baseline_comparison_gate"
 WORK_ITEMS_FILENAME = "baseline_scoring_work_items.jsonl"
+ADAPTER_PREPARE_LOCK = threading.Lock()
 
 
 def iter_jsonl(path: str | Path):
@@ -513,6 +516,179 @@ def make_real_baseline_adapter(baseline_name: str, *, external_root: str | Path)
     raise KeyError(f"unsupported baseline adapter: {baseline_name}")
 
 
+def validate_execution_parallelism(worker_count: int, batch_size: int) -> None:
+    """校验 shard 内并行调度参数。
+
+    通用工程写法是把外层 shard 和内层 worker 分开: shard 负责断点续跑,
+    worker_count 负责当前 shard 内的并发执行, batch_size 负责每个 worker 一次领取的任务块大小。
+    """
+    if worker_count < 1:
+        raise ValueError("worker_count must be >= 1")
+    if batch_size < 1:
+        raise ValueError("batch_size must be >= 1")
+
+
+def group_work_items_by_baseline(work_items: list[dict[str, Any]]) -> OrderedDict[str, list[tuple[int, dict[str, Any]]]]:
+    """按 baseline_name 保持顺序分组, 用于实现 baseline 隔离执行。
+
+    项目特定规则是不同外部 baseline 不在同一执行批中混跑。这样可以避免权重、依赖、CUDA 缓存、
+    临时文件和日志互相污染, 同时仍允许单个 baseline 的 shard 内并行。
+    """
+    grouped: OrderedDict[str, list[tuple[int, dict[str, Any]]]] = OrderedDict()
+    for index, item in enumerate(work_items):
+        grouped.setdefault(str(item["baseline_name"]), []).append((index, item))
+    return grouped
+
+
+def chunk_indexed_work_items(
+    indexed_items: list[tuple[int, dict[str, Any]]],
+    *,
+    batch_size: int,
+) -> list[list[tuple[int, dict[str, Any]]]]:
+    """把当前 baseline 的 work items 切成固定大小任务块。"""
+    return [indexed_items[start : start + batch_size] for start in range(0, len(indexed_items), batch_size)]
+
+
+def process_formal_scoring_worker(
+    *,
+    baseline_name: str,
+    indexed_batches: list[list[tuple[int, dict[str, Any]]]],
+    worker_index: int,
+    run_root: str | Path,
+    stage_two_package_root: str | Path,
+    run_id: str,
+    source_manifest: dict[str, Any],
+    external_root: str | Path,
+    adapter_factory: Any,
+) -> tuple[dict[str, Any], list[tuple[int, dict[str, Any]]]]:
+    """处理一个 baseline 内分配给单个 worker 的任务块。
+
+    每个 worker 拥有独立 adapter 实例和独立 work_dir。这样虽然会增加少量模型加载成本,
+    但可以避免多线程共享同一上游模型对象带来的状态竞争, 更适合 Colab 正式验证。
+    """
+    from experiments.baseline_comparison_gate.baseline_adapter import BaselineRuntimeContext
+
+    run_root_path = Path(run_root)
+    adapter = adapter_factory(baseline_name)
+    context = BaselineRuntimeContext(
+        baseline_name=baseline_name,
+        run_id=run_id,
+        work_dir=run_root_path / "work" / baseline_name / f"worker_{worker_index:02d}",
+        source_manifest=source_manifest,
+    )
+    # 部分上游 adapter 会在 prepare 阶段临时切换进程工作目录, 因此需要串行化 prepare。
+    with ADAPTER_PREPARE_LOCK:
+        prepare_result = adapter.prepare(context)
+    worker_records: list[tuple[int, dict[str, Any]]] = []
+    for batch_index, indexed_batch in enumerate(indexed_batches):
+        for original_index, item in indexed_batch:
+            payload_bits = build_payload_bits(item.get("payload_digest"), length=32)
+            detection_video_path, runtime_metrics, trace_update = prepare_video_for_detection(
+                run_root=run_root_path,
+                stage_two_package_root=stage_two_package_root,
+                work_item=item,
+                adapter=adapter,
+                payload_bits=payload_bits,
+            )
+            runtime_metrics.update(
+                {
+                    "worker_index": worker_index,
+                    "batch_index": batch_index,
+                    "batch_size_config": len(indexed_batch),
+                }
+            )
+            detection = adapter.detect(
+                detection_video_path,
+                {"payload_bits": payload_bits, "work_item": item},
+            )
+            worker_records.append(
+                (
+                    original_index,
+                    build_formal_score_record(
+                        run_id=run_id,
+                        source_manifest=source_manifest,
+                        work_item=item,
+                        payload_bits=payload_bits,
+                        detection_result=detection,
+                        extra_runtime_metrics=runtime_metrics,
+                        extra_trace={**trace_update, "worker_index": worker_index},
+                    ),
+                )
+            )
+    return prepare_result, worker_records
+
+
+def execute_baseline_group_with_workers(
+    *,
+    baseline_name: str,
+    indexed_items: list[tuple[int, dict[str, Any]]],
+    worker_count: int,
+    batch_size: int,
+    run_root: str | Path,
+    stage_two_package_root: str | Path,
+    run_id: str,
+    source_manifest: dict[str, Any],
+    external_root: str | Path,
+    adapter_factory: Any,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """在单个 baseline 内执行 shard 内 worker/batch 调度。"""
+    batches = chunk_indexed_work_items(indexed_items, batch_size=batch_size)
+    worker_buckets: list[list[list[tuple[int, dict[str, Any]]]]] = [list() for _ in range(worker_count)]
+    for batch_index, batch in enumerate(batches):
+        worker_buckets[batch_index % worker_count].append(batch)
+
+    prepare_results: dict[str, Any] = {}
+    indexed_records: list[tuple[int, dict[str, Any]]] = []
+    active_workers = [(index, bucket) for index, bucket in enumerate(worker_buckets) if bucket]
+    if worker_count == 1:
+        for worker_index, bucket in active_workers:
+            prepare_result, worker_records = process_formal_scoring_worker(
+                baseline_name=baseline_name,
+                indexed_batches=bucket,
+                worker_index=worker_index,
+                run_root=run_root,
+                stage_two_package_root=stage_two_package_root,
+                run_id=run_id,
+                source_manifest=source_manifest,
+                external_root=external_root,
+                adapter_factory=adapter_factory,
+            )
+            prepare_results[f"worker_{worker_index:02d}"] = prepare_result
+            indexed_records.extend(worker_records)
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = {
+                executor.submit(
+                    process_formal_scoring_worker,
+                    baseline_name=baseline_name,
+                    indexed_batches=bucket,
+                    worker_index=worker_index,
+                    run_root=run_root,
+                    stage_two_package_root=stage_two_package_root,
+                    run_id=run_id,
+                    source_manifest=source_manifest,
+                    external_root=external_root,
+                    adapter_factory=adapter_factory,
+                ): worker_index
+                for worker_index, bucket in active_workers
+            }
+            for future in as_completed(futures):
+                worker_index = futures[future]
+                prepare_result, worker_records = future.result()
+                prepare_results[f"worker_{worker_index:02d}"] = prepare_result
+                indexed_records.extend(worker_records)
+
+    indexed_records.sort(key=lambda pair: pair[0])
+    return [record for _, record in indexed_records], {
+        "baseline_name": baseline_name,
+        "worker_count": worker_count,
+        "active_worker_count": len(active_workers),
+        "batch_size": batch_size,
+        "batch_count": len(batches),
+        "prepare_results_by_worker": prepare_results,
+    }
+
+
 def run_formal_scoring_execution(
     *,
     run_root: str | Path,
@@ -525,13 +701,18 @@ def run_formal_scoring_execution(
     shard_count: int = 1,
     shard_index: int = 0,
     max_work_items: int | None = None,
+    worker_count: int = 1,
+    batch_size: int = 1,
     adapter_factory: Any | None = None,
 ) -> dict[str, Any]:
     """执行小规模或分片 formal baseline scoring。
 
-    该函数只生成 score records, 不计算 fixed-FPR 阈值。这样可以先在 Colab 上验证真实外部
-    baseline、攻击链路和 Drive 落盘链路, 避免在全量运行前浪费 GPU 时间。
+    三层策略如下:
+    1. baseline 隔离: 不同外部 baseline 顺序执行, 避免依赖和 CUDA 状态相互污染。
+    2. shard 分片: 用 shard_count / shard_index 控制 Colab 断点续跑和结果聚合粒度。
+    3. shard 内并行: 用 worker_count / batch_size 在单 baseline 内并发处理任务块。
     """
+    validate_execution_parallelism(worker_count, batch_size)
     contract = load_json(formal_input_contract_path)
     if contract.get("ready_for_formal_baseline_runner") is not True:
         raise ValueError("formal input contract is not ready for formal baseline runner")
@@ -548,43 +729,27 @@ def run_formal_scoring_execution(
     if max_work_items is not None:
         work_items = work_items[: max(0, int(max_work_items))]
 
-    records: list[dict[str, Any]] = []
-    adapters: dict[str, Any] = {}
-    prepare_results: dict[str, Any] = {}
     factory = adapter_factory or (lambda name: make_real_baseline_adapter(name, external_root=external_root))
-    for item in work_items:
-        baseline_name = item["baseline_name"]
-        if baseline_name not in adapters:
-            adapter = factory(baseline_name)
-            context = __import__("experiments.baseline_comparison_gate.baseline_adapter", fromlist=["BaselineRuntimeContext"]).BaselineRuntimeContext(
-                baseline_name=baseline_name,
-                run_id=run_id,
-                work_dir=run_root_path / "work" / baseline_name,
-                source_manifest=manifests[baseline_name],
-            )
-            prepare_results[baseline_name] = adapter.prepare(context)
-            adapters[baseline_name] = adapter
-        adapter = adapters[baseline_name]
-        payload_bits = build_payload_bits(item.get("payload_digest"), length=32)
-        detection_video_path, runtime_metrics, trace_update = prepare_video_for_detection(
+    grouped_items = group_work_items_by_baseline(work_items)
+    records: list[dict[str, Any]] = []
+    prepare_results: dict[str, Any] = {}
+    baseline_execution_plan: list[dict[str, Any]] = []
+    for baseline_name, indexed_items in grouped_items.items():
+        baseline_records, baseline_plan = execute_baseline_group_with_workers(
+            baseline_name=baseline_name,
+            indexed_items=indexed_items,
+            worker_count=worker_count,
+            batch_size=batch_size,
             run_root=run_root_path,
             stage_two_package_root=stage_two_package_root,
-            work_item=item,
-            adapter=adapter,
-            payload_bits=payload_bits,
+            run_id=run_id,
+            source_manifest=manifests[baseline_name],
+            external_root=external_root,
+            adapter_factory=factory,
         )
-        detection = adapter.detect(detection_video_path, {"payload_bits": payload_bits, "work_item": item})
-        records.append(
-            build_formal_score_record(
-                run_id=run_id,
-                source_manifest=manifests[baseline_name],
-                work_item=item,
-                payload_bits=payload_bits,
-                detection_result=detection,
-                extra_runtime_metrics=runtime_metrics,
-                extra_trace=trace_update,
-            )
-        )
+        records.extend(baseline_records)
+        prepare_results[baseline_name] = baseline_plan["prepare_results_by_worker"]
+        baseline_execution_plan.append(baseline_plan)
 
     records_path = run_root_path / "records" / FORMAL_SCORE_RECORDS_FILENAME
     write_jsonl(records_path, records)
@@ -595,14 +760,19 @@ def run_formal_scoring_execution(
         "formal_input_contract_path": Path(formal_input_contract_path).as_posix(),
         "formal_input_contract_digest": compute_file_digest(formal_input_contract_path),
         "stage_two_package_root": Path(stage_two_package_root).as_posix(),
-        "baseline_names": sorted({item["baseline_name"] for item in work_items}),
+        "baseline_names": list(grouped_items.keys()),
+        "baseline_isolation_enabled": True,
         "shard_count": shard_count,
         "shard_index": shard_index,
+        "worker_count": worker_count,
+        "batch_size": batch_size,
+        "parallelism_strategy": "baseline_isolated_sharded_thread_workers",
         "planned_work_item_count": len(work_items),
         "completed_record_count": len(records),
         "records_path": records_path.as_posix(),
         "records_digest": compute_file_digest(records_path),
         "prepare_results": prepare_results,
+        "baseline_execution_plan": baseline_execution_plan,
         "claim_support_allowed": False,
         "formal_fixed_fpr_complete": False,
         "blocking_reason": "score_records_only_thresholds_tables_and_claim_audit_not_built",

@@ -200,6 +200,8 @@ def test_run_formal_scoring_execution_writes_score_records_with_fake_adapter(tmp
         shard_count=3,
         shard_index=2,
         max_work_items=1,
+        worker_count=2,
+        batch_size=1,
         adapter_factory=lambda name: FakeAdapter(),
     )
 
@@ -207,6 +209,9 @@ def test_run_formal_scoring_execution_writes_score_records_with_fake_adapter(tmp
     rows = [json.loads(line) for line in records_path.read_text(encoding="utf-8").splitlines() if line]
     assert summary["completed_record_count"] == 1
     assert summary["formal_fixed_fpr_complete"] is False
+    assert summary["baseline_isolation_enabled"] is True
+    assert summary["worker_count"] == 2
+    assert summary["batch_size"] == 1
     assert rows[0]["baseline_name"] == "external_videoseal"
     assert rows[0]["decision"] == "pending_threshold_calibration"
     assert rows[0]["baseline_score"] == 0.75

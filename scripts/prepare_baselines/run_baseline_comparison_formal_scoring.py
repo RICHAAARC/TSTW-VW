@@ -59,6 +59,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--external-root", type=Path, default=ROOT / "external_baselines", help="外部 baseline 源码根目录。")
     parser.add_argument("--execute", action="store_true", help="执行小规模 formal scoring, 而不是只生成 work-item plan。")
     parser.add_argument("--max-work-items", type=int, default=None, help="小规模验证最多执行的 work item 数量。")
+    parser.add_argument("--worker-count", type=int, default=1, help="当前 shard 内的并发 worker 数。")
+    parser.add_argument("--batch-size", type=int, default=1, help="每个 worker 一次领取的 work item 数。")
     return parser.parse_args()
 
 
@@ -88,6 +90,8 @@ def main() -> None:
             shard_count=args.shard_count,
             shard_index=args.shard_index,
             max_work_items=args.max_work_items,
+            worker_count=args.worker_count,
+            batch_size=args.batch_size,
         )
     else:
         summary = run_formal_scoring_plan(

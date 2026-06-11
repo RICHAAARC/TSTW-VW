@@ -130,3 +130,22 @@ runtime_profile/baseline_gpu_profiles/<baseline_name>/gpu_runtime_profile_manife
 `manifest.json` 中会同步写入 `gpu_profile` 字段, 包含 `gpu_name`、`mean_gpu_util_percent`、`median_gpu_util_percent`、`peak_memory_used_mb`、`peak_memory_ratio`、`low_utilization_ratio` 和 `estimated_gpu_usage_status`。这些字段用于判断后续正式 run 是否需要 baseline 并行、batch 扩大、shard 拆分或 I/O 优化。
 
 这些 profiling 结果只用于工程调度决策, 不支持论文 claim。
+
+
+## 10. formal scoring 三层调度策略
+
+正式 scoring execution 使用三层调度策略:
+
+1. baseline 隔离: `BASELINE_FORMAL_SCORING_EXECUTION_BASELINE_NAMES` 控制当前运行的外部 baseline。第一次小规模验证建议只使用 `["external_videoseal"]`, 不建议三个 baseline 同时混跑。
+2. shard 分片: `BASELINE_SCORING_SHARD_COUNT` 和 `BASELINE_SCORING_SHARD_INDEX` 控制外层任务切分。该层主要用于 Colab 断点续跑、失败重试和后续聚合, 不是 GPU 利用率优化手段。
+3. shard 内并行: `BASELINE_FORMAL_SCORING_WORKER_COUNT` 和 `BASELINE_FORMAL_SCORING_BATCH_SIZE` 控制当前 baseline 当前 shard 内的任务块并发。首次验证必须保持 `1`, 确认可运行后再尝试 `2` 或更高。
+
+对应命令行参数为:
+
+```bash
+python scripts/prepare_baselines/run_baseline_comparison_formal_scoring.py   --execute   --baseline-name external_videoseal   --shard-count 8   --shard-index 0   --worker-count 1   --batch-size 1
+```
+
+`worker_count > 1` 时, 每个 worker 使用独立 adapter 实例和独立 work directory。该设计优先保证上游模型状态、临时工作目录和 CUDA 缓存互不污染。部分上游 adapter 的 prepare 阶段会临时切换进程工作目录, 因此 runner 会串行化 prepare 阶段, 再执行 shard 内任务调度。
+
+当前 execution 输出仍然只是 `records/baseline_formal_score_records.jsonl` 和 execution manifest, 不生成 fixed-FPR 阈值、TPR@FPR、论文表格或 claim audit。
