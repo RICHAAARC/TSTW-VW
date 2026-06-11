@@ -142,8 +142,8 @@ def test_baseline_notebook_defines_score_aggregation_config_before_use() -> None
     assert definition_index < use_index
     assert "BASELINE_SCORE_AGGREGATION_RECORD_PATHS = []" in notebook_source
     assert "BASELINE_SCORE_AGGREGATION_RUN_ROOT =" in notebook_source
-    assert "BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS = 8" in notebook_source
-    assert "BASELINE_FORMAL_SCORING_WORKER_COUNT = 2" in notebook_source
+    assert "BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS = 24" in notebook_source
+    assert "BASELINE_FORMAL_SCORING_WORKER_COUNT = 4" in notebook_source
 
 
 def test_baseline_notebook_passes_gpu_profile_to_formal_execution() -> None:
