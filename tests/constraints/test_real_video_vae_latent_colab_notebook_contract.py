@@ -343,6 +343,8 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "runtime_profile_workflow.start_gpu_runtime_profile(" in notebook_text
     assert "runtime_profile_workflow.stop_gpu_runtime_profile(" in notebook_text
     assert "runtime_profile_workflow.summarize_gpu_runtime_profile(" in notebook_text
+    assert "runtime_profile_workflow.run_lightweight_gpu_runtime_profile(" in notebook_text
+    assert "gpu_profile_lightweight_smoke_after_runner" in notebook_text
     assert "runtime_profile_workflow.write_gpu_runtime_audit_record(" in notebook_text
     assert "run_timing_workflow.summarize_run_timing(" in notebook_text
     assert "runtime_profile_workflow.summarize_run_failures(" in notebook_text

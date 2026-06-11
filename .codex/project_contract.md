@@ -140,6 +140,7 @@
 - `run_real_video_vae_latent_probe.ipynb` must write its primary run outputs and family package into the Colab session-local runtime first, then materialize the completed family result into `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/` only after the runner, checker, mechanism audit, and packaging steps succeed.
 - Notebook workspace preparation must not create an empty Google Drive family result directory before the formal run has produced packageable outputs.
 - Stage-two final formal notebook defaults must enable CLIP similarity evidence by setting `TSTW_ENABLE_CLIP_SIMILARITY=1`, while debug review presets may explicitly disable it to control runtime cost.
+- If full-run GPU profiling returns `not_sampled`, the notebook may run a separately labeled lightweight GPU profiling smoke fallback to verify the sampling chain without rerunning the formal experiment.
 
 
 

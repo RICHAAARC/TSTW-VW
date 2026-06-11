@@ -295,6 +295,55 @@ def test_runtime_profile_workflow_writes_available_gpu_audit_record_from_trace(
     assert payload["gpu_runtime_summary"]["usable_sample_count"] == 0
 
 
+def test_runtime_profile_workflow_lightweight_gpu_profile_writes_sampled_trace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """验证轻量 GPU profiling 补救路径可以直接写出可汇总的 trace。"""
+    run_root = tmp_path / "run_root"
+
+    def fake_which(command_name: str) -> str | None:
+        if command_name == "nvidia-smi":
+            return "/usr/bin/nvidia-smi"
+        return None
+
+    def fake_check_output(command: list[str], **_: object) -> str:
+        assert command[0] == "/usr/bin/nvidia-smi"
+        return "0, Fake GPU, 72, 4096, 8192, 120, 60\n"
+
+    monkeypatch.setattr(gpu_profile_module.shutil, "which", fake_which)
+    monkeypatch.setattr(gpu_profile_module.subprocess, "check_output", fake_check_output)
+    monkeypatch.setattr(
+        runtime_profile_workflow,
+        "_run_lightweight_cuda_workload",
+        lambda duration_seconds: {
+            "status": True,
+            "workload_executed": True,
+            "iteration_count": 1,
+        },
+    )
+
+    payload = runtime_profile_workflow.run_lightweight_gpu_runtime_profile(
+        run_root=run_root,
+        interval_seconds=0.01,
+        duration_seconds=0.05,
+        event_tag="unit_lightweight_gpu_profile",
+    )
+
+    trace_path = run_root / "runtime_profile" / "gpu_runtime_trace.csv"
+    summary_path = run_root / "runtime_profile" / "gpu_runtime_summary.json"
+    smoke_summary_path = (
+        run_root / "runtime_profile" / "gpu_runtime_lightweight_profile_summary.json"
+    )
+    assert trace_path.exists()
+    assert summary_path.exists()
+    assert smoke_summary_path.exists()
+    assert payload["status"] is True
+    assert payload["gpu_runtime_summary"]["profiling_status"] == "sampled"
+    assert payload["gpu_runtime_summary"]["usable_sample_count"] >= 1
+    assert payload["workload_summary"]["workload_executed"] is True
+
+
 def test_runtime_profile_workflow_loads_governed_profile_config() -> None:
     """Validate the notebook helper loads a governed runtime-profile config.
 

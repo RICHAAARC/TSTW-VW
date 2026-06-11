@@ -11,6 +11,8 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -959,6 +961,130 @@ def summarize_gpu_runtime_profile(*, run_root: str | Path) -> dict[str, Any]:
             str(output_md),
         ],
     )
+
+
+def run_lightweight_gpu_runtime_profile(
+    *,
+    run_root: str | Path,
+    interval_seconds: float = 1.0,
+    duration_seconds: float = 12.0,
+    event_tag: str = "gpu_profile_lightweight_smoke",
+) -> dict[str, Any]:
+    """功能：在不重跑 formal runner 的情况下补采一段轻量 GPU runtime trace。
+
+    该函数属于 notebook runtime profile 的工程补救路径。它只验证当前
+    Colab 会话的 GPU 采样链路是否可写出有效 trace, 不替代 full formal runner
+    的性能画像。若 CUDA 可用, 函数会执行短时间矩阵乘法以产生轻量 GPU 负载；
+    若 CUDA 不可用, 仍会保留 nvidia-smi 或 unavailable trace, 便于定位环境问题。
+    """
+    from scripts.profile_runtime.profile_gpu_runtime import profile_gpu_runtime
+
+    run_root_path = Path(run_root)
+    runtime_profile_dir = _runtime_profile_dir(run_root_path)
+    stop_file = runtime_profile_dir / "gpu_profile_stop.flag"
+    trace_csv = runtime_profile_dir / "gpu_runtime_trace.csv"
+    event_tag_file = runtime_profile_dir / "current_runtime_event_tag.txt"
+    smoke_summary_path = runtime_profile_dir / "gpu_runtime_lightweight_profile_summary.json"
+
+    if stop_file.exists():
+        stop_file.unlink()
+    event_tag_file.write_text(f"{event_tag}\n", encoding="utf-8")
+
+    profile_payload: dict[str, Any] = {}
+    profile_error: str | None = None
+
+    def _profile_target() -> None:
+        nonlocal profile_payload, profile_error
+        try:
+            profile_payload = profile_gpu_runtime(
+                run_root=run_root_path,
+                interval_seconds=max(float(interval_seconds), 0.01),
+                output_csv=trace_csv,
+                stop_file=stop_file,
+                current_event_tag_file=event_tag_file,
+            )
+        except Exception as error:  # pragma: no cover - 防御性兜底, 测试覆盖正常路径。
+            profile_error = str(error)
+
+    profiler_thread = threading.Thread(
+        target=_profile_target,
+        name="tstw_lightweight_gpu_runtime_profile",
+        daemon=True,
+    )
+    profile_start_time = time.perf_counter()
+    profiler_thread.start()
+
+    workload_summary = _run_lightweight_cuda_workload(duration_seconds=duration_seconds)
+    remaining_seconds = float(duration_seconds) - (time.perf_counter() - profile_start_time)
+    if remaining_seconds > 0:
+        time.sleep(remaining_seconds)
+    stop_file.write_text("stop\n", encoding="utf-8")
+    profiler_thread.join(timeout=max(float(interval_seconds) * 4.0, 2.0))
+    if profiler_thread.is_alive():
+        _append_gpu_profiler_warning(
+            run_root_path,
+            warning_type="gpu_runtime_lightweight_profiler_thread_still_running",
+            message="Lightweight GPU profiler thread did not stop before timeout.",
+        )
+
+    summary_payload = summarize_gpu_runtime_profile(run_root=run_root_path)
+    lightweight_payload = {
+        "status": profile_error is None,
+        "profile_error": profile_error,
+        "event_tag": event_tag,
+        "duration_seconds": float(duration_seconds),
+        "interval_seconds": float(interval_seconds),
+        "trace_path": str(trace_csv),
+        "trace_exists": trace_csv.exists(),
+        "profile_payload": profile_payload,
+        "workload_summary": workload_summary,
+        "gpu_runtime_summary": summary_payload,
+    }
+    write_json_file(smoke_summary_path, lightweight_payload)
+    return lightweight_payload
+
+
+def _run_lightweight_cuda_workload(*, duration_seconds: float) -> dict[str, Any]:
+    """功能：尽量产生短时间 CUDA 负载, 不可用时返回明确跳过原因。"""
+    try:
+        torch = __import__("torch")
+    except Exception as error:
+        return {
+            "status": False,
+            "workload_executed": False,
+            "reason": f"torch_import_failed: {error}",
+        }
+    try:
+        if not bool(torch.cuda.is_available()):
+            return {
+                "status": False,
+                "workload_executed": False,
+                "reason": "cuda_unavailable",
+            }
+        device = torch.device("cuda")
+        matrix_size = 512
+        left = torch.randn((matrix_size, matrix_size), device=device)
+        right = torch.randn((matrix_size, matrix_size), device=device)
+        iteration_count = 0
+        deadline = time.perf_counter() + max(float(duration_seconds), 0.1)
+        while time.perf_counter() < deadline:
+            left = left @ right
+            left = left / (left.abs().mean() + 1e-6)
+            iteration_count += 1
+        torch.cuda.synchronize()
+        return {
+            "status": True,
+            "workload_executed": True,
+            "device_name": torch.cuda.get_device_name(0),
+            "iteration_count": iteration_count,
+            "matrix_size": matrix_size,
+        }
+    except Exception as error:
+        return {
+            "status": False,
+            "workload_executed": False,
+            "reason": f"cuda_workload_failed: {error}",
+        }
 
 
 def write_gpu_runtime_audit_record(
