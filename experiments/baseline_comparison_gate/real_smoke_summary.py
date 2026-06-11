@@ -44,6 +44,14 @@ SUMMARY_FIELDS = [
     "adapter_version",
     "claim_support_allowed",
     "formal_fixed_fpr_complete",
+    "gpu_profiling_status",
+    "gpu_name",
+    "mean_gpu_util_percent",
+    "median_gpu_util_percent",
+    "peak_memory_used_mb",
+    "peak_memory_ratio",
+    "low_utilization_ratio",
+    "estimated_gpu_usage_status",
     "limitation_reason",
 ]
 
@@ -112,6 +120,8 @@ def summarize_real_smoke_run(run_root: str | Path) -> dict[str, Any]:
         status = "real_smoke_executed_negative"
         limitation_reason = "single_baseline_smoke_score_below_threshold"
 
+    gpu_profile = manifest.get("gpu_profile") or {}
+
     return {
         "baseline_name": baseline_name,
         "run_id": manifest.get("run_id"),
@@ -134,6 +144,14 @@ def summarize_real_smoke_run(run_root: str | Path) -> dict[str, Any]:
         "adapter_version": manifest.get("adapter_version"),
         "claim_support_allowed": bool(manifest.get("claim_support_allowed")),
         "formal_fixed_fpr_complete": bool(manifest.get("formal_fixed_fpr_complete")),
+        "gpu_profiling_status": gpu_profile.get("profiling_status"),
+        "gpu_name": gpu_profile.get("gpu_name"),
+        "mean_gpu_util_percent": gpu_profile.get("mean_gpu_util_percent"),
+        "median_gpu_util_percent": gpu_profile.get("median_gpu_util_percent"),
+        "peak_memory_used_mb": gpu_profile.get("peak_memory_used_mb"),
+        "peak_memory_ratio": gpu_profile.get("peak_memory_ratio"),
+        "low_utilization_ratio": gpu_profile.get("low_utilization_ratio"),
+        "estimated_gpu_usage_status": gpu_profile.get("estimated_gpu_usage_status"),
         "limitation_reason": limitation_reason,
     }
 
@@ -215,12 +233,12 @@ def build_summary_markdown(summary: dict[str, Any]) -> str:
         f"- claim_support_allowed: `{summary['claim_support_allowed']}`",
         f"- formal_fixed_fpr_complete: `{summary['formal_fixed_fpr_complete']}`",
         "",
-        "| baseline_name | status | clean_score | clean_decision | h264_score | h264_decision | limitation_reason |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| baseline_name | status | clean_score | h264_score | gpu_status | mean_gpu_util | peak_memory_mb | limitation_reason |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for entry in summary["entries"]:
         lines.append(
-            "| {baseline_name} | {status} | {clean_score} | {clean_decision} | {h264_score} | {h264_decision} | {limitation_reason} |".format(
+            "| {baseline_name} | {status} | {clean_score} | {h264_score} | {estimated_gpu_usage_status} | {mean_gpu_util_percent} | {peak_memory_used_mb} | {limitation_reason} |".format(
                 **entry
             )
         )

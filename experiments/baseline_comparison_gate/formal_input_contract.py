@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections import Counter
 import json
 from pathlib import Path
+import shutil
 from typing import Any
 
 from experiments.baseline_comparison_gate.real_smoke_summary import load_json as load_smoke_json
@@ -148,3 +149,39 @@ def write_formal_input_contract(contract: dict[str, Any], run_root: str | Path) 
     }
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {"contract_path": contract_path.as_posix(), "manifest_path": manifest_path.as_posix()}
+
+
+
+def materialize_formal_input_contract_run(
+    *,
+    run_root: str | Path,
+    result_root: str | Path,
+    run_id: str,
+    workflow_key: str = WORKFLOW_KEY,
+    overwrite: bool = False,
+) -> Path:
+    """将已完成的 formal input contract 运行目录复制到 Drive 结果目录。
+
+    该函数服务于 Colab 冷启动流程: 先在 session-local 目录生成并校验输入契约, 确认必要文件
+    存在后, 再一次性复制到 Google Drive。这样可以避免运行失败时在 Drive 中留下空目录或半成品。
+    """
+    run_root_path = Path(run_root)
+    result_root_path = Path(result_root)
+    destination = result_root_path / workflow_key / run_id
+    required_files = [
+        run_root_path / "configs" / "baseline_comparison_formal_input_contract.json",
+        run_root_path / "artifacts" / "baseline_comparison_formal_input_manifest.json",
+    ]
+    missing_files = [path.as_posix() for path in required_files if not path.exists()]
+    if missing_files:
+        raise FileNotFoundError(
+            "baseline comparison formal input contract run is incomplete; missing files: "
+            + ", ".join(missing_files)
+        )
+    if destination.exists():
+        if not overwrite:
+            raise FileExistsError(f"destination already exists: {destination}")
+        shutil.rmtree(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(run_root_path, destination)
+    return destination

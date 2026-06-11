@@ -16,6 +16,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from experiments.baseline_comparison_gate.baseline_adapter import BaselineRuntimeContext
+from experiments.baseline_comparison_gate.baseline_gpu_profile import (
+    BaselineGpuProfileSession,
+    attach_gpu_profile_to_manifest,
+    required_gpu_profile_paths,
+)
 from experiments.baseline_comparison_gate.hidden_framewise_adapter import (
     ADAPTER_VERSION,
     DEFAULT_EXPERIMENT_NAME,
@@ -326,17 +331,30 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--timestamp-utc", default=None)
     parser.add_argument("--result-root", type=Path, default=None)
     parser.add_argument("--overwrite-result", action="store_true")
+    parser.add_argument("--profile-gpu", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--gpu-profile-interval-seconds", type=float, default=0.5)
     args = parser.parse_args(argv)
 
     try:
-        summary = run_hidden_framewise_real_smoke(
+        with BaselineGpuProfileSession(
             run_root=args.run_root,
-            config_dir=args.config_dir,
-            external_root=args.external_root,
-            short_commit=args.short_commit or resolve_short_commit(),
-            timestamp_utc=args.timestamp_utc,
-            input_video_path=args.input_video_path,
+            baseline_name=BASELINE_NAME,
+            interval_seconds=args.gpu_profile_interval_seconds,
+            enabled=args.profile_gpu,
+        ) as gpu_profile_session:
+            summary = run_hidden_framewise_real_smoke(
+                run_root=args.run_root,
+                config_dir=args.config_dir,
+                external_root=args.external_root,
+                short_commit=args.short_commit or resolve_short_commit(),
+                timestamp_utc=args.timestamp_utc,
+                input_video_path=args.input_video_path,
+            )
+        gpu_profile_payload = attach_gpu_profile_to_manifest(
+            summary["manifest_path"], gpu_profile_session
         )
+        summary["gpu_profile"] = gpu_profile_payload
+        summary["gpu_profile_summary_path"] = str(gpu_profile_session.summary_json)
         if args.result_root is not None:
             destination = materialize_completed_smoke_run(
                 run_root=args.run_root,
@@ -347,6 +365,7 @@ def main(argv: list[str] | None = None) -> None:
                     "manifest.json",
                     "records/external_hidden_framewise_real_smoke_records.jsonl",
                     "reports/external_hidden_framewise_real_smoke_report.md",
+                    *(required_gpu_profile_paths(BASELINE_NAME) if args.profile_gpu else []),
                 ],
             )
             summary["materialized_result_path"] = str(destination)

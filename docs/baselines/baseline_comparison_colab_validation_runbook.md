@@ -13,7 +13,8 @@
 5. `external_hidden_framewise` 真实 smoke adapter 可加载 HiDDeN combined-noise checkpoint, 对视频帧逐帧执行 clean 与 H.264 CRF 28 解码。
 6. `check_real_video_vae_package_for_baseline.py` 可检查阶段二 real-video VAE 正式结果包, 并在 Colab 会话本地解压 zip 兼容包。
 7. `summarize_baseline_real_smoke.py` 可读取三个真实 smoke 结果包, 生成 JSON、CSV 和 Markdown 摘要。
-8. `prepare_baseline_comparison_formal_inputs.py` 可冻结正式 baseline comparison runner 的输入契约。
+8. `prepare_baseline_comparison_formal_inputs.py` 可冻结正式 baseline comparison runner 的输入契约, 并在成功后复制到 Drive。
+9. `run_baseline_comparison_formal_scoring.py` 可生成正式 scoring work-item 计划, 并在成功后复制到 Drive。
 
 这些结果仍然只是工程可运行性 smoke。它们不能替代正式 fixed-FPR baseline comparison, 也不能直接支持论文 superiority claim。
 
@@ -100,7 +101,7 @@ baseline_real_smoke_summary.md
 
 ## 7. 下一步正式 baseline comparison 工作
 
-完成阶段二输入包检查、三个真实 smoke 和正式输入契约冻结后, 下一步应继续实现正式 scoring runner:
+完成阶段二输入包检查、三个真实 smoke、正式输入契约冻结和 scoring work-item 计划后, 下一步应继续实现正式 scoring 执行层:
 
 1. 读取阶段二正式 real-video VAE 结果包与 processed dataset 身份。
 2. 为内部 `tubelet_sync` 与三个外部 baseline 使用同一 split、同一 payload 规则和同一 attack matrix。
@@ -108,3 +109,24 @@ baseline_real_smoke_summary.md
 4. 在 test split 上冻结 records, 不允许更新阈值或选择规则。
 5. 生成 baseline comparison 主表、攻击分解表、阈值表、运行时表和 limitation report。
 6. 更新 claim audit, 只允许 fixed-FPR 正式结果支撑投稿级 claim。
+
+## 8. 当前 scoring runner 边界
+
+当前 `run_baseline_comparison_formal_scoring.py` 已实现正式 work-item 计划层。它会从阶段二 records 中去重内部 method variant, 为三个外部 baseline 生成对齐的 scoring work items, 并支持 `baseline_name` 过滤与 `shard_count` / `shard_index` 分片。
+
+该脚本当前不会伪造外部 baseline 分数, 也不会生成 TPR/FPR 表。后续执行层必须基于这些 work items 完成真实 embed、attack、detect、calibration split fixed-FPR 阈值和 test split 冻结 records。
+
+## 9. baseline GPU profiling 输出
+
+三个真实 smoke 脚本默认启用 `--profile-gpu`, 每个 baseline 结果包会额外包含以下文件:
+
+```text
+runtime_profile/baseline_gpu_profiles/<baseline_name>/gpu_runtime_trace.csv
+runtime_profile/baseline_gpu_profiles/<baseline_name>/gpu_runtime_summary.json
+runtime_profile/baseline_gpu_profiles/<baseline_name>/gpu_runtime_report.md
+runtime_profile/baseline_gpu_profiles/<baseline_name>/gpu_runtime_profile_manifest.json
+```
+
+`manifest.json` 中会同步写入 `gpu_profile` 字段, 包含 `gpu_name`、`mean_gpu_util_percent`、`median_gpu_util_percent`、`peak_memory_used_mb`、`peak_memory_ratio`、`low_utilization_ratio` 和 `estimated_gpu_usage_status`。这些字段用于判断后续正式 run 是否需要 baseline 并行、batch 扩大、shard 拆分或 I/O 优化。
+
+这些 profiling 结果只用于工程调度决策, 不支持论文 claim。

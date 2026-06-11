@@ -9,6 +9,7 @@ import pytest
 
 from experiments.baseline_comparison_gate.formal_input_contract import (
     build_formal_input_contract,
+    materialize_formal_input_contract_run,
     write_formal_input_contract,
 )
 
@@ -146,3 +147,25 @@ def test_write_formal_input_contract_outputs_manifest(tmp_path: Path) -> None:
     assert Path(outputs["contract_path"]).exists()
     assert Path(outputs["manifest_path"]).exists()
     assert "outputs" not in outputs["contract_path"]
+
+
+
+def test_materialize_formal_input_contract_run_copies_only_after_required_files(tmp_path: Path) -> None:
+    """确认 formal input contract 先在本地完成, 再整体复制到 Drive 风格结果目录。"""
+    package_root = write_stage_two_records(tmp_path)
+    config_path = write_config(tmp_path / "baseline_config.json")
+    contract = build_formal_input_contract(
+        stage_two_package_root=package_root,
+        baseline_config_path=config_path,
+    )
+    run_root = tmp_path / "runs" / "baseline_comparison_formal_inputs"
+    write_formal_input_contract(contract, run_root)
+
+    destination = materialize_formal_input_contract_run(
+        run_root=run_root,
+        result_root=tmp_path / "results",
+        run_id="baseline_comparison_formal_inputs_20260611T080000Z_abcdef0",
+    )
+
+    assert (destination / "configs" / "baseline_comparison_formal_input_contract.json").exists()
+    assert (destination / "artifacts" / "baseline_comparison_formal_input_manifest.json").exists()

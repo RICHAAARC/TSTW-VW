@@ -13,8 +13,10 @@ if str(ROOT) not in sys.path:
 
 from experiments.baseline_comparison_gate.formal_input_contract import (
     build_formal_input_contract,
+    materialize_formal_input_contract_run,
     write_formal_input_contract,
 )
+from experiments.baseline_comparison_gate.smoke_runner import build_smoke_run_id
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,6 +31,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--real-smoke-summary", type=Path, default=None, help="真实 smoke 汇总 JSON。")
     parser.add_argument("--run-root", type=Path, required=True, help="阶段三正式 comparison 会话本地运行目录。")
+    parser.add_argument("--result-root", type=Path, default=None, help="可选的 Google Drive results 根目录。")
+    parser.add_argument("--run-id", type=str, default=None, help="可选的 Drive run_id。未提供时使用时间戳和短 commit 生成。")
+    parser.add_argument("--short-commit", type=str, default="unknown", help="生成 run_id 时使用的短 commit。")
+    parser.add_argument("--timestamp-utc", type=str, default=None, help="生成 run_id 时使用的 UTC 时间戳。")
+    parser.add_argument("--overwrite", action="store_true", help="Drive 目标目录已存在时允许覆盖。")
     return parser.parse_args()
 
 
@@ -41,7 +48,19 @@ def main() -> None:
         real_smoke_summary_path=args.real_smoke_summary,
     )
     outputs = write_formal_input_contract(contract, args.run_root)
-    print(json.dumps({"contract": contract, "outputs": outputs}, ensure_ascii=False, indent=2))
+    materialized_path = None
+    if args.result_root is not None:
+        run_id = args.run_id or build_smoke_run_id(
+            short_commit=args.short_commit,
+            timestamp_utc=args.timestamp_utc,
+        ).replace("baseline_comparison_smoke", "baseline_comparison_formal_inputs")
+        materialized_path = materialize_formal_input_contract_run(
+            run_root=args.run_root,
+            result_root=args.result_root,
+            run_id=run_id,
+            overwrite=args.overwrite,
+        ).as_posix()
+    print(json.dumps({"contract": contract, "outputs": outputs, "materialized_path": materialized_path}, ensure_ascii=False, indent=2))
     if not contract["ready_for_formal_baseline_runner"]:
         raise SystemExit(2)
 
