@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import shutil
 import sys
 import time
 from typing import Any, Iterator
@@ -83,6 +84,7 @@ class ExternalVideoSealAdapter:
         if not self.upstream_root.exists():
             raise FileNotFoundError(f"VideoSeal upstream root not found: {self.upstream_root}")
 
+        config_repair = ensure_videoseal_package_config_paths(self.upstream_root)
         if str(self.upstream_root) not in sys.path:
             sys.path.insert(0, str(self.upstream_root))
 
@@ -114,6 +116,7 @@ class ExternalVideoSealAdapter:
             "device": self.handle.device,
             "model_digest": self.handle.model_digest,
             "checkpoint_path": self.handle.checkpoint_path.as_posix(),
+            "config_path_repair": config_repair,
             "prepare_seconds": prepare_seconds,
         }
 
@@ -263,6 +266,40 @@ def resolve_single_videoseal_checkpoint(work_dir: Path) -> Path:
         if preferred:
             return preferred[0]
     return candidates[0]
+
+
+def ensure_videoseal_package_config_paths(upstream_root: Path) -> dict[str, Any]:
+    """修复 VideoSeal 上游包内配置查找路径。
+
+    当前固定的 VideoSeal 上游 commit 中, `videoseal.utils.cfg.resolve_config_path`
+    会把 `configs/attenuation.yaml` 解析到 `videoseal/configs/attenuation.yaml`。
+    但仓库实际配置目录位于上游根目录 `configs/`。这里把根目录配置复制到
+    包内 `videoseal/configs/`, 属于复现路径修复, 不修改模型结构、权重或检测
+    分数定义。
+    """
+    source_config_dir = upstream_root / "configs"
+    package_config_dir = upstream_root / "videoseal" / "configs"
+    required_files = ("attenuation.yaml", "embedder.yaml", "extractor.yaml")
+    if not source_config_dir.exists():
+        raise FileNotFoundError(f"VideoSeal source config dir not found: {source_config_dir}")
+
+    copied_files: list[str] = []
+    package_config_dir.mkdir(parents=True, exist_ok=True)
+    for filename in required_files:
+        source_path = source_config_dir / filename
+        destination_path = package_config_dir / filename
+        if not source_path.exists():
+            raise FileNotFoundError(f"VideoSeal required config missing: {source_path}")
+        if not destination_path.exists():
+            shutil.copy2(source_path, destination_path)
+            copied_files.append(filename)
+    return {
+        "repair_name": "copy_root_configs_into_videoseal_package_configs",
+        "source_config_dir": source_config_dir.as_posix(),
+        "package_config_dir": package_config_dir.as_posix(),
+        "copied_files": copied_files,
+        "required_files": list(required_files),
+    }
 
 
 def get_model_message_length(model: Any) -> int:

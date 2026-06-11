@@ -10,6 +10,7 @@ import pytest
 from experiments.baseline_comparison_gate.videoseal_adapter import (
     ADAPTER_VERSION,
     SCORE_MAPPING_RULE,
+    ensure_videoseal_package_config_paths,
     normalize_payload_bits,
 )
 from scripts.prepare_baselines.run_videoseal_real_smoke import build_run_id
@@ -45,3 +46,17 @@ def test_videoseal_real_smoke_run_id_uses_single_underscore_tokens() -> None:
     assert run_id == "external_videoseal_real_smoke_20260611T060000Z_abcdef0"
     assert "__" not in run_id
     assert ADAPTER_VERSION == "external_videoseal_real_smoke_adapter"
+
+
+def test_videoseal_config_path_repair_copies_root_configs(tmp_path: Path) -> None:
+    """确认上游根目录 configs 会复制到 videoseal 包内 configs。"""
+    source_config_dir = tmp_path / "configs"
+    source_config_dir.mkdir(parents=True)
+    for filename in ("attenuation.yaml", "embedder.yaml", "extractor.yaml"):
+        (source_config_dir / filename).write_text("model: smoke\n", encoding="utf-8")
+
+    repair = ensure_videoseal_package_config_paths(tmp_path)
+
+    assert repair["repair_name"] == "copy_root_configs_into_videoseal_package_configs"
+    for filename in ("attenuation.yaml", "embedder.yaml", "extractor.yaml"):
+        assert (tmp_path / "videoseal" / "configs" / filename).exists()

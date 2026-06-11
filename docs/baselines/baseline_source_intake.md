@@ -113,3 +113,13 @@ python scripts/prepare_baselines/run_videoseal_real_smoke.py \
 7. 写出 `records/external_videoseal_real_smoke_records.jsonl`、`manifest.json` 与 `reports/external_videoseal_real_smoke_report.md`。
 
 该结果仍然只表示 `external_videoseal` 单 baseline 可运行性 smoke, 不支持正式论文 claim。进入投稿级比较前, 仍需统一 split、统一攻击矩阵、calibration-only fixed-FPR 阈值、全量表格重建与 claim audit。
+
+### external_videoseal 路径修复记录
+
+在 Colab 真实 smoke 中, VideoSeal 权重可以下载成功, 但上游代码会尝试读取 `videoseal/configs/attenuation.yaml`。当前固定 commit 的仓库实际配置目录是上游根目录 `configs/`, 因此会触发 `FileNotFoundError`。本项目已在 `ExternalVideoSealAdapter.prepare()` 中加入 `ensure_videoseal_package_config_paths()`:
+
+1. 检查 `external_baselines/external_videoseal/upstream/configs/` 是否存在。
+2. 将 `attenuation.yaml`、`embedder.yaml`、`extractor.yaml` 复制到 `external_baselines/external_videoseal/upstream/videoseal/configs/`。
+3. 仅修复上游包内配置查找路径, 不修改权重、模型结构、嵌入算法或检测分数定义。
+
+该修复属于允许的复现路径修复, 不是方法语义修改。
