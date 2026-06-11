@@ -27,6 +27,7 @@ REQUIRED_PATHS = {
     "paper_workflow_notebook_utils": "paper_workflow/notebook_utils",
     "processed_dataset_notebook_entrypoint": "paper_workflow/build_processed_real_video_dataset.ipynb",
     "real_video_probe_notebook_entrypoint": "paper_workflow/run_real_video_vae_latent_probe.ipynb",
+    "baseline_comparison_notebook_entrypoint": "paper_workflow/run_baseline_comparison_gate.ipynb",
     "main_cli_root": "main/cli",
     "main_identity_attack": "main/attacks/identity_attack.py",
     "main_video_vae_tensor_runtime": "main/vae/video_vae_tensor_runtime.py",

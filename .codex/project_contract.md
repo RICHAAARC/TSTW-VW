@@ -11,7 +11,7 @@
 - 当前阶段的文件组织边界以 `docs/file_organization.md` 为准：`main/` 仅保留核心方法、核心协议、核心评估与 CLI 能力；阶段性 runner 位于 `experiments/`；跨 notebook 共享的 Colab / Notebook session 工具位于 `paper_workflow/colab_utils/` 或 `scripts/`；单 notebook 或单阶段专用 helper 位于 `paper_workflow/notebook_utils/`。
 - 当前阶段允许在既有 protocol core 上运行 synthetic video latent、temporal attack matrix 与 `frame_prc` / `tubelet_only` / `tubelet_sync` 三个正式 method variant。
 - 当前阶段允许实现 synthetic / placeholder 驱动的最小 mechanism runtime，用于冻结 records、thresholds、manifest、table rebuild 与机制追踪口径。
-- 当前阶段允许保留一组受治理的 stage-two transition-preparation notebook workflow：`paper_workflow/build_processed_real_video_dataset.ipynb` 只负责 raw dataset 到 processed dataset 的构建，`paper_workflow/run_real_video_vae_latent_probe.ipynb` 只负责 processed dataset 与 session model 驱动的 runner / checker / package 调度。
+- 当前阶段允许保留受治理的 notebook entrypoints：`paper_workflow/build_processed_real_video_dataset.ipynb` 只负责 raw dataset 到 processed dataset 的构建，`paper_workflow/run_real_video_vae_latent_probe.ipynb` 只负责 processed dataset 与 session model 驱动的 runner / checker / package 调度，`paper_workflow/run_baseline_comparison_gate.ipynb` 只负责 `baseline_comparison_gate` 的 Colab 冷启动 smoke 调度。
 - 当前阶段不得进入真实 watermark 算法实现、真实 DiT / Flow Matching / VAE 接入、真实视频生成流程。
 
 ## Ordered Semantic Stages
@@ -112,7 +112,7 @@
 ### Naming Governance
 
 - All formal names must use `snake_case`.
-- Governed notebook entrypoints under `paper_workflow/` must also use `snake_case` semantic names, and the current governed notebook workflow is frozen to `build_processed_real_video_dataset.ipynb` and `run_real_video_vae_latent_probe.ipynb`.
+- Governed notebook entrypoints under `paper_workflow/` must also use `snake_case` semantic names. The current governed notebook entrypoints are `build_processed_real_video_dataset.ipynb`, `run_real_video_vae_latent_probe.ipynb`, and `run_baseline_comparison_gate.ipynb`.
 - Governed notebook entrypoints must not append `_Colab`, `_Notebook`, or `Run_` naming noise.
 - `paper_workflow/notebook_utils/` 与 `paper_workflow/colab_utils/` 中的 helper 模块都必须使用 `snake_case` 语义命名，且不得使用任何数字阶段缩写、下划线阶段缩写、连字符阶段缩写或 PascalCase 数字阶段缩写形式的弱阶段编号。
 - Global weak naming patterns (regex-based) such as `stage[0-9]+` (stage0, stage1, stage999), `stage_[0-9]+`, `stage-[0-9]+`, `*_v[0-9]+` (*_v1, *_v999), `*_p[0-9]+` (*_p0, *_p999), `test_stage[0-9]+_*`, and `run_stage[0-9]+_*` are blocking violations that apply to any present and future version number.

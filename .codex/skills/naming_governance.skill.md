@@ -25,7 +25,7 @@ Applies to file names, test file names, module names, config keys, JSON keys, Py
 ## Blocking Rules
 
 - Formal names must use `snake_case`.
-- `paper_workflow/` root notebooks must also use `snake_case` semantic names; the current governed workflow names are `build_processed_real_video_dataset.ipynb` and `run_real_video_vae_latent_probe.ipynb`.
+- `paper_workflow/` root notebooks must also use `snake_case` semantic names; the current governed workflow names are `build_processed_real_video_dataset.ipynb`, `run_real_video_vae_latent_probe.ipynb`, and `run_baseline_comparison_gate.ipynb`.
 - `paper_workflow/notebook_utils/` helper modules must use stage-free `snake_case` and must not encode weak stage identifiers.
 - `paper_workflow/colab_utils/` shared helpers must stay generic `snake_case` and must not use stage-prefixed names.
 - `method_variant` must use mechanism semantics.
@@ -56,6 +56,7 @@ Applies to file names, test file names, module names, config keys, JSON keys, Py
 - Accept `tools/harness/run_synthetic_tubelet_sync_profile.py`.
 - Accept `paper_workflow/build_processed_real_video_dataset.ipynb`.
 - Accept `paper_workflow/run_real_video_vae_latent_probe.ipynb`.
+- Accept `paper_workflow/run_baseline_comparison_gate.ipynb`.
 - Reject `paper_workflow/Stage2_Real_Video_VAE_Latent_Probe.ipynb`.
 
 ## Required Audit Hooks

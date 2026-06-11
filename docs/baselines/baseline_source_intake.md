@@ -49,3 +49,45 @@
 5. 单视频 `h264_crf_28` embed / attack / detect。
 6. 写出统一 `records/baseline_smoke_records.jsonl`。
 7. 将完整 smoke 包落盘到 Google Drive。
+
+## 5. 当前本地推进状态
+
+截至当前构建, 本地已完成以下非 GPU 步骤:
+
+1. 三个 baseline 的 source manifest 已登记。
+2. 三个 baseline 的上游源码已可通过 `scripts/prepare_baselines/fetch_external_baselines.py` 拉取到 `external_baselines/`。
+3. `external_baselines/` 已加入 `.gitignore`, 上游源码不作为本项目正式提交内容。
+4. 本地 adapter skeleton smoke 可生成阻断型 records、manifest 和 limitation report。
+5. Colab preflight 可检查上游 commit、权重 digest 状态、adapter 状态和阶段二输入包契约。
+6. source probe 已确认三个上游源码树包含预期入口线索。
+
+本地命令如下:
+
+```bash
+python scripts/prepare_baselines/fetch_external_baselines.py --print-plan
+python scripts/prepare_baselines/probe_external_baseline_sources.py
+python scripts/prepare_baselines/check_baseline_colab_preflight.py
+python scripts/prepare_baselines/run_baseline_comparison_smoke.py --run-root <temporary_run_root> --result-root <drive_result_root>
+```
+
+这些命令仍不构成正式 baseline 实验。正式比较前仍需要 Colab 完成:
+
+1. 权重下载。
+2. 权重 digest。
+3. 单视频真实 embed / detect smoke。
+4. H.264 轻量攻击 smoke。
+5. Google Drive 结果包落盘。
+
+## 6. Colab 冷启动结果落盘规则
+
+对于 `baseline_comparison_gate` 的 smoke 验证, 推荐使用如下两层路径:
+
+```text
+会话本地运行目录: /content/TSTW_runtime/runs/<RUN_ID>/
+Drive 结果根目录: /content/drive/MyDrive/TSTW/results/
+最终结果目录: /content/drive/MyDrive/TSTW/results/baseline_comparison_gate/<RUN_ID>/
+```
+
+`run_baseline_comparison_smoke.py` 的 `--result-root` 参数只会在 smoke 运行成功并且本地目录中已经存在 `manifest.json`、`records/baseline_smoke_records.jsonl` 和 `reports/baseline_limitation_report.md` 后复制结果。该设计属于通用工程写法, 主要目的是避免 Colab 运行失败时先在 Google Drive 中创建空目录。
+
+当前 smoke 仍然是 adapter skeleton 验证, 不代表真实外部 baseline 已完成。真实比较仍需后续把三个 adapter 升级为可运行版本, 并在 Colab 中完成权重 digest、单视频 embed / detect、攻击后 detect 和结果包审计。

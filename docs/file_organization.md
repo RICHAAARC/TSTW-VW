@@ -443,7 +443,7 @@ real_video_vae_latent_notebook_helper.py
 命名与归属规则如下：
 
 ```text
-1. `paper_workflow/` 根下的 governed notebook 使用 stage-free `snake_case` 语义命名，当前固定为 `build_processed_real_video_dataset.ipynb` 与 `run_real_video_vae_latent_probe.ipynb`。
+1. `paper_workflow/` 根下的 governed notebook 使用 stage-free `snake_case` 语义命名，当前固定为 `build_processed_real_video_dataset.ipynb`、`run_real_video_vae_latent_probe.ipynb` 与 `run_baseline_comparison_gate.ipynb`。
 2. notebook-specific helper 若存在，必须位于 `paper_workflow/notebook_utils/`，并使用 stage-free `snake_case`。
 3. 仅有跨 notebook 共享价值的 helper 才能留在 `paper_workflow/colab_utils/`，并保持通用 snake_case 命名。
 4. 不得把单一 notebook 的兼容 wrapper 伪装成 `colab_utils/` 下的共享工具，也不得在 `paper_workflow/` 路径中保留任何数字阶段缩写形式的弱编号文件名。

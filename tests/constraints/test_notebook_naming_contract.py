@@ -23,6 +23,7 @@ def _write_text(path: Path, text: str = "\n") -> None:
 def _create_governed_notebook_layout(root: Path) -> None:
     _write_text(root / "paper_workflow" / "build_processed_real_video_dataset.ipynb", "{}\n")
     _write_text(root / "paper_workflow" / "run_real_video_vae_latent_probe.ipynb", "{}\n")
+    _write_text(root / "paper_workflow" / "run_baseline_comparison_gate.ipynb", "{}\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "runtime_check.py", "pass\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "tar_zst_packager.py", "pass\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "__init__.py", "\"\"\"pkg\"\"\"\n")
@@ -93,7 +94,7 @@ def test_notebook_naming_audit_rejects_stage_token_helper_in_notebook_utils(tmp_
 
 
 def test_notebook_naming_audit_rejects_unexpected_root_notebook(tmp_path: Path) -> None:
-    """Validate the audit rejects extra root notebooks beyond the governed pair.
+    """Validate the audit rejects extra root notebooks beyond governed entrypoints.
 
     Args:
         tmp_path: Temporary repository root.

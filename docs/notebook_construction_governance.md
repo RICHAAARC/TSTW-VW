@@ -24,7 +24,7 @@
 
 ```text
 1. `paper_workflow/` 根下的正式 notebook 物理文件名必须使用 `snake_case` 机制语义命名。
-2. 当前受治理的 notebook workflow 固定为 `build_processed_real_video_dataset.ipynb` 与 `run_real_video_vae_latent_probe.ipynb`。
+2. 当前受治理的 notebook workflow 固定为 `build_processed_real_video_dataset.ipynb`、`run_real_video_vae_latent_probe.ipynb` 与 `run_baseline_comparison_gate.ipynb`。
 3. notebook 物理文件名不得附加 `_Colab`、`_Notebook`、`Run_` 等执行环境后缀或前缀，也不得写入任何数字阶段缩写形式的弱阶段编号。
 4. notebook 物理文件名不得使用 `Stage`、`stage` 等阶段词，也不得使用任何数字弱阶段编号；需要说明 Stage 时，必须写在首个 markdown cell 的内容标题或说明段落中。
 5. notebook 的可读展示标题、Colab 文档标题和首个 markdown cell 标题如果使用英文单词，应使用单词首字母大写方式，而不是全小写短语；中文标题应清楚说明 notebook 作用。
@@ -46,7 +46,7 @@ Artifact Handoff：跨 notebook 传递的事实只能来自已落盘、已校验
 
 本文档明确替代旧规则中“模型长期保存到 Google Drive Models”的设计。当前规则为：**所有模型相关文件均为 session-only；Google Drive 不作为模型权重仓库；Google Drive 只保存模型下载与加载的 session manifest，而不保存模型权重文件本体。**
 
-当前阶段受治理的 notebook workflow 入口命名为：`paper_workflow/build_processed_real_video_dataset.ipynb` 与 `paper_workflow/run_real_video_vae_latent_probe.ipynb`。
+当前阶段受治理的 notebook workflow 入口命名为：`paper_workflow/build_processed_real_video_dataset.ipynb`、`paper_workflow/run_real_video_vae_latent_probe.ipynb` 与 `paper_workflow/run_baseline_comparison_gate.ipynb`。
 
 ---
 
