@@ -11,6 +11,7 @@ from experiments.baseline_comparison_gate.formal_scoring_aggregation import run_
 from experiments.baseline_comparison_gate.formal_scoring_runner import materialize_formal_scoring_execution_run
 
 pytestmark = [pytest.mark.constraint, pytest.mark.unit]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> Path:
@@ -85,3 +86,23 @@ def test_execution_materialization_excludes_large_checkpoint_cache(tmp_path: Pat
 
     assert (dest / "records" / "baseline_formal_score_records.jsonl").exists()
     assert not (dest / "work" / "external_videoseal" / "worker_00" / "ckpts" / "model.pth").exists()
+
+
+def test_baseline_notebook_defines_score_aggregation_config_before_use() -> None:
+    """验证 notebook 在聚合 cell 之前定义聚合开关和输入路径配置。"""
+    notebook_path = ROOT / "paper_workflow" / "run_baseline_comparison_gate.ipynb"
+    notebook_payload = json.loads(notebook_path.read_text(encoding="utf-8"))
+    notebook_source = "\n".join(
+        "".join(cell.get("source", []))
+        for cell in notebook_payload.get("cells", [])
+        if cell.get("cell_type") == "code"
+    )
+
+    definition_index = notebook_source.index("RUN_BASELINE_SCORE_RECORDS_AGGREGATION = False")
+    use_index = notebook_source.index("if RUN_BASELINE_SCORE_RECORDS_AGGREGATION:")
+
+    assert definition_index < use_index
+    assert "BASELINE_SCORE_AGGREGATION_RECORD_PATHS = []" in notebook_source
+    assert "BASELINE_SCORE_AGGREGATION_RUN_ROOT =" in notebook_source
+    assert "BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS = 8" in notebook_source
+    assert "BASELINE_FORMAL_SCORING_WORKER_COUNT = 2" in notebook_source
