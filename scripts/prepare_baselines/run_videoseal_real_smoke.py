@@ -8,6 +8,7 @@ import json
 import shutil
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -343,28 +344,60 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--overwrite-result", action="store_true")
     args = parser.parse_args(argv)
 
-    summary = run_videoseal_real_smoke(
-        run_root=args.run_root,
-        config_dir=args.config_dir,
-        external_root=args.external_root,
-        short_commit=args.short_commit or resolve_short_commit(),
-        timestamp_utc=args.timestamp_utc,
-        input_video_path=args.input_video_path,
-    )
-    if args.result_root is not None:
-        destination = materialize_completed_smoke_run(
+    try:
+        summary = run_videoseal_real_smoke(
             run_root=args.run_root,
-            result_root=args.result_root,
-            run_id=summary["run_id"],
-            overwrite=args.overwrite_result,
-            required_relative_paths=[
-                "manifest.json",
-                "records/external_videoseal_real_smoke_records.jsonl",
-                "reports/external_videoseal_real_smoke_report.md",
-            ],
+            config_dir=args.config_dir,
+            external_root=args.external_root,
+            short_commit=args.short_commit or resolve_short_commit(),
+            timestamp_utc=args.timestamp_utc,
+            input_video_path=args.input_video_path,
         )
-        summary["materialized_result_path"] = str(destination)
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+        if args.result_root is not None:
+            destination = materialize_completed_smoke_run(
+                run_root=args.run_root,
+                result_root=args.result_root,
+                run_id=summary["run_id"],
+                overwrite=args.overwrite_result,
+                required_relative_paths=[
+                    "manifest.json",
+                    "records/external_videoseal_real_smoke_records.jsonl",
+                    "reports/external_videoseal_real_smoke_report.md",
+                ],
+            )
+            summary["materialized_result_path"] = str(destination)
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+    except Exception as exc:
+        failure_payload = write_failure_summary(args.run_root, exc)
+        print(json.dumps(failure_payload, ensure_ascii=False, indent=2), file=sys.stderr)
+        raise
+
+
+def write_failure_summary(run_root: str | Path, exc: Exception) -> dict[str, Any]:
+    """在真实 smoke 失败时写出可回传的失败摘要。
+
+    Colab Notebook 有时只显示上层 `RuntimeError`。该函数把真实 Python 堆栈
+    写入会话本地目录, 便于后续判断失败属于依赖、权重下载、ffmpeg 还是模型
+    推理问题。
+    """
+    run_root_path = Path(run_root)
+    logs_dir = run_root_path / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    failure_payload = {
+        "workflow_key": WORKFLOW_KEY,
+        "baseline_name": BASELINE_NAME,
+        "status": "failed",
+        "error_type": type(exc).__name__,
+        "error_message": str(exc),
+        "traceback": traceback.format_exc(),
+    }
+    failure_path = logs_dir / "external_videoseal_real_smoke_failure.json"
+    failure_path.write_text(
+        json.dumps(failure_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    failure_payload["failure_path"] = failure_path.as_posix()
+    return failure_payload
 
 
 if __name__ == "__main__":
