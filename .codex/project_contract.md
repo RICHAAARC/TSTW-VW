@@ -6,8 +6,8 @@
 
 ## Current Stage
 
-- `project_stage`: `synthetic_tubelet_sync_probe`
-- `target_construction_phase`: `real_video_vae_latent_probe`
+- `project_stage`: `baseline_comparison_gate`
+- `target_construction_phase`: `paper_artifact_gate`
 - 当前阶段的文件组织边界以 `docs/file_organization.md` 为准：`main/` 仅保留核心方法、核心协议、核心评估与 CLI 能力；阶段性 runner 位于 `experiments/`；跨 notebook 共享的 Colab / Notebook session 工具位于 `paper_workflow/colab_utils/` 或 `scripts/`；单 notebook 或单阶段专用 helper 位于 `paper_workflow/notebook_utils/`。
 - 当前阶段允许在既有 protocol core 上运行 synthetic video latent、temporal attack matrix 与 `frame_prc` / `tubelet_only` / `tubelet_sync` 三个正式 method variant。
 - 当前阶段允许实现 synthetic / placeholder 驱动的最小 mechanism runtime，用于冻结 records、thresholds、manifest、table rebuild 与机制追踪口径。
@@ -19,10 +19,19 @@
 1. `protocol_skeleton`
 2. `synthetic_tubelet_sync_probe`
 3. `real_video_vae_latent_probe`
-4. `trajectory_statistic_probe`
-5. `trajectory_aware_sampling_probe`
-6. `full_paper_protocol`
+4. `baseline_comparison_gate`
+5. `paper_artifact_gate`
+6. `submission_readiness_gate`
 7. `minimal_release_extraction`
+
+### Current Submission-Workflow Alignment
+
+- `synthetic_tubelet_sync_probe` is the closed synthetic mechanism proof stage.
+- `real_video_vae_latent_probe` is the closed real-video VAE formal evidence stage, backed by the canonical formal package under `TSTW/results/real_video_vae_latent_probe_stage2_final_formal_audit/real_video_vae_latent_probe_formal_20260611T012845Z_2dbc783/`.
+- `baseline_comparison_gate` is now the active governed project stage. Its purpose is to compare `tubelet_sync` against `external_videoseal`, `external_rivagan`, and `external_hidden_framewise` under the same split, attack matrix, fixed-FPR calibration, records, tables, and report contracts.
+- `paper_artifact_gate` is the next target construction phase after baseline comparison passes; it owns submission figures, paper tables, and claim-audit materialization.
+- `submission_readiness_gate` is the final pre-release paper-readiness gate before `minimal_release_extraction`.
+- `trajectory_statistic_probe` and `trajectory_aware_sampling_probe` are deferred research-extension stages and are not part of the current submission-critical stage order.
 
 ## Core Method Objects
 
@@ -128,11 +137,12 @@
 
 ## Current-Stage Prohibitions
 
-1. Do not implement real watermark embedding or detection algorithms.
-2. Do not integrate real DiT backends, Flow Matching backends, or video VAE backends.
-3. Do not create notebook-only protocol logic; the governed stage-two Colab entrypoint may exist only when it delegates formal outputs to repository modules.
-4. Do not check in formal experiment outputs under `outputs/`; protocol skeleton runtime tests may use temporary output roots or ephemeral `outputs/runs` paths.
-5. Do not bypass harness audits or pytest gates.
+1. Do not replace the governed internal method variants `frame_prc`, `tubelet_only`, or `tubelet_sync` with an external baseline.
+2. Do not use external baseline outputs to support a superiority claim unless the baseline has a recorded license/source/model digest, a governed adapter, fixed-FPR calibration, and aligned attack-matrix records.
+3. Do not integrate real DiT, Flow Matching generation, or uncontrolled real video generation backends in `baseline_comparison_gate`.
+4. Do not create notebook-only protocol logic; baseline comparison must delegate records, thresholds, tables, reports, and package checks to repository modules.
+5. Do not check in formal experiment outputs under `outputs/`; runtime tests must use temporary output roots or ephemeral paths.
+6. Do not bypass harness audits, pytest gates, package checks, or claim-audit review.
 
 ## Stage-Two Notebook Result Naming And Drive Materialization
 
@@ -149,3 +159,13 @@
 - Stage-two real-video notebook Drive materialization must use `/content/drive/MyDrive/TSTW/results/<WORKFLOW_KEY>/<RUN_ID>_<UTC_TIME>_<SHORT_COMMIT>/`.
 - `RUN_ID` for Drive and local family result directories must be materialized from `TSTW_RUN_ID_TEMPLATE` or the default `<base_run_id>_utc_time_short_commit`, using the same UTC timestamp and short commit as the formal family identity.
 - The fixed session `RUN_ROOT` may remain `/content/TSTW_runtime/runs/real_video_vae_latent_probe_formal`; only the family result directory identity receives the timestamp and commit suffix.
+
+
+## Baseline Comparison Gate Contract
+
+- Active baseline names are `external_videoseal`, `external_rivagan`, and `external_hidden_framewise`.
+- Every baseline must use the same real-video processed dataset identity, split semantics, attack matrix, target-FPR calibration rule, and table/report rebuild contract as the canonical `real_video_vae_latent_probe` formal package.
+- Baseline records must preserve `baseline_name`, `baseline_family`, `baseline_score`, `baseline_raw_detector_output`, `decision`, `failure_reason`, `quality_metrics`, `temporal_metrics`, `runtime_metrics`, and `baseline_trace`.
+- `baseline_trace` must include source digest, model digest, adapter version, score mapping rule, unsupported attack reason when applicable, and license or availability status.
+- A baseline with incomplete legal, model, environment, or attack support may appear only in `baseline_limitation_report.md`; it must not support a positive superiority claim.
+- Passing this gate requires `baseline_comparison_table.csv`, `baseline_attack_breakdown.csv`, `baseline_threshold_table.csv`, `baseline_runtime_table.csv`, `baseline_limitation_report.md`, and a claim-audit update showing that all supported baseline claims map to governed artifacts.

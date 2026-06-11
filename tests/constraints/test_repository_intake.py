@@ -13,8 +13,8 @@ pytestmark = [pytest.mark.constraint, pytest.mark.unit]
 from pathlib import Path
 
 from tools.harness.inspect_repository import (
+    BASELINE_COMPARISON_REQUIRED_PATHS,
     EXPECTED_DIRECTORIES,
-    REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS,
     inspect_repository,
 )
 
@@ -53,7 +53,7 @@ def test_governed_repository_reports_active_stage_status() -> None:
     """
     report = inspect_repository(ROOT)
     assert report["repository_mode"] == "governed_repository"
-    assert report["project_stage"] == "synthetic_tubelet_sync_probe"
+    assert report["project_stage"] == "baseline_comparison_gate"
     assert "outputs" not in EXPECTED_DIRECTORIES
     assert report["directory_boundary_contract"]["exists"] is True
     assert report["directory_boundary_contract"]["source_of_truth"] == "docs/file_organization.md"
@@ -72,45 +72,12 @@ def test_governed_repository_reports_active_stage_status() -> None:
     assert report["directory_status"]["release"]["exists"] is False
     assert "outputs/" in (ROOT / ".gitignore").read_text(encoding="utf-8")
     next_stage_readiness = report["next_stage_readiness"]
-    assert next_stage_readiness["target_construction_phase"] == "real_video_vae_latent_probe"
+    assert next_stage_readiness["target_construction_phase"] == "paper_artifact_gate"
     assert next_stage_readiness["all_required_paths_present"] is True
     assert next_stage_readiness["present_required_path_count"] == len(
-        REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS
+        BASELINE_COMPARISON_REQUIRED_PATHS
     )
-    assert next_stage_readiness["required_path_count"] == len(REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS)
-    assert next_stage_readiness["required_paths"]["real_video_vae_latent_processed_dataset_notebook"]["exists"] is True
-    assert next_stage_readiness["required_paths"]["real_video_vae_latent_probe_notebook"]["exists"] is True
-    assert next_stage_readiness["required_paths"]["real_video_vae_latent_notebook_utils_root"]["exists"] is True
-    assert (
-        next_stage_readiness["required_paths"]["real_video_vae_latent_runtime_profile_root"]["exists"] is True
-    )
-    assert (
-        next_stage_readiness["required_paths"][
-            "real_video_vae_latent_runtime_profile_workflow_helper"
-        ]["exists"]
-        is True
-    )
-    assert (
-        next_stage_readiness["required_paths"][
-            "real_video_vae_latent_run_timing_workflow_helper"
-        ]["exists"]
-        is True
-    )
-    assert (
-        next_stage_readiness["required_paths"][
-            "real_video_vae_latent_runtime_parameter_recommendation_module"
-        ]["exists"]
-        is True
-    )
-    assert (
-        next_stage_readiness["required_paths"][
-            "real_video_vae_latent_run_failure_summary_module"
-        ]["exists"]
-        is True
-    )
-    assert (
-        next_stage_readiness["required_paths"]["real_video_vae_latent_runner_module"]["exists"] is True
-    )
-    assert (
-        next_stage_readiness["required_paths"]["real_video_vae_latent_named_tar_packager_module"]["exists"] is True
-    )
+    assert next_stage_readiness["required_path_count"] == len(BASELINE_COMPARISON_REQUIRED_PATHS)
+    assert next_stage_readiness["required_paths"]["baseline_comparison_build_flow"]["exists"] is True
+    assert next_stage_readiness["required_paths"]["baseline_comparison_project_contract"]["exists"] is True
+    assert next_stage_readiness["required_paths"]["baseline_comparison_protocol_contract"]["exists"] is True

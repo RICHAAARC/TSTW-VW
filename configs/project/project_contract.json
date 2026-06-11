@@ -1,7 +1,7 @@
 {
-  "project_stage": "synthetic_tubelet_sync_probe",
-  "construction_phase": "synthetic_tubelet_sync_probe",
-  "target_construction_phase": "real_video_vae_latent_probe",
+  "project_stage": "baseline_comparison_gate",
+  "construction_phase": "baseline_comparison_gate",
+  "target_construction_phase": "paper_artifact_gate",
   "legacy_stage_id": null,
   "method_objects": [
     "temporal_synchronized_tubelet_code",
@@ -110,9 +110,9 @@
       "protocol_skeleton",
       "synthetic_tubelet_sync_probe",
       "real_video_vae_latent_probe",
-      "trajectory_statistic_probe",
-      "trajectory_aware_sampling_probe",
-      "full_paper_protocol",
+      "baseline_comparison_gate",
+      "paper_artifact_gate",
+      "submission_readiness_gate",
       "minimal_release_extraction"
     ],
     "forbidden_method_variants": [

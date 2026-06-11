@@ -28,7 +28,7 @@ Applies to stage naming, stage configuration, stage-related docs, and progressio
 - `protocol_skeleton` cannot be skipped when progression starts from bootstrap.
 - Progression directly to `synthetic_tubelet_sync_probe` or higher before satisfying bootstrap gates is blocked.
 - Stage-number or version-like identifiers such as `stage1`, `stage_1`, `stage-1`, `*_v1`, and `*_p0` are blocked as formal stage identifiers.
-- Formal stage references must use the allowed semantic stage names from `.codex/project_contract.md`, including `protocol_skeleton`, `synthetic_tubelet_sync_probe`, and `real_video_vae_latent_probe`.
+- Formal stage references must use the allowed semantic stage names from `.codex/project_contract.md`, including `protocol_skeleton`, `synthetic_tubelet_sync_probe`, `real_video_vae_latent_probe`, `baseline_comparison_gate`, `paper_artifact_gate`, `submission_readiness_gate`, and `minimal_release_extraction`.
 
 ## Allowed Changes
 
@@ -45,7 +45,7 @@ Applies to stage naming, stage configuration, stage-related docs, and progressio
 ## Required Tests
 
 - Reject stage-number and version-like stage names.
-- Accept governed semantic stage names declared in `.codex/project_contract.md`.
+- Accept governed semantic stage names declared in `.codex/project_contract.md`, including submission-workflow gates.
 - Block stage advancement when harness gates are incomplete.
 
 ## Required Audit Hooks

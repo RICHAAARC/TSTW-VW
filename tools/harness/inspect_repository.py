@@ -75,6 +75,11 @@ STAGE_ONE_REQUIRED_PATHS = {
 
 
 NEXT_STAGE_TARGET = "real_video_vae_latent_probe"
+BASELINE_COMPARISON_REQUIRED_PATHS = {
+    "baseline_comparison_build_flow": "docs/builds/分阶段构建流程.md",
+    "baseline_comparison_project_contract": ".codex/project_contract.md",
+    "baseline_comparison_protocol_contract": "configs/project/project_contract.json",
+}
 
 
 def _read_project_contract(root_path: Path) -> dict[str, Any]:
@@ -143,6 +148,18 @@ def _inspect_next_stage_readiness(root_path: Path, project_stage: str | None) ->
             "all_required_paths_present": present_count == len(REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS),
             "present_required_path_count": present_count,
             "required_path_count": len(REAL_VIDEO_VAE_LATENT_REQUIRED_PATHS),
+            "required_paths": required_paths,
+        }
+    if project_stage == "baseline_comparison_gate":
+        present_count, required_paths = _build_required_paths(
+            root_path,
+            BASELINE_COMPARISON_REQUIRED_PATHS,
+        )
+        return {
+            "target_construction_phase": target_construction_phase,
+            "all_required_paths_present": present_count == len(BASELINE_COMPARISON_REQUIRED_PATHS),
+            "present_required_path_count": present_count,
+            "required_path_count": len(BASELINE_COMPARISON_REQUIRED_PATHS),
             "required_paths": required_paths,
         }
 
