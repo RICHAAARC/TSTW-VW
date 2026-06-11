@@ -3,8 +3,8 @@
   "workflow_key": "baseline_comparison_gate",
   "run_id_template": "baseline_comparison_formal_utc_time_short_commit",
   "input_stage_package": {
-    "workflow_key": "real_video_vae_latent_probe_stage2_final_formal_audit",
-    "run_id": "real_video_vae_latent_probe_formal_20260611T012845Z_2dbc783",
+    "workflow_key": "real_video_vae_latent_probe_paper_low_fpr_audit",
+    "run_id": "real_video_vae_latent_probe_paper_low_fpr_utc_time_short_commit",
     "required_manifest": true,
     "required_lpips": true,
     "required_clip_similarity": true
@@ -32,7 +32,7 @@
     ],
     "test_threshold_update_allowed": false,
     "target_fprs": [
-      0.001
+      0.01
     ],
     "score_direction": "higher_is_more_watermarked",
     "allow_attack_specific_threshold": false

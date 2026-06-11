@@ -33,7 +33,7 @@
     "tiny": 1,
     "smoke": 1,
     "proof": 8,
-    "formal": 20,
+    "formal": 100,
     "debug_real_video": 1
   },
   "required_method_variants": [
@@ -43,13 +43,13 @@
   ],
   "threshold_protocol": {
     "score_name": "S_final",
-    "target_fpr_placeholder": 0.001,
+    "target_fpr_placeholder": 0.01,
     "validation_target_fpr_by_profile": {
       "tiny": 1.0,
       "smoke": 0.25,
       "debug_real_video": 1.0,
       "proof": 0.5,
-      "formal": 0.001
+      "formal": 0.01
     },
     "calibration_split": "calibration",
     "calibration_negative_roles": [

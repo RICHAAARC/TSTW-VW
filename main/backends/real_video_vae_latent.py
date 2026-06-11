@@ -10,6 +10,7 @@ from array import array
 import importlib.util
 from pathlib import Path
 import random
+import re
 from typing import Any
 
 from main.core.digest import compute_file_digest, compute_object_digest
@@ -663,7 +664,11 @@ class RealVideoVAELatentBackend(LatentBackend):
         split_samples = self._resolved_samples_by_split.get(split, [])
         if not split_samples:
             return None
-        stable_index = self._derive_runtime_seed(sample_id, split) % len(split_samples)
+        sample_index_match = re.search(r"_(\d{6})$", sample_id)
+        if sample_index_match is not None:
+            stable_index = (int(sample_index_match.group(1)) - 1) % len(split_samples)
+        else:
+            stable_index = self._derive_runtime_seed(sample_id, split) % len(split_samples)
         return split_samples[stable_index]
 
     def _select_source_container_extension(self) -> str:

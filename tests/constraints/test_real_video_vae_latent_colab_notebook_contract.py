@@ -175,7 +175,7 @@ def test_processed_dataset_notebook_exists_and_uses_governed_entrypoints() -> No
     assert "raw_dataset_download_manifest.json" in notebook_text
     assert "PROCESSED_DATASET_KEY" in notebook_text
     assert (
-        "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
+        "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_paper_low_fpr"
         in notebook_text
     )
     assert _legacy_dataset_key() not in notebook_text
@@ -232,13 +232,13 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "RUN_ID_TEMPLATE" in notebook_text
     assert "TSTW_RUN_ID_TEMPLATE" in notebook_text
     assert (
-        "real_video_vae_latent_probe_formal_davis2017_trainval480p_utc_time_short_commit"
+        "real_video_vae_latent_probe_paper_low_fpr_davis2017_trainval480p_utc_time_short_commit"
         in notebook_text
     )
-    assert "real_video_vae_latent_probe_formal_utc_time_short_commit" in notebook_text
+    assert "real_video_vae_latent_probe_paper_low_fpr_utc_time_short_commit" in notebook_text
     assert _legacy_family_template() not in notebook_text
     assert (
-        "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_freeze001"
+        "real_video_vae_latent_probe_davis2017_trainval480p_256x256_32f_8fps_paper_low_fpr"
         in notebook_text
     )
     assert _legacy_dataset_key() not in notebook_text
@@ -317,7 +317,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "TSTW_RESET_STAGE2_MECHANISM_CALIBRATION_RUN_ROOT" in notebook_text
     assert "probe_workflow.reset_probe_runtime_run_root(" in notebook_text
     assert "reset_run_root=False" in notebook_text
-    assert "'samples_per_role_override': 20" in notebook_text
+    assert "'samples_per_role_override': 100" in notebook_text
     assert "'run_main_formal': True" in notebook_text
     assert "'run_stage2_mechanism_calibration': False" in notebook_text
     assert "'run_tubelet_anchor_forensics': False" in notebook_text

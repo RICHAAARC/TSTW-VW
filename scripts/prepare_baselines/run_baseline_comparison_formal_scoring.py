@@ -26,6 +26,11 @@ from experiments.baseline_comparison_gate.baseline_gpu_profile import (
 from experiments.baseline_comparison_gate.smoke_runner import build_smoke_run_id
 
 
+FORMAL_SCORING_PLAN_PREFIX = "baseline_comparison_formal_scoring_plan"
+FORMAL_SCORING_EXECUTION_PREFIX = "baseline_comparison_formal_scoring_execution"
+FORMAL_SCORING_MULTI_BASELINE_LABEL = "multi_baseline"
+
+
 def resolve_short_commit() -> str:
     """读取当前仓库短 commit, 失败时返回 unknown。"""
     try:
@@ -38,6 +43,40 @@ def resolve_short_commit() -> str:
         ).strip()
     except Exception:
         return "unknown"
+
+
+def build_baseline_run_id_label(baseline_names: list[str] | None) -> str:
+    """生成可写入 run_id 的 baseline 标签。
+
+    该函数用于让 Drive 顶层结果目录直接暴露 baseline 身份, 避免正式全量实验中只能打开
+    manifest 才能区分结果包。单 baseline 运行使用该 baseline 名称; 多 baseline 运行使用
+    `multi_baseline`; 未显式传入 baseline 过滤器时也视为多 baseline 运行。
+    """
+    normalized = sorted({name.strip() for name in baseline_names or [] if name and name.strip()})
+    if len(normalized) == 1:
+        return normalized[0]
+    return FORMAL_SCORING_MULTI_BASELINE_LABEL
+
+
+def build_formal_scoring_run_id(
+    *,
+    execute: bool,
+    short_commit: str,
+    timestamp_utc: str | None,
+    baseline_names: list[str] | None,
+) -> str:
+    """生成 formal scoring 的 Drive run_id。
+
+    plan 目录保持原有命名, 因为它描述的是 work-item 计划; execution 目录额外加入 baseline 标签,
+    使三种外部 baseline 分开正式运行时能够从目录名直接区分。
+    """
+    prefix = FORMAL_SCORING_EXECUTION_PREFIX if execute else FORMAL_SCORING_PLAN_PREFIX
+    if execute:
+        prefix = f"{prefix}_{build_baseline_run_id_label(baseline_names)}"
+    return build_smoke_run_id(
+        short_commit=short_commit,
+        timestamp_utc=timestamp_utc,
+    ).replace("baseline_comparison_smoke", prefix)
 
 
 def parse_args() -> argparse.Namespace:
@@ -76,15 +115,12 @@ def main() -> None:
     """执行 scoring plan 或 scoring execution。"""
     args = parse_args()
     short_commit = args.short_commit or resolve_short_commit()
-    default_prefix = (
-        "baseline_comparison_formal_scoring_execution"
-        if args.execute
-        else "baseline_comparison_formal_scoring_plan"
-    )
-    run_id = args.run_id or build_smoke_run_id(
+    run_id = args.run_id or build_formal_scoring_run_id(
+        execute=args.execute,
         short_commit=short_commit,
         timestamp_utc=args.timestamp_utc,
-    ).replace("baseline_comparison_smoke", default_prefix)
+        baseline_names=args.baseline_name,
+    )
 
     if args.execute:
         with BaselineGpuProfileSession(

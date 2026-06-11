@@ -16,6 +16,9 @@ from experiments.baseline_comparison_gate.formal_scoring_runner import (
     run_formal_scoring_plan,
 )
 from main.core.digest import compute_object_digest
+from scripts.prepare_baselines.run_baseline_comparison_formal_scoring import (
+    build_formal_scoring_run_id,
+)
 
 pytestmark = [pytest.mark.constraint, pytest.mark.unit]
 
@@ -83,6 +86,42 @@ def test_scoring_work_items_deduplicate_internal_method_variants(tmp_path: Path)
     assert len(items) == 3
     assert {item["baseline_name"] for item in items} == {"external_videoseal"}
     assert all(item["execution_status"] == "pending_external_baseline_scoring" for item in items)
+
+
+def test_formal_scoring_execution_run_id_includes_baseline_name() -> None:
+    """确认 formal execution 结果目录名直接包含 baseline 身份。
+
+    该约束用于避免三种外部 baseline 正式全量结果只依赖时间戳区分, 从而降低后续聚合时误选
+    score records 的风险。plan run_id 保持原有语义, execution run_id 才加入 baseline 标签。
+    """
+    single_baseline_run_id = build_formal_scoring_run_id(
+        execute=True,
+        short_commit="abcdef0",
+        timestamp_utc="20260611T140000Z",
+        baseline_names=["external_hidden_framewise"],
+    )
+    multi_baseline_run_id = build_formal_scoring_run_id(
+        execute=True,
+        short_commit="abcdef0",
+        timestamp_utc="20260611T140000Z",
+        baseline_names=["external_videoseal", "external_rivagan"],
+    )
+    plan_run_id = build_formal_scoring_run_id(
+        execute=False,
+        short_commit="abcdef0",
+        timestamp_utc="20260611T140000Z",
+        baseline_names=["external_hidden_framewise"],
+    )
+
+    assert (
+        single_baseline_run_id
+        == "baseline_comparison_formal_scoring_execution_external_hidden_framewise_20260611T140000Z_abcdef0"
+    )
+    assert (
+        multi_baseline_run_id
+        == "baseline_comparison_formal_scoring_execution_multi_baseline_20260611T140000Z_abcdef0"
+    )
+    assert plan_run_id == "baseline_comparison_formal_scoring_plan_20260611T140000Z_abcdef0"
 
 
 def test_scoring_work_items_support_sharding_and_multiple_baselines(tmp_path: Path) -> None:

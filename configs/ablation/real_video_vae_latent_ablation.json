@@ -32,7 +32,7 @@
     16
   ],
   "tubelet_length_sweep_formal": [],
-  "shared_target_fpr": 0.001,
+  "shared_target_fpr": 0.01,
   "shared_table_builder_name": "table_builder",
   "method_config_paths": {
     "tubelet_only": "configs/method/real_video_tubelet_only_anchor.json",

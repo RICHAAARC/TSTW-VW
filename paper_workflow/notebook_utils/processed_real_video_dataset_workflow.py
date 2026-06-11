@@ -41,6 +41,8 @@ def build_processed_dataset_handoff(
     frame_sampling_policy: str = "deterministic_uniform",
     codec: str = "libx264",
     crf: int = 18,
+    clip_stride_frames: int | None = None,
+    max_samples_per_split: int | None = None,
     registry_path: str | Path | None = None,
     clean_workspace: bool = False,
 ) -> dict[str, Any]:
@@ -58,6 +60,8 @@ def build_processed_dataset_handoff(
         frame_sampling_policy=frame_sampling_policy,
         codec=codec,
         crf=crf,
+        clip_stride_frames=clip_stride_frames,
+        max_samples_per_split=max_samples_per_split,
         local_workspace_root=local_workspace_root,
         registry_path=registry_path,
         clean_workspace=clean_workspace,

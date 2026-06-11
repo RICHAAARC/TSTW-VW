@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import importlib.util
+from types import SimpleNamespace
 from array import array
 from pathlib import Path
 
@@ -104,6 +105,44 @@ def test_real_video_vae_latent_backend_reads_mp4_from_manifest(tmp_path: Path) -
     assert metadata["height"] == 8
     assert metadata["width"] == 8
     assert metadata["channels"] == 3
+
+
+@pytest.mark.unit
+def test_backend_resolves_dataset_sample_by_protocol_sample_index(tmp_path: Path) -> None:
+    """确认大样本低 FPR 运行按 sample index 顺序选择 processed source。
+
+    该行为用于减少论文级 1% FPR 扩容时的重复抽样风险。只要 split 内 processed source
+    数量不少于 samples_per_role, `sample_..._000001` 到 `sample_..._000100`
+    就会优先映射到前 100 个 source。
+    """
+    backend = RealVideoVAELatentBackend(
+        latent_shape=(4, 4, 4, 4),
+        runtime_profile="smoke",
+        target_frame_count=4,
+        target_resolution=(16, 16),
+        allow_mock_vae_backend=True,
+    )
+    backend._resolved_samples_by_split = {
+        "calibration": [
+            SimpleNamespace(video_source_id=f"source_{index:03d}")
+            for index in range(1, 6)
+        ]
+    }
+
+    assert (
+        backend._resolve_dataset_sample(
+            "sample_calibration_clean_negative_000001",
+            "calibration",
+        ).video_source_id
+        == "source_001"
+    )
+    assert (
+        backend._resolve_dataset_sample(
+            "sample_calibration_clean_negative_000005",
+            "calibration",
+        ).video_source_id
+        == "source_005"
+    )
 
 
 @pytest.mark.unit

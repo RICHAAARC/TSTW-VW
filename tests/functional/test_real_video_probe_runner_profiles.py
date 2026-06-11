@@ -293,7 +293,7 @@ def test_real_video_profile_sample_counts_are_explicit_for_governed_profiles() -
     assert runner._resolve_samples_per_role(None, protocol_config, "tiny") == 1
     assert runner._resolve_samples_per_role(None, protocol_config, "smoke") == 1
     assert runner._resolve_samples_per_role(None, protocol_config, "proof") == 8
-    assert runner._resolve_samples_per_role(None, protocol_config, "formal") == 20
+    assert runner._resolve_samples_per_role(None, protocol_config, "formal") == 100
 
 
 @pytest.mark.unit
@@ -341,7 +341,7 @@ def test_threshold_calibrator_uses_explicit_runtime_profile_override() -> None:
     )
 
     assert threshold_record["runtime_profile"] == "formal"
-    assert threshold_record["validation_target_fpr"] == 0.001
+    assert threshold_record["validation_target_fpr"] == 0.01
 
 
 @pytest.mark.unit

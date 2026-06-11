@@ -72,7 +72,7 @@ def test_baseline_comparison_protocol_config_declares_fixed_fpr_gate() -> None:
     }
     assert threshold_protocol["test_threshold_update_allowed"] is False
     assert threshold_protocol["allow_attack_specific_threshold"] is False
-    assert threshold_protocol["target_fprs"] == [0.001]
+    assert threshold_protocol["target_fprs"] == [0.01]
     assert config["formal_attack_names"] == [
         "no_attack",
         "h264_compression",
@@ -87,6 +87,20 @@ def test_baseline_comparison_protocol_config_declares_fixed_fpr_gate() -> None:
         "speed_change",
     ]
     assert {item["attack_name"]: item["display_name"] for item in config["attack_display_names"]}["no_attack"] == "clean"
+
+
+def test_baseline_comparison_uses_paper_one_percent_fpr_contract() -> None:
+    """确认阶段三正式 baseline 比较已经切换到论文级 1% FPR 协议。
+
+    该约束属于配置级防回归测试, 作用是避免后续 notebook 或配置又退回旧的 0.1% FPR
+    目标和旧阶段二结果包。
+    """
+    config = load_json_config(BASELINE_CONFIG_DIR / "baseline_comparison_gate.json")
+
+    assert config["input_stage_package"]["workflow_key"] == (
+        "real_video_vae_latent_probe_paper_low_fpr_audit"
+    )
+    assert config["threshold_protocol"]["target_fprs"] == [0.01]
 
 
 def test_baseline_record_schema_accepts_complete_record() -> None:

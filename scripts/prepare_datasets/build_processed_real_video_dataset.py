@@ -37,6 +37,21 @@ class RawSource:
     source_key: str
 
 
+@dataclass(frozen=True)
+class ProcessingItem:
+    """描述一个待写出的 processed source video。
+
+    该结构既支持旧的“一条原始序列生成一个 processed video”模式, 也支持论文级低 FPR
+    实验所需的“一条原始序列按时间窗口生成多个 processed video”模式。
+    """
+
+    raw_source: RawSource
+    split_name: str
+    clip_index: int
+    clip_start_frame: int | None
+    clip_end_frame: int | None
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -232,22 +247,82 @@ def _infer_split(source_key: str, index: int) -> str:
     return REQUIRED_REAL_VIDEO_SPLITS[index % len(REQUIRED_REAL_VIDEO_SPLITS)]
 
 
-def _build_processing_plan(raw_sources: list[RawSource]) -> list[tuple[RawSource, str]]:
+def _build_clip_windows(frame_count: int, *, target_frame_count: int, clip_stride_frames: int | None) -> list[tuple[int | None, int | None]]:
+    """根据帧数生成时间窗口。
+
+    `clip_stride_frames=None` 保持旧行为, 即每个 raw source 只生成一个 processed sample。
+    设置 stride 后, 长序列会被切成多个 32 帧窗口, 用于增加 calibration/test negative 的
+    独立评估单元数量。
+    """
+    if clip_stride_frames is None:
+        return [(None, None)]
+    if not isinstance(clip_stride_frames, int) or clip_stride_frames < 1:
+        raise ValueError("clip_stride_frames must be a positive integer or None")
+    if frame_count <= target_frame_count:
+        return [(0, frame_count)]
+    starts = list(range(0, frame_count - target_frame_count + 1, clip_stride_frames))
+    if starts[-1] != frame_count - target_frame_count:
+        starts.append(frame_count - target_frame_count)
+    return [(start, start + target_frame_count) for start in starts]
+
+
+def _build_processing_plan(
+    raw_sources: list[RawSource],
+    *,
+    source_frame_counts: dict[str, int] | None = None,
+    target_frame_count: int = 32,
+    clip_stride_frames: int | None = None,
+    max_samples_per_split: int | None = None,
+) -> list[ProcessingItem]:
     if not raw_sources:
         raise ValueError("raw_sources must not be empty")
-    processing_plan = [
-        (raw_source, _infer_split(raw_source.source_key, index))
-        for index, raw_source in enumerate(raw_sources)
-    ]
-    observed_splits = {split_name for _, split_name in processing_plan}
+    if max_samples_per_split is not None and (
+        not isinstance(max_samples_per_split, int) or max_samples_per_split < 1
+    ):
+        raise ValueError("max_samples_per_split must be a positive integer or None")
+
+    processing_plan: list[ProcessingItem] = []
+    split_counts: dict[str, int] = {}
+    item_index = 0
+    for raw_source in raw_sources:
+        frame_count = int((source_frame_counts or {}).get(raw_source.source_key, target_frame_count))
+        for clip_index, (clip_start, clip_end) in enumerate(
+            _build_clip_windows(
+                frame_count,
+                target_frame_count=target_frame_count,
+                clip_stride_frames=clip_stride_frames,
+            )
+        ):
+            split_name = _infer_split(raw_source.source_key, item_index)
+            item_index += 1
+            if (
+                max_samples_per_split is not None
+                and split_counts.get(split_name, 0) >= max_samples_per_split
+            ):
+                continue
+            processing_plan.append(
+                ProcessingItem(
+                    raw_source=raw_source,
+                    split_name=split_name,
+                    clip_index=clip_index,
+                    clip_start_frame=clip_start,
+                    clip_end_frame=clip_end,
+                )
+            )
+            split_counts[split_name] = split_counts.get(split_name, 0) + 1
+
+    observed_splits = {item.split_name for item in processing_plan}
     duplicate_source_index = 0
     for split_name in REQUIRED_REAL_VIDEO_SPLITS:
         if split_name in observed_splits:
             continue
         processing_plan.append(
-            (
-                raw_sources[duplicate_source_index % len(raw_sources)],
-                split_name,
+            ProcessingItem(
+                raw_source=raw_sources[duplicate_source_index % len(raw_sources)],
+                split_name=split_name,
+                clip_index=0,
+                clip_start_frame=None,
+                clip_end_frame=None,
             )
         )
         duplicate_source_index += 1
@@ -324,6 +399,8 @@ def build_processed_real_video_dataset(
     frame_sampling_policy: str = "deterministic_uniform",
     codec: str = "libx264",
     crf: int = 18,
+    clip_stride_frames: int | None = None,
+    max_samples_per_split: int | None = None,
     local_workspace_root: str | Path | None = None,
     registry_path: str | Path | None = None,
     clean_workspace: bool = False,
@@ -343,6 +420,8 @@ def build_processed_real_video_dataset(
         frame_sampling_policy: Governed frame sampling policy.
         codec: Output mp4 codec.
         crf: Output mp4 CRF.
+        clip_stride_frames: Optional temporal window stride used to expand long frame directories.
+        max_samples_per_split: Optional upper bound for processed samples per split.
         local_workspace_root: Optional extraction workspace root.
         registry_path: Optional dataset registry path override.
         clean_workspace: Whether to remove any existing extraction workspace first.
@@ -370,17 +449,39 @@ def build_processed_real_video_dataset(
 
     source_root = _materialize_raw_source_root(source_archive_path, workspace_root)
     raw_sources = _collect_raw_sources(source_root)
+    source_frame_counts: dict[str, int] = {}
+    if clip_stride_frames is not None:
+        for raw_source in raw_sources:
+            if raw_source.source_kind == "frame_directory":
+                source_frame_counts[raw_source.source_key] = len(
+                    [
+                        image_path
+                        for image_path in raw_source.source_path.iterdir()
+                        if image_path.is_file()
+                        and image_path.suffix.lower() in SUPPORTED_IMAGE_EXTENSIONS
+                    ]
+                )
     output_video_root = processed_root / "source"
     output_video_root.mkdir(parents=True, exist_ok=True)
     checks_root = processed_root / "checks"
     checks_root.mkdir(parents=True, exist_ok=True)
 
-    processing_plan = _build_processing_plan(raw_sources)
+    processing_plan = _build_processing_plan(
+        raw_sources,
+        source_frame_counts=source_frame_counts,
+        target_frame_count=target_frame_count,
+        clip_stride_frames=clip_stride_frames,
+        max_samples_per_split=max_samples_per_split,
+    )
 
     samples: list[dict[str, Any]] = []
     materialized_paths: list[Path] = []
-    for index, (raw_source, split_name) in enumerate(processing_plan):
+    for index, item in enumerate(processing_plan):
+        raw_source = item.raw_source
+        split_name = item.split_name
         source_frames, source_fps = _load_source_frames(raw_source, fallback_fps=target_fps)
+        if item.clip_start_frame is not None and item.clip_end_frame is not None:
+            source_frames = source_frames[item.clip_start_frame:item.clip_end_frame]
         standardized_frames = standardize_video_frames(
             source_frames,
             target_frame_count=target_frame_count,
@@ -392,11 +493,14 @@ def build_processed_real_video_dataset(
             {
                 "source_key": raw_source.source_key,
                 "split_name": split_name,
+                "clip_index": item.clip_index,
+                "clip_start_frame": item.clip_start_frame,
+                "clip_end_frame": item.clip_end_frame,
                 "index": index,
             }
         )[:12]
         source_stem = _sanitize_slug(Path(raw_source.source_key).stem)
-        video_source_id = f"{source_stem}_{split_name}_{source_digest}"
+        video_source_id = f"{source_stem}_clip{item.clip_index:04d}_{split_name}_{source_digest}"
         output_path = output_video_root / f"{video_source_id}.mp4"
         artifact_metadata = write_video_mp4(
             standardized_frames,
@@ -413,6 +517,9 @@ def build_processed_real_video_dataset(
                 "relpath": relpath,
                 "source_kind": raw_source.source_kind,
                 "source_key": raw_source.source_key,
+                "clip_index": int(item.clip_index),
+                "clip_start_frame": item.clip_start_frame,
+                "clip_end_frame": item.clip_end_frame,
                 "source_digest": compute_file_digest(output_path),
                 "source_fps": int(source_fps),
                 "frame_count": int(target_frame_count),
@@ -443,6 +550,8 @@ def build_processed_real_video_dataset(
         "target_fps": int(target_fps),
         "target_resolution": [int(target_height), int(target_width)],
         "codec": codec,
+        "clip_stride_frames": clip_stride_frames,
+        "max_samples_per_split": max_samples_per_split,
         "samples": samples,
     }
     summary_payload = {
@@ -526,6 +635,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--frame-sampling-policy", default="deterministic_uniform")
     parser.add_argument("--codec", default="libx264")
     parser.add_argument("--crf", type=int, default=18)
+    parser.add_argument("--clip-stride-frames", type=int, default=0)
+    parser.add_argument("--max-samples-per-split", type=int, default=0)
     parser.add_argument("--local-workspace-root", default="")
     parser.add_argument("--registry-path", default="")
     parser.add_argument("--clean-workspace", action="store_true")
@@ -544,6 +655,8 @@ def main(argv: list[str] | None = None) -> int:
         frame_sampling_policy=args.frame_sampling_policy,
         codec=args.codec,
         crf=args.crf,
+        clip_stride_frames=args.clip_stride_frames or None,
+        max_samples_per_split=args.max_samples_per_split or None,
         local_workspace_root=args.local_workspace_root or None,
         registry_path=args.registry_path or None,
         clean_workspace=args.clean_workspace,

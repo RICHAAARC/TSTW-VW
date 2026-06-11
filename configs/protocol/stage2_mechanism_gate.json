@@ -1,9 +1,9 @@
 {
   "construction_phase": "real_video_vae_latent_probe",
   "stage2_mechanism_protocol": "aligned_payload_safety",
-  "target_fpr": 0.001,
-  "minimum_positive_count_per_key": 20,
-  "minimum_negative_count_per_key": 20,
+  "target_fpr": 0.01,
+  "minimum_positive_count_per_key": 100,
+  "minimum_negative_count_per_key": 100,
   "required_main_variants": [
     "frame_prc",
     "tubelet_only",
