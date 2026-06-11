@@ -132,7 +132,6 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | mean_embedding_delta_norm | protocol | none | true | false | false | Mean projection-margin delta norm applied during embedding. |
 | codebook_digest | trace | none | true | false | false | Digest of the deterministic tubelet direction codebook. |
 | sync_code_digest | trace | none | true | false | false | Digest of the deterministic synchronization code sequence. |
-| payload_digest | trace | none | true | false | false | Digest of the payload sign assignments used by the synthetic_tubelet_sync_probe method. |
 | sync_search_enabled | protocol | none | true | false | false | Boolean field recording whether synchronization search was active for detection. |
 | sync_estimated_offset | protocol | none | true | false | false | Estimated synchronization offset selected by the synthetic_tubelet_sync_probe detector. |
 | sync_ground_truth_offset | protocol | none | true | false | false | Ground-truth offset materialized by governed temporal attacks when available. |
@@ -242,8 +241,6 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | cross_event_vae_encode_effective_batch_size | protocol | none | true | false | false | Per-record diagnostic field recording the effective encode request batch size used by cross-event VAE batching. |
 | cross_event_vae_batching_fallback_count | protocol | none | true | false | false | Per-record diagnostic count of CUDA OOM fallback steps used by cross-event VAE batching. |
 | cross_event_vae_batching_fallback_reason | protocol | none | true | false | false | Nullable per-record diagnostic reason for cross-event VAE batching fallback; it is not method evidence. |
-| quality_metrics | protocol | none | true | false | false | Top-level real_video_vae_latent_probe quality-metrics payload written into event records. |
-| temporal_metrics | protocol | none | true | false | false | Top-level real_video_vae_latent_probe temporal-metrics payload written into event records. |
 | vae_reconstruction_psnr | protocol | none | true | false | false | Placeholder-derived PSNR summary used by the real_video_vae_latent_probe scaffold quality payload. |
 | vae_reconstruction_ssim | protocol | none | true | false | false | Placeholder-derived SSIM summary used by the real_video_vae_latent_probe scaffold quality payload. |
 | watermarked_video_psnr | protocol | none | true | false | false | Placeholder-derived PSNR summary for decoded or attacked comparison videos in stage two. |
@@ -378,3 +375,45 @@ Registry constraint: `docs/field_registry.md` 是 governed field 的唯一登记
 | profiling_failure_reason | runtime_profile | none | true | false | false | Reason explaining why GPU profiling did not produce usable samples. |
 | usable_sample_count | runtime_profile | none | true | false | false | Count of GPU runtime trace samples with usable GPU utilization values. |
 | unavailable_sample_count | runtime_profile | none | true | false | false | Count of GPU runtime trace samples that explicitly report unavailable or failed GPU sampling. |
+
+## Baseline Comparison Gate Fields
+
+| field_name | category | required_suffix | allowed_in_records | allowed_in_claims | replacement_required | description |
+| --- | --- | --- | --- | --- | --- | --- |
+| workflow_key | protocol | none | true | false | false | Semantic workflow identifier used by baseline_comparison_gate result packages. |
+| baseline_name | protocol | none | true | false | false | Stable external baseline identifier, currently one of external_videoseal, external_rivagan, or external_hidden_framewise. |
+| baseline_family | protocol | none | true | false | false | Method-family label that distinguishes native video-watermark baselines from frame-wise image-watermark migration baselines. |
+| method_name | protocol | none | true | false | false | Unified comparison method name; internal methods and external baselines share this table-facing field. |
+| payload_length_bits | protocol | none | true | false | false | Number of payload bits requested for embedding or simulated comparison. |
+| attack_family | protocol | none | true | false | false | Coarse attack family such as compression, spatial, temporal, local_clip, or clean. |
+| attack_config_digest | trace | none | true | false | false | Digest of the concrete attack configuration applied to a baseline comparison event. |
+| baseline_score | protocol | none | true | false | false | Unified detector score emitted by a baseline adapter after applying its documented score mapping rule. |
+| baseline_raw_detector_output | protocol | none | true | false | false | Raw detector output preserved for audit before score normalization. |
+| threshold | protocol | none | true | false | false | Fixed-FPR threshold applied to the unified baseline score. |
+| bit_accuracy | protocol | none | true | false | false | Payload bit accuracy when the baseline exposes decodable bits; otherwise null with a limitation reason. |
+| ber | protocol | none | true | false | false | Bit error rate when the baseline exposes decodable bits; otherwise null with a limitation reason. |
+| runtime_metrics | runtime_profile | none | true | false | false | Container for embed, attack, detect, metric, and packaging runtime cost evidence. |
+| baseline_trace | trace | none | true | false | false | Container for source digest, model digest, adapter version, score mapping rule, license status, and unsupported attack reason. |
+| source_digest | trace | none | true | false | false | Digest of the external baseline source snapshot used by the adapter. |
+| model_digest | trace | none | true | false | false | Digest of the external baseline model weights used by the adapter. |
+| adapter_version | trace | none | true | false | false | Version label for the local adapter wrapper that connects an external baseline to the project protocol. |
+| score_mapping_rule | protocol | none | true | false | false | Auditable rule that maps a baseline-native detector output to the unified baseline_score. |
+| license_status | governance | none | true | false | false | Source and model license availability status used to decide whether a baseline may support a paper claim. |
+| upstream_repository_url | governance | none | false | false | false | Upstream repository URL recorded by baseline source intake configs. |
+| upstream_commit | trace | none | false | false | false | Full upstream commit hash recorded by baseline source intake configs. |
+| upstream_branch | trace | none | false | false | false | Upstream branch name used only to contextualize the pinned commit. |
+| license_name | governance | none | false | false | false | License name recorded by baseline source intake configs. |
+| license_url | governance | none | false | false | false | URL of the upstream license text recorded by baseline source intake configs. |
+| source_intake_status | governance | none | false | false | false | Intake status for a baseline source manifest. |
+| model_availability_status | governance | none | false | false | false | Status describing whether model weights are available, downloaded, and digest-checked. |
+| model_weight_sources | governance | none | false | false | false | List of model weight source descriptors in a baseline source manifest. |
+| weight_digest | trace | none | false | false | false | Digest of a model weight file when available. |
+| weight_digest_status | governance | none | false | false | false | Status explaining whether a weight digest has been materialized. |
+| adapter_status | governance | none | false | false | false | Status of the local baseline adapter, for example adapter_skeleton_only or formal_adapter_ready. |
+| known_limitations | governance | none | false | false | false | Declared baseline limitations that must be reflected in the limitation report. |
+| allowed_reproduction_repairs | governance | none | false | false | false | List of allowed repairs that preserve baseline algorithm semantics. |
+| forbidden_reproduction_changes | governance | none | false | false | false | List of changes that would invalidate fair baseline comparison. |
+| expected_message_mode | governance | none | false | false | false | Expected baseline message or presence-score mode recorded by source intake configs without implying random payload generation. |
+| payload_digest | trace | none | true | false | false | Digest of the payload or message bits used for a governed event record. |
+| quality_metrics | protocol | none | true | false | false | Container for PSNR, SSIM, LPIPS, CLIP similarity, bitrate, file size, and related quality evidence. |
+| temporal_metrics | protocol | none | true | false | false | Container for frame-count, fps, temporal consistency, and attack-specific temporal evidence. |

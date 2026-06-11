@@ -9,3 +9,5 @@ build/
 .tmp*
 tmp*
 temp*
+# 外部 baseline 上游源码默认不提交, 仅通过 manifest 和脚本复现。
+external_baselines/

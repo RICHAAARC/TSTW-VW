@@ -1,0 +1,41 @@
+{
+  "project_stage": "baseline_comparison_gate",
+  "baseline_name": "external_videoseal",
+  "baseline_family": "external_video_watermark",
+  "upstream_repository_url": "https://github.com/facebookresearch/videoseal",
+  "upstream_commit": "e00b98c7ca77eb1fb5b9b68260e7c6c8fc207a84",
+  "upstream_branch": "main",
+  "license_name": "MIT",
+  "license_url": "https://raw.githubusercontent.com/facebookresearch/videoseal/main/LICENSE",
+  "source_intake_status": "source_pinned_license_reviewed",
+  "model_availability_status": "requires_weight_download_and_digest",
+  "model_weight_sources": [
+    {
+      "model_name": "videoseal",
+      "source_kind": "upstream_model_zoo",
+      "weight_url": "upstream_repository_documented",
+      "weight_digest": null,
+      "weight_digest_status": "pending_colab_download"
+    }
+  ],
+  "adapter_status": "adapter_skeleton_only",
+  "score_mapping_rule": "pending_smoke_run",
+  "supported_input_kind": "mp4_video",
+  "known_limitations": [
+    "需要在 Colab GPU 环境中安装依赖并下载权重后确认可运行性。",
+    "在完成 smoke 前不得支撑正式优势 claim。"
+  ],
+  "allowed_reproduction_repairs": [
+    "依赖版本固定",
+    "导入路径修复",
+    "Colab 路径适配",
+    "统一 adapter 封装",
+    "日志、digest 和 manifest 输出"
+  ],
+  "forbidden_reproduction_changes": [
+    "不得改变核心嵌入算法语义",
+    "不得改变检测分数定义以提升结果",
+    "不得在 test split 上调节阈值"
+  ],
+  "expected_message_mode": "message_bits_or_presence_score"
+}

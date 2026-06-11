@@ -1,0 +1,70 @@
+{
+  "project_stage": "baseline_comparison_gate",
+  "workflow_key": "baseline_comparison_gate",
+  "run_id_template": "baseline_comparison_formal_utc_time_short_commit",
+  "input_stage_package": {
+    "workflow_key": "real_video_vae_latent_probe_stage2_final_formal_audit",
+    "run_id": "real_video_vae_latent_probe_formal_20260611T012845Z_2dbc783",
+    "required_manifest": true,
+    "required_lpips": true,
+    "required_clip_similarity": true
+  },
+  "baselines": [
+    "external_videoseal",
+    "external_rivagan",
+    "external_hidden_framewise"
+  ],
+  "internal_method_variants": [
+    "frame_prc",
+    "tubelet_only",
+    "tubelet_sync"
+  ],
+  "splits": [
+    "dev",
+    "calibration",
+    "test"
+  ],
+  "threshold_protocol": {
+    "calibration_split": "calibration",
+    "calibration_negative_roles": [
+      "clean_negative",
+      "attacked_negative"
+    ],
+    "test_threshold_update_allowed": false,
+    "target_fprs": [
+      0.001
+    ],
+    "score_direction": "higher_is_more_watermarked",
+    "allow_attack_specific_threshold": false
+  },
+  "formal_attack_names": [
+    "clean",
+    "h264_crf_23",
+    "h264_crf_28",
+    "h265_crf_28",
+    "spatial_resize_0_75",
+    "spatial_center_crop_0_875",
+    "spatial_random_crop_0_875",
+    "temporal_crop",
+    "local_clip",
+    "frame_drop"
+  ],
+  "required_quality_metrics": [
+    "psnr",
+    "ssim",
+    "lpips",
+    "clip_similarity",
+    "bitrate_kbps",
+    "file_size_bytes"
+  ],
+  "required_output_artifacts": [
+    "tables/baseline_comparison_table.csv",
+    "tables/baseline_attack_breakdown.csv",
+    "tables/baseline_threshold_table.csv",
+    "tables/baseline_quality_table.csv",
+    "tables/baseline_runtime_table.csv",
+    "tables/ablation_summary_table.csv",
+    "reports/baseline_limitation_report.md",
+    "claim_audit/baseline_claim_audit.csv"
+  ]
+}

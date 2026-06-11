@@ -1,0 +1,42 @@
+{
+  "project_stage": "baseline_comparison_gate",
+  "baseline_name": "external_hidden_framewise",
+  "baseline_family": "external_image_watermark_framewise",
+  "upstream_repository_url": "https://github.com/ando-khachatryan/HiDDeN",
+  "upstream_commit": "556f76dd0602e4351ed4c19bd2ee87d50ef3c0de",
+  "upstream_branch": "master",
+  "license_name": "MIT",
+  "license_url": "https://raw.githubusercontent.com/ando-khachatryan/HiDDeN/master/LICENSE",
+  "source_intake_status": "source_pinned_license_reviewed",
+  "model_availability_status": "requires_weight_download_and_digest",
+  "model_weight_sources": [
+    {
+      "model_name": "hidden_framewise",
+      "source_kind": "upstream_or_reproduced_checkpoint",
+      "weight_url": "pending_intake_confirmation",
+      "weight_digest": null,
+      "weight_digest_status": "pending_colab_download"
+    }
+  ],
+  "adapter_status": "adapter_skeleton_only",
+  "score_mapping_rule": "pending_smoke_run",
+  "supported_input_kind": "mp4_video_as_frames",
+  "known_limitations": [
+    "该 baseline 是图像水印逐帧迁移, 不是原生视频水印方法。",
+    "时间攻击下的失败必须解释为方法族限制, 不得静默删除。"
+  ],
+  "allowed_reproduction_repairs": [
+    "依赖版本固定",
+    "导入路径修复",
+    "Colab 路径适配",
+    "逐帧视频封装",
+    "统一 adapter 封装",
+    "日志、digest 和 manifest 输出"
+  ],
+  "forbidden_reproduction_changes": [
+    "不得改变核心嵌入算法语义",
+    "不得改变检测分数定义以提升结果",
+    "不得在 test split 上调节阈值"
+  ],
+  "expected_message_mode": "framewise_message_bits_or_presence_score"
+}

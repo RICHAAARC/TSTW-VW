@@ -1,0 +1,51 @@
+# baseline source intake
+
+本文档记录 `baseline_comparison_gate` 当前固定的三个外部 baseline 的来源审计状态。该文档只记录来源、license、权重和 adapter 准备状态, 不记录任何正式实验结论。
+
+## 1. 固定 baseline
+
+| baseline_name | baseline_family | source manifest | 当前状态 |
+| --- | --- | --- | --- |
+| `external_videoseal` | `external_video_watermark` | `configs/baselines/external_videoseal_source.json` | 已固定上游 commit, 等待 Colab 权重下载和 smoke |
+| `external_rivagan` | `external_video_watermark` | `configs/baselines/external_rivagan_source.json` | 已固定上游 commit, 等待 Colab 权重下载和 smoke |
+| `external_hidden_framewise` | `external_image_watermark_framewise` | `configs/baselines/external_hidden_framewise_source.json` | 已固定上游 commit, 等待 Colab 权重下载和 smoke |
+
+## 2. 审计原则
+
+1. 每个 baseline 必须有 `upstream_repository_url` 和完整 40 位 `upstream_commit`。
+2. 每个 baseline 必须记录 license 名称和 license URL。
+3. 每个 baseline 必须记录模型权重来源和 `weight_digest_status`。
+4. 在 `weight_digest_status` 仍为 `pending_colab_download` 时, 该 baseline 不能支撑正式优势 claim。
+5. 在 `adapter_status` 仍为 `adapter_skeleton_only` 时, 该 baseline 只能用于工程准备, 不能用于正式实验表格。
+6. `external_hidden_framewise` 必须在报告中声明为图像水印逐帧迁移 baseline, 不能描述为原生视频水印方法。
+
+## 3. 复现修复边界
+
+允许的修复包括:
+
+1. 依赖版本固定。
+2. 导入路径修复。
+3. Colab 路径适配。
+4. 视频读写封装。
+5. 统一 adapter 封装。
+6. 日志、digest、manifest 和 records 输出。
+
+禁止的修改包括:
+
+1. 改变核心嵌入算法语义。
+2. 改变检测分数定义以提高结果。
+3. 在 test split 上调节阈值。
+4. 删除失败样本。
+5. 将 unsupported attack 静默排除在平均值之外。
+
+## 4. 下一步
+
+下一步应先完成本地不依赖 GPU 的 adapter skeleton 和 record schema gate, 然后在 Colab 中执行以下 smoke:
+
+1. 拉取上游代码。
+2. 安装依赖。
+3. 下载权重并计算 digest。
+4. 单视频 `clean` embed / detect。
+5. 单视频 `h264_crf_28` embed / attack / detect。
+6. 写出统一 `records/baseline_smoke_records.jsonl`。
+7. 将完整 smoke 包落盘到 Google Drive。
