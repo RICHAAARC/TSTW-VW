@@ -8,22 +8,23 @@
   "license_name": "MIT",
   "license_url": "https://raw.githubusercontent.com/ando-khachatryan/HiDDeN/master/LICENSE",
   "source_intake_status": "source_pinned_license_reviewed",
-  "model_availability_status": "requires_weight_download_and_digest",
+  "model_availability_status": "upstream_checkpoint_available_for_smoke_digest",
   "model_weight_sources": [
     {
-      "model_name": "hidden_framewise",
-      "source_kind": "upstream_or_reproduced_checkpoint",
-      "weight_url": "pending_intake_confirmation",
+      "model_name": "hidden_combined_noise_epoch_400",
+      "source_kind": "upstream_repository_checkpoint",
+      "weight_url": "external_baselines/external_hidden_framewise/upstream/experiments/combined-noise/checkpoints/combined-noise--epoch-400.pyt",
       "weight_digest": null,
-      "weight_digest_status": "pending_colab_download"
+      "weight_digest_status": "pending_colab_digest"
     }
   ],
-  "adapter_status": "adapter_skeleton_only",
-  "score_mapping_rule": "pending_smoke_run",
+  "adapter_status": "real_smoke_entrypoint_ready",
+  "score_mapping_rule": "mean_frame_bit_accuracy_from_framewise_decoder_logits",
   "supported_input_kind": "mp4_video_as_frames",
   "known_limitations": [
-    "该 baseline 是图像水印逐帧迁移, 不是原生视频水印方法。",
-    "时间攻击下的失败必须解释为方法族限制, 不得静默删除。"
+    "HiDDeN 是图像水印方法, 当前 baseline 通过逐帧迁移用于视频比较, 不能描述为原生视频水印方法。",
+    "真实 smoke 使用上游仓库 experiments/combined-noise 中随源码提供的 checkpoint 和 options。",
+    "单 baseline smoke 不能替代 calibration-only fixed-FPR 正式 baseline comparison。"
   ],
   "allowed_reproduction_repairs": [
     "依赖版本固定",
