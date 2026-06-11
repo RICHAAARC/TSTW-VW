@@ -18,12 +18,12 @@
       "weight_digest_status": "pending_colab_download"
     }
   ],
-  "adapter_status": "adapter_skeleton_only",
-  "score_mapping_rule": "pending_smoke_run",
+  "adapter_status": "real_smoke_entrypoint_ready",
+  "score_mapping_rule": "bit_accuracy_from_mean_frame_logits_excluding_detection_bit",
   "supported_input_kind": "mp4_video",
   "known_limitations": [
-    "需要在 Colab GPU 环境中安装依赖并下载权重后确认可运行性。",
-    "在完成 smoke 前不得支撑正式优势 claim。"
+    "已经提供 Colab 真实 smoke adapter 入口, 但仍需在 Colab 中完成权重下载、权重 digest 和单视频真实 embed / detect 验证。",
+    "单 baseline smoke 不能替代 calibration-only fixed-FPR 正式 baseline comparison。"
   ],
   "allowed_reproduction_repairs": [
     "依赖版本固定",

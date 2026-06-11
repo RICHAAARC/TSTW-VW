@@ -138,6 +138,7 @@ def materialize_completed_smoke_run(
     workflow_key: str = WORKFLOW_KEY,
     run_id: str,
     overwrite: bool = False,
+    required_relative_paths: list[str] | None = None,
 ) -> Path:
     """将已完成的 smoke 运行目录复制到结果根目录下.
 
@@ -150,11 +151,12 @@ def materialize_completed_smoke_run(
     result_root_path = Path(result_root)
     destination = result_root_path / workflow_key / run_id
 
-    required_files = [
-        run_root_path / "manifest.json",
-        run_root_path / "records" / "baseline_smoke_records.jsonl",
-        run_root_path / "reports" / "baseline_limitation_report.md",
+    required_relative_paths = required_relative_paths or [
+        "manifest.json",
+        "records/baseline_smoke_records.jsonl",
+        "reports/baseline_limitation_report.md",
     ]
+    required_files = [run_root_path / relative_path for relative_path in required_relative_paths]
     missing_files = [path.as_posix() for path in required_files if not path.exists()]
     if missing_files:
         raise FileNotFoundError(

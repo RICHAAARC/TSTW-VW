@@ -6,7 +6,7 @@
 
 | baseline_name | baseline_family | source manifest | 当前状态 |
 | --- | --- | --- | --- |
-| `external_videoseal` | `external_video_watermark` | `configs/baselines/external_videoseal_source.json` | 已固定上游 commit, 等待 Colab 权重下载和 smoke |
+| `external_videoseal` | `external_video_watermark` | `configs/baselines/external_videoseal_source.json` | 已提供真实 smoke adapter 入口, 等待 Colab 权重下载和真实 smoke 验证 |
 | `external_rivagan` | `external_video_watermark` | `configs/baselines/external_rivagan_source.json` | 已固定上游 commit, 等待 Colab 权重下载和 smoke |
 | `external_hidden_framewise` | `external_image_watermark_framewise` | `configs/baselines/external_hidden_framewise_source.json` | 已固定上游 commit, 等待 Colab 权重下载和 smoke |
 
@@ -91,3 +91,25 @@ Drive 结果根目录: /content/drive/MyDrive/TSTW/results/
 `run_baseline_comparison_smoke.py` 的 `--result-root` 参数只会在 smoke 运行成功并且本地目录中已经存在 `manifest.json`、`records/baseline_smoke_records.jsonl` 和 `reports/baseline_limitation_report.md` 后复制结果。该设计属于通用工程写法, 主要目的是避免 Colab 运行失败时先在 Google Drive 中创建空目录。
 
 当前 smoke 仍然是 adapter skeleton 验证, 不代表真实外部 baseline 已完成。真实比较仍需后续把三个 adapter 升级为可运行版本, 并在 Colab 中完成权重 digest、单视频 embed / detect、攻击后 detect 和结果包审计。
+
+## 7. external_videoseal 真实 smoke 入口
+
+当前已经补充 `external_videoseal` 的真实 smoke adapter 与命令行入口:
+
+```bash
+python scripts/prepare_baselines/run_videoseal_real_smoke.py \
+  --run-root /content/TSTW_runtime/runs/external_videoseal_real_smoke \
+  --result-root /content/drive/MyDrive/TSTW/results
+```
+
+该入口会在 Colab 中完成以下工作:
+
+1. 从 `external_baselines/external_videoseal/upstream` 动态导入上游 VideoSeal。
+2. 调用 `videoseal.load("videoseal")` 下载并加载官方权重。
+3. 计算实际权重文件的 SHA-256 digest。
+4. 生成或读取一个单视频 smoke 输入。
+5. 执行 clean embed / detect。
+6. 执行 H.264 CRF 28 攻击后 detect。
+7. 写出 `records/external_videoseal_real_smoke_records.jsonl`、`manifest.json` 与 `reports/external_videoseal_real_smoke_report.md`。
+
+该结果仍然只表示 `external_videoseal` 单 baseline 可运行性 smoke, 不支持正式论文 claim。进入投稿级比较前, 仍需统一 split、统一攻击矩阵、calibration-only fixed-FPR 阈值、全量表格重建与 claim audit。
