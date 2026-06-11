@@ -13,7 +13,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from experiments.baseline_comparison_gate.formal_scoring_runner import (
+    materialize_formal_scoring_execution_run,
     materialize_formal_scoring_plan_run,
+    run_formal_scoring_execution,
     run_formal_scoring_plan,
 )
 from experiments.baseline_comparison_gate.smoke_runner import build_smoke_run_id
@@ -53,22 +55,38 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """执行 scoring plan runner。"""
     args = parse_args()
-    summary = run_formal_scoring_plan(
-        run_root=args.run_root,
-        stage_two_package_root=args.stage_two_package_root,
-        formal_input_contract_path=args.formal_input_contract,
-        baseline_names=args.baseline_name,
-        shard_count=args.shard_count,
-        shard_index=args.shard_index,
-    )
+    short_commit = args.short_commit or resolve_short_commit()
+    default_prefix = "baseline_comparison_formal_scoring_execution" if args.execute else "baseline_comparison_formal_scoring_plan"
+    run_id = args.run_id or build_smoke_run_id(
+        short_commit=short_commit,
+        timestamp_utc=args.timestamp_utc,
+    ).replace("baseline_comparison_smoke", default_prefix)
+    if args.execute:
+        summary = run_formal_scoring_execution(
+            run_root=args.run_root,
+            stage_two_package_root=args.stage_two_package_root,
+            formal_input_contract_path=args.formal_input_contract,
+            config_dir=args.config_dir,
+            external_root=args.external_root,
+            run_id=run_id,
+            baseline_names=args.baseline_name,
+            shard_count=args.shard_count,
+            shard_index=args.shard_index,
+            max_work_items=args.max_work_items,
+        )
+    else:
+        summary = run_formal_scoring_plan(
+            run_root=args.run_root,
+            stage_two_package_root=args.stage_two_package_root,
+            formal_input_contract_path=args.formal_input_contract,
+            baseline_names=args.baseline_name,
+            shard_count=args.shard_count,
+            shard_index=args.shard_index,
+        )
     materialized_path = None
     if args.result_root is not None:
-        short_commit = args.short_commit or resolve_short_commit()
-        run_id = args.run_id or build_smoke_run_id(
-            short_commit=short_commit,
-            timestamp_utc=args.timestamp_utc,
-        ).replace("baseline_comparison_smoke", "baseline_comparison_formal_scoring_plan")
-        materialized_path = materialize_formal_scoring_plan_run(
+        materializer = materialize_formal_scoring_execution_run if args.execute else materialize_formal_scoring_plan_run
+        materialized_path = materializer(
             run_root=args.run_root,
             result_root=args.result_root,
             run_id=run_id,

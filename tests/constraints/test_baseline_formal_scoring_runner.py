@@ -1,4 +1,4 @@
-"""验证 baseline comparison 正式 scoring plan runner。"""
+"""验证 baseline comparison 正式 scoring runner。"""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from experiments.baseline_comparison_gate.formal_scoring_runner import (
     build_scoring_work_items,
     build_stage_two_event_universe,
     materialize_formal_scoring_plan_run,
+    run_formal_scoring_execution,
     run_formal_scoring_plan,
 )
 from main.core.digest import compute_object_digest
@@ -19,7 +20,7 @@ pytestmark = [pytest.mark.constraint, pytest.mark.unit]
 
 
 def write_stage_two_records(root: Path) -> Path:
-    """写出含 3 个内部方法变体的最小阶段二 records。"""
+    """写出包含3个内部方法变体的最小阶段二 records。"""
     package_root = root / "real_video_vae_latent_probe_formal"
     records_dir = package_root / "records"
     records_dir.mkdir(parents=True)
@@ -68,7 +69,7 @@ def write_contract(path: Path, *, ready: bool = True) -> Path:
 
 
 def test_scoring_work_items_deduplicate_internal_method_variants(tmp_path: Path) -> None:
-    """确认 work-item 宇宙不会因内部 3 个 method_variant 被重复放大。"""
+    """确认 work-item 宇宙不会因内部3个 method_variant 被重复放大。"""
     package_root = write_stage_two_records(tmp_path)
 
     events = build_stage_two_event_universe(package_root)
@@ -101,7 +102,7 @@ def test_scoring_work_items_support_sharding_and_multiple_baselines(tmp_path: Pa
 
 
 def test_run_formal_scoring_plan_writes_manifest_and_materializes(tmp_path: Path) -> None:
-    """确认 scoring plan 可写入 session-local 后再复制到 Drive 风格目录。"""
+    """确认 scoring plan 可先写入 session-local 后再复制到 Drive 风格目录。"""
     package_root = write_stage_two_records(tmp_path)
     contract_path = write_contract(tmp_path / "contract" / "baseline_comparison_formal_input_contract.json")
     run_root = tmp_path / "runs" / "baseline_comparison_formal_scoring_plan"
@@ -122,3 +123,90 @@ def test_run_formal_scoring_plan_writes_manifest_and_materializes(tmp_path: Path
     assert Path(summary["work_items_path"]).exists()
     assert Path(summary["manifest_path"]).exists()
     assert (destination / "work_items" / "baseline_scoring_work_items.jsonl").exists()
+
+
+class FakeDetectionResult:
+    """测试用检测结果, 避免约束测试加载真实外部模型。"""
+
+    baseline_score = 0.75
+    baseline_raw_detector_output = {"bit_accuracy": 0.75}
+    runtime_metrics = {"detect_seconds": 0.01}
+    baseline_trace = {
+        "adapter_version": "fake_formal_adapter",
+        "model_digest": "fake_model_digest",
+        "score_mapping_rule": "fake_bit_accuracy",
+    }
+    failure_reason = None
+
+
+class FakeEmbedResult:
+    """测试用嵌入结果, 只创建占位视频路径。"""
+
+    def __init__(self, output_video_path: Path) -> None:
+        self.baseline_name = "external_videoseal"
+        self.output_video_path = output_video_path
+        self.embed_success = True
+        self.runtime_metrics = {"embed_seconds": 0.01}
+        self.baseline_trace = {"adapter_version": "fake_formal_adapter", "model_digest": "fake_model_digest"}
+        self.failure_reason = None
+
+
+class FakeAdapter:
+    """测试用 adapter, 验证 execution runner 的数据流而不是外部模型。"""
+
+    baseline_name = "external_videoseal"
+
+    def prepare(self, context):
+        return {"adapter_version": "fake_formal_adapter", "baseline_name": context.baseline_name}
+
+    def embed(self, input_video_path, payload_bits, output_video_path, metadata):
+        output_video_path.parent.mkdir(parents=True, exist_ok=True)
+        output_video_path.write_bytes(Path(input_video_path).read_bytes())
+        return FakeEmbedResult(output_video_path)
+
+    def detect(self, input_video_path, metadata):
+        assert Path(input_video_path).exists()
+        return FakeDetectionResult()
+
+
+def write_stage_two_records_with_source_video(root: Path) -> Path:
+    """写出带源视频文件的最小阶段二包, 用于 execution runner 约束测试。"""
+    package_root = write_stage_two_records(root)
+    for relpath in {
+        "artifacts/videos/source/calibration/attacked_negative.mp4",
+        "artifacts/videos/source/test/attacked_positive.mp4",
+        "artifacts/videos/source/test/watermarked_positive.mp4",
+    }:
+        video_path = package_root / relpath
+        video_path.parent.mkdir(parents=True, exist_ok=True)
+        video_path.write_bytes(b"fake video bytes")
+    return package_root
+
+
+def test_run_formal_scoring_execution_writes_score_records_with_fake_adapter(tmp_path: Path) -> None:
+    """确认小规模 execution runner 会写出 score records, 且不会声称 fixed-FPR 已完成。"""
+    package_root = write_stage_two_records_with_source_video(tmp_path)
+    contract_path = write_contract(tmp_path / "contract" / "baseline_comparison_formal_input_contract.json")
+    run_root = tmp_path / "runs" / "baseline_comparison_formal_scoring_execution"
+
+    summary = run_formal_scoring_execution(
+        run_root=run_root,
+        stage_two_package_root=package_root,
+        formal_input_contract_path=contract_path,
+        config_dir=Path("configs") / "baselines",
+        external_root=tmp_path / "external_baselines",
+        run_id="baseline_comparison_formal_scoring_execution_20260611T090000Z_abcdef0",
+        baseline_names=["external_videoseal"],
+        shard_count=3,
+        shard_index=2,
+        max_work_items=1,
+        adapter_factory=lambda name: FakeAdapter(),
+    )
+
+    records_path = Path(summary["records_path"])
+    rows = [json.loads(line) for line in records_path.read_text(encoding="utf-8").splitlines() if line]
+    assert summary["completed_record_count"] == 1
+    assert summary["formal_fixed_fpr_complete"] is False
+    assert rows[0]["baseline_name"] == "external_videoseal"
+    assert rows[0]["decision"] == "pending_threshold_calibration"
+    assert rows[0]["baseline_score"] == 0.75
