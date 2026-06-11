@@ -24,6 +24,7 @@ from main.core.digest import compute_object_digest
 
 WORKFLOW_KEY = "baseline_comparison_gate"
 SMOKE_RUN_ID_PREFIX = "baseline_comparison_smoke"
+LARGE_CACHE_SUFFIXES = (".pth", ".pt", ".ckpt", ".safetensors")
 
 
 def utc_timestamp() -> str:
@@ -131,6 +132,20 @@ def run_baseline_smoke(
     }
 
 
+
+def ignore_large_runtime_cache(directory: str, names: list[str]) -> set[str]:
+    """复制 smoke 结果包时排除大型模型权重缓存。
+
+    smoke manifest 和 records 已保存 model_digest。Drive 结果包默认不再重复保存 checkpoint 文件,
+    以避免每次 Colab 验证产生数百 MB 的重复权重副本。
+    """
+    ignored: set[str] = set()
+    for name in names:
+        path = Path(directory) / name
+        if path.is_file() and path.suffix.lower() in LARGE_CACHE_SUFFIXES:
+            ignored.add(name)
+    return ignored
+
 def materialize_completed_smoke_run(
     *,
     run_root: str | Path,
@@ -139,6 +154,7 @@ def materialize_completed_smoke_run(
     run_id: str,
     overwrite: bool = False,
     required_relative_paths: list[str] | None = None,
+    include_large_cache: bool = False,
 ) -> Path:
     """将已完成的 smoke 运行目录复制到结果根目录下.
 
@@ -168,7 +184,8 @@ def materialize_completed_smoke_run(
         shutil.rmtree(destination)
 
     destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(run_root_path, destination)
+    copy_ignore = None if include_large_cache else ignore_large_runtime_cache
+    shutil.copytree(run_root_path, destination, ignore=copy_ignore)
     return destination
 
 

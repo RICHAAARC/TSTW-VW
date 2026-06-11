@@ -61,6 +61,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-work-items", type=int, default=None, help="小规模验证最多执行的 work item 数量。")
     parser.add_argument("--worker-count", type=int, default=1, help="当前 shard 内的并发 worker 数。")
     parser.add_argument("--batch-size", type=int, default=1, help="每个 worker 一次领取的 work item 数。")
+    parser.add_argument("--include-large-cache", action="store_true", help="复制 execution 结果包时包含大型模型权重缓存。默认不包含。")
     return parser.parse_args()
 
 
@@ -115,6 +116,7 @@ def main() -> None:
             result_root=args.result_root,
             run_id=run_id,
             overwrite=args.overwrite,
+            **({"include_large_cache": args.include_large_cache} if args.execute else {}),
         ).as_posix()
 
     print(json.dumps({"summary": summary, "materialized_path": materialized_path}, ensure_ascii=False, indent=2))

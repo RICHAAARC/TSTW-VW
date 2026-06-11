@@ -211,6 +211,7 @@ def materialize_formal_scoring_plan_run(
 # fixed-FPR 阈值、TPR@FPR 表格和论文 claim 仍由后续聚合阶段完成。
 FORMAL_SCORE_RECORDS_FILENAME = "baseline_formal_score_records.jsonl"
 FORMAL_EXECUTION_MANIFEST_FILENAME = "baseline_comparison_formal_scoring_execution_manifest.json"
+LARGE_CACHE_SUFFIXES = (".pth", ".pt", ".ckpt", ".safetensors")
 
 
 def build_payload_bits(payload_digest: str | None, *, length: int = 32) -> list[int]:
@@ -783,6 +784,20 @@ def run_formal_scoring_execution(
     return {**manifest, "manifest_path": manifest_path.as_posix()}
 
 
+
+def ignore_large_runtime_cache(directory: str, names: list[str]) -> set[str]:
+    """复制结果包时排除大型模型权重缓存。
+
+    正式结果包需要保留 model_digest、checkpoint 路径和 source manifest, 但不应在每个 shard 中
+    重复复制数百 MB 的 checkpoint。该函数只影响 Drive materialization, 不影响 Colab 本地运行目录。
+    """
+    ignored: set[str] = set()
+    for name in names:
+        path = Path(directory) / name
+        if path.is_file() and path.suffix.lower() in LARGE_CACHE_SUFFIXES:
+            ignored.add(name)
+    return ignored
+
 def materialize_formal_scoring_execution_run(
     *,
     run_root: str | Path,
@@ -790,6 +805,7 @@ def materialize_formal_scoring_execution_run(
     run_id: str,
     workflow_key: str = WORKFLOW_KEY,
     overwrite: bool = False,
+    include_large_cache: bool = False,
 ) -> Path:
     """将已完成的 formal scoring execution 复制到 Drive。"""
     run_root_path = Path(run_root)
@@ -806,5 +822,6 @@ def materialize_formal_scoring_execution_run(
             raise FileExistsError(f"destination already exists: {destination}")
         shutil.rmtree(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(run_root_path, destination)
+    copy_ignore = None if include_large_cache else ignore_large_runtime_cache
+    shutil.copytree(run_root_path, destination, ignore=copy_ignore)
     return destination
