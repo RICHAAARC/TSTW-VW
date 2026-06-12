@@ -493,11 +493,16 @@ def build_stage2_mechanism_decision(
             blocking_reasons.append("clean_negative_fpr_not_controlled")
 
     max_attacked_negative_fpr = _safe_float(mechanism_config.get("max_attacked_negative_fpr"))
+    resolved_max_attacked_negative_fpr = (
+        max_attacked_negative_fpr
+        if max_attacked_negative_fpr is not None
+        else 1.0
+    )
     attacked_negative_failures = [
         attack_name
         for attack_name in required_attacks
         if attack_name != "no_attack"
-        and (_max_attacked_negative_rate(test_records, required_variants, attack_name) or 0.0) > (max_attacked_negative_fpr or 1.0)
+        and (_max_attacked_negative_rate(test_records, required_variants, attack_name) or 0.0) > resolved_max_attacked_negative_fpr
     ]
     if attacked_negative_failures:
         blocking_reasons.append("attacked_negative_fpr_not_controlled")

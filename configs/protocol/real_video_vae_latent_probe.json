@@ -59,7 +59,12 @@
     "threshold_quantile_rule": "upper_tail",
     "test_split": "test",
     "test_threshold_update_allowed": false,
-    "allow_attack_specific_threshold": false
+    "allow_attack_specific_threshold": false,
+    "tubelet_length_threshold_guard_band_multiplier_by_profile": {
+      "formal": {
+        "default": 0.5
+      }
+    }
   },
   "real_video_vae_latent_probe_outputs": {
     "write_video_artifacts": true,

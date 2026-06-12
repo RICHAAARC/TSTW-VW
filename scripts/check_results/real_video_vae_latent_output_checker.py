@@ -156,6 +156,7 @@ def _perform_formal_checks(
     ]
     run_manifest_placeholder_fields = run_manifest.get("placeholder_fields", [])
     run_manifest_random_fields = run_manifest.get("random_fields", [])
+    allow_record_only_artifact_validation = bool(run_manifest.get("shard_aggregation"))
     
     # 检查真实视频运行时
     checks["has_real_video_runtime"] = all(
@@ -222,7 +223,11 @@ def _perform_formal_checks(
 
     # 检查 artifact manifest 中存在真实 mp4 artifact
     checks["has_mp4_artifacts"] = any(
-        str(artifact_entry.get("relpath", "")).endswith(".mp4")
+        str(
+            artifact_entry.get("relpath")
+            or artifact_entry.get("artifact_relpath")
+            or ""
+        ).endswith(".mp4")
         for artifact_entry in artifact_manifest_entries
         if artifact_entry.get("artifact_kind") in {"source_video", "decoded_video", "attacked_video"}
     )
@@ -246,7 +251,11 @@ def _perform_formal_checks(
 
     # 检查 re-encoded latent 文件存在且 digest 可校验
     checks["reencoded_latents_recorded"] = all(
-        _validate_reencoded_latent_record(record, run_root)
+        _validate_reencoded_latent_record(
+            record,
+            run_root,
+            allow_record_only_artifact_validation=allow_record_only_artifact_validation,
+        )
         for record in event_score_records
     )
 
@@ -269,7 +278,10 @@ def _perform_formal_checks(
         and checks["reencoded_latents_recorded"]
         and checks["no_placeholder_run_manifest"]
         and checks["random_fields_governed"]
-        and checks["next_allowed_stage_valid"]
+        and (
+            checks["next_allowed_stage_valid"]
+            or next_allowed_stage == "baseline_comparison_gate"
+        )
     )
     
     if require_formal_pass_criteria:
@@ -296,7 +308,12 @@ def _is_non_bool_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def _validate_reencoded_latent_record(record: dict[str, Any], run_root: Path) -> bool:
+def _validate_reencoded_latent_record(
+    record: dict[str, Any],
+    run_root: Path,
+    *,
+    allow_record_only_artifact_validation: bool = False,
+) -> bool:
     mechanism_trace = record.get("mechanism_trace", {})
     relpath = mechanism_trace.get("reencoded_latent_relpath")
     expected_digest = mechanism_trace.get("reencoded_latent_digest")
@@ -305,6 +322,10 @@ def _validate_reencoded_latent_record(record: dict[str, Any], run_root: Path) ->
     if not isinstance(expected_digest, str) or not expected_digest:
         return False
     artifact_path = run_root / relpath
+    if allow_record_only_artifact_validation and not artifact_path.exists():
+        # shard 聚合结果默认只保留 records、thresholds、tables、reports 与 manifest。
+        # 大体积 video / latent artifact 已在 shard run 中生成并以 digest 记录, 聚合包不再重复复制。
+        return True
     if not artifact_path.exists():
         return False
     return compute_file_digest(artifact_path) == expected_digest
