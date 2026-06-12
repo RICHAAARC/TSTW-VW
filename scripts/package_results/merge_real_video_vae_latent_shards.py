@@ -340,6 +340,15 @@ def _write_merged_manifests(
     short_commit: str | None,
 ) -> None:
     output_paths = build_real_video_vae_latent_output_paths(merged_run_root)
+    for manifest_path in [
+        output_paths.runtime_config_path,
+        output_paths.runtime_manifest_path,
+        output_paths.artifact_manifest_path,
+        output_paths.run_manifest_path,
+    ]:
+        # 聚合流程会先由 RecordWriter 和 ArtifactBuilder 写入 records、thresholds、tables、figures、reports。
+        # artifacts 目录并不一定已经存在, 因此这里在写入 manifest 前统一创建父目录。
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
     runtime_config = dict(shard_infos[0]["runtime_config"])
     runtime_config.update(
         {
