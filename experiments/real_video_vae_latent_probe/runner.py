@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import gc
 import importlib.util
 import json
 import platform
@@ -1375,7 +1376,42 @@ class RealVideoVaeLatentRunner:
         latent_backend: RealVideoVAELatentBackend,
         vae_runtime_backend: Any,
         vae_metadata: dict[str, Any],
+        _memory_chunked: bool = False,
     ) -> list[dict[str, Any]]:
+        memory_chunk_size = self._resolve_cross_event_memory_chunk_size()
+        if (
+            not _memory_chunked
+            and memory_chunk_size > 0
+            and len(event_plan_entries) > memory_chunk_size
+        ):
+            chunked_event_score_records: list[dict[str, Any]] = []
+            for chunk_start in range(0, len(event_plan_entries), memory_chunk_size):
+                chunk_entries = event_plan_entries[
+                    chunk_start : chunk_start + memory_chunk_size
+                ]
+                chunked_event_score_records.extend(
+                    self._process_event_plan_entries_with_cross_event_vae_batching(
+                        run_id=run_id,
+                        output_root=output_root,
+                        event_plan_entries=chunk_entries,
+                        method=method,
+                        method_config=method_config,
+                        target_fpr=target_fpr,
+                        threshold_record=threshold_record,
+                        latent_backend=latent_backend,
+                        vae_runtime_backend=vae_runtime_backend,
+                        vae_metadata=vae_metadata,
+                        _memory_chunked=True,
+                    )
+                )
+                # 该清理只释放视频帧 ndarray 缓存, 元数据和已落盘 artifact 仍可复用。
+                self._clear_shared_video_tensor_caches()
+                gc.collect()
+            chunked_event_score_records.sort(
+                key=lambda record: str(record.get("event_id", ""))
+            )
+            return chunked_event_score_records
+
         event_score_records: list[dict[str, Any]] = []
         source_sample_cache: dict[tuple[str, str, str], LatentSample] = (
             self._shared_source_sample_cache
@@ -2051,7 +2087,20 @@ class RealVideoVaeLatentRunner:
             }
             validate_event_score_record(event_score_record)
             event_score_records.append(event_score_record)
+            # 每条 event 的质量指标和时序指标已经写入 record, 后续阶段只需要路径和摘要。
+            # 及时释放 decoded/attacked 视频帧引用, 避免论文级 low-FPR 运行中持续持有数千个视频数组。
+            context.decoded_video_frames = None
+            context.attacked_video_frames = None
+            del reference_frames
+            del comparison_frames
         event_score_records.sort(key=lambda record: str(record.get("event_id", "")))
+        decoded_video_tensor_cache.clear()
+        attacked_video_tensor_cache.clear()
+        for context in contexts:
+            context.decoded_video_frames = None
+            context.attacked_video_frames = None
+        contexts.clear()
+        gc.collect()
         return event_score_records
 
     def _group_event_plan_entries_by_source(
@@ -2250,6 +2299,34 @@ class RealVideoVaeLatentRunner:
         self._shared_decoded_video_tensor_cache: dict[tuple[str, str, str], np.ndarray] = {}
         self._shared_attacked_video_tensor_cache: dict[tuple[str, str], np.ndarray] = {}
         self._shared_reencoded_cache: dict[tuple[str, str], dict[str, str]] = {}
+
+    def _clear_shared_video_tensor_caches(self) -> None:
+        """功能：释放跨 chunk 共享的视频帧数组缓存, 保留可复用的元数据缓存。"""
+        self._shared_decoded_video_tensor_cache.clear()
+        self._shared_attacked_video_tensor_cache.clear()
+
+    def _resolve_cross_event_memory_chunk_size(self) -> int:
+        """功能：解析 cross-event VAE 的内存安全 chunk 大小。
+
+        该值限制单次进入 cross-event batching 的 event 数量。这样做可以保留
+        VAE batching 的吞吐优势, 同时避免正式 low-FPR 运行把整组 event 的
+        decoded/attacked 视频帧数组同时常驻内存。
+        """
+        configured_value = self._runtime_config_overrides.get(
+            "cross_event_vae_memory_chunk_size"
+        )
+        if configured_value is None:
+            configured_value = self._runtime_config_overrides.get(
+                "cross_event_vae_max_events_per_memory_chunk"
+            )
+        if configured_value is not None:
+            return max(1, int(configured_value))
+        batch_floor = max(
+            1,
+            int(self._cross_event_vae_batching_config.decode_batch_size),
+            int(self._cross_event_vae_batching_config.encode_batch_size),
+        )
+        return max(batch_floor, min(64, batch_floor * 2))
 
     def _sample_role_requires_method_scoped_artifacts(self, sample_role: str) -> bool:
         return sample_role in {"watermarked_positive", "attacked_positive"}
