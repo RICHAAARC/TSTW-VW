@@ -31,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-root", type=Path, required=True)
     parser.add_argument("--record-path", type=Path, action="append", required=True)
     parser.add_argument("--target-fpr", type=float, default=0.001)
+    parser.add_argument("--baseline-name", type=str, required=True)
     parser.add_argument("--result-root", type=Path, default=None)
     parser.add_argument("--run-id", type=str, default=None)
     parser.add_argument("--short-commit", type=str, default=None)
@@ -46,8 +47,8 @@ def main() -> None:
     materialized_path = None
     if args.result_root is not None:
         short_commit = args.short_commit or resolve_short_commit()
-        run_id = args.run_id or build_smoke_run_id(short_commit=short_commit, timestamp_utc=args.timestamp_utc).replace("baseline_comparison_smoke", "baseline_score_records_aggregation")
-        destination = args.result_root / "baseline_comparison_gate" / run_id
+        run_id = args.run_id or build_smoke_run_id(short_commit=short_commit, timestamp_utc=args.timestamp_utc).replace("baseline_comparison_smoke", f"baseline_score_records_aggregation_{args.baseline_name}")
+        destination = args.result_root / "baseline_comparison_gate" / args.baseline_name / "shard_aggregated" / run_id
         if destination.exists():
             if not args.overwrite:
                 raise FileExistsError(destination)

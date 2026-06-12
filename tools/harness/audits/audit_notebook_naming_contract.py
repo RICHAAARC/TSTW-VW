@@ -44,6 +44,8 @@ ALLOWED_ROOT_NOTEBOOKS = {
     "build_processed_real_video_dataset.ipynb",
     "run_real_video_vae_latent_probe.ipynb",
     "run_baseline_comparison_gate.ipynb",
+    "aggregate_real_video_vae_latent_probe_shards.ipynb",
+    "aggregate_baseline_comparison_gate_shards.ipynb",
 }
 
 

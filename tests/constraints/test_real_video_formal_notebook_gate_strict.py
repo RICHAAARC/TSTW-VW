@@ -1,5 +1,5 @@
 """
-文件用途：验证阶段 2 Colab notebook formal gate 的严格约束。
+鏂囦欢鐢ㄩ€旓細楠岃瘉闃舵 2 Colab notebook formal gate 鐨勪弗鏍肩害鏉熴€?
 File purpose: Validate strict formal-gate constraints for the stage-two Colab notebook.
 Module type: General module
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-NOTEBOOK_PATH = ROOT / "paper_workflow" / "run_real_video_vae_latent_probe.ipynb"
+NOTEBOOK_PATH = ROOT / "paper_workflow" / "aggregate_real_video_vae_latent_probe_shards.ipynb"
 
 
 def _load_notebook_text() -> str:
@@ -43,10 +43,10 @@ def test_real_video_formal_notebook_gate_is_strict() -> None:
         None.
     """
     notebook_text = _load_notebook_text()
-    assert "REQUIRE_FORMAL_PASS = True" in notebook_text
-    assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
-    assert "if not formal_validation_summary['status']:" in notebook_text
-    assert "raise RuntimeError(formal_validation_summary)" in notebook_text
+    assert "merge_real_video_vae_latent_shards.py" in notebook_text
+    assert "ready_for_baseline_comparison_gate" in notebook_text
+    assert 'if not completion_summary["status"]:' in notebook_text
+    assert "raise RuntimeError(completion_summary)" in notebook_text
 
 
 def test_real_video_formal_notebook_avoids_raw_dataset_handling_and_direct_writes() -> None:
@@ -68,3 +68,4 @@ def test_real_video_formal_notebook_avoids_raw_dataset_handling_and_direct_write
         "json.dump(",
     ]
     assert all(pattern not in notebook_text for pattern in forbidden_patterns)
+

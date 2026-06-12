@@ -64,19 +64,21 @@ def build_formal_scoring_run_id(
     short_commit: str,
     timestamp_utc: str | None,
     baseline_names: list[str] | None,
+    shard_count: int = 1,
+    shard_index: int = 0,
 ) -> str:
     """生成 formal scoring 的 Drive run_id。
 
     plan 目录保持原有命名, 因为它描述的是 work-item 计划; execution 目录额外加入 baseline 标签,
     使三种外部 baseline 分开正式运行时能够从目录名直接区分。
     """
-    prefix = FORMAL_SCORING_EXECUTION_PREFIX if execute else FORMAL_SCORING_PLAN_PREFIX
     if execute:
-        prefix = f"{prefix}_{build_baseline_run_id_label(baseline_names)}"
+        baseline_label = build_baseline_run_id_label(baseline_names)
+        return f"{FORMAL_SCORING_EXECUTION_PREFIX}_{baseline_label}_sc{shard_count:02d}_si{shard_index:02d}_{short_commit[:7]}"
     return build_smoke_run_id(
         short_commit=short_commit,
         timestamp_utc=timestamp_utc,
-    ).replace("baseline_comparison_smoke", prefix)
+    ).replace("baseline_comparison_smoke", FORMAL_SCORING_PLAN_PREFIX)
 
 
 def parse_args() -> argparse.Namespace:
@@ -120,6 +122,8 @@ def main() -> None:
         short_commit=short_commit,
         timestamp_utc=args.timestamp_utc,
         baseline_names=args.baseline_name,
+        shard_count=args.shard_count,
+        shard_index=args.shard_index,
     )
 
     if args.execute:
@@ -166,24 +170,28 @@ def main() -> None:
             if args.execute
             else materialize_formal_scoring_plan_run
         )
-        materialized_path = materializer(
-            run_root=args.run_root,
-            result_root=args.result_root,
-            run_id=run_id,
-            overwrite=args.overwrite,
-            **(
-                {
-                    "include_large_cache": args.include_large_cache,
-                    "required_relative_paths": (
-                        required_gpu_profile_paths("formal_scoring_execution")
-                        if args.profile_gpu
-                        else None
-                    ),
-                }
-                if args.execute
-                else {}
-            ),
-        ).as_posix()
+        if args.execute:
+            baseline_label = build_baseline_run_id_label(args.baseline_name)
+            materialized_path = materializer(
+                run_root=args.run_root,
+                result_root=args.result_root / "baseline_comparison_gate" / baseline_label / "shard_runs",
+                workflow_key="",
+                run_id=run_id,
+                overwrite=args.overwrite,
+                include_large_cache=args.include_large_cache,
+                required_relative_paths=(
+                    required_gpu_profile_paths("formal_scoring_execution")
+                    if args.profile_gpu
+                    else None
+                ),
+            ).as_posix()
+        else:
+            materialized_path = materializer(
+                run_root=args.run_root,
+                result_root=args.result_root,
+                run_id=run_id,
+                overwrite=args.overwrite,
+            ).as_posix()
 
     print(json.dumps({"summary": summary, "materialized_path": materialized_path}, ensure_ascii=False, indent=2))
 

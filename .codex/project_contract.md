@@ -169,3 +169,7 @@
 - `baseline_trace` must include source digest, model digest, adapter version, score mapping rule, unsupported attack reason when applicable, and license or availability status.
 - A baseline with incomplete legal, model, environment, or attack support may appear only in `baseline_limitation_report.md`; it must not support a positive superiority claim.
 - Passing this gate requires `baseline_comparison_table.csv`, `baseline_attack_breakdown.csv`, `baseline_threshold_table.csv`, `baseline_runtime_table.csv`, `baseline_limitation_report.md`, and a claim-audit update showing that all supported baseline claims map to governed artifacts.
+
+## Shard Notebook Split Contract
+
+- shard run 与 shard aggregation 必须拆分为独立 Notebook: `run_real_video_vae_latent_probe.ipynb` 与 `run_baseline_comparison_gate.ipynb` 只负责分片运行, `aggregate_real_video_vae_latent_probe_shards.ipynb` 与 `aggregate_baseline_comparison_gate_shards.ipynb` 只负责聚合分片结果。

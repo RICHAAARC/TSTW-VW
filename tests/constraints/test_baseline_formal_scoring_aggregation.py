@@ -128,26 +128,26 @@ def test_execution_materialization_can_require_gpu_profile_files(tmp_path: Path)
 
 
 def test_baseline_notebook_defines_score_aggregation_config_before_use() -> None:
-    """验证 notebook 在聚合 cell 之前定义聚合开关和输入路径配置。"""
-    notebook_path = ROOT / "paper_workflow" / "run_baseline_comparison_gate.ipynb"
-    notebook_payload = json.loads(notebook_path.read_text(encoding="utf-8"))
-    notebook_source = "\n".join(
+    """验证 baseline shard 聚合配置位于独立聚合 Notebook 中。"""
+    run_notebook_path = ROOT / "paper_workflow" / "run_baseline_comparison_gate.ipynb"
+    aggregate_notebook_path = ROOT / "paper_workflow" / "aggregate_baseline_comparison_gate_shards.ipynb"
+    run_source = run_notebook_path.read_text(encoding="utf-8")
+    aggregate_payload = json.loads(aggregate_notebook_path.read_text(encoding="utf-8"))
+    aggregate_source = "\n".join(
         "".join(cell.get("source", []))
-        for cell in notebook_payload.get("cells", [])
+        for cell in aggregate_payload.get("cells", [])
         if cell.get("cell_type") == "code"
     )
 
-    definition_index = notebook_source.index("RUN_BASELINE_SCORE_RECORDS_AGGREGATION = False")
-    use_index = notebook_source.index("if RUN_BASELINE_SCORE_RECORDS_AGGREGATION:")
-
-    assert definition_index < use_index
-    assert "BASELINE_SCORE_AGGREGATION_RECORD_PATHS = []" in notebook_source
-    assert "BASELINE_SCORE_AGGREGATION_RUN_ROOT =" in notebook_source
-    assert re.search(r"BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS = (None|\d+)", notebook_source)
-    assert re.search(r"BASELINE_FORMAL_SCORING_WORKER_COUNT = \d+", notebook_source)
-    assert "BASELINE_FORMAL_SCORING_EXECUTION_BASELINE_NAMES =" in notebook_source
-    assert "if BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS is not None:" in notebook_source
-
+    assert "RUN_BASELINE_SCORE_RECORDS_AGGREGATION" not in run_source
+    assert "BASELINE_SCORE_RECORD_PATHS = []" in aggregate_source
+    assert "BASELINE_SCORE_AGGREGATION_RUN_ROOT =" in aggregate_source
+    assert "aggregate_baseline_score_records.py" in aggregate_source
+    assert "--baseline-name" in aggregate_source
+    assert re.search(r"BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS = (None|\d+)", run_source)
+    assert re.search(r"BASELINE_FORMAL_SCORING_WORKER_COUNT = \d+", run_source)
+    assert "BASELINE_FORMAL_SCORING_EXECUTION_BASELINE_NAMES =" in run_source
+    assert "if BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS is not None:" in run_source
 
 def test_baseline_notebook_passes_gpu_profile_to_formal_execution() -> None:
     """验证 notebook 的 formal execution cell 会把 GPU profiling 参数传给仓库脚本。"""

@@ -222,12 +222,9 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "probe_workflow.run_probe_runner" in notebook_text
     assert "probe_workflow.rebuild_probe_tables_and_reports" in notebook_text
     assert "probe_workflow.check_probe_outputs" in notebook_text
-    assert "probe_workflow.run_probe_stage2_mechanism_audit" in notebook_text
-    assert "probe_workflow.run_probe_stage2_mechanism_calibration" in notebook_text
-    assert "probe_workflow.write_probe_tubelet_anchor_forensics" in notebook_text
-    assert "probe_workflow.package_probe_non_formal_audit_bundle" in notebook_text
-    assert "probe_workflow.package_probe_family_results" in notebook_text
-    assert "probe_workflow.materialize_probe_family_results_to_drive" in notebook_text
+    assert "package_real_video_vae_latent_shard_run.py" in notebook_text
+    assert "shard_run_packaging" in notebook_text
+    assert "aggregate_real_video_vae_latent_probe_shards.ipynb" in notebook_text
     assert "FAMILY_ID_TEMPLATE" in notebook_text
     assert "RUN_ID_TEMPLATE" in notebook_text
     assert "TSTW_RUN_ID_TEMPLATE" in notebook_text
@@ -243,11 +240,11 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     )
     assert _legacy_dataset_key() not in notebook_text
     assert (
-        "DRIVE_FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / WORKFLOW_KEY / RUN_ID"
+        "DRIVE_FAMILY_ROOT = DRIVE_ROOT / 'TSTW' / 'results' / RESULT_ROOT_WORKFLOW_KEY / RESULT_KIND / RUN_ID"
         in notebook_text
     )
     assert (
-        "LOCAL_FAMILY_ROOT = LOCAL_RUNTIME_ROOT / 'families' / WORKFLOW_KEY / RUN_ID"
+        "LOCAL_FAMILY_ROOT = LOCAL_RUNTIME_ROOT / 'families' / RESULT_ROOT_WORKFLOW_KEY / RESULT_KIND / RUN_ID"
         in notebook_text
     )
     assert "RUN_ID_BASE = RUN_ROOT.name" in notebook_text
@@ -315,27 +312,10 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "'effective_manual_env'" in notebook_text
     assert "TSTW_STAGE2_MECHANISM_CALIBRATION_GRID_PATH" in notebook_text
     assert "TSTW_RESET_STAGE2_MECHANISM_CALIBRATION_RUN_ROOT" in notebook_text
-    assert "probe_workflow.reset_probe_runtime_run_root(" in notebook_text
-    assert "reset_run_root=False" in notebook_text
-    assert "'samples_per_role_override': 100" in notebook_text
-    assert "'run_main_formal': True" in notebook_text
-    assert "'run_stage2_mechanism_calibration': False" in notebook_text
-    assert "'run_tubelet_anchor_forensics': False" in notebook_text
-    assert "'reset_stage2_mechanism_calibration_run_root': False" in notebook_text
-    assert "'run_stage2_local_clip_sync_forensics': False" in notebook_text
-    assert "'package_non_formal_audit_bundle': False" in notebook_text
-    assert "'require_stage2_mechanism_pass': True" in notebook_text
-    assert "selected_tubelet_anchor_forensics.csv" in notebook_text
-    assert "selected_tubelet_anchor_forensics_summary.json" in notebook_text
-    assert "stage2_controlled_search_stage_summary" in notebook_text
-    assert "stage2_grid_config_preview" in notebook_text
-    assert "stage2_search_stage_preview" in notebook_text
-    assert "stage2_vae_mechanism_calibration_grid__" not in notebook_text
-    assert "TL02_CONTROLLED_SYNC_WIDE_GRID" not in notebook_text
-    assert "TUBELET_RESCUE_EXPANDED_SYNC_GRID" not in notebook_text
-    assert "TUBELET_UNSATURATED_ANCHOR_PROBE_SYNC_WIDE_GRID" not in notebook_text
-    assert "STAGE2_CALIBRATION_TARGET" not in notebook_text
-    assert "stage2_calibration_target" not in notebook_text
+    assert "package_real_video_vae_latent_shard_run.py" in notebook_text
+    assert "shard_completion_summary" in notebook_text
+    assert "can_aggregate_after_all_shards_complete" in notebook_text
+    assert "aggregate_real_video_vae_latent_probe_shards.ipynb" in notebook_text
     assert "run_timer = run_timing_workflow.start_run_timing(" in notebook_text
     assert "runtime_profile_workflow.capture_colab_environment(" in notebook_text
     assert "runtime_profile_workflow.profile_drive_io(" in notebook_text
@@ -354,14 +334,7 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "with run_timer.event('real_video_vae_latent_runner'" in notebook_text
     assert "with run_timer.event('table_and_report_rebuild'" in notebook_text
     assert "with run_timer.event('formal_checker'" in notebook_text
-    assert "stage2_calibration_gpu_profile_process = runtime_profile_workflow.start_gpu_runtime_profile(" in notebook_text
-    assert "run_root=STAGE2_MECHANISM_CALIBRATION_RUN_ROOT" in notebook_text
-    assert "with run_timer.event('stage2_mechanism_audit'" in notebook_text
-    assert "with run_timer.event('stage2_mechanism_calibration'" in notebook_text
-    assert "with run_timer.event('tubelet_anchor_forensics'" in notebook_text
-    assert "with run_timer.event('audit_bundle_packaging'" in notebook_text
-    assert "with run_timer.event('result_packaging'" in notebook_text
-    assert "run_main_formal_disabled" in notebook_text
+    assert "with run_timer.event('shard_run_packaging'" in notebook_text
     assert "experiments.real_video_vae_latent_probe.runner" not in notebook_text
     assert "scripts.prepare_models.prepare_session_autoencoder_kl" not in notebook_text
     assert "scripts.check_results.check_real_video_vae_latent_outputs" not in notebook_text
@@ -377,36 +350,26 @@ def test_real_video_run_notebook_exists_and_uses_governed_entrypoints() -> None:
     assert "from paper_workflow.colab_utils.runtime_check import run_runtime_preflight_check" in workflow_text
     assert "session_only_no_drive_model_storage" in workflow_text
     assert "dataset_manifest_path" in workflow_text
-    assert "REQUIRE_FORMAL_PASS = True" in notebook_text
+    assert "REQUIRE_FORMAL_PASS = False" in notebook_text
     assert "require_formal_pass_criteria=REQUIRE_FORMAL_PASS" in notebook_text
-    assert "mechanism_summary=stage2_mechanism_summary" in notebook_text
     assert "samples_per_role=RUNNER_SAMPLES_PER_ROLE_OVERRIDE" in notebook_text
     assert "batch_size_frames=BATCH_SIZE_FRAMES" in notebook_text
     assert "shard_count=SHARD_COUNT" in notebook_text
     assert "shard_index=SHARD_INDEX" in notebook_text
     assert "worker_count=WORKER_COUNT" in notebook_text
     assert "lpips_evidence_summary" in notebook_text
-    assert "tubelet_anchor_forensics_summary" in notebook_text
-    assert "non_formal_audit_bundle_summary" in notebook_text
-    assert "local_archive_path = package_payload['drive_archive_path']" in notebook_text
-    assert "drive_archive_path = drive_family_materialization_summary.get('drive_archive_path')" in notebook_text
-    assert "compat_pack_root = package_payload['compat_pack_root']" in notebook_text
+    assert "local_archive_path = package_payload.get('archive_path')" in notebook_text
+    assert "drive_family_materialization_summary" in notebook_text
+    assert "compat_pack_root = package_payload.get('compat_run_root')" in notebook_text
     summarize_run_timing_call = "run_timing_summary = run_timing_workflow.summarize_run_timing("
     summarize_run_timing_indices = _all_indices(notebook_text, summarize_run_timing_call)
     formal_checker_index = notebook_text.index(
         "formal_validation_summary = probe_workflow.check_probe_outputs("
     )
-    mechanism_audit_index = notebook_text.index(
-        "stage2_mechanism_summary = probe_workflow.run_probe_stage2_mechanism_audit("
-    )
-    package_call_index = notebook_text.index("probe_workflow.package_probe_family_results(")
-    assert len(summarize_run_timing_indices) == 3
-    assert formal_checker_index < mechanism_audit_index < package_call_index
-    assert formal_checker_index < summarize_run_timing_indices[1] < package_call_index
-    assert package_call_index < summarize_run_timing_indices[2]
+    package_call_index = notebook_text.index("package_real_video_vae_latent_shard_run.py")
+    assert len(summarize_run_timing_indices) >= 2
+    assert formal_checker_index < package_call_index
     assert "formal_validation_summary" in notebook_text
-    assert "result_registry.jsonl" in notebook_text
-    assert "family_registry.jsonl" in notebook_text
     assert "/content/TSTW_runtime" in notebook_text
     assert "/content/drive/MyDrive" in notebook_text
     assert "raw_dataset_download_manifest.json" not in notebook_text

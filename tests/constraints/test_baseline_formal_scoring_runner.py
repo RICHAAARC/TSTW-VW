@@ -115,11 +115,11 @@ def test_formal_scoring_execution_run_id_includes_baseline_name() -> None:
 
     assert (
         single_baseline_run_id
-        == "baseline_comparison_formal_scoring_execution_external_hidden_framewise_20260611T140000Z_abcdef0"
+        == "baseline_comparison_formal_scoring_execution_external_hidden_framewise_sc01_si00_abcdef0"
     )
     assert (
         multi_baseline_run_id
-        == "baseline_comparison_formal_scoring_execution_multi_baseline_20260611T140000Z_abcdef0"
+        == "baseline_comparison_formal_scoring_execution_multi_baseline_sc01_si00_abcdef0"
     )
     assert plan_run_id == "baseline_comparison_formal_scoring_plan_20260611T140000Z_abcdef0"
 

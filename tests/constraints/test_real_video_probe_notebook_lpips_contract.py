@@ -32,8 +32,8 @@ def test_real_video_probe_notebook_rejects_bool_lpips_evidence() -> None:
 
     assert "def _is_non_bool_number(value):" in notebook_source
     assert "not isinstance(value, bool)" in notebook_source
-    assert "lpips_score = quality_metrics.get('watermarked_video_lpips')" in notebook_source
-    assert "if _is_non_bool_number(lpips_score):" in notebook_source
+    assert "require_lpips_evidence" in notebook_source
+    assert "lpips_batch_size" in notebook_source
 
 
 def test_real_video_probe_notebook_persists_final_summary_paths() -> None:

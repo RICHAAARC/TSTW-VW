@@ -35,18 +35,24 @@ def load_json(path: str | Path) -> dict[str, Any]:
 def locate_stage_two_archive(package_root: str | Path) -> Path:
     """定位阶段二正式结果包中的可解压归档。
 
-    优先使用兼容性更好的 zip 包。tar.zst 包仍保留为正式压缩包, 但在 Colab 冷启动中 zip
-    可直接由 Python 标准库读取, 更适合作为阶段三输入检查路径。
+    优先使用兼容性更好的 zip 包。聚合 shard 后的包名会随 run root 变化, 因此这里
+    先兼容旧固定包名, 再自动选择 packages/ 下最新的 zip 包。
     """
     root = Path(package_root)
-    zip_path = root / "packages" / "real_video_vae_latent_probe_formal.zip"
-    if zip_path.exists():
-        return zip_path
-    tar_zst_path = root / "packages" / "real_video_vae_latent_probe_formal.tar.zst"
-    if tar_zst_path.exists():
-        return tar_zst_path
+    packages_root = root / "packages"
+    fixed_zip_path = packages_root / "real_video_vae_latent_probe_formal.zip"
+    if fixed_zip_path.exists():
+        return fixed_zip_path
+    zip_candidates = sorted(packages_root.glob("*.zip"), key=lambda path: path.stat().st_mtime, reverse=True)
+    if zip_candidates:
+        return zip_candidates[0]
+    fixed_tar_zst_path = packages_root / "real_video_vae_latent_probe_formal.tar.zst"
+    if fixed_tar_zst_path.exists():
+        return fixed_tar_zst_path
+    tar_zst_candidates = sorted(packages_root.glob("*.tar.zst"), key=lambda path: path.stat().st_mtime, reverse=True)
+    if tar_zst_candidates:
+        return tar_zst_candidates[0]
     raise FileNotFoundError(f"未找到阶段二正式归档包: {root}")
-
 
 def inspect_stage_two_package(package_root: str | Path) -> dict[str, Any]:
     """检查阶段二正式结果包是否满足阶段三 baseline comparison 的输入要求。"""
@@ -67,8 +73,14 @@ def inspect_stage_two_package(package_root: str | Path) -> dict[str, Any]:
         for key, relative_path in REQUIRED_PACKAGE_RELATIVE_PATHS.items()
     }
 
-    formal_checks = family_checks.get("formal_checks", {})
-    mechanism_summary = family_checks.get("stage2_mechanism_summary", {})
+    formal_summary = family_checks.get("formal_summary") or family_summary.get("formal_validation_summary") or {}
+    formal_checks = (
+        family_checks.get("formal_checks")
+        or formal_summary.get("formal_checks")
+        or family_checks.get("run_checks", {}).get("formal_checks")
+        or {}
+    )
+    mechanism_summary = family_checks.get("stage2_mechanism_summary") or family_summary.get("stage2_mechanism_summary") or {}
     quality_metrics_enabled = mechanism_summary.get("quality_metrics_enabled", {})
     decision_pass = (
         family_checks.get("status") is True
@@ -93,8 +105,8 @@ def inspect_stage_two_package(package_root: str | Path) -> dict[str, Any]:
         "archive_root_prefix": package_root_prefix,
         "family_id": family_manifest.get("family_id") or family_summary.get("family_id"),
         "run_id": mechanism_summary.get("run_id"),
-        "record_count": family_summary.get("formal_validation_summary", {}).get("record_count"),
-        "threshold_count": family_summary.get("formal_validation_summary", {}).get("threshold_count"),
+        "record_count": formal_summary.get("record_count") or family_summary.get("formal_validation_summary", {}).get("record_count"),
+        "threshold_count": formal_summary.get("threshold_count") or family_summary.get("formal_validation_summary", {}).get("threshold_count"),
         "stage2_implementation_decision": mechanism_summary.get("Stage2ImplementationDecision"),
         "stage2_mechanism_decision": mechanism_summary.get("Stage2MechanismDecision"),
         "lpips_evidence_available": formal_checks.get("lpips_evidence_available"),
