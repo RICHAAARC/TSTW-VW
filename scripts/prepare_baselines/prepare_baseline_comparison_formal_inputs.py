@@ -16,6 +16,7 @@ from experiments.baseline_comparison_gate.formal_input_contract import (
     materialize_formal_input_contract_run,
     write_formal_input_contract,
 )
+from experiments.baseline_comparison_gate.source_intake import REQUIRED_BASELINE_NAMES
 from experiments.baseline_comparison_gate.smoke_runner import build_smoke_run_id
 
 
@@ -35,8 +36,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-id", type=str, default=None, help="可选的 Drive run_id。未提供时使用时间戳和短 commit 生成。")
     parser.add_argument("--short-commit", type=str, default="unknown", help="生成 run_id 时使用的短 commit。")
     parser.add_argument("--timestamp-utc", type=str, default=None, help="生成 run_id 时使用的 UTC 时间戳。")
+    parser.add_argument("--baseline-name", action="append", default=None, help="可重复传入的 baseline 过滤器。未提供时为三个 baseline 分别落盘。")
     parser.add_argument("--overwrite", action="store_true", help="Drive 目标目录已存在时允许覆盖。")
     return parser.parse_args()
+
+
+def normalize_baseline_names(baseline_names: list[str] | None) -> list[str]:
+    """规范化 formal input contract 的 baseline 落盘目标。"""
+    if baseline_names is None:
+        return list(REQUIRED_BASELINE_NAMES)
+    normalized = [name for name in baseline_names if name]
+    unsupported = sorted(set(normalized) - set(REQUIRED_BASELINE_NAMES))
+    if unsupported:
+        raise ValueError(f"unsupported baseline names: {unsupported}")
+    if not normalized:
+        raise ValueError("baseline filter must contain at least one baseline")
+    return sorted(set(normalized))
 
 
 def main() -> None:
@@ -50,16 +65,27 @@ def main() -> None:
     outputs = write_formal_input_contract(contract, args.run_root)
     materialized_path = None
     if args.result_root is not None:
-        run_id = args.run_id or build_smoke_run_id(
+        baseline_names = normalize_baseline_names(args.baseline_name)
+        base_run_id = args.run_id or build_smoke_run_id(
             short_commit=args.short_commit,
             timestamp_utc=args.timestamp_utc,
         ).replace("baseline_comparison_smoke", "baseline_comparison_formal_inputs")
-        materialized_path = materialize_formal_input_contract_run(
-            run_root=args.run_root,
-            result_root=args.result_root,
-            run_id=run_id,
-            overwrite=args.overwrite,
-        ).as_posix()
+        materialized_paths = []
+        for baseline_name in baseline_names:
+            run_id = base_run_id.replace(
+                "baseline_comparison_formal_inputs",
+                f"baseline_comparison_formal_inputs_{baseline_name}",
+                1,
+            )
+            destination = materialize_formal_input_contract_run(
+                run_root=args.run_root,
+                result_root=args.result_root / "baseline_comparison_gate" / baseline_name,
+                workflow_key="",
+                run_id=run_id,
+                overwrite=args.overwrite,
+            )
+            materialized_paths.append(destination.as_posix())
+        materialized_path = materialized_paths[0] if len(materialized_paths) == 1 else materialized_paths
     print(json.dumps({"contract": contract, "outputs": outputs, "materialized_path": materialized_path}, ensure_ascii=False, indent=2))
     if not contract["ready_for_formal_baseline_runner"]:
         raise SystemExit(2)

@@ -164,8 +164,8 @@
 ## Baseline Comparison Gate Contract
 
 - Active baseline names are `external_videoseal`, `external_rivagan`, and `external_hidden_framewise`.
-- Baseline comparison 的 Drive 结果必须使用以下组织结构: 全局输入契约位于 `TSTW/results/baseline_comparison_gate/formal_inputs/<RUN_ID>/`; 单 baseline scoring plan 位于 `TSTW/results/baseline_comparison_gate/<baseline>/scoring_plans/<RUN_ID>/`; 单 baseline shard run 位于 `TSTW/results/baseline_comparison_gate/<baseline>/shard_runs/<RUN_ID>/`; 单 baseline shard aggregation 位于 `TSTW/results/baseline_comparison_gate/<baseline>/shard_aggregated/<RUN_ID>/`。
-- 每个单 baseline scoring plan 和 shard run 结果包都必须包含 `configs/baseline_comparison_formal_input_contract.json` 快照, 使单独下载某个 baseline 结果目录时仍可独立审计。
+- Baseline comparison 的 Drive 结果必须使用 per-baseline 组织结构: `TSTW/results/baseline_comparison_gate/<baseline>/comparison_smoke/<RUN_ID>/` 保存轻量 comparison smoke; `TSTW/results/baseline_comparison_gate/<baseline>/real_smoke/<RUN_ID>/` 保存真实 baseline smoke; `TSTW/results/baseline_comparison_gate/<baseline>/formal_inputs/<RUN_ID>/` 保存该 baseline 使用的输入契约; `TSTW/results/baseline_comparison_gate/<baseline>/scoring_plans/<RUN_ID>/` 保存该 baseline 的 scoring plan; `TSTW/results/baseline_comparison_gate/<baseline>/shard_runs/<RUN_ID>/` 保存该 baseline 的 shard run; `TSTW/results/baseline_comparison_gate/<baseline>/shard_aggregated/<RUN_ID>/` 保存该 baseline 的 shard aggregation。
+- 每个单 baseline formal input、scoring plan 和 shard run 结果包都必须包含 `configs/baseline_comparison_formal_input_contract.json` 快照, 使单独下载某个 baseline 结果目录时仍可独立审计。
 - Every baseline must use the same real-video processed dataset identity, split semantics, attack matrix, target-FPR calibration rule, and table/report rebuild contract as the canonical `real_video_vae_latent_probe` formal package.
 - Baseline records must preserve `baseline_name`, `baseline_family`, `baseline_score`, `baseline_raw_detector_output`, `decision`, `failure_reason`, `quality_metrics`, `temporal_metrics`, `runtime_metrics`, and `baseline_trace`.
 - `baseline_trace` must include source digest, model digest, adapter version, score mapping rule, unsupported attack reason when applicable, and license or availability status.

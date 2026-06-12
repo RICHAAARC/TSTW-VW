@@ -374,7 +374,8 @@ def main(argv: list[str] | None = None) -> None:
         if args.result_root is not None:
             destination = materialize_completed_smoke_run(
                 run_root=args.run_root,
-                result_root=args.result_root,
+                result_root=args.result_root / "baseline_comparison_gate" / "external_videoseal" / "real_smoke",
+                workflow_key="",
                 run_id=summary["run_id"],
                 overwrite=args.overwrite_result,
                 required_relative_paths=[

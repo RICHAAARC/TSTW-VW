@@ -1013,13 +1013,17 @@ The run notebook must not create the Google Drive family result directory during
 
 ## Baseline Comparison Result Layout
 
-对于 `baseline_comparison_gate`, 受治理的 Google Drive 结果目录结构为:
+对于 `baseline_comparison_gate`, 受治理的 Google Drive 结果目录结构为每个 baseline 独立归档:
 
 ```text
 /content/drive/MyDrive/TSTW/results/baseline_comparison_gate/
-  formal_inputs/
-    baseline_comparison_formal_inputs_<UTC_TIME>_<SHORT_COMMIT>/
   external_hidden_framewise/
+    comparison_smoke/
+      baseline_comparison_smoke_external_hidden_framewise_<UTC_TIME>_<SHORT_COMMIT>/
+    real_smoke/
+      external_hidden_framewise_real_smoke_<UTC_TIME>_<SHORT_COMMIT>/
+    formal_inputs/
+      baseline_comparison_formal_inputs_external_hidden_framewise_<UTC_TIME>_<SHORT_COMMIT>/
     scoring_plans/
       baseline_comparison_formal_scoring_plan_external_hidden_framewise_scXX_siXX_<SHORT_COMMIT>/
     shard_runs/
@@ -1027,14 +1031,19 @@ The run notebook must not create the Google Drive family result directory during
     shard_aggregated/
       baseline_score_records_aggregation_external_hidden_framewise_<UTC_TIME>_<SHORT_COMMIT>/
   external_rivagan/
+    comparison_smoke/
+    real_smoke/
+    formal_inputs/
     scoring_plans/
     shard_runs/
     shard_aggregated/
   external_videoseal/
+    comparison_smoke/
+    real_smoke/
+    formal_inputs/
     scoring_plans/
     shard_runs/
     shard_aggregated/
 ```
 
-`formal_inputs` 是全局目录, 因为阶段二聚合包与 fixed-FPR 输入契约由所有外部 baseline 共享。`scoring_plans`、`shard_runs` 和 `shard_aggregated` 必须存放在各自 baseline 目录下, 因为这些目录是 baseline-specific 证据包。每个单 baseline scoring plan 和 shard run 结果包都必须包含 `configs/baseline_comparison_formal_input_contract.json`, 作为不可变输入契约快照。
-
+该结构的项目特定设计目标是避免三个外部 baseline 的输入契约、smoke 证据、任务计划、shard 运行结果和聚合结果互相混淆。每个单 baseline formal input、scoring plan 和 shard run 结果包都必须包含 `configs/baseline_comparison_formal_input_contract.json`, 作为不可变输入契约快照。

@@ -43,11 +43,12 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--short-commit", default=None)
     parser.add_argument("--timestamp-utc", default=None)
+    parser.add_argument("--baseline-name", action="append", default=None, help="可重复传入的 baseline 过滤器。")
     parser.add_argument(
         "--result-root",
         type=Path,
         default=None,
-        help="可选结果根目录。若提供, smoke 成功后复制到 <result-root>/baseline_comparison_gate/<run_id>/。",
+        help="可选结果根目录。若提供, smoke 成功后复制到 <result-root>/baseline_comparison_gate/<baseline>/comparison_smoke/<run_id>/。",
     )
     parser.add_argument(
         "--overwrite-result",
@@ -61,11 +62,14 @@ def main(argv: list[str] | None = None) -> None:
         config_dir=args.config_dir,
         short_commit=args.short_commit or resolve_short_commit(),
         timestamp_utc=args.timestamp_utc,
+        baseline_names=args.baseline_name,
     )
     if args.result_root is not None:
+        baseline_label = summary["run_id"].removeprefix("baseline_comparison_smoke_").rsplit("_", 2)[0]
         destination = materialize_completed_smoke_run(
             run_root=args.run_root,
-            result_root=args.result_root,
+            result_root=args.result_root / "baseline_comparison_gate" / baseline_label / "comparison_smoke",
+            workflow_key="",
             run_id=summary["run_id"],
             overwrite=args.overwrite_result,
         )

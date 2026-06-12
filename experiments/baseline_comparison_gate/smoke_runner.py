@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import shutil
-from typing import Any
+from typing import Any, Iterable
 
 from experiments.baseline_comparison_gate.baseline_adapter import BaselineRuntimeContext
 from experiments.baseline_comparison_gate.baseline_registry import get_baseline_adapter
@@ -39,12 +39,34 @@ def build_smoke_run_id(short_commit: str, timestamp_utc: str | None = None) -> s
     return f"{SMOKE_RUN_ID_PREFIX}_{timestamp}_{commit}"
 
 
+def normalize_smoke_baseline_filter(baseline_names: Iterable[str] | None) -> list[str]:
+    """规范化 comparison smoke 的 baseline 过滤器。"""
+    if baseline_names is None:
+        return list(REQUIRED_BASELINE_NAMES)
+    normalized = [name for name in baseline_names if name]
+    unsupported = sorted(set(normalized) - set(REQUIRED_BASELINE_NAMES))
+    if unsupported:
+        raise ValueError(f"unsupported baseline names: {unsupported}")
+    if not normalized:
+        raise ValueError("baseline filter must contain at least one baseline")
+    return normalized
+
+
+def build_baseline_label(baseline_names: Iterable[str] | None) -> str:
+    """生成用于结果目录的 baseline 标签。"""
+    normalized = sorted(set(normalize_smoke_baseline_filter(baseline_names)))
+    if len(normalized) == 1:
+        return normalized[0]
+    return "multi_baseline"
+
+
 def run_baseline_smoke(
     *,
     run_root: str | Path,
     config_dir: str | Path,
     short_commit: str = "unknown",
     timestamp_utc: str | None = None,
+    baseline_names: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     """执行不依赖真实 GPU 的 baseline smoke skeleton。
 
@@ -52,14 +74,17 @@ def run_baseline_smoke(
     它不会下载权重, 不会运行真实嵌入, 也不会产生可用于论文 claim 的正式分数。
     """
     run_root_path = Path(run_root)
-    run_id = build_smoke_run_id(short_commit=short_commit, timestamp_utc=timestamp_utc)
+    selected_baselines = normalize_smoke_baseline_filter(baseline_names)
+    baseline_label = build_baseline_label(selected_baselines)
+    base_run_id = build_smoke_run_id(short_commit=short_commit, timestamp_utc=timestamp_utc)
+    run_id = base_run_id.replace(SMOKE_RUN_ID_PREFIX, f"{SMOKE_RUN_ID_PREFIX}_{baseline_label}", 1)
     layout = prepare_smoke_layout(run_root_path)
     manifests = load_all_source_manifests(config_dir)
     source_summary = build_source_intake_summary(manifests)
 
     records: list[dict[str, Any]] = []
     limitations: list[dict[str, Any]] = []
-    for baseline_name in REQUIRED_BASELINE_NAMES:
+    for baseline_name in selected_baselines:
         source_manifest = manifests[baseline_name]
         adapter = get_baseline_adapter(baseline_name)
         context = BaselineRuntimeContext(

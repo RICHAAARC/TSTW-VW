@@ -163,7 +163,10 @@ def discover_latest_real_smoke_runs(result_root: str | Path) -> list[Path]:
     selected: list[Path] = []
     for baseline_name in REQUIRED_BASELINE_NAMES:
         pattern = f"{baseline_name}_real_smoke_*"
-        matches = sorted(path for path in workflow_root.glob(pattern) if path.is_dir())
+        baseline_real_smoke_root = workflow_root / baseline_name / "real_smoke"
+        matches = sorted(path for path in baseline_real_smoke_root.glob(pattern) if path.is_dir())
+        if not matches:
+            matches = sorted(path for path in workflow_root.glob(pattern) if path.is_dir())
         if not matches:
             raise FileNotFoundError(f"缺少 {baseline_name} 的真实 smoke 结果包: {workflow_root}")
         selected.append(matches[-1])

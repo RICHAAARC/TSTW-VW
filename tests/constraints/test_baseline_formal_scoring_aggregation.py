@@ -10,6 +10,7 @@ import pytest
 
 from experiments.baseline_comparison_gate.formal_scoring_aggregation import run_baseline_score_aggregation
 from experiments.baseline_comparison_gate.formal_scoring_runner import materialize_formal_scoring_execution_run
+from scripts.prepare_baselines.aggregate_baseline_score_records import validate_record_paths_belong_to_baseline
 
 pytestmark = [pytest.mark.constraint, pytest.mark.unit]
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,6 +53,14 @@ def make_record(split: str, role: str, score: float, attack: str = "no_attack") 
         "baseline_trace": {"source_digest": "s", "model_digest": "m", "adapter_version": "a", "score_mapping_rule": "r", "license_status": "recorded"},
         "failure_reason": None,
     }
+
+
+def test_score_aggregation_rejects_cross_baseline_record_path(tmp_path: Path) -> None:
+    """确认聚合脚本拒绝把其他 baseline 的 records 混入当前 baseline。"""
+    record_path = write_jsonl(tmp_path / "records" / "baseline_formal_score_records.jsonl", [make_record("test", "clean_negative", 0.1)])
+
+    with pytest.raises(ValueError, match="do not belong to baseline"):
+        validate_record_paths_belong_to_baseline([record_path], "external_hidden_framewise")
 
 
 def test_score_aggregation_writes_fixed_fpr_tables(tmp_path: Path) -> None:
@@ -141,6 +150,9 @@ def test_baseline_notebook_defines_score_aggregation_config_before_use() -> None
 
     assert "RUN_BASELINE_SCORE_RECORDS_AGGREGATION" not in run_source
     assert "BASELINE_SCORE_RECORD_PATHS = []" in aggregate_source
+    assert "AUTO_RESOLVE_BASELINE_SCORE_RECORD_PATHS = True" in aggregate_source
+    assert "discover_baseline_score_record_groups" in aggregate_source
+    assert "baseline_comparison_gate" in aggregate_source and "shard_runs" in aggregate_source
     assert "BASELINE_SCORE_AGGREGATION_RUN_ROOT =" in aggregate_source
     assert "aggregate_baseline_score_records.py" in aggregate_source
     assert "--baseline-name" in aggregate_source

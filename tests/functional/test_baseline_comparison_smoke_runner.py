@@ -73,3 +73,28 @@ def test_baseline_smoke_materialization_copies_only_completed_run(tmp_path: Path
     assert (destination / "manifest.json").exists()
     assert (destination / "records" / "baseline_smoke_records.jsonl").exists()
     assert (destination / "reports" / "baseline_limitation_report.md").exists()
+
+
+def test_baseline_smoke_supports_single_baseline_result_directory(tmp_path: Path) -> None:
+    """确认轻量 comparison smoke 可以按 baseline 独立生成结果包。"""
+    run_root = tmp_path / "session" / "external_hidden_framewise"
+    result_root = tmp_path / "r" / "external_hidden_framewise" / "comparison_smoke"
+    summary = run_baseline_smoke(
+        run_root=run_root,
+        config_dir=ROOT / "configs" / "baselines",
+        short_commit="abcdef0",
+        timestamp_utc="20260611T00Z",
+        baseline_names=["external_hidden_framewise"],
+    )
+
+    destination = materialize_completed_smoke_run(
+        run_root=run_root,
+        result_root=result_root,
+        workflow_key="",
+        run_id=summary["run_id"],
+    )
+
+    assert summary["record_count"] == 1
+    assert "external_hidden_framewise" in summary["run_id"]
+    assert destination == result_root / summary["run_id"]
+    assert (destination / "records" / "baseline_smoke_records.jsonl").exists()

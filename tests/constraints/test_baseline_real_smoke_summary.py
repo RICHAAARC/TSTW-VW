@@ -104,7 +104,7 @@ def test_summarize_real_smoke_run_classifies_positive_package(tmp_path: Path) ->
     run_root = write_run(
         tmp_path,
         baseline_name="external_videoseal",
-        run_id="external_videoseal_real_smoke_20260611T071016Z_d78573c",
+        run_id="external_videoseal_real_smoke_t_c",
         clean_decision="positive",
         h264_decision="positive",
     )
@@ -124,7 +124,7 @@ def test_summarize_real_smoke_run_keeps_negative_smoke_as_limitation(tmp_path: P
     run_root = write_run(
         tmp_path,
         baseline_name="external_hidden_framewise",
-        run_id="external_hidden_framewise_real_smoke_20260611T071057Z_d78573c",
+        run_id="external_hidden_framewise_real_smoke_t_c",
         clean_decision="negative",
         h264_decision="negative",
     )
@@ -139,32 +139,32 @@ def test_summarize_real_smoke_run_keeps_negative_smoke_as_limitation(tmp_path: P
 
 def test_discover_and_write_real_smoke_summary_outputs(tmp_path: Path) -> None:
     """确认结果根目录自动发现和三种摘要格式写出均可用。"""
-    workflow_root = tmp_path / "results" / "baseline_comparison_gate"
+    workflow_root = tmp_path.parent / ("r" + tmp_path.name[-2:]) / "baseline_comparison_gate"
     runs = [
         write_run(
-            workflow_root,
+            workflow_root / "external_videoseal" / "real_smoke",
             baseline_name="external_videoseal",
-            run_id="external_videoseal_real_smoke_20260611T071016Z_d78573c",
+            run_id="external_videoseal_real_smoke_t_c",
             clean_decision="positive",
             h264_decision="positive",
         ),
         write_run(
-            workflow_root,
+            workflow_root / "external_rivagan" / "real_smoke",
             baseline_name="external_rivagan",
-            run_id="external_rivagan_real_smoke_20260611T071047Z_d78573c",
+            run_id="external_rivagan_real_smoke_t_c",
             clean_decision="positive",
             h264_decision="positive",
         ),
         write_run(
-            workflow_root,
+            workflow_root / "external_hidden_framewise" / "real_smoke",
             baseline_name="external_hidden_framewise",
-            run_id="external_hidden_framewise_real_smoke_20260611T071057Z_d78573c",
+            run_id="external_hidden_framewise_real_smoke_t_c",
             clean_decision="negative",
             h264_decision="negative",
         ),
     ]
 
-    discovered = discover_latest_real_smoke_runs(tmp_path / "results")
+    discovered = discover_latest_real_smoke_runs(tmp_path.parent / ("r" + tmp_path.name[-2:]))
     summary = summarize_real_smoke_runs(runs)
     outputs = write_summary_outputs(summary, tmp_path / "summary")
 

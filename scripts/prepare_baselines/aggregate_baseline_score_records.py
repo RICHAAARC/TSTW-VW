@@ -40,9 +40,38 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def validate_record_paths_belong_to_baseline(record_paths: list[Path], baseline_name: str) -> None:
+    """校验聚合输入确实属于当前 baseline。
+
+    该函数属于项目特定防混淆约束: 阶段三每个 baseline 的 shard run 和聚合结果都独立存放,
+    因此聚合脚本需要拒绝把其他 baseline 的 score records 混入当前 baseline 表格。
+    """
+    mismatches: list[dict[str, str]] = []
+    for record_path in record_paths:
+        with record_path.open("r", encoding="utf-8") as handle:
+            for line_number, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
+                record = json.loads(line)
+                actual = str(record.get("baseline_name"))
+                if actual != baseline_name:
+                    mismatches.append(
+                        {
+                            "record_path": record_path.as_posix(),
+                            "line_number": str(line_number),
+                            "expected": baseline_name,
+                            "actual": actual,
+                        }
+                    )
+                break
+    if mismatches:
+        raise ValueError(f"record paths do not belong to baseline {baseline_name}: {mismatches}")
+
+
 def main() -> None:
     """执行聚合并可选复制到 Drive。"""
     args = parse_args()
+    validate_record_paths_belong_to_baseline(args.record_path, args.baseline_name)
     summary = run_baseline_score_aggregation(run_root=args.run_root, record_paths=args.record_path, target_fpr=args.target_fpr)
     materialized_path = None
     if args.result_root is not None:
