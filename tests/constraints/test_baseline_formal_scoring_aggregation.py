@@ -153,6 +153,8 @@ def test_baseline_notebook_defines_score_aggregation_config_before_use() -> None
     assert "AUTO_RESOLVE_BASELINE_SCORE_RECORD_PATHS = True" in aggregate_source
     assert "discover_baseline_score_record_groups" in aggregate_source
     assert "baseline_comparison_gate" in aggregate_source and "shard_runs" in aggregate_source
+    assert "baseline_score_records_aggregation_manifest.json" in aggregate_source
+    assert "materialized_path / \"thresholds\" / \"baseline_threshold_table.csv\"" in aggregate_source
     assert "BASELINE_SCORE_AGGREGATION_RUN_ROOT =" in aggregate_source
     assert "aggregate_baseline_score_records.py" in aggregate_source
     assert "--baseline-name" in aggregate_source
