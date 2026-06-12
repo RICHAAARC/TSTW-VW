@@ -167,7 +167,7 @@ def materialize_formal_input_contract_run(
     """
     run_root_path = Path(run_root)
     result_root_path = Path(result_root)
-    destination = result_root_path / workflow_key / run_id
+    destination = result_root_path / workflow_key / "formal_inputs" / run_id
     required_files = [
         run_root_path / "configs" / "baseline_comparison_formal_input_contract.json",
         run_root_path / "artifacts" / "baseline_comparison_formal_input_manifest.json",

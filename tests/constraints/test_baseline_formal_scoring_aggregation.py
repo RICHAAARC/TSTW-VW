@@ -147,6 +147,8 @@ def test_baseline_notebook_defines_score_aggregation_config_before_use() -> None
     assert re.search(r"BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS = (None|\d+)", run_source)
     assert re.search(r"BASELINE_FORMAL_SCORING_WORKER_COUNT = \d+", run_source)
     assert "BASELINE_FORMAL_SCORING_EXECUTION_BASELINE_NAMES =" in run_source
+    assert "scoring_plans" in run_source
+    assert "formal_input_contract_snapshot" in run_source
     assert "if BASELINE_FORMAL_SCORING_EXECUTION_MAX_WORK_ITEMS is not None:" in run_source
 
 def test_baseline_notebook_passes_gpu_profile_to_formal_execution() -> None:

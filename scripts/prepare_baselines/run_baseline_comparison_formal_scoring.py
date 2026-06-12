@@ -72,13 +72,10 @@ def build_formal_scoring_run_id(
     plan 目录保持原有命名, 因为它描述的是 work-item 计划; execution 目录额外加入 baseline 标签,
     使三种外部 baseline 分开正式运行时能够从目录名直接区分。
     """
+    baseline_label = build_baseline_run_id_label(baseline_names)
     if execute:
-        baseline_label = build_baseline_run_id_label(baseline_names)
         return f"{FORMAL_SCORING_EXECUTION_PREFIX}_{baseline_label}_sc{shard_count:02d}_si{shard_index:02d}_{short_commit[:7]}"
-    return build_smoke_run_id(
-        short_commit=short_commit,
-        timestamp_utc=timestamp_utc,
-    ).replace("baseline_comparison_smoke", FORMAL_SCORING_PLAN_PREFIX)
+    return f"{FORMAL_SCORING_PLAN_PREFIX}_{baseline_label}_sc{shard_count:02d}_si{shard_index:02d}_{short_commit[:7]}"
 
 
 def parse_args() -> argparse.Namespace:
@@ -92,6 +89,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--run-root", type=Path, required=True, help="会话本地运行目录。")
     parser.add_argument("--stage-two-package-root", type=Path, required=True, help="已解压的阶段二结果包根目录。")
+    parser.add_argument(
+        "--stage-two-artifact-root",
+        type=Path,
+        action="append",
+        default=None,
+        help="可重复传入的阶段二 artifact fallback 根目录, 用于从 shard run compat_run_root 读取未打入聚合瘦身包的 source video。",
+    )
     parser.add_argument("--formal-input-contract", type=Path, required=True, help="formal input contract JSON 路径。")
     parser.add_argument("--baseline-name", action="append", default=None, help="可重复传入的 baseline 过滤器。")
     parser.add_argument("--shard-count", type=int, default=1, help="外层 work-item shard 总数。")
@@ -146,6 +150,7 @@ def main() -> None:
                 max_work_items=args.max_work_items,
                 worker_count=args.worker_count,
                 batch_size=args.batch_size,
+                stage_two_artifact_roots=args.stage_two_artifact_root,
             )
         gpu_profile_payload = attach_gpu_profile_to_manifest(
             summary["manifest_path"],
@@ -186,9 +191,11 @@ def main() -> None:
                 ),
             ).as_posix()
         else:
+            baseline_label = build_baseline_run_id_label(args.baseline_name)
             materialized_path = materializer(
                 run_root=args.run_root,
-                result_root=args.result_root,
+                result_root=args.result_root / "baseline_comparison_gate" / baseline_label / "scoring_plans",
+                workflow_key="",
                 run_id=run_id,
                 overwrite=args.overwrite,
             ).as_posix()

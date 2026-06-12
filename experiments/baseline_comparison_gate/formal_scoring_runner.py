@@ -147,6 +147,25 @@ def write_jsonl(path: str | Path, rows: list[dict[str, Any]]) -> None:
     )
 
 
+
+
+def copy_formal_input_contract_snapshot(
+    *,
+    formal_input_contract_path: str | Path,
+    run_root: str | Path,
+) -> Path:
+    """把本次使用的 formal input contract 复制到运行结果包中。
+
+    这是项目特定的复现约定: scoring plan 和 execution 都需要携带输入契约快照,
+    这样单独下载某个 baseline 目录时, 也可以判断它使用了哪个阶段二聚合包和哪个固定 FPR 配置。
+    """
+    source_path = Path(formal_input_contract_path)
+    destination_path = Path(run_root) / "configs" / "baseline_comparison_formal_input_contract.json"
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    if source_path.resolve() != destination_path.resolve():
+        shutil.copy2(source_path, destination_path)
+    return destination_path
+
 def run_formal_scoring_plan(
     *,
     run_root: str | Path,
@@ -161,6 +180,10 @@ def run_formal_scoring_plan(
     contract = load_json(formal_input_contract_path)
     if contract.get("ready_for_formal_baseline_runner") is not True:
         raise ValueError("formal input contract is not ready for formal baseline runner")
+    contract_snapshot_path = copy_formal_input_contract_snapshot(
+        formal_input_contract_path=formal_input_contract_path,
+        run_root=run_root_path,
+    )
     work_items = build_scoring_work_items(
         stage_two_package_root=stage_two_package_root,
         baseline_names=baseline_names,
@@ -172,8 +195,8 @@ def run_formal_scoring_plan(
     manifest = {
         "workflow_key": WORKFLOW_KEY,
         "run_kind": "baseline_comparison_formal_scoring_plan",
-        "formal_input_contract_path": Path(formal_input_contract_path).as_posix(),
-        "formal_input_contract_digest": compute_file_digest(formal_input_contract_path),
+        "formal_input_contract_path": contract_snapshot_path.as_posix(),
+        "formal_input_contract_digest": compute_file_digest(contract_snapshot_path),
         "stage_two_package_root": Path(stage_two_package_root).as_posix(),
         "baseline_names": sorted({item["baseline_name"] for item in work_items}),
         "shard_count": shard_count,
@@ -243,15 +266,27 @@ def build_payload_bits(payload_digest: str | None, *, length: int = 32) -> list[
     return (bits * ((length // max(1, len(bits))) + 1))[:length]
 
 
-def resolve_source_video_path(stage_two_package_root: str | Path, work_item: dict[str, Any]) -> Path:
+def resolve_source_video_path(
+    stage_two_package_root: str | Path,
+    work_item: dict[str, Any],
+    *,
+    stage_two_artifact_roots: Iterable[str | Path] | None = None,
+) -> Path:
     """解析 work item 指向的阶段二源视频路径。"""
     relpath = work_item.get("source_video_relpath")
     if not isinstance(relpath, str) or not relpath:
         raise ValueError("work item is missing source_video_relpath")
-    source_path = Path(stage_two_package_root) / relpath
-    if not source_path.exists():
-        raise FileNotFoundError(f"source video not found: {source_path}")
-    return source_path
+    candidate_roots = [Path(stage_two_package_root)]
+    candidate_roots.extend(Path(root) for root in (stage_two_artifact_roots or []))
+    checked_paths: list[str] = []
+    for candidate_root in candidate_roots:
+        source_path = candidate_root / relpath
+        checked_paths.append(source_path.as_posix())
+        if source_path.exists():
+            return source_path
+    raise FileNotFoundError(
+        "source video not found. checked paths: " + "; ".join(checked_paths)
+    )
 
 
 def prepare_video_for_detection(
@@ -261,6 +296,7 @@ def prepare_video_for_detection(
     work_item: dict[str, Any],
     adapter: Any,
     payload_bits: list[int],
+    stage_two_artifact_roots: Iterable[str | Path] | None = None,
 ) -> tuple[PreparedDetectionInput, dict[str, Any], dict[str, Any]]:
     """为单个 work item 准备待检测视频。
 
@@ -269,7 +305,11 @@ def prepare_video_for_detection(
     的 fixed-FPR 阈值估计。
     """
     run_root_path = Path(run_root)
-    source_path = resolve_source_video_path(stage_two_package_root, work_item)
+    source_path = resolve_source_video_path(
+        stage_two_package_root,
+        work_item,
+        stage_two_artifact_roots=stage_two_artifact_roots,
+    )
     work_item_id = str(work_item["work_item_id"])
     sample_role = str(work_item.get("sample_role"))
     attack_name = str(work_item.get("attack_name") or "no_attack")
@@ -726,6 +766,7 @@ def process_formal_scoring_worker(
     worker_index: int,
     run_root: str | Path,
     stage_two_package_root: str | Path,
+    stage_two_artifact_roots: Iterable[str | Path] | None,
     run_id: str,
     source_manifest: dict[str, Any],
     external_root: str | Path,
@@ -756,6 +797,7 @@ def process_formal_scoring_worker(
             detection_input, runtime_metrics, trace_update = prepare_video_for_detection(
                 run_root=run_root_path,
                 stage_two_package_root=stage_two_package_root,
+                stage_two_artifact_roots=stage_two_artifact_roots,
                 work_item=item,
                 adapter=adapter,
                 payload_bits=payload_bits,
@@ -805,6 +847,7 @@ def execute_baseline_group_with_workers(
     batch_size: int,
     run_root: str | Path,
     stage_two_package_root: str | Path,
+    stage_two_artifact_roots: Iterable[str | Path] | None,
     run_id: str,
     source_manifest: dict[str, Any],
     external_root: str | Path,
@@ -827,6 +870,7 @@ def execute_baseline_group_with_workers(
                 worker_index=worker_index,
                 run_root=run_root,
                 stage_two_package_root=stage_two_package_root,
+                stage_two_artifact_roots=stage_two_artifact_roots,
                 run_id=run_id,
                 source_manifest=source_manifest,
                 external_root=external_root,
@@ -844,6 +888,7 @@ def execute_baseline_group_with_workers(
                     worker_index=worker_index,
                     run_root=run_root,
                     stage_two_package_root=stage_two_package_root,
+                    stage_two_artifact_roots=stage_two_artifact_roots,
                     run_id=run_id,
                     source_manifest=source_manifest,
                     external_root=external_root,
@@ -882,6 +927,7 @@ def run_formal_scoring_execution(
     max_work_items: int | None = None,
     worker_count: int = 1,
     batch_size: int = 1,
+    stage_two_artifact_roots: Iterable[str | Path] | None = None,
     adapter_factory: Any | None = None,
 ) -> dict[str, Any]:
     """执行小规模或分片 formal baseline scoring。
@@ -895,9 +941,13 @@ def run_formal_scoring_execution(
     contract = load_json(formal_input_contract_path)
     if contract.get("ready_for_formal_baseline_runner") is not True:
         raise ValueError("formal input contract is not ready for formal baseline runner")
+    run_root_path = Path(run_root)
+    contract_snapshot_path = copy_formal_input_contract_snapshot(
+        formal_input_contract_path=formal_input_contract_path,
+        run_root=run_root_path,
+    )
     from experiments.baseline_comparison_gate.source_intake import load_all_source_manifests
 
-    run_root_path = Path(run_root)
     manifests = load_all_source_manifests(config_dir)
     work_items = build_scoring_work_items(
         stage_two_package_root=stage_two_package_root,
@@ -921,6 +971,7 @@ def run_formal_scoring_execution(
             batch_size=batch_size,
             run_root=run_root_path,
             stage_two_package_root=stage_two_package_root,
+            stage_two_artifact_roots=stage_two_artifact_roots,
             run_id=run_id,
             source_manifest=manifests[baseline_name],
             external_root=external_root,
@@ -936,9 +987,12 @@ def run_formal_scoring_execution(
         "workflow_key": WORKFLOW_KEY,
         "run_id": run_id,
         "run_kind": "baseline_comparison_formal_scoring_execution",
-        "formal_input_contract_path": Path(formal_input_contract_path).as_posix(),
-        "formal_input_contract_digest": compute_file_digest(formal_input_contract_path),
+        "formal_input_contract_path": contract_snapshot_path.as_posix(),
+        "formal_input_contract_digest": compute_file_digest(contract_snapshot_path),
         "stage_two_package_root": Path(stage_two_package_root).as_posix(),
+        "stage_two_artifact_roots": [
+            Path(root).as_posix() for root in (stage_two_artifact_roots or [])
+        ],
         "baseline_names": list(grouped_items.keys()),
         "baseline_isolation_enabled": True,
         "shard_count": shard_count,

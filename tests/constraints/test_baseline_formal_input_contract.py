@@ -167,5 +167,6 @@ def test_materialize_formal_input_contract_run_copies_only_after_required_files(
         run_id="baseline_comparison_formal_inputs_20260611T080000Z_abcdef0",
     )
 
+    assert destination.parent.name == "formal_inputs"
     assert (destination / "configs" / "baseline_comparison_formal_input_contract.json").exists()
     assert (destination / "artifacts" / "baseline_comparison_formal_input_manifest.json").exists()

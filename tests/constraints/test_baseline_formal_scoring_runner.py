@@ -121,7 +121,7 @@ def test_formal_scoring_execution_run_id_includes_baseline_name() -> None:
         multi_baseline_run_id
         == "baseline_comparison_formal_scoring_execution_multi_baseline_sc01_si00_abcdef0"
     )
-    assert plan_run_id == "baseline_comparison_formal_scoring_plan_20260611T140000Z_abcdef0"
+    assert plan_run_id == "baseline_comparison_formal_scoring_plan_external_hidden_framewise_sc01_si00_abcdef0"
 
 
 def test_scoring_work_items_support_sharding_and_multiple_baselines(tmp_path: Path) -> None:
@@ -162,6 +162,7 @@ def test_run_formal_scoring_plan_writes_manifest_and_materializes(tmp_path: Path
     assert summary["work_item_count"] == 3
     assert Path(summary["work_items_path"]).exists()
     assert Path(summary["manifest_path"]).exists()
+    assert (destination / "configs" / "baseline_comparison_formal_input_contract.json").exists()
     assert (destination / "work_items" / "baseline_scoring_work_items.jsonl").exists()
 
 
