@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+import gc
 import hashlib
 import json
 from pathlib import Path
@@ -24,6 +25,32 @@ from main.core.digest import compute_file_digest, compute_object_digest
 WORKFLOW_KEY = "baseline_comparison_gate"
 WORK_ITEMS_FILENAME = "baseline_scoring_work_items.jsonl"
 ADAPTER_PREPARE_LOCK = threading.Lock()
+
+
+def release_baseline_runtime_memory(*, clear_cuda_cache: bool = True) -> dict[str, Any]:
+    """释放 baseline scoring 的临时 Python 对象和 CUDA 缓存。
+
+    该函数属于通用工程防护写法: 每个 work item 结束后尽快触发 Python 垃圾回收, 并在存在
+    PyTorch CUDA runtime 时清理未使用的 CUDA cache。这样可以降低 Colab 长时间正式运行中因为
+    视频帧数组、临时 tensor、adapter 中间输出和 CUDA cache 累积导致 OOM 的风险。
+    """
+    collected_objects = gc.collect()
+    cuda_cache_cleared = False
+    cuda_cleanup_error: str | None = None
+    if clear_cuda_cache:
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                cuda_cache_cleared = True
+        except Exception as exc:  # pragma: no cover - 依赖可选 CUDA 环境, 单元测试只验证不会中断主流程。
+            cuda_cleanup_error = f"{type(exc).__name__}: {exc}"
+    return {
+        "gc_collected_objects": int(collected_objects),
+        "cuda_cache_cleared": cuda_cache_cleared,
+        "cuda_cleanup_error": cuda_cleanup_error,
+    }
 
 
 @dataclass(frozen=True)
@@ -791,51 +818,77 @@ def process_formal_scoring_worker(
     with ADAPTER_PREPARE_LOCK:
         prepare_result = adapter.prepare(context)
     worker_records: list[tuple[int, dict[str, Any]]] = []
-    for batch_index, indexed_batch in enumerate(indexed_batches):
-        for original_index, item in indexed_batch:
-            payload_bits = build_payload_bits(item.get("payload_digest"), length=32)
-            detection_input, runtime_metrics, trace_update = prepare_video_for_detection(
-                run_root=run_root_path,
-                stage_two_package_root=stage_two_package_root,
-                stage_two_artifact_roots=stage_two_artifact_roots,
-                work_item=item,
-                adapter=adapter,
-                payload_bits=payload_bits,
-            )
-            runtime_metrics.update(
-                {
-                    "worker_index": worker_index,
-                    "batch_index": batch_index,
-                    "batch_size_config": len(indexed_batch),
-                }
-            )
-            if detection_input.frames is not None and callable(getattr(adapter, "detect_frames", None)):
-                detection = adapter.detect_frames(
-                    detection_input.frames,
-                    fps=float(detection_input.fps or item.get("video_fps") or 8),
-                    payload_bits=payload_bits,
-                )
-            elif detection_input.video_path is not None:
-                detection = adapter.detect(
-                    detection_input.video_path,
-                    {"payload_bits": payload_bits, "work_item": item},
-                )
-            else:
-                raise RuntimeError("prepared detection input has neither frames nor path")
-            worker_records.append(
-                (
-                    original_index,
-                    build_formal_score_record(
-                        run_id=run_id,
-                        source_manifest=source_manifest,
+    worker_memory_cleanup_events: list[dict[str, Any]] = []
+    try:
+        for batch_index, indexed_batch in enumerate(indexed_batches):
+            for original_index, item in indexed_batch:
+                payload_bits = build_payload_bits(item.get("payload_digest"), length=32)
+                detection_input = None
+                detection = None
+                runtime_metrics: dict[str, Any] = {}
+                trace_update: dict[str, Any] = {}
+                try:
+                    detection_input, runtime_metrics, trace_update = prepare_video_for_detection(
+                        run_root=run_root_path,
+                        stage_two_package_root=stage_two_package_root,
+                        stage_two_artifact_roots=stage_two_artifact_roots,
                         work_item=item,
+                        adapter=adapter,
                         payload_bits=payload_bits,
-                        detection_result=detection,
-                        extra_runtime_metrics=runtime_metrics,
-                        extra_trace={**trace_update, "worker_index": worker_index},
-                    ),
-                )
-            )
+                    )
+                    runtime_metrics.update(
+                        {
+                            "worker_index": worker_index,
+                            "batch_index": batch_index,
+                            "batch_size_config": len(indexed_batch),
+                        }
+                    )
+                    if detection_input.frames is not None and callable(getattr(adapter, "detect_frames", None)):
+                        detection = adapter.detect_frames(
+                            detection_input.frames,
+                            fps=float(detection_input.fps or item.get("video_fps") or 8),
+                            payload_bits=payload_bits,
+                        )
+                    elif detection_input.video_path is not None:
+                        detection = adapter.detect(
+                            detection_input.video_path,
+                            {"payload_bits": payload_bits, "work_item": item},
+                        )
+                    else:
+                        raise RuntimeError("prepared detection input has neither frames nor path")
+                    worker_records.append(
+                        (
+                            original_index,
+                            build_formal_score_record(
+                                run_id=run_id,
+                                source_manifest=source_manifest,
+                                work_item=item,
+                                payload_bits=payload_bits,
+                                detection_result=detection,
+                                extra_runtime_metrics=runtime_metrics,
+                                extra_trace={**trace_update, "worker_index": worker_index},
+                            ),
+                        )
+                    )
+                finally:
+                    # 每个 work item 结束后释放帧数组、临时 tensor 和检测输出引用, 避免长 shard 中内存持续累积。
+                    del detection_input
+                    del detection
+                    del runtime_metrics
+                    del trace_update
+                    del payload_bits
+                    worker_memory_cleanup_events.append(release_baseline_runtime_memory())
+    finally:
+        # worker 结束时释放 adapter 引用, 让模型对象和 CUDA cache 有机会被回收。
+        del adapter
+        worker_memory_cleanup_events.append(release_baseline_runtime_memory())
+    if isinstance(prepare_result, dict):
+        prepare_result = {
+            **prepare_result,
+            "memory_cleanup_enabled": True,
+            "memory_cleanup_event_count": len(worker_memory_cleanup_events),
+            "last_memory_cleanup_event": worker_memory_cleanup_events[-1] if worker_memory_cleanup_events else None,
+        }
     return prepare_result, worker_records
 
 
@@ -980,6 +1033,8 @@ def run_formal_scoring_execution(
         records.extend(baseline_records)
         prepare_results[baseline_name] = baseline_plan["prepare_results_by_worker"]
         baseline_execution_plan.append(baseline_plan)
+        # 单个 baseline 结束后清理线程 worker 遗留的 Python 对象与 CUDA cache, 降低多 baseline 顺序执行时的状态污染。
+        baseline_plan["post_baseline_memory_cleanup"] = release_baseline_runtime_memory()
 
     records_path = run_root_path / "records" / FORMAL_SCORE_RECORDS_FILENAME
     write_jsonl(records_path, records)

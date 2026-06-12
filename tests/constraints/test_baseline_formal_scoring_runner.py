@@ -12,6 +12,7 @@ from experiments.baseline_comparison_gate.formal_scoring_runner import (
     build_stage_two_event_universe,
     materialize_formal_scoring_plan_run,
     prepare_video_for_detection,
+    release_baseline_runtime_memory,
     run_formal_scoring_execution,
     run_formal_scoring_plan,
 )
@@ -263,6 +264,19 @@ def test_run_formal_scoring_execution_writes_score_records_with_fake_adapter(tmp
     assert rows[0]["baseline_name"] == "external_videoseal"
     assert rows[0]["decision"] == "pending_threshold_calibration"
     assert rows[0]["baseline_score"] == 0.75
+    worker_prepare_result = summary["prepare_results"]["external_videoseal"]["worker_00"]
+    assert worker_prepare_result["memory_cleanup_enabled"] is True
+    assert worker_prepare_result["memory_cleanup_event_count"] >= 2
+    assert summary["baseline_execution_plan"][0]["post_baseline_memory_cleanup"]["gc_collected_objects"] >= 0
+
+
+def test_release_baseline_runtime_memory_is_safe_without_cuda() -> None:
+    """确认内存清理函数在无 CUDA 或未安装 GPU runtime 时也不会中断正式流程。"""
+    summary = release_baseline_runtime_memory()
+
+    assert summary["gc_collected_objects"] >= 0
+    assert "cuda_cache_cleared" in summary
+    assert "cuda_cleanup_error" in summary
 
 
 def test_prepare_video_for_detection_uses_in_memory_path_for_supported_adapter(
