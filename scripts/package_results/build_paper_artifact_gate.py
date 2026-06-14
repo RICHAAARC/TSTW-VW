@@ -52,6 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-id", type=str, default=None, help="可选 run_id。")
     parser.add_argument("--short-commit", type=str, default=None, help="用于默认 run_id 的短 commit。")
     parser.add_argument("--overwrite", action="store_true", help="输出目录已存在时允许覆盖。")
+    parser.add_argument("--skip-figures", action="store_true", help="只生成表格和 claim audit, 跳过 PNG/PDF 图表导出。")
     return parser.parse_args()
 
 
@@ -87,7 +88,7 @@ def main() -> None:
             raise FileExistsError(f"输出目录已存在, 如需覆盖请传入 --overwrite: {output_root}")
         shutil.rmtree(output_root)
     inputs = inputs_from_args(args)
-    summary = build_paper_artifacts(output_root=output_root, inputs=inputs, run_id=run_id)
+    summary = build_paper_artifacts(output_root=output_root, inputs=inputs, run_id=run_id, build_figures=not args.skip_figures)
     print(json.dumps({"summary": summary, "output_root": output_root.as_posix()}, ensure_ascii=False, indent=2))
 
 

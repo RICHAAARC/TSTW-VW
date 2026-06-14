@@ -152,6 +152,7 @@ def test_build_paper_artifacts_writes_tables_and_claim_audit(tmp_path: Path) -> 
         output_root=output,
         inputs=PaperArtifactInputs(stage_two_root=stage_two, baseline_aggregation_roots=baselines),
         run_id="paper_artifact_gate_test",
+        build_figures=False,
     )
 
     assert summary["paper_artifact_gate_complete"] is True
@@ -193,3 +194,16 @@ def test_paper_artifact_gate_contract_is_documented() -> None:
     assert "## Paper Artifact Gate Contract" in project_contract
     assert "Paper Artifact Gate Result Layout" in file_organization
     assert script.exists()
+
+
+def test_paper_figure_builder_contract_is_static_and_export_focused() -> None:
+    """确认图表生成器声明 PNG/PDF 投稿导出和相对路径 manifest。"""
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "experiments" / "paper_artifact_gate" / "figure_builder.py").read_text(encoding="utf-8")
+
+    assert "paper_method_comparison.pdf" not in source
+    assert 'with_suffix(".pdf")' in source
+    assert 'with_suffix(".png")' in source
+    assert "relative_to(root).as_posix()" in source
+    assert "paper_attack_breakdown_heatmap" in source
+    assert "paper_sync_gain_temporal_attacks" in source

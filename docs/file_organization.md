@@ -1028,11 +1028,21 @@ The run notebook must not create the Google Drive family result directory during
     figure_data/
       paper_method_comparison_figure_data.csv
       paper_sync_gain_figure_data.csv
+    figures/
+      paper_method_comparison.pdf
+      paper_method_comparison.png
+      paper_sync_gain_temporal_attacks.pdf
+      paper_sync_gain_temporal_attacks.png
+      paper_attack_breakdown_heatmap.pdf
+      paper_attack_breakdown_heatmap.png
+      paper_external_baseline_comparison.pdf
+      paper_external_baseline_comparison.png
+      paper_figure_manifest.json
     claim_audit/
       paper_claim_audit.csv
 ```
 
-该结构的项目特定设计目标是将阶段二真实视频 VAE 证据、阶段三外部 baseline 聚合结果和论文 claim audit 绑定到同一个可重建 manifest。`paper_artifact_gate` 不允许手工拼表; 所有论文表格和图表数据必须由 `experiments/paper_artifact_gate/` 与 `scripts/package_results/build_paper_artifact_gate.py` 从受治理输入生成。
+该结构的项目特定设计目标是将阶段二真实视频 VAE 证据、阶段三外部 baseline 聚合结果和论文 claim audit 绑定到同一个可重建 manifest。`paper_artifact_gate` 不允许手工拼表; 所有论文表格、图表数据和投稿静态图必须由 `experiments/paper_artifact_gate/` 与 `scripts/package_results/build_paper_artifact_gate.py` 从受治理输入生成。
 
 
 ## Baseline Comparison Result Layout

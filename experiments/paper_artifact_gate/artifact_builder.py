@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from main.core.digest import compute_file_digest, compute_object_digest
+from experiments.paper_artifact_gate.figure_builder import build_paper_figures
 
 WORKFLOW_KEY = "paper_artifact_gate"
 STAGE_TWO_ZIP_MEMBER_PREFIX = "real_video_vae_latent_probe_shard_aggregated"
@@ -300,6 +301,7 @@ def build_paper_artifacts(
     output_root: str | Path,
     inputs: PaperArtifactInputs,
     run_id: str | None = None,
+    build_figures: bool = True,
 ) -> dict[str, Any]:
     """构建阶段四论文表格、图表数据和 claim audit 总表。"""
     output_root_path = Path(output_root)
@@ -341,6 +343,8 @@ def build_paper_artifacts(
     write_csv(output_root_path / "claim_audit" / "paper_claim_audit.csv", claim_rows, claim_fields)
 
     supported_claims = [row for row in claim_rows if bool(row["claim_support_allowed"])]
+    figure_summary = build_paper_figures(output_root_path) if build_figures else None
+
     manifest = {
         "workflow_key": WORKFLOW_KEY,
         "run_id": run_id,
@@ -352,7 +356,8 @@ def build_paper_artifacts(
         "sync_gain_row_count": len(sync_gain_rows),
         "claim_count": len(claim_rows),
         "supported_claim_count": len(supported_claims),
-        "paper_artifact_gate_complete": len(supported_claims) == len(claim_rows),
+        "paper_artifact_gate_complete": len(supported_claims) == len(claim_rows) and (figure_summary is not None or not build_figures),
+        "paper_figure_count": None if figure_summary is None else figure_summary.get("figure_count"),
         "blocking_reason": None if len(supported_claims) == len(claim_rows) else "unsupported_claims_present",
         "source_digest": compute_object_digest(
             {
@@ -365,6 +370,7 @@ def build_paper_artifacts(
             "paper_attack_breakdown_table": compute_file_digest(output_root_path / "tables" / "paper_attack_breakdown_table.csv"),
             "paper_sync_gain_table": compute_file_digest(output_root_path / "tables" / "paper_sync_gain_table.csv"),
             "paper_claim_audit": compute_file_digest(output_root_path / "claim_audit" / "paper_claim_audit.csv"),
+            "paper_figure_manifest": None if figure_summary is None else compute_file_digest(output_root_path / "figures" / "paper_figure_manifest.json"),
         },
     }
     manifest_path = output_root_path / "artifacts" / "paper_artifact_gate_manifest.json"
