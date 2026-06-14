@@ -46,7 +46,7 @@ Artifact Handoff：跨 notebook 传递的事实只能来自已落盘、已校验
 
 本文档明确替代旧规则中“模型长期保存到 Google Drive Models”的设计。当前规则为：**所有模型相关文件均为 session-only；Google Drive 不作为模型权重仓库；Google Drive 只保存模型下载与加载的 session manifest，而不保存模型权重文件本体。**
 
-当前阶段受治理的 notebook workflow 入口命名为：`paper_workflow/build_processed_real_video_dataset.ipynb`、`paper_workflow/run_real_video_vae_latent_probe.ipynb` 与 `paper_workflow/run_baseline_comparison_gate.ipynb`。
+当前阶段受治理的 notebook workflow 入口命名为：`paper_workflow/build_processed_real_video_dataset.ipynb`、`paper_workflow/run_real_video_vae_latent_probe.ipynb`、`paper_workflow/run_baseline_comparison_gate.ipynb`、`paper_workflow/run_attack_strength_curve_probe.ipynb`。
 
 ---
 

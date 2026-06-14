@@ -1029,6 +1029,8 @@ The run notebook must not create the Google Drive family result directory during
       paper_quality_table.csv
       paper_runtime_efficiency_table.csv
       paper_temporal_quality_table.csv
+      paper_attack_strength_table.csv
+      paper_additional_dataset_table.csv
     figure_data/
       paper_method_comparison_figure_data.csv
       paper_sync_gain_figure_data.csv
@@ -1037,6 +1039,8 @@ The run notebook must not create the Google Drive family result directory during
       paper_runtime_efficiency_figure_data.csv
       paper_visual_example_figure_data.csv
       paper_temporal_quality_figure_data.csv
+      paper_attack_strength_curve_data.csv
+      paper_additional_dataset_figure_data.csv
     figures/
       paper_method_comparison.pdf
       paper_method_comparison.png
@@ -1058,6 +1062,10 @@ The run notebook must not create the Google Drive family result directory during
       paper_visual_example_grid.png
       paper_temporal_quality_summary.pdf
       paper_temporal_quality_summary.png
+      paper_attack_strength_curves.pdf
+      paper_attack_strength_curves.png
+      paper_additional_dataset_comparison.pdf
+      paper_additional_dataset_comparison.png
       paper_figure_manifest.json
     claim_audit/
       paper_claim_audit.csv
@@ -1082,6 +1090,47 @@ The run notebook must not create the Google Drive family result directory during
         temporal_quality_metric_figure_data.csv
       artifacts/
         temporal_quality_metric_manifest.json
+```
+
+`attack_strength_curve_probe` 的聚合结果目录为:
+
+```text
+/content/drive/MyDrive/TSTW/results/attack_strength_curve_probe/
+  shard_runs/
+    attack_strength_curve_probe_base_records_<UTC_TIME>_<SHORT_COMMIT>/
+      records/
+        attack_strength_event_scores.jsonl
+      artifacts/
+        attack_strength_base_records_manifest.json
+  shard_aggregated/
+    attack_strength_curve_probe_<UTC_TIME>_<SHORT_COMMIT>/
+      records/
+        attack_strength_event_scores.jsonl
+      tables/
+        attack_strength_tpr_table.csv
+        attack_strength_auc_table.csv
+      figure_data/
+        attack_strength_curve_figure_data.csv
+      artifacts/
+        attack_strength_curve_manifest.json
+```
+
+`additional_dataset_validation_probe` 的 UCF101 subset 聚合结果目录为:
+
+```text
+/content/drive/MyDrive/TSTW/results/additional_dataset_validation_probe/
+  ucf101/
+    shard_aggregated/
+      additional_dataset_validation_probe_ucf101_<UTC_TIME>_<SHORT_COMMIT>/
+        records/
+          additional_dataset_event_scores.jsonl
+        tables/
+          additional_dataset_main_tpr_fpr_table.csv
+          additional_dataset_attack_breakdown_table.csv
+        figure_data/
+          additional_dataset_comparison_figure_data.csv
+        artifacts/
+          additional_dataset_validation_manifest.json
 ```
 
 该结构的项目特定设计目标是将阶段二真实视频 VAE 证据、阶段三外部 baseline 聚合结果和论文 claim audit 绑定到同一个可重建 manifest。`paper_artifact_gate` 不允许手工拼表; 所有论文表格、图表数据和投稿静态图必须由 `experiments/paper_artifact_gate/` 与 `scripts/package_results/build_paper_artifact_gate.py` 从受治理输入生成。

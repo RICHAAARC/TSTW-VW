@@ -386,6 +386,77 @@ def build_temporal_quality_figure(root: Path) -> dict[str, Any] | None:
     return {"figure_id": "paper_temporal_quality_summary", "title": "Temporal quality summary", "paths": paths}
 
 
+def build_attack_strength_curves_figure(root: Path) -> dict[str, Any] | None:
+    """生成攻击强度曲线图, 展示 TPR@1%FPR 随攻击强度变化。"""
+    csv_path = root / "figure_data" / "paper_attack_strength_curve_data.csv"
+    if not csv_path.exists():
+        return None
+    rows = [row for row in read_csv_rows(csv_path) if row.get("tpr_at_target_fpr") not in (None, "")]
+    if not rows:
+        return None
+    plt, _ = ensure_matplotlib()
+    attacks = [attack for attack in ATTACK_LABELS if any(row["attack_name"] == attack for row in rows)]
+    if not attacks:
+        attacks = sorted({row["attack_name"] for row in rows})
+    fig, axes = plt.subplots(1, len(attacks), figsize=(max(4.0 * len(attacks), 4.0), 3.4), squeeze=False)
+    for axis, attack_name in zip(axes[0], attacks):
+        attack_rows = [row for row in rows if row["attack_name"] == attack_name]
+        for method in METHOD_ORDER:
+            method_rows = [row for row in attack_rows if row["method_name"] == method]
+            if not method_rows:
+                continue
+            method_rows.sort(key=lambda row: safe_float(row["attack_strength_value"]))
+            axis.plot(
+                [safe_float(row["attack_strength_value"]) for row in method_rows],
+                [safe_float(row["tpr_at_target_fpr"]) for row in method_rows],
+                marker="o",
+                linewidth=2.2 if method == "tubelet_sync" else 1.2,
+                label=METHOD_LABELS.get(method, method),
+            )
+        axis.set_title(ATTACK_LABELS.get(attack_name, attack_name))
+        axis.set_ylim(0, 1.0)
+        axis.set_xlabel("Attack strength")
+        axis.grid(color="#dddddd", linewidth=0.8)
+    axes[0][0].set_ylabel("TPR at 1% target FPR")
+    axes[0][-1].legend(fontsize=7, loc="lower left")
+    fig.suptitle("Robustness under attack-strength sweep", y=1.03)
+    fig.tight_layout()
+    paths = save_figure(fig, root / "figures" / "paper_attack_strength_curves", root)
+    plt.close(fig)
+    return {"figure_id": "paper_attack_strength_curves", "title": "Attack strength curves", "paths": paths}
+
+
+def build_additional_dataset_figure(root: Path) -> dict[str, Any] | None:
+    """生成附加数据集验证图, 展示 UCF101 subset 上内部 3 方法的 TPR@1%FPR。"""
+    csv_path = root / "tables" / "paper_additional_dataset_table.csv"
+    if not csv_path.exists():
+        return None
+    rows = [row for row in read_csv_rows(csv_path) if row.get("tpr_at_target_fpr") not in (None, "")]
+    if not rows:
+        return None
+    plt, _ = ensure_matplotlib()
+    rows.sort(key=lambda row: METHOD_ORDER.index(row["method_name"]) if row["method_name"] in METHOD_ORDER else 99)
+    labels = [METHOD_LABELS.get(row["method_name"], row["method_name"]) for row in rows]
+    values = [safe_float(row["tpr_at_target_fpr"]) for row in rows]
+    datasets = sorted({row.get("dataset_name", "") for row in rows if row.get("dataset_name")})
+
+    fig, ax = plt.subplots(figsize=(5.8, 3.2))
+    colors = ["#1f77b4" if row["method_name"] == "tubelet_sync" else "#9aa0a6" for row in rows]
+    bars = ax.bar(labels, values, color=colors)
+    ax.set_ylim(0, 1.0)
+    ax.set_ylabel("TPR at 1% target FPR")
+    ax.set_title(f"Additional dataset validation: {', '.join(datasets) if datasets else 'subset'}")
+    ax.grid(axis="y", color="#dddddd", linewidth=0.8)
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.tick_params(axis="x", rotation=20)
+    for bar, value in zip(bars, values):
+        ax.text(bar.get_x() + bar.get_width() / 2, value + 0.015, f"{value:.3f}", ha="center", va="bottom", fontsize=8)
+    fig.tight_layout()
+    paths = save_figure(fig, root / "figures" / "paper_additional_dataset_comparison", root)
+    plt.close(fig)
+    return {"figure_id": "paper_additional_dataset_comparison", "title": "Additional dataset validation", "paths": paths}
+
+
 def build_paper_figures(root: str | Path) -> dict[str, Any]:
     """生成阶段四投稿图表并写出图表 manifest。"""
     root_path = Path(root)
@@ -405,6 +476,12 @@ def build_paper_figures(root: str | Path) -> dict[str, Any]:
     temporal_quality_entry = build_temporal_quality_figure(root_path)
     if temporal_quality_entry is not None:
         figure_entries.append(temporal_quality_entry)
+    attack_strength_entry = build_attack_strength_curves_figure(root_path)
+    if attack_strength_entry is not None:
+        figure_entries.append(attack_strength_entry)
+    additional_dataset_entry = build_additional_dataset_figure(root_path)
+    if additional_dataset_entry is not None:
+        figure_entries.append(additional_dataset_entry)
     manifest = {
         "figure_count": len(figure_entries),
         "figures": figure_entries,

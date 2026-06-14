@@ -33,6 +33,8 @@ class PaperArtifactInputs:
     stage_two_root: Path
     baseline_aggregation_roots: dict[str, Path]
     temporal_quality_root: Path | None = None
+    attack_strength_root: Path | None = None
+    additional_dataset_root: Path | None = None
 
 
 def read_csv_rows(path: str | Path) -> list[dict[str, str]]:
@@ -83,10 +85,16 @@ def discover_latest_inputs(result_root: str | Path, baseline_names: Iterable[str
             raise FileNotFoundError(f"未找到 {baseline_name} 的 baseline shard_aggregated 聚合结果。")
         baseline_roots[baseline_name] = baseline_root
     temporal_quality_root = latest_child_dir(result_root_path / "temporal_quality_metric_probe" / "shard_aggregated")
+    attack_strength_root = latest_child_dir(result_root_path / "attack_strength_curve_probe" / "shard_aggregated")
+    additional_dataset_root = latest_child_dir(
+        result_root_path / "additional_dataset_validation_probe" / "ucf101" / "shard_aggregated"
+    )
     return PaperArtifactInputs(
         stage_two_root=stage_two_root,
         baseline_aggregation_roots=baseline_roots,
         temporal_quality_root=temporal_quality_root,
+        attack_strength_root=attack_strength_root,
+        additional_dataset_root=additional_dataset_root,
     )
 
 
@@ -589,10 +597,38 @@ def build_temporal_quality_rows(temporal_quality_root: Path | None) -> list[dict
     return rows
 
 
+def build_attack_strength_rows(attack_strength_root: Path | None) -> list[dict[str, Any]]:
+    """读取可选的攻击强度曲线补充 probe 聚合表。"""
+    if attack_strength_root is None:
+        return []
+    table_path = attack_strength_root / "tables" / "attack_strength_tpr_table.csv"
+    if not table_path.exists():
+        return []
+    rows = read_csv_rows(table_path)
+    for row in rows:
+        row["source_artifact"] = "attack_strength_curve_probe/tables/attack_strength_tpr_table.csv"
+    return rows
+
+
+def build_additional_dataset_rows(additional_dataset_root: Path | None) -> list[dict[str, Any]]:
+    """读取可选的附加数据集验证聚合表。"""
+    if additional_dataset_root is None:
+        return []
+    table_path = additional_dataset_root / "tables" / "additional_dataset_main_tpr_fpr_table.csv"
+    if not table_path.exists():
+        return []
+    rows = read_csv_rows(table_path)
+    for row in rows:
+        row["source_artifact"] = "additional_dataset_validation_probe/tables/additional_dataset_main_tpr_fpr_table.csv"
+    return rows
+
+
 def build_submission_gap_audit_rows(
     *,
     has_visual_examples: bool,
     temporal_quality_rows: list[dict[str, Any]] | None = None,
+    attack_strength_rows: list[dict[str, Any]] | None = None,
+    additional_dataset_rows: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """生成与主流视频水印论文图表习惯对齐的差距审计表。
 
@@ -600,6 +636,8 @@ def build_submission_gap_audit_rows(
     它不是性能结果表, 不能作为未完成指标的替代证据。
     """
     temporal_quality_rows = temporal_quality_rows or []
+    attack_strength_rows = attack_strength_rows or []
+    additional_dataset_rows = additional_dataset_rows or []
     t_lpips_supported = any(str(row.get("t_lpips_available")) == "True" for row in temporal_quality_rows)
     return [
         {
@@ -652,9 +690,9 @@ def build_submission_gap_audit_rows(
         },
         {
             "artifact_need": "attack_strength_curves",
-            "status": "not_supported_by_frozen_results",
-            "current_artifact": "",
-            "next_action": "需要补跑多强度攻击矩阵, 不能由当前固定攻击协议外推。",
+            "status": "supported" if attack_strength_rows else "not_supported_by_frozen_results",
+            "current_artifact": "tables/paper_attack_strength_table.csv" if attack_strength_rows else "",
+            "next_action": "" if attack_strength_rows else "需要补跑多强度攻击矩阵, 不能由当前固定攻击协议外推。",
         },
         {
             "artifact_need": "visual_example_grid",
@@ -666,9 +704,9 @@ def build_submission_gap_audit_rows(
         },
         {
             "artifact_need": "additional_dataset_validation",
-            "status": "not_supported_by_frozen_results",
-            "current_artifact": "",
-            "next_action": "需要在 UCF101 或 WebVid 等附加数据集上复用相同协议补跑。",
+            "status": "supported" if additional_dataset_rows else "not_supported_by_frozen_results",
+            "current_artifact": "tables/paper_additional_dataset_table.csv" if additional_dataset_rows else "",
+            "next_action": "" if additional_dataset_rows else "需要在 UCF101 subset 上复用相同 fixed-FPR 协议补跑内部 3 个方法。",
         },
     ]
 
@@ -695,9 +733,13 @@ def build_paper_artifacts(
     runtime_rows = build_runtime_efficiency_rows(inputs.baseline_aggregation_roots)
     visual_example_rows = build_visual_example_rows(inputs.stage_two_root)
     temporal_quality_rows = build_temporal_quality_rows(inputs.temporal_quality_root)
+    attack_strength_rows = build_attack_strength_rows(inputs.attack_strength_root)
+    additional_dataset_rows = build_additional_dataset_rows(inputs.additional_dataset_root)
     gap_audit_rows = build_submission_gap_audit_rows(
         has_visual_examples=bool(visual_example_rows),
         temporal_quality_rows=temporal_quality_rows,
+        attack_strength_rows=attack_strength_rows,
+        additional_dataset_rows=additional_dataset_rows,
     )
     external_rows = [row for row in method_rows if row["method_group"] == "external_baseline"]
     claim_rows = build_claim_audit_rows(
@@ -735,6 +777,15 @@ def build_paper_artifacts(
         "mean_t_lpips", "std_t_lpips", "mean_t_ssim", "std_t_ssim",
         "t_lpips_available", "t_ssim_available", "source_artifact",
     ]
+    attack_strength_fields = [
+        "method_name", "attack_name", "attack_strength_name", "attack_strength_value",
+        "target_fpr", "threshold", "positive_count", "negative_count",
+        "tpr_at_target_fpr", "fpr_at_threshold", "source_artifact",
+    ]
+    additional_dataset_fields = [
+        "dataset_name", "dataset_subset_id", "method_name", "target_fpr", "threshold",
+        "positive_count", "negative_count", "tpr_at_target_fpr", "fpr_at_threshold", "auc", "source_artifact",
+    ]
     gap_audit_fields = ["artifact_need", "status", "current_artifact", "next_action"]
 
     write_csv(output_root_path / "tables" / "paper_method_comparison_table.csv", method_rows, method_fields)
@@ -752,6 +803,10 @@ def build_paper_artifacts(
     write_csv(output_root_path / "figure_data" / "paper_visual_example_figure_data.csv", visual_example_rows, visual_example_fields)
     write_csv(output_root_path / "tables" / "paper_temporal_quality_table.csv", temporal_quality_rows, temporal_quality_fields)
     write_csv(output_root_path / "figure_data" / "paper_temporal_quality_figure_data.csv", temporal_quality_rows, temporal_quality_fields)
+    write_csv(output_root_path / "tables" / "paper_attack_strength_table.csv", attack_strength_rows, attack_strength_fields)
+    write_csv(output_root_path / "figure_data" / "paper_attack_strength_curve_data.csv", attack_strength_rows, attack_strength_fields)
+    write_csv(output_root_path / "tables" / "paper_additional_dataset_table.csv", additional_dataset_rows, additional_dataset_fields)
+    write_csv(output_root_path / "figure_data" / "paper_additional_dataset_figure_data.csv", additional_dataset_rows, additional_dataset_fields)
     write_csv(output_root_path / "claim_audit" / "paper_submission_gap_audit.csv", gap_audit_rows, gap_audit_fields)
     write_csv(output_root_path / "claim_audit" / "paper_claim_audit.csv", claim_rows, claim_fields)
 
@@ -765,6 +820,8 @@ def build_paper_artifacts(
         "stage_two_root": inputs.stage_two_root.as_posix(),
         "baseline_aggregation_roots": {name: path.as_posix() for name, path in sorted(inputs.baseline_aggregation_roots.items())},
         "temporal_quality_root": None if inputs.temporal_quality_root is None else inputs.temporal_quality_root.as_posix(),
+        "attack_strength_root": None if inputs.attack_strength_root is None else inputs.attack_strength_root.as_posix(),
+        "additional_dataset_root": None if inputs.additional_dataset_root is None else inputs.additional_dataset_root.as_posix(),
         "method_count": len(method_rows),
         "attack_row_count": len(attack_rows),
         "sync_gain_row_count": len(sync_gain_rows),
@@ -774,6 +831,8 @@ def build_paper_artifacts(
         "runtime_efficiency_row_count": len(runtime_rows),
         "visual_example_row_count": len(visual_example_rows),
         "temporal_quality_row_count": len(temporal_quality_rows),
+        "attack_strength_row_count": len(attack_strength_rows),
+        "additional_dataset_row_count": len(additional_dataset_rows),
         "submission_gap_audit_row_count": len(gap_audit_rows),
         "supported_claim_count": len(supported_claims),
         "paper_artifact_gate_complete": len(supported_claims) == len(claim_rows) and (figure_summary is not None or not build_figures),
@@ -784,6 +843,8 @@ def build_paper_artifacts(
                 "stage_two_root": inputs.stage_two_root.as_posix(),
                 "baseline_aggregation_roots": {name: path.as_posix() for name, path in sorted(inputs.baseline_aggregation_roots.items())},
                 "temporal_quality_root": None if inputs.temporal_quality_root is None else inputs.temporal_quality_root.as_posix(),
+                "attack_strength_root": None if inputs.attack_strength_root is None else inputs.attack_strength_root.as_posix(),
+                "additional_dataset_root": None if inputs.additional_dataset_root is None else inputs.additional_dataset_root.as_posix(),
             }
         ),
         "artifact_digests": {
@@ -796,6 +857,8 @@ def build_paper_artifacts(
             "paper_runtime_efficiency_table": compute_file_digest(output_root_path / "tables" / "paper_runtime_efficiency_table.csv"),
             "paper_visual_example_figure_data": compute_file_digest(output_root_path / "figure_data" / "paper_visual_example_figure_data.csv"),
             "paper_temporal_quality_table": compute_file_digest(output_root_path / "tables" / "paper_temporal_quality_table.csv"),
+            "paper_attack_strength_table": compute_file_digest(output_root_path / "tables" / "paper_attack_strength_table.csv"),
+            "paper_additional_dataset_table": compute_file_digest(output_root_path / "tables" / "paper_additional_dataset_table.csv"),
             "paper_submission_gap_audit": compute_file_digest(output_root_path / "claim_audit" / "paper_submission_gap_audit.csv"),
             "paper_figure_manifest": None if figure_summary is None else compute_file_digest(output_root_path / "figures" / "paper_figure_manifest.json"),
         },
