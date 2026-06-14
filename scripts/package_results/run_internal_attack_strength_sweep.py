@@ -11,6 +11,7 @@ import argparse
 import json
 import shutil
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -193,6 +194,14 @@ def _copy_optional_run_diagnostics(run_root: Path, output_root: Path) -> dict[st
         destination_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_path, destination_path)
         copied[relpath.as_posix()] = destination_path.relative_to(output_root).as_posix()
+    runtime_profile_root = run_root / "runtime_profile"
+    if runtime_profile_root.exists():
+        for source_path in sorted(path for path in runtime_profile_root.rglob("*") if path.is_file()):
+            relpath = source_path.relative_to(run_root)
+            destination_path = output_root / "runner_diagnostics" / relpath
+            destination_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, destination_path)
+            copied[relpath.as_posix()] = destination_path.relative_to(output_root).as_posix()
     return copied
 
 
@@ -272,6 +281,8 @@ def main() -> None:
     attack_matrix_path.write_text(json.dumps(attack_matrix, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     runtime_config_path.write_text(json.dumps(runtime_config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+    runner_started_at = datetime.now(timezone.utc).replace(microsecond=0)
+    runner_started_perf = time.perf_counter()
     RealVideoVaeLatentRunner(ROOT).run(
         output_root=args.run_root,
         run_mode="formal",
@@ -289,6 +300,8 @@ def main() -> None:
         cross_event_vae_encode_batch_size=args.cross_event_vae_encode_batch_size,
         cross_event_vae_batch_fallback_on_oom=True,
     )
+    runner_finished_at = datetime.now(timezone.utc).replace(microsecond=0)
+    runner_duration_seconds = time.perf_counter() - runner_started_perf
 
     source_records = _read_event_scores(args.run_root)
     attack_strength_records = convert_stage_two_records_to_attack_strength_records(
@@ -303,6 +316,21 @@ def main() -> None:
     record_path = output_root / "records" / "attack_strength_event_scores.jsonl"
     write_jsonl(record_path, attack_strength_records)
     copied_diagnostics = _copy_optional_run_diagnostics(args.run_root, output_root)
+    timing_payload = {
+        "runner_started_at": runner_started_at.isoformat().replace("+00:00", "Z"),
+        "runner_finished_at": runner_finished_at.isoformat().replace("+00:00", "Z"),
+        "runner_duration_seconds": round(float(runner_duration_seconds), 3),
+        "runner_duration_minutes": round(float(runner_duration_seconds) / 60.0, 3),
+        "record_count": len(attack_strength_records),
+        "records_per_minute": (
+            round(len(attack_strength_records) / max(float(runner_duration_seconds) / 60.0, 1e-9), 3)
+            if attack_strength_records
+            else 0.0
+        ),
+    }
+    timing_path = output_root / "artifacts" / "attack_strength_internal_sweep_timing.json"
+    timing_path.parent.mkdir(parents=True, exist_ok=True)
+    timing_path.write_text(json.dumps(timing_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     strength_points = sorted(
         {f"{row['attack_name']}:{row['attack_strength_name']}" for row in attack_strength_records}
     )
@@ -330,6 +358,7 @@ def main() -> None:
         "attack_matrix_path": attack_matrix_path.as_posix(),
         "runtime_config_path": runtime_config_path.as_posix(),
         "copied_diagnostics": copied_diagnostics,
+        "timing": timing_payload,
         "source_digest": compute_object_digest(
             {
                 "attack_matrix": attack_matrix,
@@ -339,7 +368,10 @@ def main() -> None:
                 "shard_index": args.shard_index,
             }
         ),
-        "artifact_digests": {"attack_strength_event_scores": compute_file_digest(record_path)},
+        "artifact_digests": {
+            "attack_strength_event_scores": compute_file_digest(record_path),
+            "attack_strength_internal_sweep_timing": compute_file_digest(timing_path),
+        },
     }
     manifest_path = output_root / "artifacts" / "attack_strength_internal_sweep_manifest.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
