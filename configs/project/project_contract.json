@@ -1,7 +1,7 @@
 {
-  "project_stage": "baseline_comparison_gate",
-  "construction_phase": "baseline_comparison_gate",
-  "target_construction_phase": "paper_artifact_gate",
+  "project_stage": "paper_artifact_gate",
+  "construction_phase": "paper_artifact_gate",
+  "target_construction_phase": "submission_readiness_gate",
   "legacy_stage_id": null,
   "method_objects": [
     "temporal_synchronized_tubelet_code",

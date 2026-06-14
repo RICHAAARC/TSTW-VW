@@ -56,5 +56,5 @@ def test_project_contract_stage_matches_active_formal_phase() -> None:
         None.
     """
     data = load_json_config(ROOT / "configs" / "project" / "project_contract.json")
-    assert data["project_stage"] == "baseline_comparison_gate"
-    assert data["target_construction_phase"] == "paper_artifact_gate"
+    assert data["project_stage"] == "paper_artifact_gate"
+    assert data["target_construction_phase"] == "submission_readiness_gate"

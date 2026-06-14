@@ -1011,6 +1011,30 @@ Double-underscore separators are forbidden for notebook result identities; gover
 
 The run notebook must not create the Google Drive family result directory during workspace preparation. It must first write runner outputs, checker outputs, mechanism summaries, package archives, and notebook final summaries into the Colab session-local family root, then copy the completed family result into the Google Drive result layout above. This prevents failed formal runs from leaving empty family result folders on Google Drive.
 
+## Paper Artifact Gate Result Layout
+
+对于 `paper_artifact_gate`, 受治理的 Google Drive 结果目录结构为一次论文产物构建一个独立 run 目录:
+
+```text
+/content/drive/MyDrive/TSTW/results/paper_artifact_gate/
+  paper_artifact_gate_<UTC_TIME>_<SHORT_COMMIT>/
+    artifacts/
+      paper_artifact_gate_manifest.json
+    tables/
+      paper_method_comparison_table.csv
+      paper_attack_breakdown_table.csv
+      paper_sync_gain_table.csv
+      paper_external_baseline_table.csv
+    figure_data/
+      paper_method_comparison_figure_data.csv
+      paper_sync_gain_figure_data.csv
+    claim_audit/
+      paper_claim_audit.csv
+```
+
+该结构的项目特定设计目标是将阶段二真实视频 VAE 证据、阶段三外部 baseline 聚合结果和论文 claim audit 绑定到同一个可重建 manifest。`paper_artifact_gate` 不允许手工拼表; 所有论文表格和图表数据必须由 `experiments/paper_artifact_gate/` 与 `scripts/package_results/build_paper_artifact_gate.py` 从受治理输入生成。
+
+
 ## Baseline Comparison Result Layout
 
 对于 `baseline_comparison_gate`, 受治理的 Google Drive 结果目录结构为每个 baseline 独立归档:

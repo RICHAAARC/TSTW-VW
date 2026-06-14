@@ -331,19 +331,19 @@ def validate_project_contract_data(data: dict[str, Any]) -> list[dict[str, str]]
     """
     violations: list[dict[str, str]] = []
 
-    if data.get("project_stage") != "baseline_comparison_gate":
+    if data.get("project_stage") != "paper_artifact_gate":
         violations.append(
             {
                 "field": "project_stage",
-                "reason": "project_stage_must_equal_baseline_comparison_gate",
+                "reason": "project_stage_must_equal_paper_artifact_gate",
             }
         )
 
-    if data.get("construction_phase") != "baseline_comparison_gate":
+    if data.get("construction_phase") != "paper_artifact_gate":
         violations.append(
             {
                 "field": "construction_phase",
-                "reason": "construction_phase_must_equal_baseline_comparison_gate",
+                "reason": "construction_phase_must_equal_paper_artifact_gate",
             }
         )
 

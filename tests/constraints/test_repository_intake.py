@@ -13,8 +13,8 @@ pytestmark = [pytest.mark.constraint, pytest.mark.unit]
 from pathlib import Path
 
 from tools.harness.inspect_repository import (
-    BASELINE_COMPARISON_REQUIRED_PATHS,
     EXPECTED_DIRECTORIES,
+    PAPER_ARTIFACT_REQUIRED_PATHS,
     inspect_repository,
 )
 
@@ -53,7 +53,7 @@ def test_governed_repository_reports_active_stage_status() -> None:
     """
     report = inspect_repository(ROOT)
     assert report["repository_mode"] == "governed_repository"
-    assert report["project_stage"] == "baseline_comparison_gate"
+    assert report["project_stage"] == "paper_artifact_gate"
     assert "outputs" not in EXPECTED_DIRECTORIES
     assert report["directory_boundary_contract"]["exists"] is True
     assert report["directory_boundary_contract"]["source_of_truth"] == "docs/file_organization.md"
@@ -72,12 +72,12 @@ def test_governed_repository_reports_active_stage_status() -> None:
     assert report["directory_status"]["release"]["exists"] is False
     assert "outputs/" in (ROOT / ".gitignore").read_text(encoding="utf-8")
     next_stage_readiness = report["next_stage_readiness"]
-    assert next_stage_readiness["target_construction_phase"] == "paper_artifact_gate"
+    assert next_stage_readiness["target_construction_phase"] == "submission_readiness_gate"
     assert next_stage_readiness["all_required_paths_present"] is True
     assert next_stage_readiness["present_required_path_count"] == len(
-        BASELINE_COMPARISON_REQUIRED_PATHS
+        PAPER_ARTIFACT_REQUIRED_PATHS
     )
-    assert next_stage_readiness["required_path_count"] == len(BASELINE_COMPARISON_REQUIRED_PATHS)
-    assert next_stage_readiness["required_paths"]["baseline_comparison_build_flow"]["exists"] is True
-    assert next_stage_readiness["required_paths"]["baseline_comparison_project_contract"]["exists"] is True
-    assert next_stage_readiness["required_paths"]["baseline_comparison_protocol_contract"]["exists"] is True
+    assert next_stage_readiness["required_path_count"] == len(PAPER_ARTIFACT_REQUIRED_PATHS)
+    assert next_stage_readiness["required_paths"]["paper_artifact_builder_module"]["exists"] is True
+    assert next_stage_readiness["required_paths"]["paper_artifact_package_script"]["exists"] is True
+    assert next_stage_readiness["required_paths"]["paper_artifact_project_contract"]["exists"] is True

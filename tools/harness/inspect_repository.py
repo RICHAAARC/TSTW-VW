@@ -1,4 +1,4 @@
-﻿"""
+"""
 文件用途：提供仓库 intake 检查与空仓库分类能力。
 File purpose: Provide repository intake inspection and empty bootstrap classification.
 Module type: General module
@@ -80,6 +80,12 @@ BASELINE_COMPARISON_REQUIRED_PATHS = {
     "baseline_comparison_project_contract": ".codex/project_contract.md",
     "baseline_comparison_protocol_contract": "configs/project/project_contract.json",
 }
+PAPER_ARTIFACT_REQUIRED_PATHS = {
+    "paper_artifact_builder_module": "experiments/paper_artifact_gate/artifact_builder.py",
+    "paper_artifact_package_script": "scripts/package_results/build_paper_artifact_gate.py",
+    "paper_artifact_project_contract": ".codex/project_contract.md",
+    "paper_artifact_file_organization_contract": "docs/file_organization.md",
+}
 
 
 def _read_project_contract(root_path: Path) -> dict[str, Any]:
@@ -160,6 +166,18 @@ def _inspect_next_stage_readiness(root_path: Path, project_stage: str | None) ->
             "all_required_paths_present": present_count == len(BASELINE_COMPARISON_REQUIRED_PATHS),
             "present_required_path_count": present_count,
             "required_path_count": len(BASELINE_COMPARISON_REQUIRED_PATHS),
+            "required_paths": required_paths,
+        }
+    if project_stage == "paper_artifact_gate":
+        present_count, required_paths = _build_required_paths(
+            root_path,
+            PAPER_ARTIFACT_REQUIRED_PATHS,
+        )
+        return {
+            "target_construction_phase": target_construction_phase,
+            "all_required_paths_present": present_count == len(PAPER_ARTIFACT_REQUIRED_PATHS),
+            "present_required_path_count": present_count,
+            "required_path_count": len(PAPER_ARTIFACT_REQUIRED_PATHS),
             "required_paths": required_paths,
         }
 
