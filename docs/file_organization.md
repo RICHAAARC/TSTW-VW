@@ -1028,6 +1028,7 @@ The run notebook must not create the Google Drive family result directory during
       paper_roc_auc_table.csv
       paper_quality_table.csv
       paper_runtime_efficiency_table.csv
+      paper_temporal_quality_table.csv
     figure_data/
       paper_method_comparison_figure_data.csv
       paper_sync_gain_figure_data.csv
@@ -1035,6 +1036,7 @@ The run notebook must not create the Google Drive family result directory during
       paper_quality_figure_data.csv
       paper_runtime_efficiency_figure_data.csv
       paper_visual_example_figure_data.csv
+      paper_temporal_quality_figure_data.csv
     figures/
       paper_method_comparison.pdf
       paper_method_comparison.png
@@ -1054,10 +1056,32 @@ The run notebook must not create the Google Drive family result directory during
       paper_runtime_efficiency.png
       paper_visual_example_grid.pdf
       paper_visual_example_grid.png
+      paper_temporal_quality_summary.pdf
+      paper_temporal_quality_summary.png
       paper_figure_manifest.json
     claim_audit/
       paper_claim_audit.csv
       paper_submission_gap_audit.csv
+```
+
+## Supplemental Figure Probe Result Layout
+
+`submission_readiness_gate` 前允许使用补充图表 probe 生成投稿增强图表。补充 probe 不得覆盖阶段二或阶段三冻结结果, 必须写入独立 workflow 目录。
+
+`temporal_quality_metric_probe` 的结果目录为:
+
+```text
+/content/drive/MyDrive/TSTW/results/temporal_quality_metric_probe/
+  shard_aggregated/
+    temporal_quality_metric_probe_<UTC_TIME>_<SHORT_COMMIT>/
+      records/
+        temporal_quality_records.jsonl
+      tables/
+        temporal_quality_metric_table.csv
+      figure_data/
+        temporal_quality_metric_figure_data.csv
+      artifacts/
+        temporal_quality_metric_manifest.json
 ```
 
 该结构的项目特定设计目标是将阶段二真实视频 VAE 证据、阶段三外部 baseline 聚合结果和论文 claim audit 绑定到同一个可重建 manifest。`paper_artifact_gate` 不允许手工拼表; 所有论文表格、图表数据和投稿静态图必须由 `experiments/paper_artifact_gate/` 与 `scripts/package_results/build_paper_artifact_gate.py` 从受治理输入生成。

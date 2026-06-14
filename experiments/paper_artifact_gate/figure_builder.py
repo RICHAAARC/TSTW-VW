@@ -352,6 +352,40 @@ def build_visual_example_grid(root: Path) -> dict[str, Any] | None:
     return {"figure_id": "paper_visual_example_grid", "title": "Real-video visual examples", "paths": paths}
 
 
+def build_temporal_quality_figure(root: Path) -> dict[str, Any] | None:
+    """生成补充 probe 的 t-SSIM 时间质量图。"""
+    csv_path = root / "tables" / "paper_temporal_quality_table.csv"
+    if not csv_path.exists():
+        return None
+    rows = [
+        row for row in read_csv_rows(csv_path)
+        if row.get("video_role") == "attacked" and row.get("mean_t_ssim") not in (None, "")
+    ]
+    if not rows:
+        return None
+    plt, _ = ensure_matplotlib()
+    rows.sort(key=lambda row: (row["attack_name"], row["method_name"]))
+    labels = [
+        f"{METHOD_LABELS.get(row['method_name'], row['method_name'])}\n{ATTACK_LABELS.get(row['attack_name'], row['attack_name'])}"
+        for row in rows
+    ]
+    values = [safe_float(row["mean_t_ssim"]) for row in rows]
+    fig, ax = plt.subplots(figsize=(max(6.5, len(rows) * 0.7), 3.4))
+    bars = ax.bar(range(len(rows)), values, color="#59a14f")
+    ax.set_ylim(0, 1.0)
+    ax.set_ylabel("t-SSIM")
+    ax.set_title("Temporal quality on attacked videos")
+    ax.set_xticks(range(len(rows)), labels, rotation=35, ha="right", fontsize=8)
+    ax.grid(axis="y", color="#dddddd", linewidth=0.8)
+    ax.spines[["top", "right"]].set_visible(False)
+    for bar, value in zip(bars, values):
+        ax.text(bar.get_x() + bar.get_width() / 2, value + 0.01, f"{value:.3f}", ha="center", va="bottom", fontsize=7)
+    fig.tight_layout()
+    paths = save_figure(fig, root / "figures" / "paper_temporal_quality_summary", root)
+    plt.close(fig)
+    return {"figure_id": "paper_temporal_quality_summary", "title": "Temporal quality summary", "paths": paths}
+
+
 def build_paper_figures(root: str | Path) -> dict[str, Any]:
     """生成阶段四投稿图表并写出图表 manifest。"""
     root_path = Path(root)
@@ -368,6 +402,9 @@ def build_paper_figures(root: str | Path) -> dict[str, Any]:
     visual_entry = build_visual_example_grid(root_path)
     if visual_entry is not None:
         figure_entries.append(visual_entry)
+    temporal_quality_entry = build_temporal_quality_figure(root_path)
+    if temporal_quality_entry is not None:
+        figure_entries.append(temporal_quality_entry)
     manifest = {
         "figure_count": len(figure_entries),
         "figures": figure_entries,

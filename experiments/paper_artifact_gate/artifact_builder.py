@@ -32,6 +32,7 @@ class PaperArtifactInputs:
 
     stage_two_root: Path
     baseline_aggregation_roots: dict[str, Path]
+    temporal_quality_root: Path | None = None
 
 
 def read_csv_rows(path: str | Path) -> list[dict[str, str]]:
@@ -81,7 +82,12 @@ def discover_latest_inputs(result_root: str | Path, baseline_names: Iterable[str
         if baseline_root is None:
             raise FileNotFoundError(f"未找到 {baseline_name} 的 baseline shard_aggregated 聚合结果。")
         baseline_roots[baseline_name] = baseline_root
-    return PaperArtifactInputs(stage_two_root=stage_two_root, baseline_aggregation_roots=baseline_roots)
+    temporal_quality_root = latest_child_dir(result_root_path / "temporal_quality_metric_probe" / "shard_aggregated")
+    return PaperArtifactInputs(
+        stage_two_root=stage_two_root,
+        baseline_aggregation_roots=baseline_roots,
+        temporal_quality_root=temporal_quality_root,
+    )
 
 
 def resolve_stage_two_zip(stage_two_root: str | Path) -> Path:
@@ -570,12 +576,31 @@ def build_visual_example_rows(stage_two_root: str | Path) -> list[dict[str, Any]
     return rows
 
 
-def build_submission_gap_audit_rows(*, has_visual_examples: bool) -> list[dict[str, Any]]:
+def build_temporal_quality_rows(temporal_quality_root: Path | None) -> list[dict[str, Any]]:
+    """读取可选的时间质量补充 probe 聚合表。"""
+    if temporal_quality_root is None:
+        return []
+    table_path = temporal_quality_root / "tables" / "temporal_quality_metric_table.csv"
+    if not table_path.exists():
+        return []
+    rows = read_csv_rows(table_path)
+    for row in rows:
+        row["source_artifact"] = "temporal_quality_metric_probe/tables/temporal_quality_metric_table.csv"
+    return rows
+
+
+def build_submission_gap_audit_rows(
+    *,
+    has_visual_examples: bool,
+    temporal_quality_rows: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     """生成与主流视频水印论文图表习惯对齐的差距审计表。
 
     该表用于明确哪些论文级图表已经由冻结结果支撑, 哪些仍需要新增实验。
     它不是性能结果表, 不能作为未完成指标的替代证据。
     """
+    temporal_quality_rows = temporal_quality_rows or []
+    t_lpips_supported = any(str(row.get("t_lpips_available")) == "True" for row in temporal_quality_rows)
     return [
         {
             "artifact_need": "fixed_fpr_tpr_table",
@@ -600,6 +625,18 @@ def build_submission_gap_audit_rows(*, has_visual_examples: bool) -> list[dict[s
             "status": "supported",
             "current_artifact": "tables/paper_quality_table.csv",
             "next_action": "",
+        },
+        {
+            "artifact_need": "temporal_quality_t_lpips_t_ssim",
+            "status": (
+                "supported"
+                if t_lpips_supported
+                else ("supported_t_ssim_only" if temporal_quality_rows else "not_supported_by_frozen_results")
+            ),
+            "current_artifact": "tables/paper_temporal_quality_table.csv" if temporal_quality_rows else "",
+            "next_action": ""
+            if t_lpips_supported
+            else "当前仅支持 t-SSIM; t-LPIPS 需要在 Colab 配置 LPIPS 模型后重跑 temporal_quality_metric_probe。",
         },
         {
             "artifact_need": "baseline_runtime_efficiency_table",
@@ -657,7 +694,11 @@ def build_paper_artifacts(
     quality_rows = build_quality_summary_rows(inputs.stage_two_root)
     runtime_rows = build_runtime_efficiency_rows(inputs.baseline_aggregation_roots)
     visual_example_rows = build_visual_example_rows(inputs.stage_two_root)
-    gap_audit_rows = build_submission_gap_audit_rows(has_visual_examples=bool(visual_example_rows))
+    temporal_quality_rows = build_temporal_quality_rows(inputs.temporal_quality_root)
+    gap_audit_rows = build_submission_gap_audit_rows(
+        has_visual_examples=bool(visual_example_rows),
+        temporal_quality_rows=temporal_quality_rows,
+    )
     external_rows = [row for row in method_rows if row["method_group"] == "external_baseline"]
     claim_rows = build_claim_audit_rows(
         method_rows=method_rows,
@@ -689,6 +730,11 @@ def build_paper_artifacts(
         "method_name", "attack_name", "sample_id", "event_id", "decision", "score", "video_source_id", "shard_root",
         "source_video_path", "decoded_video_path", "attacked_video_path", "source_artifact",
     ]
+    temporal_quality_fields = [
+        "method_name", "attack_name", "video_role", "video_count",
+        "mean_t_lpips", "std_t_lpips", "mean_t_ssim", "std_t_ssim",
+        "t_lpips_available", "t_ssim_available", "source_artifact",
+    ]
     gap_audit_fields = ["artifact_need", "status", "current_artifact", "next_action"]
 
     write_csv(output_root_path / "tables" / "paper_method_comparison_table.csv", method_rows, method_fields)
@@ -704,6 +750,8 @@ def build_paper_artifacts(
     write_csv(output_root_path / "tables" / "paper_runtime_efficiency_table.csv", runtime_rows, runtime_fields)
     write_csv(output_root_path / "figure_data" / "paper_runtime_efficiency_figure_data.csv", runtime_rows, runtime_fields)
     write_csv(output_root_path / "figure_data" / "paper_visual_example_figure_data.csv", visual_example_rows, visual_example_fields)
+    write_csv(output_root_path / "tables" / "paper_temporal_quality_table.csv", temporal_quality_rows, temporal_quality_fields)
+    write_csv(output_root_path / "figure_data" / "paper_temporal_quality_figure_data.csv", temporal_quality_rows, temporal_quality_fields)
     write_csv(output_root_path / "claim_audit" / "paper_submission_gap_audit.csv", gap_audit_rows, gap_audit_fields)
     write_csv(output_root_path / "claim_audit" / "paper_claim_audit.csv", claim_rows, claim_fields)
 
@@ -716,6 +764,7 @@ def build_paper_artifacts(
         "created_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "stage_two_root": inputs.stage_two_root.as_posix(),
         "baseline_aggregation_roots": {name: path.as_posix() for name, path in sorted(inputs.baseline_aggregation_roots.items())},
+        "temporal_quality_root": None if inputs.temporal_quality_root is None else inputs.temporal_quality_root.as_posix(),
         "method_count": len(method_rows),
         "attack_row_count": len(attack_rows),
         "sync_gain_row_count": len(sync_gain_rows),
@@ -724,6 +773,7 @@ def build_paper_artifacts(
         "quality_row_count": len(quality_rows),
         "runtime_efficiency_row_count": len(runtime_rows),
         "visual_example_row_count": len(visual_example_rows),
+        "temporal_quality_row_count": len(temporal_quality_rows),
         "submission_gap_audit_row_count": len(gap_audit_rows),
         "supported_claim_count": len(supported_claims),
         "paper_artifact_gate_complete": len(supported_claims) == len(claim_rows) and (figure_summary is not None or not build_figures),
@@ -733,6 +783,7 @@ def build_paper_artifacts(
             {
                 "stage_two_root": inputs.stage_two_root.as_posix(),
                 "baseline_aggregation_roots": {name: path.as_posix() for name, path in sorted(inputs.baseline_aggregation_roots.items())},
+                "temporal_quality_root": None if inputs.temporal_quality_root is None else inputs.temporal_quality_root.as_posix(),
             }
         ),
         "artifact_digests": {
@@ -744,6 +795,7 @@ def build_paper_artifacts(
             "paper_quality_table": compute_file_digest(output_root_path / "tables" / "paper_quality_table.csv"),
             "paper_runtime_efficiency_table": compute_file_digest(output_root_path / "tables" / "paper_runtime_efficiency_table.csv"),
             "paper_visual_example_figure_data": compute_file_digest(output_root_path / "figure_data" / "paper_visual_example_figure_data.csv"),
+            "paper_temporal_quality_table": compute_file_digest(output_root_path / "tables" / "paper_temporal_quality_table.csv"),
             "paper_submission_gap_audit": compute_file_digest(output_root_path / "claim_audit" / "paper_submission_gap_audit.csv"),
             "paper_figure_manifest": None if figure_summary is None else compute_file_digest(output_root_path / "figures" / "paper_figure_manifest.json"),
         },

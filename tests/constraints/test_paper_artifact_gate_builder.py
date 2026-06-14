@@ -256,6 +256,8 @@ def test_build_paper_artifacts_writes_tables_and_claim_audit(tmp_path: Path) -> 
     assert (output / "figure_data" / "paper_quality_figure_data.csv").exists()
     assert (output / "figure_data" / "paper_runtime_efficiency_figure_data.csv").exists()
     assert (output / "figure_data" / "paper_visual_example_figure_data.csv").exists()
+    assert (output / "tables" / "paper_temporal_quality_table.csv").exists()
+    assert (output / "figure_data" / "paper_temporal_quality_figure_data.csv").exists()
     assert (output / "claim_audit" / "paper_submission_gap_audit.csv").exists()
     claim_rows = read_csv_rows(output / "claim_audit" / "paper_claim_audit.csv")
     assert {row["claim_support_allowed"] for row in claim_rows} == {"True"}
@@ -310,3 +312,4 @@ def test_paper_figure_builder_contract_is_static_and_export_focused() -> None:
     assert "paper_roc_curves_overall" in source
     assert "paper_runtime_efficiency" in source
     assert "paper_visual_example_grid" in source
+    assert "paper_temporal_quality_summary" in source

@@ -9,5 +9,9 @@ build/
 .tmp*
 tmp*
 temp*
+!experiments/temporal_quality_metric_probe/
+!experiments/temporal_quality_metric_probe/**
+experiments/temporal_quality_metric_probe/__pycache__/
+experiments/temporal_quality_metric_probe/**/*.pyc
 # 外部 baseline 上游源码默认不提交, 仅通过 manifest 和脚本复现。
 external_baselines/
