@@ -1025,9 +1025,16 @@ The run notebook must not create the Google Drive family result directory during
       paper_attack_breakdown_table.csv
       paper_sync_gain_table.csv
       paper_external_baseline_table.csv
+      paper_roc_auc_table.csv
+      paper_quality_table.csv
+      paper_runtime_efficiency_table.csv
     figure_data/
       paper_method_comparison_figure_data.csv
       paper_sync_gain_figure_data.csv
+      paper_roc_curve_data.csv
+      paper_quality_figure_data.csv
+      paper_runtime_efficiency_figure_data.csv
+      paper_visual_example_figure_data.csv
     figures/
       paper_method_comparison.pdf
       paper_method_comparison.png
@@ -1037,9 +1044,20 @@ The run notebook must not create the Google Drive family result directory during
       paper_attack_breakdown_heatmap.png
       paper_external_baseline_comparison.pdf
       paper_external_baseline_comparison.png
+      paper_auc_overview.pdf
+      paper_auc_overview.png
+      paper_quality_summary.pdf
+      paper_quality_summary.png
+      paper_roc_curves_overall.pdf
+      paper_roc_curves_overall.png
+      paper_runtime_efficiency.pdf
+      paper_runtime_efficiency.png
+      paper_visual_example_grid.pdf
+      paper_visual_example_grid.png
       paper_figure_manifest.json
     claim_audit/
       paper_claim_audit.csv
+      paper_submission_gap_audit.csv
 ```
 
 该结构的项目特定设计目标是将阶段二真实视频 VAE 证据、阶段三外部 baseline 聚合结果和论文 claim audit 绑定到同一个可重建 manifest。`paper_artifact_gate` 不允许手工拼表; 所有论文表格、图表数据和投稿静态图必须由 `experiments/paper_artifact_gate/` 与 `scripts/package_results/build_paper_artifact_gate.py` 从受治理输入生成。

@@ -76,6 +76,60 @@ def write_stage_two_package(root: Path) -> Path:
             "real_video_vae_latent_probe_shard_aggregated/tables/real_video_attack_breakdown.csv",
             buffer.getvalue(),
         )
+        records = []
+        for method, attacks in values.items():
+            for attack, tpr in attacks.items():
+                for index in range(10):
+                    records.append(
+                        {
+                            "split": "test",
+                            "sample_role": "attacked_positive" if attack != "no_attack" else "watermarked_positive",
+                            "method_variant": method,
+                            "attack_name": attack,
+                            "evidence_scores": {"S_final": 0.8 if index < int(tpr * 10) else 0.2},
+                        }
+                    )
+                    records.append(
+                        {
+                            "split": "test",
+                            "sample_role": "attacked_negative" if attack != "no_attack" else "clean_negative",
+                            "method_variant": method,
+                            "attack_name": attack,
+                            "evidence_scores": {"S_final": 0.1},
+                        }
+                    )
+        zf.writestr(
+            "real_video_vae_latent_probe_shard_aggregated/records/event_scores.jsonl",
+            "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+        )
+        quality_rows = [
+            {
+                "run_id": "stage_two_run",
+                "construction_phase": "real_video_vae_latent_probe",
+                "method_variant": method,
+                "attack_name": "no_attack",
+                "sample_role": "watermarked_positive",
+                "video_count": 10,
+                "watermarked_video_psnr_finite_mean": 32.0,
+                "watermarked_video_ssim_mean": 0.9,
+                "watermarked_video_lpips_mean": 0.1,
+                "quality_failure_count": 0,
+            }
+            for method in values
+        ]
+        quality_buffer = io.StringIO()
+        quality_fields = [
+            "run_id", "construction_phase", "method_variant", "attack_name", "sample_role", "video_count",
+            "watermarked_video_psnr_finite_mean", "watermarked_video_ssim_mean",
+            "watermarked_video_lpips_mean", "quality_failure_count",
+        ]
+        quality_writer = csv.DictWriter(quality_buffer, fieldnames=quality_fields)
+        quality_writer.writeheader()
+        quality_writer.writerows(quality_rows)
+        zf.writestr(
+            "real_video_vae_latent_probe_shard_aggregated/tables/quality_table.csv",
+            quality_buffer.getvalue(),
+        )
     return root
 
 
@@ -135,6 +189,42 @@ def write_baseline_aggregation(root: Path, baseline_name: str, tpr: float) -> Pa
             "negative_count", "tpr_at_target_fpr", "fpr_at_threshold", "mean_score",
         ],
     )
+    write_csv(
+        root / "tables" / "baseline_runtime_table.csv",
+        [
+            {
+                "baseline_name": baseline_name,
+                "record_count": 20,
+                "runtime_seconds_sum": 40.0,
+                "runtime_seconds_mean": 2.0,
+            }
+        ],
+        ["baseline_name", "record_count", "runtime_seconds_sum", "runtime_seconds_mean"],
+    )
+    record_dir = root / "records"
+    record_dir.mkdir(parents=True, exist_ok=True)
+    records = []
+    for index in range(10):
+        records.append(
+            {
+                "split": "test",
+                "sample_role": "attacked_positive",
+                "attack_name": "local_clip",
+                "baseline_score": 0.8 if index < int(tpr * 10) else 0.2,
+            }
+        )
+        records.append(
+            {
+                "split": "test",
+                "sample_role": "attacked_negative",
+                "attack_name": "local_clip",
+                "baseline_score": 0.1,
+            }
+        )
+    (record_dir / "baseline_formal_score_records.jsonl").write_text(
+        "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in records),
+        encoding="utf-8",
+    )
     return root
 
 
@@ -158,7 +248,15 @@ def test_build_paper_artifacts_writes_tables_and_claim_audit(tmp_path: Path) -> 
     assert summary["paper_artifact_gate_complete"] is True
     assert (output / "tables" / "paper_method_comparison_table.csv").exists()
     assert (output / "tables" / "paper_sync_gain_table.csv").exists()
+    assert (output / "tables" / "paper_roc_auc_table.csv").exists()
+    assert (output / "tables" / "paper_quality_table.csv").exists()
+    assert (output / "tables" / "paper_runtime_efficiency_table.csv").exists()
     assert (output / "figure_data" / "paper_method_comparison_figure_data.csv").exists()
+    assert (output / "figure_data" / "paper_roc_curve_data.csv").exists()
+    assert (output / "figure_data" / "paper_quality_figure_data.csv").exists()
+    assert (output / "figure_data" / "paper_runtime_efficiency_figure_data.csv").exists()
+    assert (output / "figure_data" / "paper_visual_example_figure_data.csv").exists()
+    assert (output / "claim_audit" / "paper_submission_gap_audit.csv").exists()
     claim_rows = read_csv_rows(output / "claim_audit" / "paper_claim_audit.csv")
     assert {row["claim_support_allowed"] for row in claim_rows} == {"True"}
 
@@ -207,3 +305,8 @@ def test_paper_figure_builder_contract_is_static_and_export_focused() -> None:
     assert "relative_to(root).as_posix()" in source
     assert "paper_attack_breakdown_heatmap" in source
     assert "paper_sync_gain_temporal_attacks" in source
+    assert "paper_auc_overview" in source
+    assert "paper_quality_summary" in source
+    assert "paper_roc_curves_overall" in source
+    assert "paper_runtime_efficiency" in source
+    assert "paper_visual_example_grid" in source

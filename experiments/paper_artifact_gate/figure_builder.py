@@ -181,6 +181,177 @@ def build_external_baseline_figure(root: Path) -> dict[str, Any]:
     return {"figure_id": "paper_external_baseline_comparison", "title": "External baseline comparison", "paths": paths}
 
 
+
+def build_auc_overview_figure(root: Path) -> dict[str, Any]:
+    """生成总体 AUC 排序图, 与 TPR 主图互补。"""
+    plt, _ = ensure_matplotlib()
+    rows = [row for row in read_csv_rows(root / "tables" / "paper_roc_auc_table.csv") if row["attack_name"] == "overall"]
+    by_name = {row["method_name"]: row for row in rows}
+    ordered = [by_name[name] for name in METHOD_ORDER if name in by_name]
+    labels = [METHOD_LABELS.get(row["method_name"], row["method_name"]) for row in ordered]
+    values = [safe_float(row["auc"]) for row in ordered]
+    colors = ["#1f77b4" if row["method_name"] == "tubelet_sync" else "#9aa0a6" for row in ordered]
+    fig, ax = plt.subplots(figsize=(7.2, 3.8))
+    bars = ax.barh(labels, values, color=colors)
+    ax.invert_yaxis()
+    ax.set_xlim(0, 1.0)
+    ax.set_xlabel("AUC")
+    ax.set_title("Overall ROC-AUC under the aligned test split")
+    ax.grid(axis="x", color="#dddddd", linewidth=0.8)
+    ax.spines[["top", "right", "left"]].set_visible(False)
+    for bar, value in zip(bars, values):
+        ax.text(min(0.98, value + 0.015), bar.get_y() + bar.get_height() / 2, f"{value:.3f}", va="center", fontsize=9)
+    fig.tight_layout()
+    paths = save_figure(fig, root / "figures" / "paper_auc_overview", root)
+    plt.close(fig)
+    return {"figure_id": "paper_auc_overview", "title": "Overall AUC comparison", "paths": paths}
+
+
+def build_quality_summary_figure(root: Path) -> dict[str, Any]:
+    """生成阶段二内部方法质量指标图, 展示 PSNR/SSIM/LPIPS。"""
+    plt, np = ensure_matplotlib()
+    rows = read_csv_rows(root / "tables" / "paper_quality_table.csv")
+    rows = [row for row in rows if row["method_name"] in {"frame_prc", "tubelet_only", "tubelet_sync"}]
+    rows.sort(key=lambda row: METHOD_ORDER.index(row["method_name"]) if row["method_name"] in METHOD_ORDER else 99)
+    labels = [METHOD_LABELS.get(row["method_name"], row["method_name"]) for row in rows]
+    psnr = [safe_float(row["watermarked_video_psnr_finite_mean"]) for row in rows]
+    ssim = [safe_float(row["watermarked_video_ssim_mean"]) for row in rows]
+    lpips = [safe_float(row["watermarked_video_lpips_mean"]) for row in rows]
+    x = np.arange(len(rows))
+    fig, axes = plt.subplots(1, 3, figsize=(8.8, 3.0))
+    panels = [
+        (axes[0], psnr, "PSNR ↑", "#4c78a8"),
+        (axes[1], ssim, "SSIM ↑", "#59a14f"),
+        (axes[2], lpips, "LPIPS ↓", "#f28e2b"),
+    ]
+    for ax, values, title, color in panels:
+        bars = ax.bar(x, values, color=color)
+        ax.set_title(title)
+        ax.set_xticks(x, labels, rotation=25, ha="right")
+        ax.grid(axis="y", color="#dddddd", linewidth=0.8)
+        ax.spines[["top", "right"]].set_visible(False)
+        for bar, value in zip(bars, values):
+            ax.text(bar.get_x() + bar.get_width() / 2, value, f"{value:.3f}", ha="center", va="bottom", fontsize=8)
+    fig.suptitle("Video quality evidence for internal variants", y=1.05)
+    fig.tight_layout()
+    paths = save_figure(fig, root / "figures" / "paper_quality_summary", root)
+    plt.close(fig)
+    return {"figure_id": "paper_quality_summary", "title": "Quality metrics summary", "paths": paths}
+
+
+def build_overall_roc_curves_figure(root: Path) -> dict[str, Any]:
+    """生成总体 ROC 曲线图, 仅绘制 overall 分组以保持论文主图可读。"""
+    plt, _ = ensure_matplotlib()
+    rows = [row for row in read_csv_rows(root / "figure_data" / "paper_roc_curve_data.csv") if row["attack_name"] == "overall"]
+    by_method: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        by_method.setdefault(row["method_name"], []).append(row)
+    fig, ax = plt.subplots(figsize=(4.8, 4.2))
+    for method in METHOD_ORDER:
+        method_rows = by_method.get(method)
+        if not method_rows:
+            continue
+        method_rows.sort(key=lambda row: safe_float(row["fpr"]))
+        line_width = 2.4 if method == "tubelet_sync" else 1.2
+        alpha = 1.0 if method == "tubelet_sync" else 0.75
+        ax.plot(
+            [safe_float(row["fpr"]) for row in method_rows],
+            [safe_float(row["tpr"]) for row in method_rows],
+            label=METHOD_LABELS.get(method, method),
+            linewidth=line_width,
+            alpha=alpha,
+        )
+    ax.plot([0, 1], [0, 1], linestyle="--", color="#bbbbbb", linewidth=1.0, label="Random")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("FPR")
+    ax.set_ylabel("TPR")
+    ax.set_title("Overall ROC curves")
+    ax.grid(color="#dddddd", linewidth=0.8)
+    ax.legend(fontsize=7, loc="lower right")
+    fig.tight_layout()
+    paths = save_figure(fig, root / "figures" / "paper_roc_curves_overall", root)
+    plt.close(fig)
+    return {"figure_id": "paper_roc_curves_overall", "title": "Overall ROC curves", "paths": paths}
+
+
+def build_runtime_efficiency_figure(root: Path) -> dict[str, Any]:
+    """生成外部 baseline 正式计分耗时图, 用于论文效率分析和附录运行成本说明。"""
+    plt, _ = ensure_matplotlib()
+    rows = read_csv_rows(root / "tables" / "paper_runtime_efficiency_table.csv")
+    rows.sort(key=lambda row: safe_float(row["runtime_seconds_per_1000_records"]))
+    labels = [METHOD_LABELS.get(row["method_name"], row["method_name"]) for row in rows]
+    values = [safe_float(row["runtime_seconds_per_1000_records"]) for row in rows]
+
+    fig, ax = plt.subplots(figsize=(6.2, 3.2))
+    bars = ax.barh(labels, values, color="#8f9fb3")
+    ax.invert_yaxis()
+    ax.set_xlabel("Runtime seconds per 1K score records")
+    ax.set_title("Formal scoring cost of external baselines")
+    ax.grid(axis="x", color="#dddddd", linewidth=0.8)
+    ax.spines[["top", "right", "left"]].set_visible(False)
+    for bar, value in zip(bars, values):
+        ax.text(value + max(values) * 0.015, bar.get_y() + bar.get_height() / 2, f"{value:.1f}s", va="center", fontsize=9)
+    fig.tight_layout()
+    paths = save_figure(fig, root / "figures" / "paper_runtime_efficiency", root)
+    plt.close(fig)
+    return {"figure_id": "paper_runtime_efficiency", "title": "External baseline runtime efficiency", "paths": paths}
+
+
+def read_video_frame(path: str | Path, frame_index: int | None = None) -> Any:
+    """读取 mp4 的指定帧; 未指定时读取中间帧作为静态视觉样例。"""
+    import imageio.v2 as imageio
+
+    reader = imageio.get_reader(str(path))
+    try:
+        if frame_index is None:
+            try:
+                frame_count = reader.count_frames()
+                frame_index = max(0, frame_count // 2)
+            except Exception:
+                frame_index = 0
+        return reader.get_data(frame_index)
+    finally:
+        reader.close()
+
+
+def build_visual_example_grid(root: Path) -> dict[str, Any] | None:
+    """生成 clean / watermarked / attacked 的真实视频视觉样例网格。"""
+    csv_path = root / "figure_data" / "paper_visual_example_figure_data.csv"
+    if not csv_path.exists():
+        return None
+    rows = read_csv_rows(csv_path)
+    if not rows:
+        return None
+    rows = rows[:4]
+    plt, _ = ensure_matplotlib()
+    columns = [
+        ("source_video_path", "Source"),
+        ("decoded_video_path", "Watermarked / decoded"),
+        ("attacked_video_path", "Attacked"),
+    ]
+    fig, axes = plt.subplots(len(rows), len(columns), figsize=(7.8, 2.15 * len(rows)))
+    if len(rows) == 1:
+        axes = [axes]
+    for row_index, row in enumerate(rows):
+        for col_index, (field, title) in enumerate(columns):
+            ax = axes[row_index][col_index]
+            frame = read_video_frame(row[field])
+            ax.imshow(frame)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            if row_index == 0:
+                ax.set_title(title, fontsize=10)
+            if col_index == 0:
+                label = ATTACK_LABELS.get(row["attack_name"], row["attack_name"])
+                ax.set_ylabel(label, fontsize=9)
+    fig.suptitle("Visual examples from governed real-video shard runs", y=0.995)
+    fig.tight_layout()
+    paths = save_figure(fig, root / "figures" / "paper_visual_example_grid", root)
+    plt.close(fig)
+    return {"figure_id": "paper_visual_example_grid", "title": "Real-video visual examples", "paths": paths}
+
+
 def build_paper_figures(root: str | Path) -> dict[str, Any]:
     """生成阶段四投稿图表并写出图表 manifest。"""
     root_path = Path(root)
@@ -189,7 +360,14 @@ def build_paper_figures(root: str | Path) -> dict[str, Any]:
         build_sync_gain_figure(root_path),
         build_attack_breakdown_heatmap(root_path),
         build_external_baseline_figure(root_path),
+        build_auc_overview_figure(root_path),
+        build_quality_summary_figure(root_path),
+        build_overall_roc_curves_figure(root_path),
+        build_runtime_efficiency_figure(root_path),
     ]
+    visual_entry = build_visual_example_grid(root_path)
+    if visual_entry is not None:
+        figure_entries.append(visual_entry)
     manifest = {
         "figure_count": len(figure_entries),
         "figures": figure_entries,
