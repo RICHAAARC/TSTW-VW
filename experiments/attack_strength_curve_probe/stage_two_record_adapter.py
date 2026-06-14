@@ -112,6 +112,15 @@ def derive_attack_strength(record: dict[str, Any]) -> tuple[str, float]:
     if "crop_ratio" in params:
         value = float(params["crop_ratio"])
         return f"keep_{value:.2f}", value
+    if "crop_length" in params and "original_frame_count" in params:
+        original_frame_count = max(1.0, float(params["original_frame_count"]))
+        value = float(params["crop_length"]) / original_frame_count
+        return f"keep_{value:.2f}", value
+    if "observed_frame_count" in params and "original_frame_count" in params:
+        original_frame_count = max(1.0, float(params["original_frame_count"]))
+        value = float(params["observed_frame_count"]) / original_frame_count
+        if attack_name == "temporal_crop":
+            return f"keep_{value:.2f}", value
     if "drop_rate" in params:
         value = float(params["drop_rate"])
         return f"drop_{value:.2f}", value
@@ -151,7 +160,7 @@ def convert_stage_two_records_to_attack_strength_records(
         if score is None:
             continue
         strength_name, strength_value = derive_attack_strength(record)
-        group_key = (method_name, attack_name, split, sample_role)
+        group_key = (method_name, attack_name, strength_name, split, sample_role)
         if max_records_per_group is not None and group_counts.get(group_key, 0) >= max_records_per_group:
             continue
         group_counts[group_key] = group_counts.get(group_key, 0) + 1
@@ -231,4 +240,3 @@ def write_attack_strength_shard_from_stage_two(
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {**manifest, "manifest_path": manifest_path.as_posix(), "output_root": output_root_path.as_posix()}
-

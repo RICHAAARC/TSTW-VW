@@ -1097,6 +1097,12 @@ The run notebook must not create the Google Drive family result directory during
 ```text
 /content/drive/MyDrive/TSTW/results/attack_strength_curve_probe/
   shard_runs/
+    attack_strength_curve_probe_internal_sweep_sc<SHARD_COUNT>_si<SHARD_INDEX>_<SHORT_COMMIT>/
+      records/
+        attack_strength_event_scores.jsonl
+      artifacts/
+        attack_strength_internal_sweep_manifest.json
+      runner_diagnostics/
     attack_strength_curve_probe_base_records_<UTC_TIME>_<SHORT_COMMIT>/
       records/
         attack_strength_event_scores.jsonl

@@ -47,6 +47,7 @@ ALLOWED_ROOT_NOTEBOOKS = {
     "aggregate_real_video_vae_latent_probe_shards.ipynb",
     "aggregate_baseline_comparison_gate_shards.ipynb",
     "run_attack_strength_curve_probe.ipynb",
+    "aggregate_attack_strength_curve_probe_shards.ipynb",
 }
 
 

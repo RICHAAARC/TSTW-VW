@@ -25,6 +25,7 @@ def _create_governed_notebook_layout(root: Path) -> None:
     _write_text(root / "paper_workflow" / "run_real_video_vae_latent_probe.ipynb", "{}\n")
     _write_text(root / "paper_workflow" / "run_baseline_comparison_gate.ipynb", "{}\n")
     _write_text(root / "paper_workflow" / "run_attack_strength_curve_probe.ipynb", "{}\n")
+    _write_text(root / "paper_workflow" / "aggregate_attack_strength_curve_probe_shards.ipynb", "{}\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "runtime_check.py", "pass\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "tar_zst_packager.py", "pass\n")
     _write_text(root / "paper_workflow" / "colab_utils" / "__init__.py", "\"\"\"pkg\"\"\"\n")

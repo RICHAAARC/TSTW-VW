@@ -112,7 +112,7 @@
 ### Naming Governance
 
 - All formal names must use `snake_case`.
-- Governed notebook entrypoints under `paper_workflow/` must also use `snake_case` semantic names. The current governed notebook entrypoints are `build_processed_real_video_dataset.ipynb`, `run_real_video_vae_latent_probe.ipynb`, `run_baseline_comparison_gate.ipynb`, `run_attack_strength_curve_probe.ipynb`.
+- Governed notebook entrypoints under `paper_workflow/` must also use `snake_case` semantic names. The current governed notebook entrypoints are `build_processed_real_video_dataset.ipynb`, `run_real_video_vae_latent_probe.ipynb`, `run_baseline_comparison_gate.ipynb`, `run_attack_strength_curve_probe.ipynb`, and `aggregate_attack_strength_curve_probe_shards.ipynb`.
 - Governed notebook entrypoints must not append `_Colab`, `_Notebook`, or `Run_` naming noise.
 - `paper_workflow/notebook_utils/` 与 `paper_workflow/colab_utils/` 中的 helper 模块都必须使用 `snake_case` 语义命名，且不得使用任何数字阶段缩写、下划线阶段缩写、连字符阶段缩写或 PascalCase 数字阶段缩写形式的弱阶段编号。
 - Global weak naming patterns (regex-based) such as `stage[0-9]+` (stage0, stage1, stage999), `stage_[0-9]+`, `stage-[0-9]+`, `*_v[0-9]+` (*_v1, *_v999), `*_p[0-9]+` (*_p0, *_p999), `test_stage[0-9]+_*`, and `run_stage[0-9]+_*` are blocking violations that apply to any present and future version number.
@@ -188,6 +188,8 @@
 - `temporal_quality_metric_probe` may read governed stage-two shard-run mp4 artifacts and emit `records/temporal_quality_records.jsonl`, `tables/temporal_quality_metric_table.csv`, `figure_data/temporal_quality_metric_figure_data.csv`, and `artifacts/temporal_quality_metric_manifest.json`.
 - `attack_strength_curve_probe` may aggregate Colab-generated multi-strength attack records and emit `records/attack_strength_event_scores.jsonl`, `tables/attack_strength_tpr_table.csv`, `tables/attack_strength_auc_table.csv`, `figure_data/attack_strength_curve_figure_data.csv`, and `artifacts/attack_strength_curve_manifest.json`.
 - `attack_strength_curve_probe` must calibrate thresholds only from calibration split negatives and must not tune thresholds on test split records.
+- `attack_strength_curve_probe` full internal sweep mode must cover the internal method variants `frame_prc`, `tubelet_only`, and `tubelet_sync`; external baselines are not required for the first internal attack-strength curve.
+- `paper_workflow/run_attack_strength_curve_probe.ipynb` must be a shard-run-only entrypoint; `paper_workflow/aggregate_attack_strength_curve_probe_shards.ipynb` must be the separate shard-aggregation entrypoint.
 - `attack_strength_curve_probe` may use `from_stage_two_existing_records` mode to seed base curve records from frozen stage-two event scores, but this mode must set `claim_support_allowed=false` in its shard manifest because it is not a full multi-strength sweep.
 - `additional_dataset_validation_probe` may aggregate Colab-generated UCF101 subset records for the internal method variants `frame_prc`, `tubelet_only`, and `tubelet_sync`, and emit `records/additional_dataset_event_scores.jsonl`, `tables/additional_dataset_main_tpr_fpr_table.csv`, `tables/additional_dataset_attack_breakdown_table.csv`, `figure_data/additional_dataset_comparison_figure_data.csv`, and `artifacts/additional_dataset_validation_manifest.json`.
 - `additional_dataset_validation_probe` must preserve the same fixed-FPR calibration rule as the main real-video protocol and must not use test split records for threshold selection.

@@ -46,7 +46,9 @@ Artifact Handoff：跨 notebook 传递的事实只能来自已落盘、已校验
 
 本文档明确替代旧规则中“模型长期保存到 Google Drive Models”的设计。当前规则为：**所有模型相关文件均为 session-only；Google Drive 不作为模型权重仓库；Google Drive 只保存模型下载与加载的 session manifest，而不保存模型权重文件本体。**
 
-当前阶段受治理的 notebook workflow 入口命名为：`paper_workflow/build_processed_real_video_dataset.ipynb`、`paper_workflow/run_real_video_vae_latent_probe.ipynb`、`paper_workflow/run_baseline_comparison_gate.ipynb`、`paper_workflow/run_attack_strength_curve_probe.ipynb`。
+当前阶段受治理的 notebook workflow 入口命名为：`paper_workflow/build_processed_real_video_dataset.ipynb`、`paper_workflow/run_real_video_vae_latent_probe.ipynb`、`paper_workflow/run_baseline_comparison_gate.ipynb`、`paper_workflow/run_attack_strength_curve_probe.ipynb`、`paper_workflow/aggregate_attack_strength_curve_probe_shards.ipynb`。
+
+`paper_workflow/run_attack_strength_curve_probe.ipynb` 的正式职责是为内部三方法多强度攻击曲线提供 Colab 冷启动 shard-run 入口。它可以准备 session-local processed dataset 和 session-only VAE 模型, 但只允许调度单个 shard 的多强度 runner、records 转换和 shard 结果检查。`paper_workflow/aggregate_attack_strength_curve_probe_shards.ipynb` 的正式职责是发现完整 shard group、聚合 records、生成曲线表和可选重建阶段四图表。两个 notebook 都必须把正式 records、tables、figure data 和 manifest 写入逻辑委托给 `scripts/package_results/` 与 `experiments/` 中的仓库模块。
 
 ---
 

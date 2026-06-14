@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,8 +19,13 @@ from main.core.digest import compute_file_digest, compute_object_digest
 WORKFLOW_KEY = "attack_strength_curve_probe"
 INTERNAL_METHODS = ("frame_prc", "tubelet_only", "tubelet_sync")
 ATTACKS = ("h264_compression", "h265_compression", "temporal_crop", "frame_dropping")
+CALIBRATION_ONLY_ATTACKS = ("no_attack",)
 POSITIVE_ROLES = {"watermarked_positive", "attacked_positive"}
 NEGATIVE_ROLES = {"clean_negative", "attacked_negative"}
+INTERNAL_SWEEP_RUN_RE = re.compile(
+    r"^attack_strength_curve_probe_internal_sweep_sc(?P<shard_count>\d+)_"
+    r"si(?P<shard_index>\d+)_(?P<short_commit>[0-9a-fA-F]+|unknown)$"
+)
 
 
 def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
@@ -60,12 +66,112 @@ def latest_child_dir(root: str | Path) -> Path | None:
     return max(children, key=lambda path: path.stat().st_mtime)
 
 
-def discover_record_paths(result_root: str | Path) -> list[Path]:
-    """从默认 shard_runs 目录自动发现 attack strength records。"""
+def _parse_internal_sweep_run_dir(path: Path) -> dict[str, Any] | None:
+    """解析内部多强度 sweep shard 目录名。"""
+    match = INTERNAL_SWEEP_RUN_RE.match(path.name)
+    if match is None:
+        return None
+    return {
+        "family_root": path,
+        "shard_count": int(match.group("shard_count")),
+        "shard_index": int(match.group("shard_index")),
+        "short_commit": match.group("short_commit"),
+        "record_path": path / "records" / "attack_strength_event_scores.jsonl",
+        "latest_mtime": path.stat().st_mtime,
+    }
+
+
+def _jsonable_group(group: dict[str, Any]) -> dict[str, Any]:
+    """把 Path 转为字符串, 便于写入 JSON manifest。"""
+    payload = dict(group)
+    payload["record_paths"] = [Path(path).as_posix() for path in group.get("record_paths", [])]
+    return payload
+
+
+def _jsonable_groups(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """批量转换 shard group JSON 表示。"""
+    return [_jsonable_group(group) for group in groups]
+
+
+def discover_internal_sweep_record_paths(
+    result_root: str | Path,
+    *,
+    required_short_commit: str | None = None,
+    required_shard_count: int | None = None,
+) -> tuple[list[Path], dict[str, Any]]:
+    """自动发现一组完整的内部多强度 sweep shard records。"""
     shard_root = Path(result_root) / WORKFLOW_KEY / "shard_runs"
     if not shard_root.exists():
-        return []
-    return sorted(shard_root.glob("*/records/attack_strength_event_scores.jsonl"))
+        return [], {"mode": "internal_sweep", "candidate_group_count": 0, "selected_group": None}
+    candidates = []
+    for child in sorted(path for path in shard_root.iterdir() if path.is_dir()):
+        parsed = _parse_internal_sweep_run_dir(child)
+        if parsed is None or not parsed["record_path"].exists():
+            continue
+        if required_short_commit and parsed["short_commit"] != required_short_commit:
+            continue
+        if required_shard_count is not None and parsed["shard_count"] != int(required_shard_count):
+            continue
+        candidates.append(parsed)
+    groups: dict[tuple[str, int], list[dict[str, Any]]] = {}
+    for item in candidates:
+        groups.setdefault((str(item["short_commit"]), int(item["shard_count"])), []).append(item)
+    group_payloads: list[dict[str, Any]] = []
+    for (short_commit, shard_count), items in groups.items():
+        by_index = {int(item["shard_index"]): item for item in items}
+        missing = [index for index in range(shard_count) if index not in by_index]
+        group_payloads.append(
+            {
+                "short_commit": short_commit,
+                "shard_count": shard_count,
+                "shard_indexes": sorted(by_index),
+                "complete": not missing,
+                "missing_shard_indexes": missing,
+                "record_paths": [by_index[index]["record_path"] for index in sorted(by_index)],
+                "latest_mtime": max(float(item["latest_mtime"]) for item in items),
+            }
+        )
+    complete_groups = [group for group in group_payloads if group["complete"]]
+    if not complete_groups:
+        return [], {
+            "mode": "internal_sweep",
+            "candidate_group_count": len(group_payloads),
+            "selected_group": None,
+            "candidate_groups": _jsonable_groups(group_payloads),
+        }
+    selected = max(complete_groups, key=lambda group: float(group["latest_mtime"]))
+    return list(selected["record_paths"]), {
+        "mode": "internal_sweep",
+        "candidate_group_count": len(group_payloads),
+        "selected_group": _jsonable_group(selected),
+    }
+
+
+def discover_record_paths(
+    result_root: str | Path,
+    *,
+    source_mode: str = "all",
+    required_short_commit: str | None = None,
+    required_shard_count: int | None = None,
+) -> tuple[list[Path], dict[str, Any]]:
+    """从默认 shard_runs 目录自动发现 attack strength records。"""
+    if source_mode == "internal_sweep":
+        return discover_internal_sweep_record_paths(
+            result_root,
+            required_short_commit=required_short_commit,
+            required_shard_count=required_shard_count,
+        )
+    shard_root = Path(result_root) / WORKFLOW_KEY / "shard_runs"
+    if not shard_root.exists():
+        return [], {"mode": source_mode, "record_count": 0}
+    patterns = {
+        "base_records": "attack_strength_curve_probe_base_records_*/records/attack_strength_event_scores.jsonl",
+        "all": "*/records/attack_strength_event_scores.jsonl",
+    }
+    if source_mode not in patterns:
+        raise ValueError("source_mode must be internal_sweep, base_records, or all")
+    paths = sorted(shard_root.glob(patterns[source_mode]))
+    return paths, {"mode": source_mode, "record_count": len(paths)}
 
 
 def resolve_short_commit() -> str:
@@ -186,6 +292,8 @@ def build_attack_strength_tables(
     grouped: dict[tuple[str, str, str, float], list[dict[str, Any]]] = {}
     for row in normalized:
         if row["split"] != "test":
+            continue
+        if row["attack_name"] in CALIBRATION_ONLY_ATTACKS:
             continue
         grouped.setdefault(
             (
